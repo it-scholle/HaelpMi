@@ -1,0 +1,116 @@
+<Window x:Class="HaelpMi.InstallCreator.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="HälpMi Install-Creator"
+        Width="1000" Height="640"
+        ResizeMode="NoResize"
+        WindowStartupLocation="CenterScreen">
+    <!-- Breitbild statt Hochformat (Nutzerwunsch 06.08.2026): links wie bisher Kundenname/
+         Checkbox/Passwort, rechts auf voller Fensterhöhe das Protokoll. Vorher stand das Log
+         unten in einer festen 220px-Box, obwohl rechts daneben nur Leerraum war - bei einem
+         längeren Build-Log (Payload+Admin-Installer nacheinander, siehe BuildAdminButton_Click)
+         war das ein unnötig enges Scroll-Feld. -->
+    <Window.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="Styles/ModernStyles.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </Window.Resources>
+    <Grid Margin="24">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="420" />
+            <ColumnDefinition Width="24" />
+            <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+
+        <StackPanel Grid.Column="0">
+            <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                <Image Source="Assets/haelpmi_icon.ico" Width="36" Height="36" Margin="0,0,12,0" />
+                <StackPanel VerticalAlignment="Center">
+                    <TextBlock Text="HälpMi Install-Creator" FontSize="19" FontWeight="Bold" />
+                    <TextBlock Foreground="{StaticResource TextSecondaryBrush}" FontSize="11"
+                               Text="Entwickler-Werkzeug - nicht Teil der Kunden-Auslieferung" />
+                </StackPanel>
+            </StackPanel>
+            <Border Background="{StaticResource CardBackgroundBrush}" BorderBrush="{StaticResource HairlineBrush}"
+                    BorderThickness="1" CornerRadius="12" Padding="16" Margin="0,16,0,16">
+                <StackPanel>
+                    <CheckBox x:Name="TestInstallerCheckBox" IsChecked="True" Margin="0,0,0,16"
+                              Content="Test-Installer (kein Passwort nötig - für internes Testen, niemals an einen Kunden ausliefern)" />
+
+                    <TextBlock Text="Kundenname (Pflicht bei Produktiv-Installer; bei Test-Installer optionale Bezeichnung z. B. &quot;Testgruppe 3&quot;)"
+                               FontWeight="SemiBold" TextWrapping="Wrap" FontSize="12" />
+                    <TextBox x:Name="CustomerNameBox" Margin="0,6,0,16" />
+
+                    <TextBlock Text="Admin-Installer-Passwort (Pflicht außer bei Test-Installer)" FontWeight="SemiBold" FontSize="12" />
+                    <Grid Margin="0,6,0,4">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <!-- Bugfix 06.08.2026 (Fehlerbericht "Kopieren wirft immer noch einen
+                             Error", zweite Runde): PasswordBox UND ein normales TextBox liegen
+                             übereinander in derselben Zelle, per Häkchen umgeschaltet - der
+                             bisherige Fallback-Text ("Passwort manuell markieren/kopieren")
+                             war schlicht nicht umsetzbar, WPFs PasswordBox blockt Strg+C
+                             absichtlich (Schutz gegen Mitlesen). Mit "anzeigen" gibt es jetzt
+                             einen echten Weg, das Passwort notfalls von Hand zu kopieren, wenn
+                             die automatische Zwischenablage (wieder) an hartnäckiger
+                             VM-Synchronisation scheitert. -->
+                        <PasswordBox Grid.Column="0" x:Name="PasswordBox" Margin="0,0,8,0" PasswordChanged="PasswordBox_PasswordChanged" />
+                        <TextBox Grid.Column="0" x:Name="PasswordRevealBox" Margin="0,0,8,0" Visibility="Collapsed" TextChanged="PasswordRevealBox_TextChanged" />
+                        <!-- Nutzerwunsch 04.08.2026 ("das Plus ist ein Punkt") gilt hier genauso:
+                             kein Symbol-Zeichen in einem schmalen Button, Font-Metriken/Emoji-
+                             Unterstützung sind nicht zuverlässig genug - Text statt Icon. -->
+                        <Button Grid.Column="1" x:Name="RevealPasswordToggle" Content="Anzeigen" Margin="0,0,8,0"
+                                ToolTip="Passwort anzeigen (zum manuellen Markieren/Kopieren, falls die Zwischenablage nicht mitmacht)"
+                                Click="RevealPasswordToggle_Click" />
+                        <Button Grid.Column="2" x:Name="GeneratePasswordButton" Content="Zufällig generieren" Margin="0,0,8,0" Click="GeneratePasswordButton_Click" />
+                        <Button Grid.Column="3" x:Name="CopyPasswordButton" Content="Kopieren" Click="CopyPasswordButton_Click" />
+                    </Grid>
+                    <TextBlock Margin="0,0,0,0" Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" TextWrapping="Wrap"
+                               Text="Wird nirgends zentral gespeichert (kein Log, keine Datei) - nach dem Schließen dieses Fensters ist es nicht mehr abrufbar. Rechtzeitig kopieren/weitergeben." />
+                    <!-- Nutzerfrage 06.08.2026: gilt bewusst NUR für den Admin-Installer (der App-
+                         Admin-Rolle vergibt), nicht für den eingebetteten User-Installer - der wird
+                         ohnehin erst NACH einer erfolgreichen Admin-Installation über "User-
+                         Installer exportieren" im Dashboard erzeugt/verteilt, ein zusätzliches
+                         Passwort dort bringt keinen Sicherheitsgewinn, nur Verteil-Reibung
+                         (Passwort müsste an jeden Endnutzer mitgegeben werden). -->
+                    <TextBlock Margin="0,4,0,0" Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" TextWrapping="Wrap"
+                               Text="Gilt nur für den Admin-Installer. Der User-Installer bleibt immer passwortfrei - er wird erst nach erfolgreicher Admin-Installation im Dashboard erzeugt und an bereits vertrautem Weg verteilt." />
+                </StackPanel>
+            </Border>
+
+            <Button x:Name="BuildAdminButton" Content="Admin-Installer erstellen" HorizontalAlignment="Left"
+                    Style="{StaticResource AccentButtonStyle}" Padding="18,9" Margin="0,0,0,16" Click="BuildAdminButton_Click" />
+
+            <!-- Nutzerwunsch 06.08.2026: der Erfolgs-Toast (BuildSuccessToastWindow) schließt
+                 nach 8s automatisch - wer ihn übersieht, hatte bisher keine zweite Chance, an
+                 die fertige Datei zu kommen außer im Protokoll nachzulesen. Bleibt jetzt hier
+                 dauerhaft stehen (bis zum nächsten Build), an der Stelle, die die entfernten
+                 Beschreibungstexte freigemacht haben. -->
+            <Border x:Name="LastBuildPanel" Visibility="Collapsed" Background="{StaticResource SuccessLightBrush}"
+                    BorderBrush="{StaticResource HairlineBrush}" BorderThickness="1" CornerRadius="12" Padding="16">
+                <StackPanel>
+                    <TextBlock Text="Admin-Installer erstellt" FontWeight="SemiBold" FontSize="13" />
+                    <TextBlock x:Name="LastBuildFileText" Foreground="{StaticResource TextSecondaryBrush}"
+                               FontSize="11" TextWrapping="Wrap" Margin="0,4,0,12" />
+                    <Button x:Name="LastBuildShowButton" Content="Anzeigen" HorizontalAlignment="Left"
+                            Padding="14,6" Click="LastBuildShowButton_Click" />
+                </StackPanel>
+            </Border>
+        </StackPanel>
+
+        <DockPanel Grid.Column="2">
+            <TextBlock DockPanel.Dock="Top" Text="Protokoll" FontWeight="SemiBold" Margin="0,0,0,6" />
+            <TextBox x:Name="LogBox" IsReadOnly="True" TextWrapping="Wrap"
+                     VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto"
+                     FontFamily="Consolas" FontSize="11" Background="#F4F6F6" />
+        </DockPanel>
+
+        <TextBlock x:Name="VersionText" Grid.Column="2" Style="{StaticResource VersionWatermarkStyle}" />
+    </Grid>
+</Window>

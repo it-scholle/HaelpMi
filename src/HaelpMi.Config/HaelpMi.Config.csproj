@@ -1,0 +1,38 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+    <RootNamespace>HaelpMi.Config</RootNamespace>
+    <AssemblyName>HaelpMi.Config</AssemblyName>
+    <ApplicationIcon>Assets\haelpmi_icon.ico</ApplicationIcon>
+    <Platforms>x64;ARM64</Platforms>
+    <!-- Kein InvariantGlobalization: WPF-Texteingabefelder lösen beim Klicken die aktuelle
+         Tastatur-Eingabesprache in eine echte CultureInfo auf (TextEditorMouse.OnMouseDown
+         -> InputLanguageSource.CurrentInputLanguage) - im Invariant-Modus wirft das eine
+         CultureNotFoundException bei jedem Klick in ein Textfeld. Entdeckt beim Reproduzieren
+         des InstallCreator-Absturzes, gilt aber für jede WPF-App mit Texteingabe gleichermaßen. -->
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\HaelpMi.Core\HaelpMi.Core.csproj" />
+    <ProjectReference Include="..\HaelpMi.UI\HaelpMi.UI.csproj" />
+  </ItemGroup>
+
+  <!-- Der Splashscreen (05.08.2026, "warum brauchen die Apps so ewig zum Starten") wurde am
+       06.08.2026 wieder ENTFERNT: WPFs SplashScreen-Feature ruft im generierten Main()
+       System.Windows.SplashScreen.Show() auf, dessen Ressourcen-Auflösung (GetResourceStream)
+       in einer self-contained-Veröffentlichung zuverlässig mit MissingManifestResourceException
+       abstürzt, VOR OnStartup, also ohne jede Chance für CrashLogger/DispatcherUnhandledException,
+       genau das gemeldete "Dashboard startet nicht, loggt auch nicht". Reproduziert: derselbe
+       Build funktioniert framework-dependent (self-contained false) einwandfrei, stürzt aber
+       reproduzierbar mit self-contained ab, unabhängig von PublishReadyToRun/Platform, ein
+       bekannter WPF-Kompatibilitätsfall, kein Fehler auf unserer Seite, aber mit self-contained
+       (Pflicht laut CLAUDE.md: kein vorausgesetztes .NET auf Kundenrechnern) nicht vereinbar.
+       Die eigentliche Startzeit-Verkürzung (PublishReadyToRun statt PublishSingleFile, siehe
+       BUILD-UND-INSTALLATION.md) bleibt bestehen und war ohnehin der wirksamere Teil. -->
+
+</Project>

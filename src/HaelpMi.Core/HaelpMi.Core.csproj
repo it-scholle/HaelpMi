@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <!-- Only for System.Windows.Forms.NativeWindow, used as a lightweight message-only
+         window to receive WM_HOTKEY (see Interop/GlobalHotkey.cs) - no WinForms UI is used. -->
+    <UseWindowsForms>true</UseWindowsForms>
+    <RootNamespace>HaelpMi.Core</RootNamespace>
+    <AssemblyName>HaelpMi.Core</AssemblyName>
+    <Platforms>x64;ARM64</Platforms>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="NAudio" Version="2.2.1" />
+    <!-- .NET 8 hat kein eingebautes Ed25519 (System.Security.Cryptography deckt es nicht
+         ab) - für die Update-Signatur-Prüfung (Abschnitt 11, separater Schlüssel von der
+         Lizenzsignatur) reicht die reine Verify-Operation gegen den eingebetteten
+         öffentlichen Schlüssel; BouncyCastle ist die gängige, aktiv gepflegte Wahl dafür
+         statt einer riskanten Eigenimplementierung von Signaturprüfung. -->
+    <PackageReference Include="BouncyCastle.Cryptography" Version="2.4.0" />
+  </ItemGroup>
+
+</Project>

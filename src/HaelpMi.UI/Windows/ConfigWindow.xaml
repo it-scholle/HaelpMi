@@ -1,0 +1,177 @@
+<Window x:Class="HaelpMi.UI.Windows.ConfigWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:conv="clr-namespace:HaelpMi.UI.Converters"
+        Title="HälpMi - Einstellungen"
+        Width="820" Height="600"
+        WindowStartupLocation="CenterScreen"
+        PreviewMouseDown="Window_PreviewMouseDown">
+    <Window.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/HaelpMi.UI;component/Styles/ModernStyles.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </Window.Resources>
+    <Grid Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- Allgemein: Teil 2, Abschnitt 2 - Computername/Rolle bleiben rein lesend (OS- bzw.
+             Installer-bestimmt). Raum/Raumnummer sind jetzt direkt editierbar (Nutzerwunsch
+             05.08.2026) statt nur zentral über das Admin-Dashboard - mit einem Hinweis-Popup
+             beim ersten Bearbeiten (AdminOnlyNoticeWindow; eine spätere Version soll das über
+             einen echten Windows-Admin-Prompt/UAC statt nur eines Hinweises durchsetzen).
+             Alles hier speichert automatisch bei Verlassen des Feldes - kein Speichern-
+             Button mehr (CLAUDE.md, wie im übrigen Dashboard). -->
+        <GroupBox Grid.Row="0" Header="Allgemein - dieser Arbeitsplatz" Padding="12">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
+                <StackPanel Grid.Row="0" Grid.Column="0" Margin="0,0,10,8">
+                    <TextBlock Text="Computername" FontWeight="SemiBold" />
+                    <TextBlock x:Name="ComputerNameText" Margin="0,6,0,0" />
+                </StackPanel>
+                <StackPanel Grid.Row="0" Grid.Column="1" Margin="0,0,10,8" ToolTip="Nur durch den Administrator ändern">
+                    <TextBlock Text="Raum" FontWeight="SemiBold" />
+                    <Grid Margin="0,6,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="2*" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <TextBox x:Name="RoomNameBox" Grid.Column="0" Padding="4" Margin="0,0,4,0"
+                                 GotFocus="RoomField_GotFocus" LostFocus="RoomField_LostFocus" />
+                        <TextBox x:Name="RoomNumberBox" Grid.Column="1" Padding="4"
+                                 GotFocus="RoomField_GotFocus" LostFocus="RoomField_LostFocus" />
+                    </Grid>
+                </StackPanel>
+                <StackPanel Grid.Row="0" Grid.Column="2" Margin="0,0,10,8">
+                    <TextBlock Text="Rolle" FontWeight="SemiBold" />
+                    <TextBlock x:Name="RoleText" Margin="0,6,0,0" />
+                </StackPanel>
+                <StackPanel Grid.Row="0" Grid.Column="3" Margin="0,0,0,8">
+                    <TextBlock Text="Signalton (eingehend)" FontWeight="SemiBold" />
+                    <ComboBox x:Name="IncomingSoundCombo" Margin="0,4,0,0" DisplayMemberPath="DisplayName"
+                              SelectionChanged="IncomingSoundCombo_SelectionChanged" />
+                </StackPanel>
+
+                <TextBlock Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2" x:Name="SaveGeneralStatusText"
+                           VerticalAlignment="Center" Margin="0,4,0,0" Foreground="Gray" />
+
+                <!-- FR-33: nur sichtbar für Role.Admin - ConfigWindowContext.OpenAdminDashboard ist dann gesetzt. -->
+                <Button Grid.Row="1" Grid.Column="2" Grid.ColumnSpan="2" x:Name="OpenAdminDashboardButton"
+                        Content="Admin-Dashboard öffnen" Padding="14,6" HorizontalAlignment="Right"
+                        Background="#8E44AD" Foreground="White" BorderThickness="0"
+                        Visibility="Collapsed" Click="OpenAdminDashboardButton_Click" />
+            </Grid>
+        </GroupBox>
+
+        <!-- Nutzerwunsch 05.08.2026: reine Lesansicht, damit der User selbst sieht, was sein
+             eigener Hotkey auslöst und wer benachrichtigt wird - vorher nirgends im User-
+             Fenster sichtbar, nur im Admin-Dashboard konfigurierbar. -->
+        <GroupBox Grid.Row="1" Header="Meine Alarme" Padding="12" Margin="0,12,0,0">
+            <StackPanel>
+                <TextBlock Text="Für dieses Gerät eingerichtete Alarm-Profile" FontWeight="SemiBold" />
+                <ComboBox x:Name="MyAlarmsCombo" Margin="0,4,0,10" DisplayMemberPath="Name" SelectionChanged="MyAlarmsCombo_SelectionChanged" />
+
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="2*" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Grid.Column="0" Margin="0,0,10,0">
+                        <TextBlock Text="Tastenkürzel" FontWeight="SemiBold" />
+                        <TextBlock x:Name="MyAlarmHotkeyText" Margin="0,4,0,0" />
+                    </StackPanel>
+                    <StackPanel Grid.Column="1">
+                        <TextBlock Text="Empfänger (für dieses Gerät als Sender)" FontWeight="SemiBold" />
+                        <TextBlock x:Name="MyAlarmRecipientsText" Margin="0,4,0,0" TextWrapping="Wrap" />
+                    </StackPanel>
+                </Grid>
+
+                <TextBlock x:Name="MyAlarmsEmptyText" Foreground="{StaticResource TextSecondaryBrush}" FontSize="11"
+                           Margin="0,4,0,0" TextWrapping="Wrap" Visibility="Collapsed"
+                           Text="Für dieses Gerät ist aktuell kein Alarm-Profil als Sender eingerichtet." />
+            </StackPanel>
+        </GroupBox>
+
+        <!-- Individuell header row with actions -->
+        <Grid Grid.Row="2" Margin="0,16,0,8">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBlock Grid.Column="0" Text="Individuell - bekannte Geräte" FontSize="14" FontWeight="Bold" VerticalAlignment="Center" />
+            <Button Grid.Column="1" x:Name="SelfTestButton" Content="Selbsttest" Padding="14,6" Margin="0,0,8,0" Click="SelfTestButton_Click" />
+            <Button Grid.Column="2" x:Name="SearchAgainButton" Content="Erneut suchen" Padding="14,6" Click="SearchAgainButton_Click" />
+        </Grid>
+
+        <!-- Individuell grid -->
+        <DataGrid x:Name="DevicesGrid" Grid.Row="3" AutoGenerateColumns="False"
+                  CanUserAddRows="False" CanUserDeleteRows="False" CanUserSortColumns="False"
+                  HeadersVisibility="Column" GridLinesVisibility="Horizontal"
+                  RowHeaderWidth="0" CellEditEnding="DevicesGrid_CellEditEnding"
+                  SelectionChanged="DevicesGrid_SelectionChanged">
+            <DataGrid.RowStyle>
+                <Style TargetType="DataGridRow">
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding IsNew}" Value="True">
+                            <Setter Property="Background" Value="#FFF9E6B0" />
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </DataGrid.RowStyle>
+            <DataGrid.Columns>
+                <!-- Nutzerwunsch 05.08.2026: "Benachrichtigen" entfernt - das steuert der
+                     Admin jetzt zentral über die Empfängerkreise im Alarm-Profil (war laut
+                     eigenem Klassenkommentar oben schon länger ein wirkungsloses Phase-1-
+                     Überbleibsel, siehe DeviceEntry.Notified). "Favorit" fällt aus demselben
+                     Grund mit weg. Beide Spalten hatten außerdem einen echten Bug: ihr
+                     Checked/Unchecked-Handler rief PersistDevicesAndReload() SYNCHRON aus dem
+                     DataGrid-eigenen Zell-Template-Klick heraus auf - das Neuzuweisen von
+                     ItemsSource mitten in der Klick-Verarbeitung derselben Zeile brachte das
+                     DataGrid zum Leeren/Hängen (klassische WPF-Reentrancy-Falle; die Notiz-
+                     Spalte unten umgeht das schon länger bewusst über Dispatcher.BeginInvoke). -->
+                <DataGridTemplateColumn Header="Computername" Width="150">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="{Binding ComputerName}" VerticalAlignment="Center" />
+                                <Border Background="#C0392B" CornerRadius="3" Padding="4,1" Margin="6,0,0,0"
+                                        Visibility="{Binding IsNew, Converter={x:Static conv:BoolToVisibilityConverter.Instance}}">
+                                    <TextBlock Text="NEU" Foreground="White" FontSize="9" FontWeight="Bold" />
+                                </Border>
+                            </StackPanel>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+
+                <DataGridTextColumn Header="Raum" Binding="{Binding RoomName, Mode=OneWay}" IsReadOnly="True" Width="110" />
+                <DataGridTextColumn Header="Nr." Binding="{Binding RoomNumber, Mode=OneWay}" IsReadOnly="True" Width="60" />
+                <DataGridTextColumn Header="Nutzer" Binding="{Binding User, Mode=OneWay}" IsReadOnly="True" Width="130" />
+                <DataGridTextColumn Header="Notiz" Binding="{Binding Note, Mode=TwoWay}" Width="*" />
+            </DataGrid.Columns>
+        </DataGrid>
+
+        <DockPanel Grid.Row="4" Margin="0,8,0,0">
+            <TextBlock x:Name="VersionText" DockPanel.Dock="Right" Style="{StaticResource VersionWatermarkStyle}" Margin="8,0,0,0" />
+            <TextBlock Foreground="Gray" FontSize="11"
+                       Text="Neue Geräte sind hervorgehoben, bis die Zeile einmal angeklickt wurde." />
+        </DockPanel>
+    </Grid>
+</Window>

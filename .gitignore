@@ -1,0 +1,72 @@
+## .NET / Visual Studio build output
+bin/
+obj/
+out/
+[Bb]uild/
+*.user
+*.userosscache
+*.suo
+*.userprefs
+.vs/
+.vscode/
+
+## Test results
+[Tt]est[Rr]esult*/
+*.trx
+*.coverage
+*.coveragexml
+
+## Inno Setup / installer output
+installer/Output/
+installer/payload/
+tools/InstallCreator/
+*.exe
+!installer/**/*.exe.stub
+
+## Bundled Inno Setup command-line compiler (User-Installer-Export aus dem Admin-
+## Dashboard, siehe HaelpMiCommon.iss.inc) - redistributable Drittanbieter-Binärdateien,
+## lokal von einer eigenen Inno-Setup-Installation hierher kopiert, nicht Teil des Repos.
+installer/inno-compiler/
+
+## Rider / JetBrains
+.idea/
+*.sln.iml
+
+## Claude Code: settings.local.json ist bewusst pro Gerät/Person (Name schon sagt "local"),
+## das Lock nur Laufzeitzustand für geplante Aufgaben - keins von beidem gehört ins Repo.
+## .claude/skills/ bleibt dagegen versioniert (projektweit geteiltes Tooling, siehe CLAUDE.md).
+.claude/settings.local.json
+.claude/scheduled_tasks.lock
+
+## OS cruft
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+## --- Secrets: never commit real keys, certs, or credentials ---
+*.pfx
+*.p12
+*.pem
+*.key
+*.snk
+*.ppk
+*.jwk
+*.cer
+*.crt
+*id_rsa*
+*id_ed25519*
+*private-key*
+*privatekey*
+*signing-key*
+secrets.json
+appsettings.*.local.json
+.env
+.env.*
+*.local.env
+
+## Local per-device runtime data (device id / device list / settings)
+## Real installs store this under %ProgramData%\HaelpMi (Teil 2, FR-34) — nothing here
+## should end up in the repo, this is just belt-and-suspenders for local test runs.
+**/AppDataLocal/
+**/*.devicelist.json
+**/*.identity.json

@@ -1,0 +1,168 @@
+using System.Collections.Concurrent;
+using HaelpMi.Core.Audio;
+using HaelpMi.Core.Models;
+using HaelpMi.Core.Networking;
+using HaelpMi.Core.Networking.Protocol;
+using HaelpMi.Core.Sending;
+using HaelpMi.Core.Storage;
+using HaelpMi.UI.Windows;
+
+namespace HaelpMi.Agent;
+
+/// <summary>
+/// Glues the Core networking/audio pieces to the shared WPF windows (Teil 2, Abschnitt
+/// 7/8). Receiver side: an incoming <see cref="AlarmRequestMessage"/> becomes "show/refresh
+/// a threshold-gated popup + play a sound" (FR-47/FR-51/FR-52); sender side: a triggered
+/// <see cref="AlarmProfile"/> becomes "resolve recipients + run a repeating session + show
+/// a status popup" (FR-50/FR-53).
+///
+/// One <see cref="AlarmPopupWindow"/> per <see cref="AlarmRequestMessage.AlarmSessionId"/>
+/// is the whole trick behind FR-51's "öffnet sich beim nächsten Signal erneut, falls
+/// vorzeitig geschlossen": a repeat for a session with no tracked window simply creates a
+/// fresh one, since the previous one (closed for whatever reason) can no longer be found.
+/// </summary>
+public sealed class AlarmFlowCoordinator
+{
+    private readonly Func<LiveIdentity> _identityProvider;
+    private readonly Func<OwnSettings> _settingsProvider;
+    private readonly Func<SharedConfig> _sharedConfigProvider;
+    private readonly AlarmFeedbackChannel _feedbackChannel;
+    private readonly AuditLog _auditLog = new();
+    private readonly AlarmSender _sender;
+    private readonly DeviceStore _deviceStore = new();
+    private readonly MultiDeviceAlarmPlayer _audioPlayer = new();
+    private readonly ConcurrentDictionary<Guid, AlarmPopupWindow> _openPopups = new();
+
+    public AlarmFlowCoordinator(
+        Func<LiveIdentity> identityProvider,
+        Func<OwnSettings> settingsProvider,
+        Func<SharedConfig> sharedConfigProvider,
+        AlarmFeedbackChannel feedbackChannel)
+    {
+        _identityProvider = identityProvider;
+        _settingsProvider = settingsProvider;
+        _sharedConfigProvider = sharedConfigProvider;
+        _feedbackChannel = feedbackChannel;
+        _sender = new AlarmSender(_auditLog.Append);
+        _feedbackChannel.StatusRelayReceived += (_, relay) => HandleStatusRelay(relay);
+    }
+
+    /// <summary>Called from the TCP listener's background thread when an alarm arrives (FR-9/FR-47).</summary>
+    public void HandleIncomingAlarmRequest(AlarmReceivedEventArgs args)
+    {
+        var request = args.Request;
+        var settings = _settingsProvider();
+        var soundOption = IncomingSoundCatalog.Resolve(settings.IncomingSoundId);
+
+        System.Windows.Application.Current.Dispatcher.Invoke(() =>
+        {
+            if (_openPopups.TryGetValue(request.AlarmSessionId, out var existing))
+            {
+                // Same alarm, still on screen - just refresh it (FR-52), don't spam a
+                // second window for every 5-second repeat.
+                existing.NotifyNewSignalReceived(request.SentAtUtc);
+                return;
+            }
+
+            var popup = new AlarmPopupWindow(
+                request.SenderComputerName,
+                request.SenderUser,
+                request.SenderRoomName,
+                request.SenderRoomNumber,
+                request.SenderIsRemoteSession,
+                request.Text,
+                request.ResponseThreshold,
+                request.AlarmProfileId,
+                request.AlarmSessionId,
+                request.SentAtUtc);
+
+            popup.OnMyWayRequested += (_, _) => _ = ReportOnMyWayAsync(request, args);
+            popup.Closed += (_, _) => _openPopups.TryRemove(request.AlarmSessionId, out _);
+
+            _openPopups[request.AlarmSessionId] = popup;
+            popup.Show();
+        });
+
+        _ = _audioPlayer.PlayOnAllActiveDevicesAsync(soundOption);
+    }
+
+    /// <summary>Every aggregated status update from the sender (FR-51): keeps a still-open receiver popup's threshold gate current.</summary>
+    private void HandleStatusRelay(AlarmStatusRelayMessage relay)
+    {
+        if (!_openPopups.TryGetValue(relay.AlarmSessionId, out var popup))
+        {
+            return;
+        }
+
+        System.Windows.Application.Current.Dispatcher.Invoke(() => popup.UpdateOnTheWayCount(relay.OnTheWayUserNames.Count));
+    }
+
+    private async Task ReportOnMyWayAsync(AlarmRequestMessage request, AlarmReceivedEventArgs args)
+    {
+        var identity = _identityProvider();
+        var senderTarget = new DeviceEntry
+        {
+            DeviceId = request.SenderDeviceId,
+            IpAddress = args.SenderAddress.ToString(),
+        };
+
+        var message = new AlarmOnMyWayMessage(
+            identity.CustomerGroupId, request.AlarmProfileId, request.AlarmSessionId,
+            identity.DeviceId, identity.ComputerName, identity.User, identity.RoomName, DateTimeOffset.UtcNow);
+
+        await _feedbackChannel.SendOnMyWayAsync(senderTarget, message);
+    }
+
+    /// <summary>Hotkey-triggered send for one <see cref="AlarmProfile"/> (FR-50): resolves this sender's asymmetric recipient set and starts a repeating session.</summary>
+    public void TriggerAlarmProfile(AlarmProfile profile)
+    {
+        var identity = _identityProvider();
+        var devices = _deviceStore.Load();
+        var groups = _sharedConfigProvider().DeviceGroups;
+        var targets = RecipientResolver.ResolveRecipientsForSender(profile, identity.DeviceId, identity.RoomNumber, devices, groups);
+        if (targets.Count == 0)
+        {
+            return; // nothing to send, nothing to show (Teil 2, Abschnitt 4: an empty recipient set is a valid, if useless, admin configuration)
+        }
+
+        var session = new RepeatingAlarmSession(profile, targets, identity, _sender, _feedbackChannel, DateTimeOffset.UtcNow);
+        System.Windows.Application.Current.Dispatcher.Invoke(() =>
+        {
+            var window = new SenderStatusWindow(session, profile.Name);
+            window.Show();
+        });
+
+        _ = RunSessionAsync(session);
+    }
+
+    private static async Task RunSessionAsync(RepeatingAlarmSession session)
+    {
+        try
+        {
+            await session.RunAsync();
+        }
+        finally
+        {
+            session.Dispose();
+        }
+    }
+
+    /// <summary>"Testalarm an mich selbst senden" (FR-27): a single-wave send to our own listener via loopback, not a full repeating session.</summary>
+    public async Task<bool> SendSelfTestAsync(AlarmProfile profile)
+    {
+        var identity = _identityProvider();
+        var selfTarget = new DeviceEntry
+        {
+            DeviceId = identity.DeviceId,
+            ComputerName = identity.ComputerName,
+            User = identity.User,
+            RoomName = identity.RoomName,
+            RoomNumber = identity.RoomNumber,
+            IpAddress = "127.0.0.1",
+            TcpPort = AppConstants.AlarmTcpPort,
+        };
+
+        var result = await _sender.SendAsync(profile, Guid.NewGuid(), identity, new[] { selfTarget });
+        return result.AckedCount > 0;
+    }
+}

@@ -1,0 +1,321 @@
+<Window x:Class="HaelpMi.UI.Windows.AdminDashboardWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="HälpMi - Admin-Dashboard"
+        Width="1000" Height="720" MinWidth="860" MinHeight="520"
+        WindowStartupLocation="CenterScreen"
+        PreviewMouseDown="Window_PreviewMouseDown">
+    <Window.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/HaelpMi.UI;component/Styles/ModernStyles.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+
+            <!-- Empfänger-Spalte (Nutzerwunsch 04.08.2026): Klick toggelt Zuordnung für den
+                 gerade gewählten Sender, grün = zugeordnet. -->
+            <Style x:Key="ToggleListItemStyle" TargetType="ListBoxItem">
+                <Setter Property="Padding" Value="6,4" />
+                <Style.Triggers>
+                    <DataTrigger Binding="{Binding IsAssigned}" Value="True">
+                        <Setter Property="Background" Value="{StaticResource SuccessLightBrush}" />
+                    </DataTrigger>
+                </Style.Triggers>
+            </Style>
+
+            <!-- Sender-Spalte: Klick WÄHLT AUS zur Bearbeitung (kein Toggle) - blauer
+                 Hintergrund nur für "wird gerade bearbeitet", unabhängig vom fett+Badge-
+                 Zustand ("hat bereits Empfänger", siehe SenderItemTemplate). Während des
+                 Übertragen-Modus bedeutet dieselbe Markierung stattdessen "als Ziel gewählt". -->
+            <Style x:Key="SenderItemContainerStyle" TargetType="ListBoxItem">
+                <Setter Property="Padding" Value="6,4" />
+                <Style.Triggers>
+                    <DataTrigger Binding="{Binding IsHighlighted}" Value="True">
+                        <Setter Property="Background" Value="{StaticResource AccentLightBrush}" />
+                    </DataTrigger>
+                </Style.Triggers>
+            </Style>
+
+            <!-- Nutzerwunsch 04.08.2026: Sender mit bereits konfigurierten Empfängern fett,
+                 mit ausgefülltem blauem Zähler-Punkt (zweistellig-tauglich, daher MinWidth
+                 statt fester Width) davor - unkonfigurierte Sender ohne Auszeichnung. -->
+            <DataTemplate x:Key="SenderItemTemplate">
+                <StackPanel Orientation="Horizontal" Margin="0,1">
+                    <Border x:Name="CountBadge" Background="{StaticResource AccentBrush}" CornerRadius="9" MinWidth="18" Height="18"
+                            Padding="5,0" Visibility="Collapsed" VerticalAlignment="Center">
+                        <TextBlock Text="{Binding RecipientCount}" Foreground="White" FontSize="10" FontWeight="Bold"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Border>
+                    <TextBlock x:Name="NameText" Text="{Binding DisplayName}" Margin="6,0,0,0" VerticalAlignment="Center" TextWrapping="Wrap" />
+                </StackPanel>
+                <DataTemplate.Triggers>
+                    <DataTrigger Binding="{Binding IsConfigured}" Value="True">
+                        <Setter TargetName="CountBadge" Property="Visibility" Value="Visible" />
+                        <Setter TargetName="NameText" Property="FontWeight" Value="Bold" />
+                    </DataTrigger>
+                </DataTemplate.Triggers>
+            </DataTemplate>
+        </ResourceDictionary>
+    </Window.Resources>
+    <Grid Margin="12">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- Nutzerwunsch: eine Datei an den Sysadmin, User-Installer wird bei Bedarf aus dem Dashboard selbst nachgebaut. -->
+        <DockPanel Grid.Row="0" Margin="0,0,0,10">
+            <Button DockPanel.Dock="Left" x:Name="ExportUserInstallerButton" Content="User-Installer exportieren"
+                    Padding="14,8" Background="#2471A3" Foreground="White" BorderThickness="0"
+                    Click="ExportUserInstallerButton_Click" />
+            <TextBlock x:Name="ExportStatusText" VerticalAlignment="Center" Margin="12,0,0,0" Foreground="Gray" />
+        </DockPanel>
+
+        <!-- Nutzerwunsch 04.08.2026: Empfängerkreis-Verwaltung (im Alarm-Profile-Tab) näher an
+             den Anfang, nicht hinten versteckt - deshalb Alarm-Profile hier als erster Tab.
+             "Kreise" gibt es hier bewusst nicht mehr - Gruppe ist die einzige organisatorische
+             Einheit im Dashboard (siehe EditScope.cs für den Hintergrund). -->
+        <TabControl Grid.Row="1">
+            <!-- Alarm-Profile: Nutzerwunsch 04.08.2026 - Empfängerkreis-Zuordnung nicht mehr
+                 als separates Popup-Fenster, sondern direkt hier im Profil; Profilauswahl
+                 als Dropdown (alphabetisch, erster Eintrag standardmäßig gewählt) statt
+                 Liste+Button. -->
+            <TabItem Header="Alarm-Profile">
+                <!-- Nutzerwunsch 04.08.2026: "unten das Feld ist zu klein/zu eng, Scrollbar
+                     machen" - die Sender-/Empfänger-Spalten brauchen mehr Platz, als in ein
+                     fixes Fenster passt; jetzt gibt der Inhalt seine eigene Höhe vor
+                     (RowDefinition "Auto" statt "*"), und diese ScrollViewer übernimmt den
+                     Rest, statt alles gleichmäßig auf nahezu 0px zusammenzuquetschen. -->
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <Grid Margin="10">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <DockPanel Grid.Row="0" Margin="0,0,0,12">
+                        <!-- Nutzerwunsch 04.08.2026: "das Plus ist ein Punkt" - das Zeichen "+"
+                             wurde vom Button-ControlTemplate/Font so klein/verschoben gerendert,
+                             dass nur der untere Punkt sichtbar war. Statt eines Schriftzeichens
+                             jetzt ein gezeichnetes Kreuz (zwei Rechtecke) - unabhängig von
+                             Font-Metriken immer korrekt und scharf.
+                             Bugfix 06.08.2026 (immer noch "kaputt" laut Fehlerbericht): der
+                             Basis-Button-Style (ModernStyles.xaml) setzt Padding="14,7" - bei
+                             einem 32x32-Button blieb dadurch nur ca. 4px Breite für das 14x14-
+                             Kreuz übrig, es wurde abgeschnitten/gequetscht. Explizites Padding="0"
+                             behebt das (die Border bekommt ihre Form weiterhin über Width/Height
+                             des Buttons selbst, nicht über Padding). -->
+                        <Button DockPanel.Dock="Right" x:Name="NewProfileButton" Width="32" Height="32" Margin="8,0,0,0" Padding="0"
+                                Click="NewProfileButton_Click" ToolTip="Neues Alarm-Profil anlegen">
+                            <Grid Width="14" Height="14">
+                                <Rectangle Fill="{StaticResource TextPrimaryBrush}" Height="2" VerticalAlignment="Center" />
+                                <Rectangle Fill="{StaticResource TextPrimaryBrush}" Width="2" HorizontalAlignment="Center" />
+                            </Grid>
+                        </Button>
+                        <!-- Nutzerwunsch 04.08.2026: kein "Löschen"-Button mit hässlichem
+                             nativem Windows-Bestätigungsdialog mehr - stattdessen ein "-"
+                             direkt neben dem "+", löscht das aktuell gewählte Profil sofort
+                             (Rückgängig deckt ein Versehen ab, siehe UndoProfileButton).
+                             Padding="0": gleicher Grund wie bei NewProfileButton oben. -->
+                        <Button DockPanel.Dock="Right" x:Name="DeleteProfileIconButton" Width="32" Height="32" Margin="4,0,0,0" Padding="0"
+                                Click="DeleteProfileIconButton_Click" ToolTip="Ausgewähltes Alarm-Profil löschen">
+                            <Rectangle Fill="{StaticResource TextPrimaryBrush}" Width="14" Height="2" />
+                        </Button>
+                        <ComboBox x:Name="ProfileCombo" DisplayMemberPath="Name" SelectionChanged="ProfileCombo_SelectionChanged" />
+                    </DockPanel>
+
+                    <StackPanel Grid.Row="1" x:Name="ProfileFieldsPanel" IsEnabled="False" Margin="0,0,0,12">
+                        <!-- Nutzerwunsch 04.08.2026: Schwellwert mit hoch zu Name/Tastenkürzel. -->
+                        <Grid>
+                            <!-- Bugfix 06.08.2026 (Fehlerbericht "Shortcut-Zelle zu breit,
+                                 Text daneben auf zwei Zeilen"): Tastenkürzel-Inhalt ist immer
+                                 kurz (eine Tastenkombination wie "Strg+Alt+F1"), braucht also
+                                 keinen gleich großen Anteil wie Name (freier Text). War 2*/2*/*,
+                                 wodurch Schwellwert (kürzester Anteil, aber zweitlängster
+                                 Beschriftungstext) gezwungen war umzubrechen. -->
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="2*" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="1.3*" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0" Margin="0,0,10,0">
+                                <TextBlock Text="Name (nur im Dashboard sichtbar, nicht im Alarmtext)" FontWeight="SemiBold" TextWrapping="Wrap" />
+                                <TextBox x:Name="ProfileNameBox" Padding="4" Margin="0,4,0,0" LostFocus="ProfileNameBox_LostFocus" />
+                            </StackPanel>
+                            <StackPanel Grid.Column="1" Margin="0,0,10,0">
+                                <TextBlock Text="Tastenkürzel (löst den Alarm aus)" FontWeight="SemiBold" TextWrapping="Wrap" />
+                                <TextBox x:Name="ProfileHotkeyBox" Padding="4" Margin="0,4,0,0" IsReadOnly="True"
+                                         PreviewKeyDown="ProfileHotkeyBox_PreviewKeyDown" />
+                            </StackPanel>
+                            <StackPanel Grid.Column="2">
+                                <TextBlock Text="Schwellwert (Antworten bis schließbar)" FontWeight="SemiBold" TextWrapping="Wrap" />
+                                <TextBox x:Name="ProfileThresholdBox" Padding="4" Margin="0,4,0,0" LostFocus="ProfileThresholdBox_LostFocus" />
+                            </StackPanel>
+                        </Grid>
+                        <TextBlock Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" Margin="0,2,0,10" TextWrapping="Wrap"
+                                   Text="Tastenkürzel: Klick rein, Tastenkombination drücken - Entf/Rücktaste löscht wieder." />
+
+                        <TextBlock Text="Anzeigetext (Text, den Empfänger beim Alarm sehen)" FontWeight="SemiBold" />
+                        <TextBox x:Name="ProfileTextBox" Padding="4" Margin="0,4,0,0" LostFocus="ProfileTextBox_LostFocus" />
+                    </StackPanel>
+
+                    <Grid Grid.Row="2" Margin="0,0,0,10">
+                        <Button x:Name="TransferRecipientsButton" Content="Empfängerliste übertragen" HorizontalAlignment="Left"
+                                Padding="14,6" Background="#2C3E50" Foreground="White" BorderThickness="0"
+                                Click="TransferRecipientsButton_Click" />
+                        <StackPanel x:Name="TransferModeButtons" Orientation="Horizontal" HorizontalAlignment="Left" Visibility="Collapsed">
+                            <TextBlock VerticalAlignment="Center" Margin="0,0,10,0" TextWrapping="Wrap" MaxWidth="280"
+                                       Text="Sender anklicken, die dieselbe Empfängerliste bekommen sollen, dann übernehmen." />
+                            <Button x:Name="TransferApplyButton" Content="Auswahl übernehmen" Padding="14,6" Margin="0,0,8,0"
+                                    Background="{StaticResource SuccessBrush}" Foreground="White" BorderThickness="0" Click="TransferApplyButton_Click" />
+                            <Button x:Name="TransferCancelButton" Content="Abbrechen" Padding="14,6" Click="TransferCancelButton_Click" />
+                        </StackPanel>
+                    </Grid>
+
+                    <!-- Nutzerwunsch 06.08.2026: von 2 Spalten (Sender|Empfänger) x je 3
+                         gestapelten Zeilen (Nutzer/Räume/Gruppen) - was insgesamt so hoch
+                         wurde, dass nur der ScrollViewer oben es überhaupt zeigen konnte -
+                         umgedreht auf 3 Spalten (Nutzer/Räume/Gruppen nebeneinander) x 2
+                         Zeilen (Sender-Zeile, Empfänger-Zeile) - passt jetzt ohne Scrollen
+                         auf ein Bild, der ScrollViewer bleibt nur als Sicherheitsnetz für
+                         ein sehr klein gezogenes Fenster (MinHeight/MinWidth oben). -->
+                    <Grid Grid.Row="3" x:Name="SenderRecipientPanel" IsEnabled="False">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="12" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="12" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+
+                        <!-- Spaltenköpfe einmal oben statt doppelt (früher je einmal pro
+                             Sender-/Empfänger-Stapel) - gelten für beide Zeilen darunter. -->
+                        <TextBlock Grid.Row="0" Grid.Column="0" Text="Nutzer" FontWeight="SemiBold" FontSize="11" Margin="0,0,0,2" />
+                        <TextBlock Grid.Row="0" Grid.Column="2" Text="Räume" FontWeight="SemiBold" FontSize="11" Margin="0,0,0,2" />
+                        <TextBlock Grid.Row="0" Grid.Column="4" Text="Gruppen" FontWeight="SemiBold" FontSize="11" Margin="0,0,0,2" />
+
+                        <!-- Zeile 1: alle möglichen Sender - Klick wählt zur Bearbeitung aus
+                             (im Übertragen-Modus: Klick wählt Ziel). Fett+Zähler-Badge = hat
+                             bereits Empfänger. -->
+                        <TextBlock Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="5" Text="Sender" FontSize="13" FontWeight="Bold" Margin="0,4,0,6" />
+                        <ListBox Grid.Row="2" Grid.Column="0" x:Name="SenderUsersList" MinHeight="140" ItemTemplate="{StaticResource SenderItemTemplate}"
+                                 ItemContainerStyle="{StaticResource SenderItemContainerStyle}"
+                                 PreviewMouseLeftButtonUp="SenderList_PreviewMouseLeftButtonUp" />
+                        <ListBox Grid.Row="2" Grid.Column="2" x:Name="SenderRoomsList" MinHeight="140" ItemTemplate="{StaticResource SenderItemTemplate}"
+                                 ItemContainerStyle="{StaticResource SenderItemContainerStyle}"
+                                 PreviewMouseLeftButtonUp="SenderList_PreviewMouseLeftButtonUp" />
+                        <ListBox Grid.Row="2" Grid.Column="4" x:Name="SenderGroupsList" MinHeight="140" ItemTemplate="{StaticResource SenderItemTemplate}"
+                                 ItemContainerStyle="{StaticResource SenderItemContainerStyle}"
+                                 PreviewMouseLeftButtonUp="SenderList_PreviewMouseLeftButtonUp" />
+
+                        <!-- Zeile 2: alle möglichen Empfänger für den oben gewählten Sender -
+                             grün = zugeordnet, Klick toggelt. Eigenes verschachteltes Grid nur
+                             damit RecipientColumnPanel weiterhin als ein Ganzes per
+                             IsEnabled aktiviert/deaktiviert werden kann (Code-behind). -->
+                        <Grid Grid.Row="3" Grid.RowSpan="2" Grid.Column="0" Grid.ColumnSpan="5" x:Name="RecipientColumnPanel">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="*" />
+                            </Grid.RowDefinitions>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="12" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="12" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="5" FontSize="13" FontWeight="Bold" Margin="0,10,0,6" TextWrapping="Wrap"
+                                       Text="Empfänger für den gewählten Sender (grün = zugeordnet)" />
+                            <ListBox Grid.Row="1" Grid.Column="0" x:Name="RecipientUsersList" MinHeight="140" DisplayMemberPath="DisplayName" ItemContainerStyle="{StaticResource ToggleListItemStyle}"
+                                     PreviewMouseLeftButtonUp="RecipientList_PreviewMouseLeftButtonUp" />
+                            <ListBox Grid.Row="1" Grid.Column="2" x:Name="RecipientRoomsList" MinHeight="140" DisplayMemberPath="DisplayName" ItemContainerStyle="{StaticResource ToggleListItemStyle}"
+                                     PreviewMouseLeftButtonUp="RecipientList_PreviewMouseLeftButtonUp" />
+                            <ListBox Grid.Row="1" Grid.Column="4" x:Name="RecipientGroupsList" MinHeight="140" DisplayMemberPath="DisplayName" ItemContainerStyle="{StaticResource ToggleListItemStyle}"
+                                     PreviewMouseLeftButtonUp="RecipientList_PreviewMouseLeftButtonUp" />
+                        </Grid>
+                    </Grid>
+
+                    <StackPanel Grid.Row="4" Margin="0,10,0,0">
+                        <!-- Nutzerwunsch 04.08.2026: kein "Löschen"-Button/Bestätigungsdialog
+                             hier mehr - siehe DeleteProfileIconButton ("-") oben. -->
+                        <Button x:Name="UndoProfileButton" Content="Rückgängig" Padding="14,6" HorizontalAlignment="Left" Click="UndoProfileButton_Click" />
+                        <TextBlock x:Name="ProfileStatusText" Margin="0,8,0,0" Foreground="Gray" TextWrapping="Wrap" />
+                    </StackPanel>
+                </Grid>
+                </ScrollViewer>
+            </TabItem>
+
+            <!-- Gruppen: die einzige organisatorische Einheit - ein Zusammenschluss von
+                 Arbeitsplätzen/Räumen (z. B. eine Etage), direkt aus Geräten. -->
+            <TabItem Header="Gruppen">
+                <Grid Margin="10">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="220" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+
+                    <DockPanel Grid.Column="0" Margin="0,0,12,0">
+                        <Button DockPanel.Dock="Bottom" x:Name="NewGroupButton" Content="Neue Gruppe" Margin="0,8,0,0" Padding="0,6" Click="NewGroupButton_Click" />
+                        <ListBox x:Name="GroupsList" DisplayMemberPath="Name" SelectionChanged="GroupsList_SelectionChanged">
+                            <ListBox.Resources>
+                                <SolidColorBrush x:Key="{x:Static SystemColors.HighlightBrushKey}" Color="#D6F5DD" />
+                                <SolidColorBrush x:Key="{x:Static SystemColors.HighlightTextBrushKey}" Color="#1D1D1F" />
+                                <SolidColorBrush x:Key="{x:Static SystemColors.ControlBrushKey}" Color="#D6F5DD" />
+                                <SolidColorBrush x:Key="{x:Static SystemColors.ControlTextBrushKey}" Color="#1D1D1F" />
+                            </ListBox.Resources>
+                        </ListBox>
+                    </DockPanel>
+
+                    <StackPanel Grid.Column="1" x:Name="GroupDetailPanel" IsEnabled="False">
+                        <TextBlock Text="Name (z. B. eine Etage oder Abteilung)" FontWeight="SemiBold" />
+                        <TextBox x:Name="GroupNameBox" Padding="4" Margin="0,4,0,12" LostFocus="GroupNameBox_LostFocus" />
+
+                        <TextBlock Text="Enthaltene Geräte (Klick fügt hinzu/entfernt - grün = Mitglied)" FontWeight="SemiBold" TextWrapping="Wrap" />
+                        <ListBox x:Name="GroupDevicesList" DisplayMemberPath="DisplayName" SelectionMode="Multiple"
+                                 Height="180" Margin="0,4,0,12" SelectionChanged="GroupDevicesList_SelectionChanged">
+                            <!-- Nutzerwunsch 04.08.2026: "leicht grün hinterlegt" statt der WPF-
+                                 Standard-Blau-Markierung, konsistent mit der Empfänger-Spalte im
+                                 Alarm-Profile-Tab (ToggleListItemStyle) - SelectionMode=Multiple ist
+                                 bereits click-to-toggle, nur die Farbe der Auswahl wird hier
+                                 umdefiniert (funktioniert für fokussiert/unfokussiert). -->
+                            <ListBox.Resources>
+                                <SolidColorBrush x:Key="{x:Static SystemColors.HighlightBrushKey}" Color="#D6F5DD" />
+                                <SolidColorBrush x:Key="{x:Static SystemColors.HighlightTextBrushKey}" Color="#1D1D1F" />
+                                <SolidColorBrush x:Key="{x:Static SystemColors.ControlBrushKey}" Color="#D6F5DD" />
+                                <SolidColorBrush x:Key="{x:Static SystemColors.ControlTextBrushKey}" Color="#1D1D1F" />
+                            </ListBox.Resources>
+                        </ListBox>
+
+                        <TextBlock Text="Enthaltene Räume" FontWeight="SemiBold" />
+                        <TextBlock x:Name="GroupRoomsSummaryText" Margin="0,4,0,10" TextWrapping="Wrap" Foreground="{StaticResource TextSecondaryBrush}" />
+
+                        <TextBlock Text="Enthaltene Nutzer" FontWeight="SemiBold" />
+                        <TextBlock x:Name="GroupUsersSummaryText" Margin="0,4,0,16" TextWrapping="Wrap" Foreground="{StaticResource TextSecondaryBrush}" />
+
+                        <StackPanel Orientation="Horizontal">
+                            <Button x:Name="DeleteGroupButton" Content="Löschen" Padding="14,6" Margin="0,0,8,0" Click="DeleteGroupButton_Click" />
+                            <Button x:Name="UndoGroupButton" Content="Rückgängig" Padding="14,6" Click="UndoGroupButton_Click" />
+                        </StackPanel>
+                        <TextBlock x:Name="GroupStatusText" Margin="0,8,0,0" Foreground="Gray" TextWrapping="Wrap" />
+                    </StackPanel>
+                </Grid>
+            </TabItem>
+        </TabControl>
+
+        <DockPanel Grid.Row="2" Margin="0,8,0,0">
+            <TextBlock x:Name="VersionText" DockPanel.Dock="Right" Style="{StaticResource VersionWatermarkStyle}" Margin="8,0,0,0" />
+            <TextBlock Foreground="Gray" FontSize="11" TextWrapping="Wrap"
+                       Text="Änderungen werden sofort beim Verlassen eines Feldes gespeichert und an alle Geräte verteilt (Config-Sync, kein Speichern-Button). Auswahl einer Gruppe/eines Profils reserviert es exklusiv zur Bearbeitung." />
+        </DockPanel>
+    </Grid>
+</Window>

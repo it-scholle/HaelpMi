@@ -1,0 +1,18 @@
+<Project>
+  <PropertyGroup>
+    <!-- Bugfix 06.08.2026 (Fehlerbericht "Dashboard zeigt Version 1.0.0 statt der
+         tatsächlichen"): ohne dieses Property blieb jede Assembly beim .NET-Standardwert
+         1.0.0.0 stehen (Assembly.GetExecutingAssembly().GetName().Version, siehe
+         HaelpMi.Core/Runtime/LiveIdentityFactory.cs, CurrentProgramVersion) - unabhängig
+         von der ganz anderen Versionsnummer, die der Inno-Setup-Installer anzeigt
+         (installer/HaelpMiCommon.iss.inc, MyAppVersion). Directory.Build.props wird von
+         MSBuild automatisch für jedes darunterliegende Projekt eingelesen, ohne dass jede
+         .csproj es einzeln referenzieren muss - das ist hier keine unnötige
+         Abstraktionsschicht, sondern schlicht der eine Ort, den MSBuild dafür vorsieht.
+         Es gibt keine automatische Kopplung zwischen MSBuild und dem separaten ISPP-
+         Toolchain des Installers - beide Werte müssen bei jedem Versionssprung von Hand
+         synchron gehalten werden (gleiches Prinzip wie bei den Port-Konstanten, siehe
+         Kommentar dort in HaelpMiCommon.iss.inc). -->
+    <Version>0.7.3</Version>
+  </PropertyGroup>
+</Project>

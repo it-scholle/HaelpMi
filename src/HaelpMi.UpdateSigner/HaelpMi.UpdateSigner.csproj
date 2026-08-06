@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>HaelpMi.UpdateSigner</RootNamespace>
+    <AssemblyName>HaelpMi.UpdateSigner</AssemblyName>
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+
+  <!-- Reines Release-Werkzeug (CLI, kein WPF-GUI): wer eine offizielle Version signiert,
+       tut das über die Kommandozeile als Teil des Release-Prozesses, nicht interaktiv.
+       Läuft nie beim Kunden, ist kein Teil der ausgelieferten Payload - hält den privaten
+       Schlüssel komplett von HaelpMi.Core (das nur die Verify-Seite mit dem öffentlichen
+       Schlüssel enthält) getrennt. -->
+  <ItemGroup>
+    <PackageReference Include="BouncyCastle.Cryptography" Version="2.4.0" />
+  </ItemGroup>
+
+</Project>

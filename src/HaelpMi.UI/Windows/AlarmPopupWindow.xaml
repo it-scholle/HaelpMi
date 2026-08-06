@@ -1,0 +1,70 @@
+<Window x:Class="HaelpMi.UI.Windows.AlarmPopupWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="HälpMi"
+        Width="460" SizeToContent="Height"
+        WindowStyle="None" ResizeMode="NoResize"
+        WindowStartupLocation="CenterScreen"
+        Topmost="True" ShowInTaskbar="True"
+        Background="Transparent" AllowsTransparency="True">
+    <Window.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/HaelpMi.UI;component/Styles/ModernStyles.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </Window.Resources>
+    <Border Background="White" BorderBrush="#C0392B" BorderThickness="2" CornerRadius="14">
+        <Border.Effect>
+            <DropShadowEffect BlurRadius="18" ShadowDepth="2" Opacity="0.4" />
+        </Border.Effect>
+        <StackPanel Margin="0,0,0,16">
+            <Border Background="#C0392B" CornerRadius="12,12,0,0" Padding="16,12">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="&#9888;" FontSize="20" Foreground="White" VerticalAlignment="Center" Margin="0,0,10,0" />
+                    <StackPanel>
+                        <TextBlock Text="HälpMi - Alarm" FontSize="12" Foreground="#F5B7B1" />
+                        <!-- FR-40: Raum + Raumnummer prominent - this is the biggest text in the window. -->
+                        <TextBlock x:Name="RoomText" FontSize="20" FontWeight="Bold" Foreground="White" />
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
+            <TextBlock x:Name="MessageText" FontSize="18" FontWeight="SemiBold"
+                       Margin="20,18,20,4" TextWrapping="Wrap" />
+
+            <!-- FR-40: Benutzername klein und untergeordnet. FR-41: RDP-Kennzeichnung, wenn zutreffend. -->
+            <TextBlock x:Name="SenderSubText" FontSize="11" Foreground="Gray" Margin="20,0,20,4" />
+            <TextBlock x:Name="TimestampText" FontSize="11" Foreground="Gray" Margin="20,0,20,12" />
+
+            <StackPanel Orientation="Horizontal" Margin="20,0,20,10">
+                <TextBlock Text="&#128266;" FontSize="16" Margin="0,0,8,0" />
+                <TextBlock Text="Signalton auf allen Lautsprechern - auch bei Stummschaltung oder Kopfhörer"
+                           FontSize="11" Foreground="Gray" TextWrapping="Wrap" MaxWidth="330" />
+            </StackPanel>
+
+            <!-- FR-47/FR-51: Schwellwert-Status - wie viele Bestätigungen fehlen noch, bis das Fenster schließbar wird. -->
+            <Border Background="#F4F6F6" CornerRadius="4" Margin="20,4,20,14" Padding="10,8">
+                <TextBlock x:Name="ThresholdStatusText" FontSize="12" TextWrapping="Wrap" Foreground="#34495E" />
+            </Border>
+
+            <Grid Margin="20,0,20,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <!-- FR-51: "bin unterwegs" - Rückmeldung an den Sender. -->
+                <Button Grid.Column="1" x:Name="OnMyWayButton" Content="Bin unterwegs" Margin="0,0,8,0"
+                        Padding="16,8" Background="#27AE60" Foreground="White" BorderThickness="0"
+                        Click="OnMyWayButton_Click" />
+
+                <!-- FR-51: erst klickbar (aktiviert), sobald der Schwellwert erreicht ist. -->
+                <Button Grid.Column="2" x:Name="CloseButton" Content="Schließen" IsEnabled="False"
+                        Padding="16,8" Background="#2E86C1" Foreground="White" BorderThickness="0"
+                        Click="CloseButton_Click" />
+            </Grid>
+        </StackPanel>
+    </Border>
+</Window>

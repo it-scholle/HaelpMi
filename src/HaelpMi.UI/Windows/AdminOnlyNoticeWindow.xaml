@@ -1,0 +1,27 @@
+<Window x:Class="HaelpMi.UI.Windows.AdminOnlyNoticeWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="HälpMi"
+        Width="380" SizeToContent="Height"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize" ShowInTaskbar="False">
+    <!-- Nutzerwunsch 05.08.2026: Raum/Raumnummer sind jetzt im User-Fenster editierbar,
+         sollen aber "nur durch den Administrator" angefasst werden - vorerst nur ein
+         Hinweis-Popup statt einer echten Prüfung (eine spätere Version soll das über einen
+         echten Windows-Admin-Prompt/UAC durchsetzen, siehe ConfigWindow-Kommentar). Kein
+         natives MessageBox ("noch hässlich alt Windows", Nutzer-Feedback 04.08.2026). -->
+    <Window.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/HaelpMi.UI;component/Styles/ModernStyles.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </Window.Resources>
+    <StackPanel Margin="20">
+        <TextBlock Text="Achtung" FontSize="16" FontWeight="Bold" Margin="0,0,0,10" />
+        <TextBlock TextWrapping="Wrap" Margin="0,0,0,16"
+                   Text="Bitte nur durch den Administrator bearbeiten lassen - eine falsche Raumzuordnung kann Alarme falsch weiterleiten." />
+        <Button x:Name="UnderstoodButton" Content="Verstanden" HorizontalAlignment="Right" Padding="16,7"
+                Style="{StaticResource AccentButtonStyle}" Click="UnderstoodButton_Click" />
+    </StackPanel>
+</Window>

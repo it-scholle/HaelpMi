@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+    <RootNamespace>HaelpMi.Installer.Tests</RootNamespace>
+    <!-- Für SendKeys (WizardAutomation.cs) - steuert Inno Setups eigene, stabile
+         Wizard-Chrome per Tastatur statt per Koordinaten-Klick (siehe README.md). Keine
+         eigene UI-Automation-Bibliothek nötig für diesen einen Zweck. -->
+    <UseWindowsForms>true</UseWindowsForms>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
+    <PackageReference Include="xunit" Version="2.9.2" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="xunit.runner.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Nicht zum Ausführen der App - nur um deployment.json/settings.json über denselben
+         JsonFileStore zu lesen, den die echte App auch benutzt (treuere Prüfung als ein
+         eigener, parallel gepflegter JSON-Parser hier). -->
+    <ProjectReference Include="..\..\src\HaelpMi.Core\HaelpMi.Core.csproj" />
+  </ItemGroup>
+
+</Project>

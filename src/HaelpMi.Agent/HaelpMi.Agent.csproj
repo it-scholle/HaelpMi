@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+    <!-- Nutzerwunsch 05.08.2026: Tray-Icon zum Öffnen von Konfiguration/Dashboard - WPF hat
+         keine eigene Tray-Icon-Klasse, System.Windows.Forms.NotifyIcon ist dafür die
+         etablierte, im Desktop-Workload bereits enthaltene Lösung (kein NuGet-Paket nötig),
+         statt Shell_NotifyIcon per P/Invoke selbst nachzubauen. -->
+    <UseWindowsForms>true</UseWindowsForms>
+    <RootNamespace>HaelpMi.Agent</RootNamespace>
+    <AssemblyName>HaelpMi.Agent</AssemblyName>
+    <ApplicationIcon>Assets\haelpmi_icon.ico</ApplicationIcon>
+    <Platforms>x64;ARM64</Platforms>
+    <!-- Kein InvariantGlobalization: WPF-Texteingabefelder lösen beim Klicken die aktuelle
+         Tastatur-Eingabesprache in eine echte CultureInfo auf (TextEditorMouse.OnMouseDown
+         -> InputLanguageSource.CurrentInputLanguage) - im Invariant-Modus wirft das eine
+         CultureNotFoundException bei jedem Klick in ein Textfeld. Entdeckt beim Reproduzieren
+         des InstallCreator-Absturzes, gilt aber für jede WPF-App mit Texteingabe gleichermaßen. -->
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\HaelpMi.Core\HaelpMi.Core.csproj" />
+    <ProjectReference Include="..\HaelpMi.UI\HaelpMi.UI.csproj" />
+  </ItemGroup>
+
+</Project>

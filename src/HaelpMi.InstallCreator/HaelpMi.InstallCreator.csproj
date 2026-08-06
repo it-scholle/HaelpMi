@@ -1,0 +1,41 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+    <RootNamespace>HaelpMi.InstallCreator</RootNamespace>
+    <AssemblyName>HaelpMi.InstallCreator</AssemblyName>
+    <ApplicationIcon>Assets\haelpmi_icon.ico</ApplicationIcon>
+    <Platforms>x64;ARM64</Platforms>
+    <!-- Nur für Clipboard.SetDataObject(...,retryTimes,retryDelay) in MainWindow.xaml.cs
+         CopyPasswordButton_Click - WinForms' Clipboard-Klasse hat für CLIPBRD_E_CANT_OPEN
+         (Zwischenablage kurz von einem anderen Prozess offen gehalten, z. B. VM-Sync) einen
+         eingebauten, offiziell dafür vorgesehenen Retry-Mechanismus; WPFs eigene
+         Clipboard-Klasse hat das nicht (siehe Kommentar dort für die Vorgeschichte). Gleiches
+         Muster wie HaelpMi.Agent (dort für NotifyIcon/ContextMenuStrip). -->
+    <UseWindowsForms>true</UseWindowsForms>
+    <!-- Kein InvariantGlobalization: hat genau diesen Absturz verursacht - WPF-Textfelder
+         lösen beim Klicken die aktuelle Tastatur-Eingabesprache in eine echte CultureInfo
+         auf (TextEditorMouse.OnMouseDown -> InputLanguageSource.CurrentInputLanguage), was
+         im Invariant-Modus eine CultureNotFoundException wirft. Per Windows-Ereignisprotokoll
+         bestätigt (siehe crash.log-Mechanismus unten, der genau deshalb ergänzt wurde). -->
+  </PropertyGroup>
+
+  <!-- Bewusst ohne ProjectReference auf HaelpMi.Core/HaelpMi.UI: dieses Tool ist reines
+       Entwickler-Werkzeug (Task "Install-Creator"), das nur ISCC.exe aufruft - es teilt
+       keine Laufzeit-Modelle mit der eigentlichen App und soll deren Payload/Deployment
+       auch nicht versehentlich mit-referenzieren. Das Icon/Style-XAML sind bewusste, kleine
+       Duplikate der HaelpMi.UI-Pendants statt einer ProjectReference (siehe CrashLogger.cs). -->
+  <ItemGroup>
+    <Resource Include="Assets\haelpmi_icon.ico" />
+  </ItemGroup>
+
+  <!-- Splashscreen (05.08.2026) am 06.08.2026 wieder entfernt - siehe HaelpMi.Config.csproj
+       für die ausführliche Begründung (WPF SplashScreen.Show() stürzt in einer self-contained
+       Veröffentlichung mit MissingManifestResourceException ab, VOR jeder eigenen
+       Fehlerbehandlung), dieses Tool ist ebenfalls self-contained veröffentlicht. -->
+
+</Project>

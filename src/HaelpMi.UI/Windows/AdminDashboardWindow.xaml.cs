@@ -1,0 +1,1116 @@
+using System.IO;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Input;
+using HaelpMi.Core.Models;
+using HaelpMi.Core.Networking;
+using HaelpMi.Core.Runtime;
+using HaelpMi.Core.Storage;
+using HaelpMi.UI.Helpers;
+using HaelpMi.UI.ViewModels;
+
+namespace HaelpMi.UI.Windows;
+
+/// <summary>
+/// Admin-Dashboard-Grundgerüst (Teil 2, Abschnitt 4): Gruppen und Alarm-Profile
+/// verwalten. Jede Änderung geht sofort über <see cref="AdminDashboardContext.Publish"/>
+/// (Config-Sync-Hot-Reload, kein Speichern-Button je Feld - CLAUDE.md) und landet in der
+/// Änderungshistorie mit Undo.
+///
+/// Nutzerwunsch 04.08.2026: die Empfängerkreis-Zuordnung lebt nicht mehr in einem
+/// separaten Popup-Fenster (ehemals RecipientAssignmentWindow, entfernt), sondern direkt
+/// im Alarm-Profile-Tab als zweite Spalte neben der Sender-Auswahl. Ein "Sender-Zeile"
+/// existiert dabei nicht mehr als eigenständig anzulegendes/löschbares Objekt - sie ergibt
+/// sich implizit daraus, ob ein Sender mindestens einen zugeordneten Empfänger hat (leere
+/// Zeilen werden beim Entfernen des letzten Empfängers automatisch entfernt).
+///
+/// Kein "Kreise"-Tab (Nutzer-Klarstellung 04.08.2026, siehe EditScope.cs): Gruppe ist die
+/// einzige organisatorische Einheit, ein direkter Zusammenschluss von Geräten.
+///
+/// Der exklusive Edit-Lock (CLAUDE.md, Abschnitt 5) wird PRO AUSGEWÄHLTEM DATENSATZ
+/// erworben - sobald eine Gruppe oder ein Alarm-Profil ausgewählt wird. "Wenn ich Gruppe
+/// A1 bearbeite, darf kein anderer diese bearbeiten; wenn ich Alarmprofil B2 bearbeite,
+/// darf dort kein anderer rein" - beide Tabs sperren unabhängig voneinander.
+/// </summary>
+public partial class AdminDashboardWindow : Window
+{
+    private sealed record DeviceChoice(Guid DeviceId, string DisplayName);
+
+    // IsHighlighted: "wird gerade bearbeitet" (Normalmodus) bzw. "als Übertragen-Ziel
+    // gewählt" (Übertragen-Modus) - siehe SenderItemContainerStyle in der XAML.
+    private sealed record SenderChoice(EntityRef Ref, string DisplayName, bool IsConfigured, int RecipientCount, bool IsHighlighted);
+    private sealed record RecipientChoice(EntityRef Ref, string DisplayName, bool IsAssigned);
+
+    private readonly AdminDashboardContext _context;
+    private SharedConfig _config = null!;
+    private List<DeviceChoice> _deviceChoices = new();
+
+    private DeviceGroup? _selectedGroup;
+    private AlarmProfile? _selectedProfile;
+    private HotkeyDefinition? _capturedProfileHotkey;
+
+    // Welcher Sender (Gerät/Raum/Gruppe) gerade in der rechten Spalte bearbeitet wird -
+    // unabhängig davon, ob er schon Empfänger hat oder gerade zum ersten Mal konfiguriert wird.
+    private EntityRef? _selectedSenderRef;
+
+    // "Empfängerliste übertragen" (Nutzerwunsch 04.08.2026): während aktiv ist die Sender-
+    // Spalte eine Mehrfachauswahl von Zielen statt einer Einzelauswahl zum Bearbeiten.
+    private bool _isTransferMode;
+    private EntityRef? _transferSourceSenderRef;
+    private readonly HashSet<EntityRef> _transferTargets = new();
+
+    // Welcher Lock (falls einer gehalten wird) gerade aktiv ist - für Release beim
+    // Auswahlwechsel/Schließen. Getrennt pro Tab, da beide unabhängig voneinander
+    // gesperrt werden können (siehe Klassenkommentar).
+    private Guid? _heldGroupLockId;
+    private Guid? _heldProfileLockId;
+
+    // Unterdrückt die Auto-Speichern-Handler unten, während LoadGroupDetail/
+    // LoadProfileDetail selbst Felder befüllen (z. B. GroupDevicesList.SelectedItems
+    // setzen löst sonst GroupDevicesList_SelectionChanged aus, obwohl der Nutzer nichts
+    // geändert hat).
+    private bool _isLoadingDetail;
+
+    // Nutzerwunsch 05.08.2026: automatisch aktualisieren, wenn ein neuer Boot-Call
+    // eintrifft/beantwortet wird. Bewusst NICHT die schwere ReloadAll() (die zyklt bei
+    // jedem Aufruf Group-/Profile-Edit-Lock neu und würde eine gerade laufende Eingabe
+    // durch das kurze IsEnabled=false währenddessen stören) - stattdessen nur die von der
+    // Geräteliste abgeleiteten Anzeigen auffrischen, ohne Auswahl/Lock anzufassen.
+    private readonly FileChangeWatcher _deviceFileWatcher = new(AppPaths.DevicesFilePath);
+
+    public AdminDashboardWindow(AdminDashboardContext context)
+    {
+        InitializeComponent();
+        _context = context;
+
+        VersionText.Text = $"v{LiveIdentityFactory.CurrentProgramVersion}";
+
+        ReloadAll();
+
+        _deviceFileWatcher.Changed += (_, _) => RefreshDeviceDerivedViews();
+        Closed += (_, _) =>
+        {
+            ReleaseAllLocks();
+            _deviceFileWatcher.Dispose();
+        };
+    }
+
+    // Nur die Geräte-abgeleiteten Anzeigen auffrischen (Gruppen-Geräteliste inkl.
+    // Zusammenfassung, Sender-/Empfänger-Spalten) - Gruppen-/Profil-AUSWAHL und deren Locks
+    // bleiben unangetastet, damit ein neu entdecktes Gerät im Hintergrund nicht mitten in
+    // einer laufenden Bearbeitung den Fokus wegreißt.
+    private void RefreshDeviceDerivedViews()
+    {
+        var ownDevice = _context.LoadOwnDevice();
+        _deviceChoices = _context.LoadDevices().Append(ownDevice)
+            .Select(d => new DeviceChoice(d.DeviceId, BuildDeviceDisplayName(d, isOwnDevice: d.DeviceId == ownDevice.DeviceId)))
+            .OrderBy(d => d.DisplayName, StringComparer.CurrentCultureIgnoreCase)
+            .ToList();
+
+        var wasLoading = _isLoadingDetail;
+        _isLoadingDetail = true;
+        try
+        {
+            var selectedIds = GroupDevicesList.SelectedItems.Cast<DeviceChoice>().Select(d => d.DeviceId).ToHashSet();
+            GroupDevicesList.ItemsSource = null;
+            GroupDevicesList.ItemsSource = _deviceChoices;
+            foreach (var device in _deviceChoices.Where(d => selectedIds.Contains(d.DeviceId)))
+            {
+                GroupDevicesList.SelectedItems.Add(device);
+            }
+        }
+        finally
+        {
+            _isLoadingDetail = wasLoading;
+        }
+
+        if (_selectedGroup is not null)
+        {
+            UpdateGroupSummaries();
+        }
+
+        if (_selectedProfile is not null)
+        {
+            RebuildSenderPanels();
+            RebuildRecipientPanels();
+        }
+    }
+
+    // Nutzerwunsch 04.08.2026: "blur soll auch funktionieren, wenn ich nur aus dem Feld
+    // klicke, nicht gezwungen aktiv in ein anderes Feld" - WPF feuert LostFocus nur, wenn
+    // die Tastatur-Fokus tatsächlich zu einem ANDEREN fokussierbaren Element wandert. Ein
+    // Klick auf leeren Hintergrund (Grid/TextBlock, nicht fokussierbar) bewegt den Fokus
+    // gar nicht erst, also blieb das Feld fokussiert und LostFocus feuerte nie.
+    //
+    // Ein früherer Versuch filterte per Ancestor-Typ (TextBox/ComboBox/ListBoxItem/...) und
+    // löste nur aus, wenn KEINER davon in der Klickkette vorkam - blieb aber weiterhin
+    // unzuverlässig (z. B. Klicks innerhalb der ListBox-Chrome/ScrollViewer, die keiner der
+    // gelisteten Typen sind, aber trotzdem nicht immer griffen). Robuster: bei JEDEM Klick
+    // im Fenster bedingungslos zuerst auf das Fenster selbst fokussieren (Preview-Events
+    // tunneln von der Wurzel nach unten, laufen also VOR der eigentlichen Klick-Behandlung
+    // ab) - falls das tatsächliche Ziel selbst fokussierbar ist (TextBox, ComboBox, ...),
+    // übernimmt die normale WPF-Klick-Logik direkt danach ohnehin wieder dessen Fokus.
+    private void Window_PreviewMouseDown(object sender, MouseButtonEventArgs e) => Keyboard.Focus(this);
+
+    private void ReloadAll()
+    {
+        _config = _context.LoadConfig();
+        // Nutzer-Frage 04.08.2026: LoadDevices() sind nur über Boot-Call entdeckte Peers,
+        // das eigene Gerät fehlt dort immer - ohne LoadOwnDevice() könnte der Admin sich
+        // selbst nie einer Gruppe zuordnen oder als Sender/Empfänger auswählen.
+        var ownDevice = _context.LoadOwnDevice();
+        _deviceChoices = _context.LoadDevices().Append(ownDevice)
+            .Select(d => new DeviceChoice(d.DeviceId, BuildDeviceDisplayName(d, isOwnDevice: d.DeviceId == ownDevice.DeviceId)))
+            .OrderBy(d => d.DisplayName, StringComparer.CurrentCultureIgnoreCase)
+            .ToList();
+
+        var groupSelectionId = _selectedGroup?.Id;
+        GroupsList.ItemsSource = null;
+        GroupsList.ItemsSource = _config.DeviceGroups;
+        GroupDevicesList.ItemsSource = null;
+        GroupDevicesList.ItemsSource = _deviceChoices;
+        GroupsList.SelectedItem = _config.DeviceGroups.FirstOrDefault(g => g.Id == groupSelectionId);
+
+        ReloadProfileCombo();
+    }
+
+    // Nutzerwunsch 04.08.2026: alphabetisch sortiert, standardmäßig immer der erste
+    // verfügbare Eintrag gewählt (nicht "keine Auswahl") - auch nach dem Löschen eines
+    // Profils oder beim allerersten Öffnen. Wählt ProfileCombo dasselbe Profil wie vorher
+    // (gleiche Id, aber neue Objektinstanz nach dem Config-Reload) erneut aus, wird das im
+    // SelectionChanged-Handler erkannt und der Edit-Lock NICHT unnötig neu angefordert.
+    private void ReloadProfileCombo()
+    {
+        var sorted = _config.AlarmProfiles.OrderBy(p => p.Name, StringComparer.CurrentCultureIgnoreCase).ToList();
+        ProfileCombo.ItemsSource = null;
+        ProfileCombo.ItemsSource = sorted;
+
+        var target = sorted.FirstOrDefault(p => p.Id == _selectedProfile?.Id) ?? sorted.FirstOrDefault();
+        ProfileCombo.SelectedItem = target;
+    }
+
+    private static string BuildDeviceDisplayName(DeviceEntry device, bool isOwnDevice)
+    {
+        var room = string.IsNullOrWhiteSpace(device.RoomName) ? "kein Raum" : device.RoomName;
+        var suffix = isOwnDevice ? ", dieses Gerät" : "";
+        return $"{device.ComputerName} - {room} ({device.User}{suffix})";
+    }
+
+    private void ReleaseAllLocks()
+    {
+        if (_heldGroupLockId is { } groupId)
+        {
+            _context.ReleaseLock(EditScopeKind.Group, groupId);
+            _heldGroupLockId = null;
+        }
+
+        if (_heldProfileLockId is { } profileId)
+        {
+            _context.ReleaseLock(EditScopeKind.Profile, profileId);
+            _heldProfileLockId = null;
+        }
+    }
+
+    // ------------------------------------------------------------- User-Installer-Export ---
+
+    private async void ExportUserInstallerButton_Click(object sender, RoutedEventArgs e)
+    {
+        ExportUserInstallerButton.IsEnabled = false;
+        ExportStatusText.Text = "Wird erstellt - kann einen Moment dauern...";
+        try
+        {
+            var result = await _context.ExportUserInstaller();
+            if (result.Success && result.OutputFilePath is not null)
+            {
+                ExportStatusText.Text = string.Empty;
+                var toast = new DownloadToastWindow(
+                    "User-Installer exportiert",
+                    Path.GetFileName(result.OutputFilePath) + " liegt im Downloads-Ordner.",
+                    result.OutputFilePath);
+                toast.Show();
+            }
+            else
+            {
+                ExportStatusText.Text = "Export fehlgeschlagen.";
+                MessageBox.Show(result.Error ?? "Unbekannter Fehler beim Export.", "HälpMi - Export fehlgeschlagen", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+        finally
+        {
+            ExportUserInstallerButton.IsEnabled = true;
+        }
+    }
+
+    // ------------------------------------------------------------------ Gruppen ---
+
+    // Nutzerwunsch 05.08.2026: reassigning ListBox.ItemsSource (in ReloadAll(), z. B. nach
+    // JEDER Feldänderung) leert die Auswahl kurzzeitig, BEVOR SelectedItem gleich danach
+    // wieder gesetzt wird - das feuert SelectionChanged zwischenzeitlich mit
+    // SelectedItem=null, obwohl kein Nutzer je "nichts" angeklickt hat. Ohne diese Prüfung
+    // löste JEDE Speicherung (z. B. ein Gerät in der Gruppe an-/abwählen) den vollen "andere
+    // Gruppe gewählt"-Zweig aus: Lock freigeben, Panel leeren - die eigentliche Auswahl ging
+    // dabei verloren. Ein Wechsel auf "wirklich nichts ausgewählt" kommt nur vor, wenn die
+    // Liste selbst leer ist (letzte Gruppe gelöscht) - das bleibt weiterhin erlaubt.
+    private async void GroupsList_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (GroupsList.SelectedItem is null && GroupsList.Items.Count > 0)
+        {
+            return;
+        }
+
+        if (_heldGroupLockId is { } previousId)
+        {
+            _context.ReleaseLock(EditScopeKind.Group, previousId);
+            _heldGroupLockId = null;
+        }
+
+        _selectedGroup = GroupsList.SelectedItem as DeviceGroup;
+        GroupDetailPanel.IsEnabled = false;
+
+        if (_selectedGroup is null)
+        {
+            LoadGroupDetail();
+            return;
+        }
+
+        var groupId = _selectedGroup.Id;
+        GroupStatusText.Text = "Wird zur Bearbeitung reserviert...";
+        try
+        {
+            var result = await _context.AcquireLock(EditScopeKind.Group, groupId);
+            if (GroupsList.SelectedItem is not DeviceGroup current || current.Id != groupId)
+            {
+                // Auswahl hat sich während der Netzwerk-Anfrage schon wieder geändert -
+                // Lock (falls doch noch gewährt) sofort wieder freigeben, nichts anzeigen.
+                if (result.Outcome == EditLockAcquireOutcome.Granted)
+                {
+                    _context.ReleaseLock(EditScopeKind.Group, groupId);
+                }
+                return;
+            }
+
+            if (result.Outcome != EditLockAcquireOutcome.Granted)
+            {
+                GroupStatusText.Text = result.Outcome == EditLockAcquireOutcome.DeniedByHolder
+                    ? $"Wird gerade von {result.HolderComputerName} ({result.HolderUser}) bearbeitet - nur Ansicht."
+                    : "Konnte nicht exklusiv reserviert werden - bitte erneut auswählen.";
+                LoadGroupDetail();
+                return;
+            }
+
+            _heldGroupLockId = groupId;
+            GroupStatusText.Text = string.Empty;
+            LoadGroupDetail();
+            GroupDetailPanel.IsEnabled = true;
+        }
+        catch (Exception ex)
+        {
+            GroupStatusText.Text = "Reservierung fehlgeschlagen - siehe Fehlermeldung.";
+            ActionErrorHandler.Show(this, "Gruppe zur Bearbeitung reservieren", ex);
+        }
+    }
+
+    private void LoadGroupDetail()
+    {
+        _isLoadingDetail = true;
+        try
+        {
+            GroupDevicesList.SelectedItems.Clear();
+
+            if (_selectedGroup is null)
+            {
+                GroupNameBox.Text = string.Empty;
+                GroupRoomsSummaryText.Text = string.Empty;
+                GroupUsersSummaryText.Text = string.Empty;
+                return;
+            }
+
+            GroupNameBox.Text = _selectedGroup.Name;
+            foreach (var device in _deviceChoices.Where(d => _selectedGroup.DeviceIds.Contains(d.DeviceId)))
+            {
+                GroupDevicesList.SelectedItems.Add(device);
+            }
+
+            UpdateGroupSummaries();
+        }
+        finally
+        {
+            _isLoadingDetail = false;
+        }
+    }
+
+    // Nutzerwunsch 04.08.2026: automatisch akkumulierte Anzeige, welche Räume/Nutzer in
+    // der Gruppe stecken - aus den Mitgliedsgeräten abgeleitet, nicht separat gepflegt.
+    private void UpdateGroupSummaries()
+    {
+        if (_selectedGroup is null)
+        {
+            return;
+        }
+
+        var members = _context.LoadDevices().Where(d => _selectedGroup.DeviceIds.Contains(d.DeviceId)).ToList();
+        var rooms = members.Select(d => string.IsNullOrWhiteSpace(d.RoomName) ? "kein Raum" : d.RoomName)
+            .Distinct(StringComparer.CurrentCultureIgnoreCase).OrderBy(r => r, StringComparer.CurrentCultureIgnoreCase).ToList();
+        var users = members.Select(d => d.User).Where(u => !string.IsNullOrWhiteSpace(u))
+            .Distinct(StringComparer.CurrentCultureIgnoreCase).OrderBy(u => u, StringComparer.CurrentCultureIgnoreCase).ToList();
+
+        GroupRoomsSummaryText.Text = rooms.Count > 0 ? string.Join(", ", rooms) : "(keine Geräte in dieser Gruppe)";
+        GroupUsersSummaryText.Text = users.Count > 0 ? string.Join(", ", users) : "(keine Geräte in dieser Gruppe)";
+    }
+
+    private async void NewGroupButton_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            var group = new DeviceGroup { Name = "Neue Gruppe" };
+            await PublishAsync(cfg => { cfg.DeviceGroups.Add(group); return cfg; }, EditScopeKind.Group, group.Id, "Gruppe angelegt", null, group.Name);
+            ReloadAll();
+            GroupsList.SelectedItem = _config.DeviceGroups.FirstOrDefault(g => g.Id == group.Id);
+        }
+        catch (Exception ex)
+        {
+            ActionErrorHandler.Show(this, "Gruppe anlegen", ex);
+        }
+    }
+
+    private void GroupNameBox_LostFocus(object sender, RoutedEventArgs e)
+    {
+        if (_isLoadingDetail || _selectedGroup is null)
+        {
+            return;
+        }
+
+        var newName = GroupNameBox.Text.Trim();
+        if (newName.Length == 0 || newName == _selectedGroup.Name)
+        {
+            return;
+        }
+
+        SaveGroupFieldAsync("Name", _selectedGroup.Name, newName, cfg =>
+        {
+            cfg.DeviceGroups.First(g => g.Id == _selectedGroup.Id).Name = newName;
+        });
+    }
+
+    private void GroupDevicesList_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_isLoadingDetail || _selectedGroup is null)
+        {
+            return;
+        }
+
+        var newDeviceIds = GroupDevicesList.SelectedItems.Cast<DeviceChoice>().Select(d => d.DeviceId).ToList();
+        if (newDeviceIds.OrderBy(id => id).SequenceEqual(_selectedGroup.DeviceIds.OrderBy(id => id)))
+        {
+            return;
+        }
+
+        SaveGroupFieldAsync("Enthaltene Geräte", $"{_selectedGroup.DeviceIds.Count} Gerät(e)", $"{newDeviceIds.Count} Gerät(e)", cfg =>
+        {
+            cfg.DeviceGroups.First(g => g.Id == _selectedGroup.Id).DeviceIds = newDeviceIds;
+        });
+    }
+
+    private async void SaveGroupFieldAsync(string fieldName, string? oldValue, string? newValue, Action<SharedConfig> mutate)
+    {
+        if (_selectedGroup is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await PublishAsync(cfg => { mutate(cfg); return cfg; }, EditScopeKind.Group, _selectedGroup.Id, $"Gruppe - {fieldName}", oldValue, newValue);
+            ReloadAll();
+            UpdateGroupSummaries();
+            GroupStatusText.Text = "Gespeichert und an alle Geräte verteilt.";
+        }
+        catch (Exception ex)
+        {
+            GroupStatusText.Text = "Fehlgeschlagen - siehe Fehlermeldung.";
+            ActionErrorHandler.Show(this, $"Gruppe - {fieldName} speichern", ex);
+        }
+    }
+
+    private async void DeleteGroupButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_selectedGroup is null)
+        {
+            return;
+        }
+
+        // Nutzerwunsch 04.08.2026: kein natives MessageBox-Bestätigungsfenster mehr ("noch
+        // hässlich alt Windows") - Rückgängig deckt ein Versehen ab.
+        try
+        {
+            var groupId = _selectedGroup.Id;
+            var name = _selectedGroup.Name;
+            await PublishAsync(cfg => { cfg.DeviceGroups.RemoveAll(g => g.Id == groupId); return cfg; }, EditScopeKind.Group, groupId, "Gruppe gelöscht", name, null);
+            _selectedGroup = null;
+            if (_heldGroupLockId == groupId)
+            {
+                _context.ReleaseLock(EditScopeKind.Group, groupId);
+                _heldGroupLockId = null;
+            }
+            ReloadAll();
+        }
+        catch (Exception ex)
+        {
+            ActionErrorHandler.Show(this, "Gruppe löschen", ex);
+        }
+    }
+
+    private async void UndoGroupButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_selectedGroup is null)
+        {
+            return;
+        }
+
+        try
+        {
+            var ok = await _context.Undo(EditScopeKind.Group, _selectedGroup.Id);
+            GroupStatusText.Text = ok ? "Letzte Änderung rückgängig gemacht." : "Keine Änderung zum Rückgängigmachen vorhanden.";
+            ReloadAll();
+            UpdateGroupSummaries();
+        }
+        catch (Exception ex)
+        {
+            GroupStatusText.Text = "Fehlgeschlagen - siehe Fehlermeldung.";
+            ActionErrorHandler.Show(this, "Gruppen-Änderung rückgängig machen", ex);
+        }
+    }
+
+    // ------------------------------------------------------------- Alarm-Profile ---
+
+    private async void ProfileCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        var newProfile = ProfileCombo.SelectedItem as AlarmProfile;
+
+        // Nutzerwunsch 05.08.2026: reassigning ComboBox.ItemsSource (in ReloadProfileCombo(),
+        // nach JEDER Speicherung - z. B. einen Empfänger an-/abwählen) leert SelectedItem
+        // kurzzeitig, BEVOR es gleich danach wieder gesetzt wird - das feuert
+        // SelectionChanged zwischenzeitlich mit null, obwohl kein Nutzer "nichts" angeklickt
+        // hat. Ohne diese Prüfung ging dabei die gerade gewählte Sender-Auswahl
+        // (_selectedSenderRef) sofort wieder verloren, sobald irgendein Empfänger getoggelt
+        // wurde. Ein Wechsel auf "wirklich kein Profil" kommt nur vor, wenn die Liste selbst
+        // leer ist (letztes Profil gelöscht).
+        if (newProfile is null && ProfileCombo.Items.Count > 0)
+        {
+            return;
+        }
+
+        // ReloadAll() nach jedem Speichern wählt dasselbe Profil (gleiche Id, aber neue
+        // Objektinstanz nach dem Config-Reload) erneut aus - das feuert SelectionChanged,
+        // obwohl der Nutzer nichts wirklich gewechselt hat. Ohne diese Prüfung würde jedes
+        // einzelne Feld-Speichern den Lock unnötig freigeben und neu anfordern UND die
+        // gerade in Bearbeitung befindliche Sender-Auswahl (_selectedSenderRef) verlieren.
+        if (newProfile is not null && newProfile.Id == _selectedProfile?.Id)
+        {
+            _selectedProfile = newProfile;
+            RebuildSenderPanels();
+            RebuildRecipientPanels();
+            return;
+        }
+
+        if (_heldProfileLockId is { } previousId)
+        {
+            _context.ReleaseLock(EditScopeKind.Profile, previousId);
+            _heldProfileLockId = null;
+        }
+
+        _selectedProfile = newProfile;
+        _selectedSenderRef = null;
+        ExitTransferModeSilently();
+        ProfileFieldsPanel.IsEnabled = false;
+        SenderRecipientPanel.IsEnabled = false;
+
+        if (_selectedProfile is null)
+        {
+            LoadProfileDetail();
+            return;
+        }
+
+        var profileId = _selectedProfile.Id;
+        ProfileStatusText.Text = "Wird zur Bearbeitung reserviert...";
+        try
+        {
+            var result = await _context.AcquireLock(EditScopeKind.Profile, profileId);
+            if (ProfileCombo.SelectedItem is not AlarmProfile current || current.Id != profileId)
+            {
+                if (result.Outcome == EditLockAcquireOutcome.Granted)
+                {
+                    _context.ReleaseLock(EditScopeKind.Profile, profileId);
+                }
+                return;
+            }
+
+            if (result.Outcome != EditLockAcquireOutcome.Granted)
+            {
+                ProfileStatusText.Text = result.Outcome == EditLockAcquireOutcome.DeniedByHolder
+                    ? $"Wird gerade von {result.HolderComputerName} ({result.HolderUser}) bearbeitet - nur Ansicht."
+                    : "Konnte nicht exklusiv reserviert werden - bitte erneut auswählen.";
+                LoadProfileDetail();
+                return;
+            }
+
+            _heldProfileLockId = profileId;
+            ProfileStatusText.Text = string.Empty;
+            LoadProfileDetail();
+            ProfileFieldsPanel.IsEnabled = true;
+            SenderRecipientPanel.IsEnabled = true;
+        }
+        catch (Exception ex)
+        {
+            ProfileStatusText.Text = "Reservierung fehlgeschlagen - siehe Fehlermeldung.";
+            ActionErrorHandler.Show(this, "Alarm-Profil zur Bearbeitung reservieren", ex);
+        }
+    }
+
+    private void LoadProfileDetail()
+    {
+        _isLoadingDetail = true;
+        try
+        {
+            if (_selectedProfile is null)
+            {
+                ProfileNameBox.Text = string.Empty;
+                ProfileTextBox.Text = string.Empty;
+                _capturedProfileHotkey = null;
+                ProfileHotkeyBox.Text = "Kein Tastenkürzel";
+                ProfileThresholdBox.Text = string.Empty;
+                RebuildSenderPanels();
+                RebuildRecipientPanels();
+                return;
+            }
+
+            ProfileNameBox.Text = _selectedProfile.Name;
+            ProfileTextBox.Text = _selectedProfile.Text;
+            _capturedProfileHotkey = _selectedProfile.Hotkey;
+            ProfileHotkeyBox.Text = _capturedProfileHotkey?.Format() ?? "Kein Tastenkürzel";
+            ProfileThresholdBox.Text = _selectedProfile.ResponseThreshold.ToString();
+            RebuildSenderPanels();
+            RebuildRecipientPanels();
+        }
+        finally
+        {
+            _isLoadingDetail = false;
+        }
+    }
+
+    // Escape löste bisher "Tastenkürzel löschen" aus - das verhindert, Escape selbst als
+    // Hotkey zu benutzen. Entf/Rücktaste übernehmen jetzt das Löschen, Escape ist ein
+    // normal erfassbarer Key wie jeder andere (Nutzerwunsch 04.08.2026).
+    private void ProfileHotkeyBox_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        e.Handled = true;
+        if (e.Key is Key.Delete or Key.Back)
+        {
+            _capturedProfileHotkey = null;
+            ProfileHotkeyBox.Text = "Kein Tastenkürzel";
+            SaveProfileHotkeyAsync();
+            return;
+        }
+
+        var hotkey = HotkeyInputHelper.TryCapture(e);
+        if (hotkey is null)
+        {
+            return;
+        }
+
+        _capturedProfileHotkey = hotkey;
+        ProfileHotkeyBox.Text = hotkey.Format();
+        SaveProfileHotkeyAsync();
+    }
+
+    private async void NewProfileButton_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            var profile = new AlarmProfile { Name = "Neues Profil", Text = "Bitte sofort kommen!" };
+            await PublishAsync(cfg => { cfg.AlarmProfiles.Add(profile); return cfg; }, EditScopeKind.Profile, profile.Id, "Alarm-Profil angelegt", null, profile.Name);
+
+            // Bugfix 06.08.2026 (Fehlerbericht "neues Profil nicht direkt editierbar, Name
+            // etc. bleibt leer"): _selectedProfile hier VORHER auf das neue Profil zu setzen
+            // ließ ReloadProfileCombo() (ruft ReloadAll() auf) dieselbe Id gleich wieder
+            // auswählen - ProfileCombo_SelectionChanged erkannte das dann als "nur neu
+            // instanziiert, Nutzer hat nichts wirklich gewechselt" (siehe Kommentar dort) und
+            // übersprang Lock-Anforderung, Feld-Befüllung (LoadProfileDetail) UND das
+            // Freischalten von ProfileFieldsPanel/SenderRecipientPanel - das neue Profil blieb
+            // leer und nicht editierbar stehen. Stattdessen _selectedProfile unverändert lassen,
+            // ReloadAll() aufrufen (wählt dadurch zunächst die bisherige Auswahl unverändert
+            // erneut, harmlos), und erst danach das neue Profil ganz regulär per SelectedItem
+            // auswählen - das durchläuft den echten "anderes Profil gewählt"-Zweig inklusive
+            // Lock/LoadProfileDetail/Freischalten, genau wie ein normaler Nutzerklick.
+            ReloadAll();
+            ProfileCombo.SelectedItem = _config.AlarmProfiles.FirstOrDefault(p => p.Id == profile.Id);
+        }
+        catch (Exception ex)
+        {
+            ActionErrorHandler.Show(this, "Alarm-Profil anlegen", ex);
+        }
+    }
+
+    private void ProfileNameBox_LostFocus(object sender, RoutedEventArgs e)
+    {
+        if (_isLoadingDetail || _selectedProfile is null)
+        {
+            return;
+        }
+
+        var newName = ProfileNameBox.Text.Trim();
+        if (newName.Length == 0 || newName == _selectedProfile.Name)
+        {
+            return;
+        }
+
+        SaveProfileFieldAsync("Name", _selectedProfile.Name, newName, cfg =>
+        {
+            cfg.AlarmProfiles.First(p => p.Id == _selectedProfile.Id).Name = newName;
+        });
+    }
+
+    private void ProfileTextBox_LostFocus(object sender, RoutedEventArgs e)
+    {
+        if (_isLoadingDetail || _selectedProfile is null)
+        {
+            return;
+        }
+
+        var newText = ProfileTextBox.Text;
+        if (newText.Trim().Length == 0 || newText == _selectedProfile.Text)
+        {
+            return;
+        }
+
+        SaveProfileFieldAsync("Anzeigetext", _selectedProfile.Text, newText, cfg =>
+        {
+            cfg.AlarmProfiles.First(p => p.Id == _selectedProfile.Id).Text = newText;
+        });
+    }
+
+    private void ProfileThresholdBox_LostFocus(object sender, RoutedEventArgs e)
+    {
+        if (_isLoadingDetail || _selectedProfile is null)
+        {
+            return;
+        }
+
+        if (!int.TryParse(ProfileThresholdBox.Text.Trim(), out var newThreshold) || newThreshold < 1)
+        {
+            ProfileStatusText.Text = "Schwellwert muss eine ganze Zahl ≥ 1 sein - nicht gespeichert.";
+            return;
+        }
+
+        if (newThreshold == _selectedProfile.ResponseThreshold)
+        {
+            return;
+        }
+
+        SaveProfileFieldAsync("Schwellwert", _selectedProfile.ResponseThreshold.ToString(), newThreshold.ToString(), cfg =>
+        {
+            cfg.AlarmProfiles.First(p => p.Id == _selectedProfile.Id).ResponseThreshold = newThreshold;
+        });
+    }
+
+    private async void SaveProfileHotkeyAsync()
+    {
+        if (_isLoadingDetail || _selectedProfile is null)
+        {
+            return;
+        }
+
+        var oldFormat = _selectedProfile.Hotkey?.Format() ?? "keins";
+        var newFormat = _capturedProfileHotkey?.Format() ?? "keins";
+        if (oldFormat == newFormat)
+        {
+            return;
+        }
+
+        var capturedHotkey = _capturedProfileHotkey;
+        await SaveProfileFieldAsyncCore("Tastenkürzel", oldFormat, newFormat, cfg =>
+        {
+            cfg.AlarmProfiles.First(p => p.Id == _selectedProfile.Id).Hotkey = capturedHotkey;
+        });
+    }
+
+    private async void SaveProfileFieldAsync(string fieldName, string? oldValue, string? newValue, Action<SharedConfig> mutate) =>
+        await SaveProfileFieldAsyncCore(fieldName, oldValue, newValue, mutate);
+
+    private async Task SaveProfileFieldAsyncCore(string fieldName, string? oldValue, string? newValue, Action<SharedConfig> mutate)
+    {
+        if (_selectedProfile is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await PublishAsync(cfg => { mutate(cfg); return cfg; }, EditScopeKind.Profile, _selectedProfile.Id, $"Alarm-Profil - {fieldName}", oldValue, newValue);
+            ReloadAll();
+            ProfileStatusText.Text = "Gespeichert und an alle Geräte verteilt.";
+        }
+        catch (Exception ex)
+        {
+            ProfileStatusText.Text = "Fehlgeschlagen - siehe Fehlermeldung.";
+            ActionErrorHandler.Show(this, $"Alarm-Profil - {fieldName} speichern", ex);
+        }
+    }
+
+    // Nutzerwunsch 04.08.2026: kein natives MessageBox-Bestätigungsfenster mehr ("noch
+    // hässlich alt Windows") - stattdessen ein "-" direkt neben dem "+" im Dropdown, löscht
+    // sofort; Rückgängig deckt ein Versehen ab (siehe UndoProfileButton_Click).
+    private async void DeleteProfileIconButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_selectedProfile is null)
+        {
+            return;
+        }
+
+        try
+        {
+            var profileId = _selectedProfile.Id;
+            var name = _selectedProfile.Name;
+            await PublishAsync(cfg => { cfg.AlarmProfiles.RemoveAll(p => p.Id == profileId); return cfg; }, EditScopeKind.Profile, profileId, "Alarm-Profil gelöscht", name, null);
+            _selectedProfile = null;
+            if (_heldProfileLockId == profileId)
+            {
+                _context.ReleaseLock(EditScopeKind.Profile, profileId);
+                _heldProfileLockId = null;
+            }
+            ReloadAll();
+        }
+        catch (Exception ex)
+        {
+            ActionErrorHandler.Show(this, "Alarm-Profil löschen", ex);
+        }
+    }
+
+    private async void UndoProfileButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_selectedProfile is null)
+        {
+            return;
+        }
+
+        try
+        {
+            var ok = await _context.Undo(EditScopeKind.Profile, _selectedProfile.Id);
+            ProfileStatusText.Text = ok ? "Letzte Änderung rückgängig gemacht." : "Keine Änderung zum Rückgängigmachen vorhanden.";
+            ReloadAll();
+        }
+        catch (Exception ex)
+        {
+            ProfileStatusText.Text = "Fehlgeschlagen - siehe Fehlermeldung.";
+            ActionErrorHandler.Show(this, "Alarm-Profil-Änderung rückgängig machen", ex);
+        }
+    }
+
+    // ------------------------------------------------ Sender-/Empfänger-Zuordnung ---
+    // Nutzerwunsch 04.08.2026: zwei Spalten statt drei. Spalte 1 (Sender) zeigt IMMER alle
+    // möglichen Sender, ein Klick WÄHLT einen zur Bearbeitung aus (kein Toggle) - fett +
+    // blauer Zähler-Badge markiert Sender, die bereits Empfänger haben, sortiert an den
+    // Anfang ihrer jeweiligen Kategorie. Spalte 2 (Empfänger) zeigt alle möglichen
+    // Empfänger für den in Spalte 1 gewählten Sender, grün = zugeordnet, Klick toggelt.
+
+    private void RebuildSenderPanels()
+    {
+        if (_selectedProfile is null)
+        {
+            SenderUsersList.ItemsSource = null;
+            SenderRoomsList.ItemsSource = null;
+            SenderGroupsList.ItemsSource = null;
+            return;
+        }
+
+        var ownDevice = _context.LoadOwnDevice();
+        var devices = _context.LoadDevices().Append(ownDevice).ToList();
+        var groups = _config.DeviceGroups;
+        var assignments = _selectedProfile.RecipientAssignments;
+
+        SenderChoice Build(EntityRef entityRef, string displayName)
+        {
+            var row = assignments.FirstOrDefault(a => a.Sender == entityRef);
+            var count = row is null ? 0 : RecipientResolver.CountDistinctRecipientDevices(row.Recipients, devices, groups);
+            var isHighlighted = _isTransferMode ? _transferTargets.Contains(entityRef) : entityRef == _selectedSenderRef;
+            return new SenderChoice(entityRef, displayName, count > 0, count, isHighlighted);
+        }
+
+        List<SenderChoice> SortConfiguredFirst(IEnumerable<SenderChoice> choices) =>
+            choices.OrderByDescending(c => c.IsConfigured).ThenBy(c => c.DisplayName, StringComparer.CurrentCultureIgnoreCase).ToList();
+
+        SenderUsersList.ItemsSource = SortConfiguredFirst(devices.Select(d =>
+            Build(new EntityRef(EntityKind.Device, d.DeviceId), BuildUserLabel(d, isOwnDevice: d.DeviceId == ownDevice.DeviceId))));
+
+        SenderRoomsList.ItemsSource = SortConfiguredFirst(devices
+            .Where(d => !string.IsNullOrWhiteSpace(d.RoomNumber))
+            .GroupBy(d => d.RoomNumber)
+            .Select(g => Build(EntityRef.ForRoom(g.Key), BuildRoomLabel(g))));
+
+        SenderGroupsList.ItemsSource = SortConfiguredFirst(groups.Select(g =>
+            Build(new EntityRef(EntityKind.Group, g.Id), $"Gruppe: {g.Name}")));
+    }
+
+    private void RebuildRecipientPanels()
+    {
+        if (_selectedProfile is null || _selectedSenderRef is not { } senderRef)
+        {
+            RecipientUsersList.ItemsSource = null;
+            RecipientRoomsList.ItemsSource = null;
+            RecipientGroupsList.ItemsSource = null;
+            return;
+        }
+
+        var assigned = _selectedProfile.RecipientAssignments.FirstOrDefault(a => a.Sender == senderRef)?.Recipients ?? new List<EntityRef>();
+        var ownDevice = _context.LoadOwnDevice();
+        var devices = _context.LoadDevices().Append(ownDevice).ToList();
+        var groups = _config.DeviceGroups;
+
+        RecipientUsersList.ItemsSource = devices
+            .Select(d => new RecipientChoice(new EntityRef(EntityKind.Device, d.DeviceId), BuildUserLabel(d, isOwnDevice: d.DeviceId == ownDevice.DeviceId), assigned.Contains(new EntityRef(EntityKind.Device, d.DeviceId))))
+            .ToList();
+
+        RecipientRoomsList.ItemsSource = devices
+            .Where(d => !string.IsNullOrWhiteSpace(d.RoomNumber))
+            .GroupBy(d => d.RoomNumber)
+            .Select(g => new RecipientChoice(EntityRef.ForRoom(g.Key), BuildRoomLabel(g), assigned.Contains(EntityRef.ForRoom(g.Key))))
+            .OrderBy(c => c.DisplayName, StringComparer.CurrentCultureIgnoreCase)
+            .ToList();
+
+        RecipientGroupsList.ItemsSource = groups
+            .Select(g => new RecipientChoice(new EntityRef(EntityKind.Group, g.Id), $"Gruppe: {g.Name}", assigned.Contains(new EntityRef(EntityKind.Group, g.Id))))
+            .ToList();
+    }
+
+    // CLAUDE.md, Datenschutz-Prinzipien: Raum prominent, Username klein - hier aber ist der
+    // Nutzer selbst der gesuchte Zweck der Liste (der Admin muss ihn gezielt zuordnen
+    // können), daher voran, mit dem Raum zur Wiedererkennung dahinter.
+    private static string BuildUserLabel(DeviceEntry device, bool isOwnDevice)
+    {
+        var user = string.IsNullOrWhiteSpace(device.User) ? device.ComputerName : device.User;
+        var room = string.IsNullOrWhiteSpace(device.RoomName) ? "kein Raum" : device.RoomName;
+        var suffix = isOwnDevice ? ", dieses Gerät" : "";
+        return $"{user} ({room}{suffix})";
+    }
+
+    private static string BuildRoomLabel(IGrouping<string, DeviceEntry> roomGroup)
+    {
+        var roomName = roomGroup.Select(d => d.RoomName).FirstOrDefault(n => !string.IsNullOrWhiteSpace(n));
+        var label = string.IsNullOrWhiteSpace(roomName) ? $"Raum {roomGroup.Key}" : $"{roomName} ({roomGroup.Key})";
+        var count = roomGroup.Count();
+        return $"{label} - {count} {(count == 1 ? "Gerät" : "Geräte")}";
+    }
+
+    // Ein Handler für alle drei Sender-Listen (Nutzer/Räume/Gruppen). Normalmodus: wählt
+    // den Sender zur Bearbeitung aus. Übertragen-Modus: toggelt ihn als Übertragen-Ziel.
+    private void SenderList_PreviewMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+    {
+        if (FindDataContext<SenderChoice>(e.OriginalSource) is not { } choice)
+        {
+            return;
+        }
+
+        if (_isTransferMode)
+        {
+            if (choice.Ref == _transferSourceSenderRef)
+            {
+                return; // die Quelle kann nicht gleichzeitig ihr eigenes Ziel sein
+            }
+
+            if (!_transferTargets.Remove(choice.Ref))
+            {
+                _transferTargets.Add(choice.Ref);
+            }
+            RebuildSenderPanels();
+            return;
+        }
+
+        _selectedSenderRef = choice.Ref;
+        RebuildSenderPanels();
+        RebuildRecipientPanels();
+    }
+
+    private async void RecipientList_PreviewMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+    {
+        if (FindDataContext<RecipientChoice>(e.OriginalSource) is not { } choice)
+        {
+            return;
+        }
+
+        if (choice.IsAssigned)
+        {
+            await UnassignRecipientAsync(choice);
+        }
+        else
+        {
+            await AssignRecipientAsync(choice);
+        }
+    }
+
+    private static T? FindDataContext<T>(object originalSource) where T : class
+    {
+        var element = originalSource as DependencyObject;
+        while (element is not null and not ListBoxItem)
+        {
+            element = System.Windows.Media.VisualTreeHelper.GetParent(element);
+        }
+        return (element as ListBoxItem)?.DataContext as T;
+    }
+
+    private async Task AssignRecipientAsync(RecipientChoice recipient)
+    {
+        if (_selectedProfile is null || _selectedSenderRef is not { } senderRef)
+        {
+            return;
+        }
+
+        try
+        {
+            var profileId = _selectedProfile.Id;
+            await PublishAsync(cfg =>
+            {
+                var profile = cfg.AlarmProfiles.First(p => p.Id == profileId);
+                var row = profile.RecipientAssignments.FirstOrDefault(r => r.Sender == senderRef);
+                if (row is null)
+                {
+                    row = new RecipientAssignment { Sender = senderRef, Recipients = new List<EntityRef>() };
+                    profile.RecipientAssignments.Add(row);
+                }
+                if (!row.Recipients.Contains(recipient.Ref))
+                {
+                    row.Recipients.Add(recipient.Ref);
+                }
+                return cfg;
+            }, EditScopeKind.Profile, profileId, "Empfänger zugeordnet", null, recipient.DisplayName);
+
+            ReloadAll();
+        }
+        catch (Exception ex)
+        {
+            ActionErrorHandler.Show(this, "Empfänger zuordnen", ex);
+        }
+    }
+
+    private async Task UnassignRecipientAsync(RecipientChoice recipient)
+    {
+        if (_selectedProfile is null || _selectedSenderRef is not { } senderRef)
+        {
+            return;
+        }
+
+        try
+        {
+            var profileId = _selectedProfile.Id;
+            await PublishAsync(cfg =>
+            {
+                var profile = cfg.AlarmProfiles.First(p => p.Id == profileId);
+                var row = profile.RecipientAssignments.FirstOrDefault(r => r.Sender == senderRef);
+                if (row is not null)
+                {
+                    row.Recipients.RemoveAll(r => r == recipient.Ref);
+                    if (row.Recipients.Count == 0)
+                    {
+                        // Keine explizite "Sender-Zeile löschen"-Aktion mehr im UI - eine
+                        // Zeile ohne Empfänger ist implizit keine aktive Zeile mehr.
+                        profile.RecipientAssignments.Remove(row);
+                    }
+                }
+                return cfg;
+            }, EditScopeKind.Profile, profileId, "Empfänger entfernt", recipient.DisplayName, null);
+
+            ReloadAll();
+        }
+        catch (Exception ex)
+        {
+            ActionErrorHandler.Show(this, "Empfänger entfernen", ex);
+        }
+    }
+
+    // -------------------------------------------------- "Empfängerliste übertragen" ---
+
+    private void TransferRecipientsButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_selectedSenderRef is null)
+        {
+            ProfileStatusText.Text = "Bitte zuerst links einen Sender auswählen, dessen Empfängerliste übertragen werden soll.";
+            return;
+        }
+
+        _isTransferMode = true;
+        _transferSourceSenderRef = _selectedSenderRef;
+        _transferTargets.Clear();
+
+        TransferRecipientsButton.Visibility = Visibility.Collapsed;
+        TransferModeButtons.Visibility = Visibility.Visible;
+        ProfileFieldsPanel.IsEnabled = false;
+        RecipientColumnPanel.IsEnabled = false;
+
+        RebuildSenderPanels();
+    }
+
+    private async void TransferApplyButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_selectedProfile is null || _transferSourceSenderRef is not { } sourceRef || _transferTargets.Count == 0)
+        {
+            ExitTransferModeSilently();
+            RebuildSenderPanels();
+            return;
+        }
+
+        try
+        {
+            var profileId = _selectedProfile.Id;
+            var sourceRecipients = _selectedProfile.RecipientAssignments.FirstOrDefault(r => r.Sender == sourceRef)?.Recipients.ToList() ?? new List<EntityRef>();
+            var targets = _transferTargets.ToList();
+
+            await PublishAsync(cfg =>
+            {
+                var profile = cfg.AlarmProfiles.First(p => p.Id == profileId);
+                foreach (var targetRef in targets)
+                {
+                    var row = profile.RecipientAssignments.FirstOrDefault(r => r.Sender == targetRef);
+                    if (row is null)
+                    {
+                        row = new RecipientAssignment { Sender = targetRef, Recipients = new List<EntityRef>() };
+                        profile.RecipientAssignments.Add(row);
+                    }
+                    row.Recipients = sourceRecipients.ToList();
+                }
+                return cfg;
+            }, EditScopeKind.Profile, profileId, "Empfängerliste übertragen", null, $"{targets.Count} Sender");
+
+            ProfileStatusText.Text = $"Empfängerliste auf {targets.Count} Sender übertragen und verteilt.";
+        }
+        catch (Exception ex)
+        {
+            ActionErrorHandler.Show(this, "Empfängerliste übertragen", ex);
+        }
+        finally
+        {
+            ExitTransferModeSilently();
+            ReloadAll();
+        }
+    }
+
+    private void TransferCancelButton_Click(object sender, RoutedEventArgs e)
+    {
+        ExitTransferModeSilently();
+        RebuildSenderPanels();
+    }
+
+    // "Silently" = ohne UI-Reset erneut auszulösen (z. B. beim Profilwechsel mitten im
+    // Übertragen-Modus) - RebuildSenderPanels()/ReloadAll() übernehmen danach die eigentliche Anzeige.
+    private void ExitTransferModeSilently()
+    {
+        _isTransferMode = false;
+        _transferSourceSenderRef = null;
+        _transferTargets.Clear();
+        TransferRecipientsButton.Visibility = Visibility.Visible;
+        TransferModeButtons.Visibility = Visibility.Collapsed;
+        ProfileFieldsPanel.IsEnabled = _selectedProfile is not null;
+        RecipientColumnPanel.IsEnabled = true;
+    }
+
+    private Task<SharedConfig> PublishAsync(Func<SharedConfig, SharedConfig> mutate, EditScopeKind scopeKind, Guid scopeId, string fieldPath, string? oldValue, string? newValue) =>
+        _context.Publish(mutate, scopeKind, scopeId, fieldPath, oldValue, newValue);
+}
