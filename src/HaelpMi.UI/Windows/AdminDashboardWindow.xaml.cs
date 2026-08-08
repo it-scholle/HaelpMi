@@ -2,6 +2,7 @@ using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Media;
 using HaelpMi.Core.Models;
 using HaelpMi.Core.Networking;
 using HaelpMi.Core.Runtime;
@@ -85,6 +86,7 @@ public partial class AdminDashboardWindow : Window
 
         VersionText.Text = $"v{LiveIdentityFactory.CurrentProgramVersion}";
 
+        UpdateUserLabelModeButtons();
         ReloadAll();
 
         _deviceFileWatcher.Changed += (_, _) => RefreshDeviceDerivedViews();
@@ -152,6 +154,28 @@ public partial class AdminDashboardWindow : Window
     // übernimmt die normale WPF-Klick-Logik direkt danach ohnehin wieder dessen Fokus.
     private void Window_PreviewMouseDown(object sender, MouseButtonEventArgs e) => Keyboard.Focus(this);
 
+    // Bugfix 07.08.2026 (Fehlerbericht "Sender deselektiert sich, wenn ich einen Empfänger
+    // auswähle"): GroupsList/ProfileCombo setzen ihr ItemsSource bei jedem Reload auf null
+    // und dann neu (siehe ReloadProfileCombo() unten - nötig, damit die Liste die neuen
+    // Objektinstanzen nach dem Config-Reload zeigt). Das kurzzeitige ItemsSource=null lässt
+    // WPF SelectedItem zwischenzeitlich auf null UND Items.Count auf 0 fallen - genau der
+    // Fall, den die "Items.Count > 0"-Wächter in ProfileCombo_SelectionChanged/
+    // GroupsList_SelectionChanged eigentlich abfangen sollten, der bei Count==0 aber selbst
+    // NICHT greift. Jeder Reload (z. B. durchs Zuordnen eines Empfängers, siehe
+    // AssignRecipientAsync) wurde dadurch von den SelectionChanged-Handlern fälschlich als
+    // "Nutzer hat wirklich auf 'keine Auswahl' gewechselt" interpretiert -
+    // _selectedSenderRef/_heldProfileLockId/_heldGroupLockId gingen verloren.
+    //
+    // Erster Fix-Versuch unterdrückte SelectionChanged während JEDES ReloadAll() komplett -
+    // das brach dabei das allererste Laden beim Fensteröffnen (nichts vorher ausgewählt):
+    // dort MUSS der echte Handler laufen (Edit-Lock anfordern, Felder befüllen, Panel
+    // freischalten - das passiert nur in dessen "andere Auswahl"-Zweig). Deshalb jetzt nur
+    // unterdrücken, wenn VORHER schon etwas ausgewählt war (reiner "gleiche fachliche
+    // Auswahl, neue Objektinstanz nach Reload"-Fall) - beim allerersten Laden bleibt der
+    // normale Ablauf unangetastet.
+    private bool _suppressGroupSelectionChanged;
+    private bool _suppressProfileSelectionChanged;
+
     private void ReloadAll()
     {
         _config = _context.LoadConfig();
@@ -165,13 +189,46 @@ public partial class AdminDashboardWindow : Window
             .ToList();
 
         var groupSelectionId = _selectedGroup?.Id;
-        GroupsList.ItemsSource = null;
-        GroupsList.ItemsSource = _config.DeviceGroups;
-        GroupDevicesList.ItemsSource = null;
-        GroupDevicesList.ItemsSource = _deviceChoices;
-        GroupsList.SelectedItem = _config.DeviceGroups.FirstOrDefault(g => g.Id == groupSelectionId);
+        var profileSelectionId = _selectedProfile?.Id;
 
-        ReloadProfileCombo();
+        _suppressGroupSelectionChanged = _selectedGroup is not null;
+        _suppressProfileSelectionChanged = _selectedProfile is not null;
+        try
+        {
+            GroupsList.ItemsSource = null;
+            GroupsList.ItemsSource = _config.DeviceGroups;
+            GroupDevicesList.ItemsSource = null;
+            GroupDevicesList.ItemsSource = _deviceChoices;
+            GroupsList.SelectedItem = _config.DeviceGroups.FirstOrDefault(g => g.Id == groupSelectionId);
+
+            ReloadProfileCombo();
+        }
+        finally
+        {
+            _suppressGroupSelectionChanged = false;
+            _suppressProfileSelectionChanged = false;
+        }
+
+        // Objektinstanzen direkt aus den Controls nachziehen (dieselbe fachliche Auswahl,
+        // aber neu erzeugte Objekte nach dem Reload) - _selectedSenderRef/Locks/etc. bleiben
+        // unangetastet, das ist der ganze Zweck der Unterdrückung oben. War vorher NICHTS
+        // ausgewählt, hat der (nicht unterdrückte) echte Handler das bereits selbst erledigt -
+        // hier dann nicht nochmal überschreiben.
+        if (groupSelectionId is not null)
+        {
+            _selectedGroup = GroupsList.SelectedItem as DeviceGroup;
+        }
+        if (profileSelectionId is not null)
+        {
+            _selectedProfile = ProfileCombo.SelectedItem as AlarmProfile;
+        }
+
+        RebuildSenderPanels();
+        RebuildRecipientPanels();
+        if (_selectedGroup is not null)
+        {
+            UpdateGroupSummaries();
+        }
     }
 
     // Nutzerwunsch 04.08.2026: alphabetisch sortiert, standardmäßig immer der erste
@@ -253,6 +310,11 @@ public partial class AdminDashboardWindow : Window
     // Liste selbst leer ist (letzte Gruppe gelöscht) - das bleibt weiterhin erlaubt.
     private async void GroupsList_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
+        if (_suppressGroupSelectionChanged)
+        {
+            return;
+        }
+
         if (GroupsList.SelectedItem is null && GroupsList.Items.Count > 0)
         {
             return;
@@ -485,6 +547,11 @@ public partial class AdminDashboardWindow : Window
 
     private async void ProfileCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
+        if (_suppressProfileSelectionChanged)
+        {
+            return;
+        }
+
         var newProfile = ProfileCombo.SelectedItem as AlarmProfile;
 
         // Nutzerwunsch 05.08.2026: reassigning ComboBox.ItemsSource (in ReloadProfileCombo(),
@@ -820,6 +887,7 @@ public partial class AdminDashboardWindow : Window
             SenderUsersList.ItemsSource = null;
             SenderRoomsList.ItemsSource = null;
             SenderGroupsList.ItemsSource = null;
+            TransferRecipientsButton.IsEnabled = false;
             return;
         }
 
@@ -835,6 +903,14 @@ public partial class AdminDashboardWindow : Window
             var isHighlighted = _isTransferMode ? _transferTargets.Contains(entityRef) : entityRef == _selectedSenderRef;
             return new SenderChoice(entityRef, displayName, count > 0, count, isHighlighted);
         }
+
+        // Nutzerwunsch 07.08.2026: "Empfängerliste übertragen" darf nur bedienbar sein, wenn
+        // ein Sender MIT mindestens einem Empfänger ausgewählt ist - sonst gäbe es nur eine
+        // leere Liste zu übertragen. Dieselbe Zähl-Logik wie Build() oben (IsConfigured),
+        // hier zentral für den ausgewählten Sender statt pro Listeneintrag.
+        var selectedSenderRow = _selectedSenderRef is { } selectedRef ? assignments.FirstOrDefault(a => a.Sender == selectedRef) : null;
+        TransferRecipientsButton.IsEnabled = selectedSenderRow is not null
+            && RecipientResolver.CountDistinctRecipientDevices(selectedSenderRow.Recipients, devices, groups) > 0;
 
         List<SenderChoice> SortConfiguredFirst(IEnumerable<SenderChoice> choices) =>
             choices.OrderByDescending(c => c.IsConfigured).ThenBy(c => c.DisplayName, StringComparer.CurrentCultureIgnoreCase).ToList();
@@ -882,15 +958,59 @@ public partial class AdminDashboardWindow : Window
             .ToList();
     }
 
+    // Nutzerwunsch 07.08.2026: "läuft immer, egal welcher Nutzer angemeldet ist" (Teil 2) -
+    // der reine Username ist damit kein zuverlässiger Bezeichner mehr (derselbe Rechner kann
+    // je nach Anmeldung unterschiedliche Namen zeigen, ein Kiosk-/Gemeinschaftsgerät sogar
+    // ständig wechselnde) - inkonsequent, wenn der Admin dann nur den Nutzer sieht, nie das
+    // Gerät. Umschaltbar statt eine feste Kombination zu erzwingen, Standard bleibt "Nutzer"
+    // (unverändertes Verhalten, CLAUDE.md Datenschutz-Prinzipien: möglichst wenig auf einen
+    // Blick, der Admin kann bei Bedarf mehr einblenden).
+    private enum UserLabelMode { User, Device, Both }
+
+    private UserLabelMode _userLabelMode = UserLabelMode.User;
+
+    private void UserLabelModeButton_Click(object sender, RoutedEventArgs e)
+    {
+        _userLabelMode = sender switch
+        {
+            _ when ReferenceEquals(sender, UserLabelModeDeviceButton) => UserLabelMode.Device,
+            _ when ReferenceEquals(sender, UserLabelModeBothButton) => UserLabelMode.Both,
+            _ => UserLabelMode.User,
+        };
+
+        UpdateUserLabelModeButtons();
+        RebuildSenderPanels();
+        RebuildRecipientPanels();
+    }
+
+    private void UpdateUserLabelModeButtons()
+    {
+        void SetActive(System.Windows.Controls.Button button, bool active)
+        {
+            button.Background = active ? (Brush)FindResource("AccentBrush") : (Brush)FindResource("SecondaryButtonBrush");
+            button.Foreground = active ? Brushes.White : (Brush)FindResource("TextPrimaryBrush");
+        }
+
+        SetActive(UserLabelModeUserButton, _userLabelMode == UserLabelMode.User);
+        SetActive(UserLabelModeDeviceButton, _userLabelMode == UserLabelMode.Device);
+        SetActive(UserLabelModeBothButton, _userLabelMode == UserLabelMode.Both);
+    }
+
     // CLAUDE.md, Datenschutz-Prinzipien: Raum prominent, Username klein - hier aber ist der
     // Nutzer selbst der gesuchte Zweck der Liste (der Admin muss ihn gezielt zuordnen
     // können), daher voran, mit dem Raum zur Wiedererkennung dahinter.
-    private static string BuildUserLabel(DeviceEntry device, bool isOwnDevice)
+    private string BuildUserLabel(DeviceEntry device, bool isOwnDevice)
     {
         var user = string.IsNullOrWhiteSpace(device.User) ? device.ComputerName : device.User;
+        var identity = _userLabelMode switch
+        {
+            UserLabelMode.Device => device.ComputerName,
+            UserLabelMode.Both => $"{user} / {device.ComputerName}",
+            _ => user,
+        };
         var room = string.IsNullOrWhiteSpace(device.RoomName) ? "kein Raum" : device.RoomName;
         var suffix = isOwnDevice ? ", dieses Gerät" : "";
-        return $"{user} ({room}{suffix})";
+        return $"{identity} ({room}{suffix})";
     }
 
     private static string BuildRoomLabel(IGrouping<string, DeviceEntry> roomGroup)

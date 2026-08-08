@@ -16,8 +16,10 @@ public sealed class AlarmSessionStatus
 /// One triggered alarm's full lifecycle (FR-50/FR-53): repeats the send every
 /// <see cref="AppConstants.AlarmRepeatInterval"/>, stops after
 /// <see cref="AppConstants.AlarmMaxDuration"/>, after
-/// <see cref="AppConstants.AlarmAutoStopResponseCount"/> distinct "bin unterwegs"
-/// responses, or on manual <see cref="Cancel"/> - whichever comes first. Relays the
+/// <see cref="AlarmProfile.ResponseThreshold"/> distinct "bin unterwegs"
+/// responses (the same per-profile Schwellwert the receiver's popup uses to unlock its
+/// own "Schließen" button - both sides must agree on the same value), or on manual
+/// <see cref="Cancel"/> - whichever comes first. Relays the
 /// aggregate status to every recipient after each wave and after each new response, so
 /// recipients' popups (FR-51) and this device's own hover popup (FR-53) both stay
 /// current without polling.
@@ -117,7 +119,19 @@ public sealed class RepeatingAlarmSession : IDisposable
         // failures internally, so there is nothing here that can throw unobserved.
         _ = RaiseAndRelayAsync(stillSending: true);
 
-        if (_onTheWayResponderIds.Count >= AppConstants.AlarmAutoStopResponseCount)
+        // Bugfix 07.08.2026 (Fehlerbericht "Popup poppt nach Schließen wieder auf, obwohl
+        // schon reagiert wurde"): hier stand bisher der feste AppConstants.
+        // AlarmAutoStopResponseCount (=2, ein Phase-1-Rest) statt des pro Profil im Dashboard
+        // einstellbaren Profile.ResponseThreshold ("Schwellwert (Antworten bis schließbar)").
+        // Mit Schwellwert=1 (Standard bei neuen Profilen) reichte die eine "bin unterwegs"-
+        // Antwort dem Empfänger-Popup zum Freischalten von "Schließen" (das benutzt
+        // ResponseThreshold schon richtig, siehe AlarmFlowCoordinator/AlarmPopupWindow) -
+        // dem SENDER aber nicht zum Stoppen der Wiederholung, weil er weiter auf 2 wartete.
+        // Der Sender schickte alle 5s eine neue Anfrage, und ein Empfänger ohne offenes
+        // Fenster für diese Session (weil gerade erst geschlossen) bekam prompt ein neues
+        // Popup - sah aus wie "poppt nach dem Schließen wieder auf", war eigentlich "der
+        // Sender hatte nie wirklich aufgehört zu senden".
+        if (_onTheWayResponderIds.Count >= Profile.ResponseThreshold)
         {
             _stopCts.Cancel(); // FR-50: auto-stop once enough people are on their way
         }

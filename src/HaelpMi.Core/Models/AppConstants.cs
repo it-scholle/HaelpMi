@@ -45,9 +45,6 @@ public static class AppConstants
     /// <summary>Hard stop for a repeating alarm regardless of responses (Teil 2, Abschnitt 7).</summary>
     public static readonly TimeSpan AlarmMaxDuration = TimeSpan.FromMinutes(5);
 
-    /// <summary>Stop condition: this many distinct "bin unterwegs" responses ends the repeat loop (Teil 2, Abschnitt 7).</summary>
-    public const int AlarmAutoStopResponseCount = 2;
-
     /// <summary>Receiver-side auto-close delay measured from the *last* received signal, not the first (Teil 2, Abschnitt 8).</summary>
     public static readonly TimeSpan AlarmAutoCloseAfterLastSignal = TimeSpan.FromMinutes(1);
 

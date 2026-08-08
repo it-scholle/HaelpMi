@@ -79,6 +79,7 @@ Ausführungs-Hinweis (verändert das System, läuft NICHT automatisch in jedem `
 | B7 🔹 | Alarm-Anfrage/Ack Roundtrip über TCP | ✅ |
 | B8 | Alarm-Feedback-Kanal ("bin unterwegs") Roundtrip | ❌ **Lücke** — nur Port-belegt-Fall getestet |
 | B9 🔹 | Alle 4 TCP-Dienste degradieren bei belegtem Port ohne Absturz | ✅ (dieser Sitzung's Regressions-Tests) |
+| B10 🔹 | Repeating-Alarm-Session stoppt bei Erreichen des PRO PROFIL konfigurierten Schwellwerts (nicht eines festen Default) | ✅ (07.08.2026, Regressionstest für live gemeldeten Bug - siehe SendingTests.cs) |
 
 ## C. Konfigurationslogik
 
@@ -117,6 +118,8 @@ improvisiert wurden). Aufbau erst, wenn ein Bereich strukturell 2+ Versionen sta
 | E6 | Popup: Raum/Raumnummer groß, Benutzername klein (Datenschutz-Vorgabe) | Manuell — **könnte aber schon jetzt günstig als reiner XAML/FontSize-Vergleich coded werden**, kein Live-UI nötig |
 | E7 | Popup: "Schließen" bleibt bis Schwellwert-Erreichen deaktiviert | Manuell |
 | E8 | Tray-Menü zeigt "Dashboard öffnen" nur bei Admin-Rolle | Manuell (heute per Screenshot stichprobenartig geprüft) |
+| E9 | "Empfängerliste übertragen" nur aktivierbar, wenn gewählter Sender mindestens einen Empfänger hat | 07.08.2026 per Screenshot live verifiziert, siehe Chat-Verlauf — guter FlaUI-Kandidat |
+| E10 | Sender-Auswahl bleibt erhalten, wenn währenddessen ein Empfänger (de-)markiert wird | 07.08.2026 live gefundener und gefixter Bug (WPF `ItemsSource=null`-Reload-Race), per Screenshot verifiziert - **hoher Regressions-Wert, da die Ursache strukturell ist (jeder ComboBox/ListBox-Reload-Reset), nicht nur dieser eine Klickpfad** |
 
 ## F. Ton-Wiedergabe (geplant, noch nicht coded)
 
@@ -126,7 +129,8 @@ geworfen" unterscheiden.
 
 | # | Test | Aktuell |
 |---|---|---|
-| F1 | Ton wird beim Alarmempfang tatsächlich abgespielt (Loopback-Aufnahme zeigt Audiopegel) | Manuell |
+| F0 🔹 | `PlayOnAllActiveDevicesAsync` kehrt in begrenzter Zeit zurück, hängt sich nie auf | ✅ (07.08.2026, `AudioTests.cs` - Regressionstest für live gefundenen Hang: NAudios `SampleToWaveProvider` + `WasapiOut.Dispose()` blieben auf mind. einer Testumgebung unbegrenzt hängen, siehe Kommentar in `MultiDeviceAlarmPlayer.cs`) |
+| F1 | Ton wird beim Alarmempfang tatsächlich HÖRBAR abgespielt (Loopback-Aufnahme zeigt Audiopegel) | Manuell — F0 prüft nur "hängt nicht/wirft nicht", nicht "war wirklich etwas zu hören" |
 | F2 | Ton wird auch bei stummgeschaltetem Standard-Windows-Ausgabegerät abgespielt (Mehrgeräte-Ausgabe, NAudio) | Manuell — der unsicherste Punkt im ganzen Testplan |
 | F3 | Korrekter Ton je `IncomingSoundId` wird gewählt | Teilweise coded (`IncomingSoundCatalog_Resolve_FallsBackToFirstOption_ForUnknownId`), Wiedergabe selbst nicht |
 

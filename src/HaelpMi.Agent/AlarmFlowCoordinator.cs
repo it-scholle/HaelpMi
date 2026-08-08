@@ -30,7 +30,7 @@ public sealed class AlarmFlowCoordinator
     private readonly AuditLog _auditLog = new();
     private readonly AlarmSender _sender;
     private readonly DeviceStore _deviceStore = new();
-    private readonly MultiDeviceAlarmPlayer _audioPlayer = new();
+    private readonly MultiDeviceAlarmPlayer _audioPlayer;
     private readonly ConcurrentDictionary<Guid, AlarmPopupWindow> _openPopups = new();
 
     public AlarmFlowCoordinator(
@@ -44,6 +44,7 @@ public sealed class AlarmFlowCoordinator
         _sharedConfigProvider = sharedConfigProvider;
         _feedbackChannel = feedbackChannel;
         _sender = new AlarmSender(_auditLog.Append);
+        _audioPlayer = new MultiDeviceAlarmPlayer(_auditLog.Append);
         _feedbackChannel.StatusRelayReceived += (_, relay) => HandleStatusRelay(relay);
     }
 

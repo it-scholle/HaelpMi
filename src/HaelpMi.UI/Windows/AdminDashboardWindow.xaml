@@ -163,8 +163,12 @@
                     </StackPanel>
 
                     <Grid Grid.Row="2" Margin="0,0,0,10">
+                        <!-- Nutzerwunsch 07.08.2026: nur bedienbar, wenn ein Sender MIT
+                             mindestens einem Empfänger ausgewählt ist - siehe
+                             RebuildSenderPanels() für die eigentliche Steuerung, dies hier
+                             nur der Startzustand vor dem ersten Aufbau. -->
                         <Button x:Name="TransferRecipientsButton" Content="Empfängerliste übertragen" HorizontalAlignment="Left"
-                                Padding="14,6" Background="#2C3E50" Foreground="White" BorderThickness="0"
+                                Padding="14,6" Background="#2C3E50" Foreground="White" BorderThickness="0" IsEnabled="False"
                                 Click="TransferRecipientsButton_Click" />
                         <StackPanel x:Name="TransferModeButtons" Orientation="Horizontal" HorizontalAlignment="Left" Visibility="Collapsed">
                             <TextBlock VerticalAlignment="Center" Margin="0,0,10,0" TextWrapping="Wrap" MaxWidth="280"
@@ -200,7 +204,19 @@
 
                         <!-- Spaltenköpfe einmal oben statt doppelt (früher je einmal pro
                              Sender-/Empfänger-Stapel) - gelten für beide Zeilen darunter. -->
-                        <TextBlock Grid.Row="0" Grid.Column="0" Text="Nutzer" FontWeight="SemiBold" FontSize="11" Margin="0,0,0,2" />
+                        <!-- Nutzerwunsch 07.08.2026: "läuft immer, egal welcher Nutzer
+                             angemeldet ist" (Teil 2) macht den reinen Username unzuverlässig
+                             als einzige Anzeige - Umschalter zwischen Nutzer/Gerät/beidem statt
+                             fest auf Username. Kleine Buttons statt ComboBox, damit es in der
+                             schmalen Spalte nicht zusätzlich Platz kostet. -->
+                        <DockPanel Grid.Row="0" Grid.Column="0" LastChildFill="False">
+                            <TextBlock DockPanel.Dock="Left" Text="Nutzer" FontWeight="SemiBold" FontSize="11" Margin="0,0,0,2" VerticalAlignment="Center" />
+                            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                                <Button x:Name="UserLabelModeUserButton" Content="Nutzer" FontSize="10" Padding="4,1" Margin="2,0,0,0" Click="UserLabelModeButton_Click" />
+                                <Button x:Name="UserLabelModeDeviceButton" Content="Gerät" FontSize="10" Padding="4,1" Margin="2,0,0,0" Click="UserLabelModeButton_Click" />
+                                <Button x:Name="UserLabelModeBothButton" Content="Beides" FontSize="10" Padding="4,1" Margin="2,0,0,0" Click="UserLabelModeButton_Click" />
+                            </StackPanel>
+                        </DockPanel>
                         <TextBlock Grid.Row="0" Grid.Column="2" Text="Räume" FontWeight="SemiBold" FontSize="11" Margin="0,0,0,2" />
                         <TextBlock Grid.Row="0" Grid.Column="4" Text="Gruppen" FontWeight="SemiBold" FontSize="11" Margin="0,0,0,2" />
 
