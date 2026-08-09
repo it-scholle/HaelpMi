@@ -480,6 +480,17 @@ public partial class AdminDashboardWindow : Window
     // Bugfix 09.08.2026: Klick toggelt direkt Mitgliedschaft, grün = Mitglied - dasselbe
     // Prinzip wie RecipientList_PreviewMouseLeftButtonUp bei der Empfänger-Spalte, statt der
     // vorherigen (defekten) nativen ListBox-Mehrfachauswahl.
+    //
+    // Bugfix 09.08.2026, zweiter Versuch ("Auswahl immer noch defekt - erster Nutzer geht,
+    // danach leert sich die Liste wieder"): newDeviceIds wurde bisher AUSSERHALB der
+    // mutate-Closure aus _selectedGroup.DeviceIds berechnet - dem lokalen UI-Stand, der
+    // noch nicht den gerade erst gespeicherten vorherigen Klick enthält, solange dessen
+    // PublishAsync (Netzwerk-Roundtrip) noch läuft. AssignRecipientAsync/UnassignRecipientAsync
+    // machen es richtig: die Änderung wird INNERHALB der Closure auf dem gerade frisch von
+    // der Platte geladenen cfg berechnet (siehe PublishAsync/ConfigSyncService - lädt jedes
+    // Mal neu). GroupDetailPanel bleibt zusätzlich während des Speicherns gesperrt (wie schon
+    // beim Lock-Erwerb), damit ein zweiter Klick nicht mehr auf denselben veralteten
+    // UI-Stand trifft, bevor der erste Roundtrip überhaupt zurück ist.
     private void GroupDevicesList_PreviewMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
     {
         if (_selectedGroup is null || _selectedGroup.IsBuiltInAllDevicesGroup || FindDataContext<GroupDeviceChoice>(e.OriginalSource) is not { } choice)
@@ -487,13 +498,22 @@ public partial class AdminDashboardWindow : Window
             return; // "Alle" (Nutzerwunsch 09.08.2026): Mitgliedschaft automatisch, nicht manuell togglebar
         }
 
-        var newDeviceIds = choice.IsAssigned
-            ? _selectedGroup.DeviceIds.Where(id => id != choice.DeviceId).ToList()
-            : _selectedGroup.DeviceIds.Append(choice.DeviceId).ToList();
+        var groupId = _selectedGroup.Id;
+        var wasAssigned = choice.IsAssigned;
+        var oldCount = _selectedGroup.DeviceIds.Count;
+        var newCount = wasAssigned ? oldCount - 1 : oldCount + 1;
 
-        SaveGroupFieldAsync("Enthaltene Geräte", $"{_selectedGroup.DeviceIds.Count} Gerät(e)", $"{newDeviceIds.Count} Gerät(e)", cfg =>
+        SaveGroupFieldAsync("Enthaltene Geräte", $"{oldCount} Gerät(e)", $"{newCount} Gerät(e)", cfg =>
         {
-            cfg.DeviceGroups.First(g => g.Id == _selectedGroup.Id).DeviceIds = newDeviceIds;
+            var group = cfg.DeviceGroups.First(g => g.Id == groupId);
+            if (wasAssigned)
+            {
+                group.DeviceIds.Remove(choice.DeviceId);
+            }
+            else if (!group.DeviceIds.Contains(choice.DeviceId))
+            {
+                group.DeviceIds.Add(choice.DeviceId);
+            }
         });
     }
 
@@ -504,9 +524,11 @@ public partial class AdminDashboardWindow : Window
             return;
         }
 
+        var groupId = _selectedGroup.Id;
+        GroupDetailPanel.IsEnabled = false;
         try
         {
-            await PublishAsync(cfg => { mutate(cfg); return cfg; }, EditScopeKind.Group, _selectedGroup.Id, $"Gruppe - {fieldName}", oldValue, newValue);
+            await PublishAsync(cfg => { mutate(cfg); return cfg; }, EditScopeKind.Group, groupId, $"Gruppe - {fieldName}", oldValue, newValue);
             ReloadAll();
             UpdateGroupSummaries();
             GroupStatusText.Text = "Gespeichert und an alle Geräte verteilt.";
@@ -515,6 +537,10 @@ public partial class AdminDashboardWindow : Window
         {
             GroupStatusText.Text = "Fehlgeschlagen - siehe Fehlermeldung.";
             ActionErrorHandler.Show(this, $"Gruppe - {fieldName} speichern", ex);
+        }
+        finally
+        {
+            GroupDetailPanel.IsEnabled = _selectedGroup is not null;
         }
     }
 

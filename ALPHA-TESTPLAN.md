@@ -87,8 +87,11 @@ Fehlermeldung kam.
       ohne Kreis-Zuordnung sollte das ohne Sperre einfach aufgehen)
 - [ ] Tab "Kreise": neuen Kreis anlegen, Namen ändern, Tastenkürzel per Klick ins Feld +
       Tastenkombination setzen, Signalton auswählen, "Speichern" - Statuszeile bestätigt
-- [ ] Tab "Gruppen": neue Gruppe anlegen, den eben erstellten Kreis per Mehrfachauswahl
-      zuordnen, speichern
+- [ ] Tab "Gruppen": neue Gruppe anlegen, mehrere Geräte in "Enthaltene Geräte" nacheinander
+      *schnell hintereinander* anklicken (Regressionstest v0.8.1 - Race beim Speichern:
+      zweiter Klick, bevor der erste fertig verteilt war, hat vorher die ganze Auswahl
+      geleert) - alle angeklickten Geräte müssen am Ende grün markiert bleiben, keins darf
+      wieder verschwinden
 - [ ] Tab "Alarm-Profile": neues Profil anlegen, Text/Tastenkürzel/Schwellwert setzen
 - [ ] Im Profil-Tab: "Empfängerkreise verwalten" öffnen, einen Sender hinzufügen, per
       Drag-and-Drop einen Empfänger von "Verfügbar" nach "Zugeordnet" ziehen
