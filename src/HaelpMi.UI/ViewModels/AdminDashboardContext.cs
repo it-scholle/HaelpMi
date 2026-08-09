@@ -47,6 +47,14 @@ public sealed class AdminDashboardContext
     /// beliebig oft wiederholbar, kein erneuter Install-Creator-Lauf nötig.
     /// </summary>
     public required Func<Task<UserInstallerExportResult>> ExportUserInstaller { get; init; }
+
+    /// <summary>
+    /// "Updates"-Tab (Nutzerwunsch 09.08.2026): Versionen, die dieses Gerät bereits lokal
+    /// im P2P-Cache hat (per Auto-Seed aus dem eigenen Installer-Bausatz oder per früherem
+    /// P2P-Pull) und die der Admin daher für einen Rollout freigeben könnte - siehe
+    /// UpdatePackageCacheStore.ListAvailableVersions.
+    /// </summary>
+    public required Func<List<string>> ListAvailableUpdateVersions { get; init; }
 }
 
 public sealed record UserInstallerExportResult(bool Success, string? OutputFilePath, string? Error);

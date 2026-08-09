@@ -73,6 +73,47 @@ per `recursesubdirs` ohnehin den ganzen Ordner, das war schon immer so vorbereit
 Diesen Schritt nur nach Codeänderungen wiederholen müssen - für reines Neu-Bauen des
 Installers mit anderer Kunden-Gruppen-ID reicht Schritt 2.
 
+## Schritt 1b: Update-Paket signieren (optional, für Auto-Update)
+
+Nutzerwunsch 09.08.2026: "vollautomatisch, sobald der Admin sich selbst aktualisiert hat" -
+dafür muss der Installer selbst schon ein signiertes P2P-Update-Paket für genau diese
+Version mitbringen (siehe `HaelpMi.Core/Updates/UpdateSeedImporter.cs`). Dieser Schritt ist
+**optional** - ohne ihn baut der Installer genauso wie bisher, nur ohne das automatische
+Auto-Seeding (dann bleibt der bisherige, rein manuelle Weg nötig, um die allererste Version
+ins P2P-Netz zu bringen).
+
+1. Einmalig (nur beim allerersten Mal): Schlüsselpaar erzeugen und **außerhalb** des
+   Repo-Checkouts sichern (die Namenskonvention unten matcht `.gitignore`, falls doch
+   versehentlich im Checkout erzeugt):
+   ```powershell
+   dotnet run --project HälpMi\src\HaelpMi.UpdateSigner -- genkey update-private-key.txt update-public-key.txt
+   ```
+   Den öffentlichen Schlüssel einmalig in
+   `HälpMi\src\HaelpMi.Core\Updates\UpdateSignaturePublicKey.cs` einbetten (siehe
+   TECHSTACK-UND-ARCHITEKTUR.md - der dort eingebettete Key ist noch ein Wegwerf-Dev-Key).
+   Den privaten Schlüssel nie ins Repo, nie ins Log, nie in eine Fehlermeldung (CLAUDE.md).
+
+2. Payload (aus Schritt 1) zu `package.zip` packen und signieren:
+   ```powershell
+   Compress-Archive -Path HälpMi\installer\payload\* -DestinationPath package.zip -Force
+   dotnet run --project HälpMi\src\HaelpMi.UpdateSigner -- sign package.zip update-private-key.txt <Version, z.B. 0.8.0> manifest.json
+   ```
+
+3. Beide Dateien nach `HälpMi\installer\payload\update-seed\` kopieren, **bevor** du Schritt
+   2 (Install-Creator) ausführst - das bestehende `[Files]`-Statement
+   (`Source: "payload\*"; ... recursesubdirs`) nimmt den Unterordner dann automatisch mit,
+   keine .iss-Änderung nötig:
+   ```powershell
+   New-Item -ItemType Directory -Force HälpMi\installer\payload\update-seed
+   Copy-Item package.zip, manifest.json HälpMi\installer\payload\update-seed\
+   ```
+
+Jedes damit gebaute Gerät (Admin **und** User - kein Rollen-Sonderfall) importiert sein
+mitgebrachtes Paket beim ersten Start automatisch ins lokale P2P-Cache und dient danach als
+Quelle für andere Peers. Das ersetzt **nicht** die Freigabe im Admin-Dashboard
+(`SharedConfig.UpdateRollout`) - andere Geräte pullen es weiterhin erst, nachdem der Admin
+die Version dort freigegeben hat (CLAUDE.md: gestaffelter, admin-freigegebener Rollout).
+
 ## Schritt 2: Install-Creator - hier baust du den Admin-Installer
 
 Fertig gebautes, doppelklickbares Werkzeug (schon für dich erstellt):

@@ -1,5 +1,6 @@
 using System.Text.Json;
 using HaelpMi.Core.Updates;
+using System.Linq;
 
 namespace HaelpMi.Core.Storage;
 
@@ -17,6 +18,27 @@ public sealed class UpdatePackageCacheStore
 
     public static string DirectoryFor(string version) =>
         Path.Combine(AppPaths.RootFolder, "updates-cache", version);
+
+    /// <summary>
+    /// Nutzerwunsch 09.08.2026 (Admin-Dashboard "Updates"-Tab): welche Versionen dieses
+    /// Gerät lokal im Cache hat und damit theoretisch für einen Rollout freigeben könnte -
+    /// unabhängig davon, ob es selbst schon auf einer davon läuft (siehe
+    /// <see cref="UpdateSeedImporter"/>/<c>UpdateOrchestrator</c>, die hier hineinschreiben).
+    /// </summary>
+    public List<string> ListAvailableVersions()
+    {
+        var root = Path.Combine(AppPaths.RootFolder, "updates-cache");
+        if (!Directory.Exists(root))
+        {
+            return new List<string>();
+        }
+
+        return Directory.GetDirectories(root)
+            .Select(Path.GetFileName)
+            .Where(name => !string.IsNullOrEmpty(name) && TryLoad(name!) is not null)
+            .Select(name => name!)
+            .ToList();
+    }
 
     public (UpdatePackageManifest Manifest, byte[] Payload)? TryLoad(string version)
     {

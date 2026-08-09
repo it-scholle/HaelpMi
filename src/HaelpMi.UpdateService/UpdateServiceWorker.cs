@@ -5,6 +5,7 @@ using System.Security.AccessControl;
 using System.Security.Principal;
 using HaelpMi.Core.Ipc;
 using HaelpMi.Core.Models;
+using HaelpMi.Core.Updates;
 
 namespace HaelpMi.UpdateService;
 
@@ -238,8 +239,8 @@ public sealed class UpdateServiceWorker : BackgroundService
         }
         Directory.CreateDirectory(previousDir);
 
-        MoveAllEntries(AppRoot, previousDir, exclude: new[] { "versions", "_previous" });
-        MoveAllEntries(newVersionDir, AppRoot, exclude: Array.Empty<string>());
+        SwapDirectoryMover.MoveAllEntries(AppRoot, previousDir, exclude: SwapDirectoryMover.BuildAppRootMoveExcludeList());
+        SwapDirectoryMover.MoveAllEntries(newVersionDir, AppRoot, exclude: Array.Empty<string>());
 
         var newAgentPath = Path.Combine(AppRoot, "HaelpMi.Agent.exe");
         if (File.Exists(newAgentPath))
@@ -266,28 +267,6 @@ public sealed class UpdateServiceWorker : BackgroundService
         }
 
         return new UpdateServiceResponse(true);
-    }
-
-    private static void MoveAllEntries(string sourceDir, string destinationDir, IReadOnlyCollection<string> exclude)
-    {
-        foreach (var entry in Directory.GetFileSystemEntries(sourceDir))
-        {
-            var name = Path.GetFileName(entry);
-            if (exclude.Contains(name))
-            {
-                continue;
-            }
-
-            var destination = Path.Combine(destinationDir, name);
-            if (Directory.Exists(entry))
-            {
-                Directory.Move(entry, destination);
-            }
-            else
-            {
-                File.Move(entry, destination, overwrite: true);
-            }
-        }
     }
 
     private void StopTrackedTestProcess(string version)

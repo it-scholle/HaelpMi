@@ -76,6 +76,11 @@ public partial class AdminDashboardWindow : Window
     private Guid? _heldGroupLockId;
     private Guid? _heldProfileLockId;
 
+    // Updates-Tab (Nutzerwunsch 09.08.2026): ein einziger, fest verdrahteter Datensatz
+    // (AppConstants.UpdateRolloutScopeId) statt echter Datensatz-Ids wie bei Gruppe/Profil -
+    // deshalb reicht hier ein bool statt eines Guid?, ob der Lock gerade gehalten wird.
+    private bool _heldUpdateRolloutLock;
+
     // Unterdrückt die Auto-Speichern-Handler unten, während LoadGroupDetail/
     // LoadProfileDetail selbst Felder befüllen (z. B. GroupNameBox.Text setzen löst sonst
     // GroupNameBox_LostFocus aus, obwohl der Nutzer nichts geändert hat). GroupDevicesList
@@ -260,6 +265,12 @@ public partial class AdminDashboardWindow : Window
         {
             _context.ReleaseLock(EditScopeKind.Profile, profileId);
             _heldProfileLockId = null;
+        }
+
+        if (_heldUpdateRolloutLock)
+        {
+            _context.ReleaseLock(EditScopeKind.UpdateRollout, AppConstants.UpdateRolloutScopeId);
+            _heldUpdateRolloutLock = false;
         }
     }
 
@@ -1283,4 +1294,207 @@ public partial class AdminDashboardWindow : Window
 
     private Task<SharedConfig> PublishAsync(Func<SharedConfig, SharedConfig> mutate, EditScopeKind scopeKind, Guid scopeId, string fieldPath, string? oldValue, string? newValue) =>
         _context.Publish(mutate, scopeKind, scopeId, fieldPath, oldValue, newValue);
+
+    // --------------------------------------------------------------------- Updates ---
+    // Nutzerwunsch 09.08.2026: gleiches Lock-bei-Auswahl-Prinzip wie Gruppe/Alarm-Profil
+    // (CLAUDE.md, Abschnitt 5), nur pro Tab statt pro Listenzeile - es gibt hier immer genau
+    // einen Datensatz (AppConstants.UpdateRolloutScopeId).
+    //
+    // TabControl.SelectionChanged ist ein bubbelndes RoutedEvent (Selector-Basisklasse) -
+    // GroupsList/ProfileCombo lösen ihr eigenes SelectionChanged aus, das bis hierher
+    // durchreicht. e.Source zeigt dabei weiterhin auf das ursprünglich auslösende Element,
+    // nicht auf MainTabControl - ohne diese Prüfung würde jede Gruppen-/Profilauswahl
+    // fälschlich als "Updates-Tab verlassen" interpretiert und den Lock unnötig freigeben.
+    private async void MainTabControl_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        // Absicherung gegen die automatische "erster Tab ausgewählt"-Auslösung während
+        // InitializeComponent() selbst (anders als GroupsList/ProfileCombo bekommt
+        // MainTabControl seine TabItems direkt aus der XAML, nicht erst später per
+        // ItemsSource in ReloadAll() - ein Auto-Select kann daher schon VOR der
+        // _context-Zuweisung im Konstruktor feuern).
+        if (_context is null || e.Source != MainTabControl)
+        {
+            return;
+        }
+
+        var isUpdatesTabNow = ReferenceEquals(MainTabControl.SelectedItem, UpdatesTabItem);
+        if (_heldUpdateRolloutLock && !isUpdatesTabNow)
+        {
+            _context.ReleaseLock(EditScopeKind.UpdateRollout, AppConstants.UpdateRolloutScopeId);
+            _heldUpdateRolloutLock = false;
+        }
+
+        if (!isUpdatesTabNow)
+        {
+            return;
+        }
+
+        UpdatesPanel.IsEnabled = false;
+        UpdatesStatusText.Text = "Wird zur Bearbeitung reserviert...";
+        try
+        {
+            var result = await _context.AcquireLock(EditScopeKind.UpdateRollout, AppConstants.UpdateRolloutScopeId);
+            if (!ReferenceEquals(MainTabControl.SelectedItem, UpdatesTabItem))
+            {
+                // Tab schon wieder gewechselt, während die Netzwerk-Anfrage lief - Lock
+                // (falls doch noch gewährt) sofort wieder freigeben, nichts anzeigen.
+                if (result.Outcome == EditLockAcquireOutcome.Granted)
+                {
+                    _context.ReleaseLock(EditScopeKind.UpdateRollout, AppConstants.UpdateRolloutScopeId);
+                }
+                return;
+            }
+
+            if (result.Outcome != EditLockAcquireOutcome.Granted)
+            {
+                UpdatesStatusText.Text = result.Outcome == EditLockAcquireOutcome.DeniedByHolder
+                    ? $"Wird gerade von {result.HolderComputerName} ({result.HolderUser}) bearbeitet - nur Ansicht."
+                    : "Konnte nicht exklusiv reserviert werden - bitte Tab erneut wählen.";
+                LoadUpdatesTab();
+                return;
+            }
+
+            _heldUpdateRolloutLock = true;
+            UpdatesStatusText.Text = string.Empty;
+            LoadUpdatesTab();
+            UpdatesPanel.IsEnabled = true;
+        }
+        catch (Exception ex)
+        {
+            UpdatesStatusText.Text = "Reservierung fehlgeschlagen - siehe Fehlermeldung.";
+            ActionErrorHandler.Show(this, "Updates-Tab zur Bearbeitung reservieren", ex);
+        }
+    }
+
+    private void LoadUpdatesTab()
+    {
+        _isLoadingDetail = true;
+        try
+        {
+            OwnVersionText.Text = $"v{LiveIdentityFactory.CurrentProgramVersion}";
+
+            var available = _context.ListAvailableUpdateVersions().OrderByDescending(v => v).ToList();
+            AvailableVersionsText.Text = available.Count > 0
+                ? string.Join(", ", available)
+                : "(keine Version im Cache - siehe BUILD-UND-INSTALLATION.md, Schritt 1b, oder wartet auf einen ersten P2P-Pull)";
+            AvailableVersionsCombo.ItemsSource = available;
+            AvailableVersionsCombo.SelectedItem = available.FirstOrDefault();
+
+            var rollout = _config.UpdateRollout;
+            ApprovedVersionText.Text = string.IsNullOrWhiteSpace(rollout.ApprovedVersion)
+                ? "Kein aktiver Rollout."
+                : $"Version {rollout.ApprovedVersion}, freigegeben für {rollout.ApprovedDeviceQuota} von {_deviceChoices.Count} Geräten.";
+            QuotaBox.Text = rollout.ApprovedDeviceQuota.ToString();
+        }
+        finally
+        {
+            _isLoadingDetail = false;
+        }
+    }
+
+    private async void ReleaseVersionButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (AvailableVersionsCombo.SelectedItem is not string version || string.IsNullOrWhiteSpace(version))
+        {
+            UpdatesStatusText.Text = "Bitte zuerst eine Version aus dem Cache auswählen.";
+            return;
+        }
+
+        await SaveUpdateRolloutFieldAsync("Version freigegeben (Stufe 1)", _config.UpdateRollout.ApprovedVersion, version, cfg =>
+        {
+            cfg.UpdateRollout.ApprovedVersion = version;
+            cfg.UpdateRollout.ApprovedDeviceQuota = 1;
+        });
+    }
+
+    private void QuotaBox_LostFocus(object sender, RoutedEventArgs e)
+    {
+        if (_isLoadingDetail)
+        {
+            return;
+        }
+
+        if (!int.TryParse(QuotaBox.Text.Trim(), out var newQuota) || newQuota < 0)
+        {
+            UpdatesStatusText.Text = "Kontingent muss eine ganze Zahl ≥ 0 sein - nicht gespeichert.";
+            return;
+        }
+
+        if (newQuota == _config.UpdateRollout.ApprovedDeviceQuota)
+        {
+            return;
+        }
+
+        _ = SaveUpdateRolloutFieldAsync("Freigabekontingent", _config.UpdateRollout.ApprovedDeviceQuota.ToString(), newQuota.ToString(), cfg =>
+        {
+            cfg.UpdateRollout.ApprovedDeviceQuota = newQuota;
+        });
+    }
+
+    // Nutzerwunsch: "Admin gibt Freigabestufen frei (z. B. 1 -> 2 -> 4 -> 8 Geräte)"
+    // (Anweisungen/claude-code-prompt-teil2-admin-update.md, Abschnitt 11) - Verdopplung
+    // gedeckelt auf die Gesamtzahl bekannter Geräte, ein größeres Kontingent hätte ohnehin
+    // keine zusätzliche Wirkung (UpdateOrchestrator.IsMyTurn).
+    private async void NextStageButton_Click(object sender, RoutedEventArgs e)
+    {
+        var current = _config.UpdateRollout.ApprovedDeviceQuota;
+        var deviceCount = Math.Max(1, _deviceChoices.Count);
+        var next = Math.Min(current <= 0 ? 1 : current * 2, deviceCount);
+        if (next == current)
+        {
+            return;
+        }
+
+        await SaveUpdateRolloutFieldAsync("Freigabekontingent - nächste Stufe", current.ToString(), next.ToString(), cfg =>
+        {
+            cfg.UpdateRollout.ApprovedDeviceQuota = next;
+        });
+    }
+
+    private async void StopRolloutButton_Click(object sender, RoutedEventArgs e)
+    {
+        var oldVersion = _config.UpdateRollout.ApprovedVersion;
+        if (string.IsNullOrWhiteSpace(oldVersion))
+        {
+            return; // schon kein aktiver Rollout
+        }
+
+        await SaveUpdateRolloutFieldAsync("Rollout gestoppt", oldVersion, null, cfg =>
+        {
+            cfg.UpdateRollout.ApprovedVersion = null;
+            cfg.UpdateRollout.ApprovedDeviceQuota = 0;
+        });
+    }
+
+    private async Task SaveUpdateRolloutFieldAsync(string fieldName, string? oldValue, string? newValue, Action<SharedConfig> mutate)
+    {
+        try
+        {
+            await PublishAsync(cfg => { mutate(cfg); return cfg; }, EditScopeKind.UpdateRollout, AppConstants.UpdateRolloutScopeId, $"Update-Rollout - {fieldName}", oldValue, newValue);
+            ReloadAll();
+            LoadUpdatesTab();
+            UpdatesStatusText.Text = "Gespeichert und an alle Geräte verteilt.";
+        }
+        catch (Exception ex)
+        {
+            UpdatesStatusText.Text = "Fehlgeschlagen - siehe Fehlermeldung.";
+            ActionErrorHandler.Show(this, $"Update-Rollout - {fieldName} speichern", ex);
+        }
+    }
+
+    private async void UndoUpdatesButton_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            var ok = await _context.Undo(EditScopeKind.UpdateRollout, AppConstants.UpdateRolloutScopeId);
+            UpdatesStatusText.Text = ok ? "Letzte Änderung rückgängig gemacht." : "Keine Änderung zum Rückgängigmachen vorhanden.";
+            ReloadAll();
+            LoadUpdatesTab();
+        }
+        catch (Exception ex)
+        {
+            UpdatesStatusText.Text = "Fehlgeschlagen - siehe Fehlermeldung.";
+            ActionErrorHandler.Show(this, "Update-Rollout-Änderung rückgängig machen", ex);
+        }
+    }
 }

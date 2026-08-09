@@ -386,6 +386,7 @@ public partial class App : System.Windows.Application
             },
             ReleaseLock = (scopeKind, scopeId) => _editLock.Release(scopeKind, scopeId),
             ExportUserInstaller = ExportUserInstallerAsync,
+            ListAvailableUpdateVersions = () => new UpdatePackageCacheStore().ListAvailableVersions(),
         };
 
         var window = new AdminDashboardWindow(context);

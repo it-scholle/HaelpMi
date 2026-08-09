@@ -82,4 +82,26 @@ public static class AppConstants
 
     /// <summary>Lockout duration after the kill-switch trips - a device simply stops attempting updates until this elapses (Teil 2, Abschnitt 11: "24h-Lockout").</summary>
     public static readonly TimeSpan UpdateLockoutDuration = TimeSpan.FromHours(24);
+
+    /// <summary>
+    /// Top-level Dateinamen im Installationsverzeichnis, die vom Installer stammen (nicht
+    /// aus dem generischen P2P-Update-Paket) und deshalb einen 0-Downtime-Swap
+    /// (<c>UpdateServiceWorker.ConfirmSwapAsync</c>) unverändert überleben müssen - sie
+    /// würden sonst beim "alte Version deinstallieren"-Schritt mitgelöscht, weil das neu
+    /// gepullte Paket sie nie enthält (kundenspezifisch, nie über P2P verteilt). Bugfix
+    /// 09.08.2026: <c>deployment.json</c> fehlte nach einem Swap komplett, die App
+    /// startete danach gar nicht mehr (<see cref="AppPaths.DeploymentInfoFilePath"/> wirft
+    /// beim Fehlen). <c>HaelpMi-User-Setup.exe</c> (Admin-Installation, siehe
+    /// HaelpMiCommon.iss.inc) hätte denselben Fehler gehabt, nur unauffälliger
+    /// ("Exportieren" schlägt erst beim nächsten Klick fehl statt beim Start).
+    /// </summary>
+    public static readonly string[] InstallerOwnedFileNames = { "deployment.json", "HaelpMi-User-Setup.exe" };
+
+    /// <summary>
+    /// Fest verdrahtete ScopeId für <see cref="EditScopeKind.UpdateRollout"/> - es gibt
+    /// kundengruppenweit immer genau einen Update-Rollout-Datensatz (siehe
+    /// <see cref="UpdateRolloutState"/>), anders als Gruppen/Alarm-Profile mit echten,
+    /// eigenen Ids je Datensatz.
+    /// </summary>
+    public static readonly Guid UpdateRolloutScopeId = new("d3f1a000-a11d-4000-9000-000000000002");
 }
