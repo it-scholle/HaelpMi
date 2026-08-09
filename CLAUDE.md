@@ -17,6 +17,8 @@ stillschweigend zu ignorieren.
 - `claude-code-prompt-teil2-admin-update.md` — aktueller Umsetzungs-Prompt (Admin-Rollen,
   Config-Sync, Auto-Update). Bei Widersprüchen zwischen dieser CLAUDE.md und den Prompt-Dateien:
   CLAUDE.md gewinnt, weil sie die aktuellere, dauerhafte Regel ist.
+- `docs/WORKFLOW.md` — konkretisiert die Abschnitte "Versionierung", "Tests" und "Status-Updates"
+  unten (Git-Mechanik im Detail: Branch/Rebase-Ablauf, Versionsnummer-Kollisionen, Tabellenvorlage).
 
 ## Tech-Stack
 - .NET 8, C#, WPF
@@ -102,6 +104,56 @@ stillschweigend zu ignorieren.
 - Vor jedem Abschluss eines Features: kurzer Blick, ob eine neu eingeführte Abhängigkeit bekannte
   CVEs hat — nicht als Gate, sondern als Gewohnheit. Der volle Ablauf für den Release-Zeitpunkt
   selbst liegt im Skill `dependency-check`.
+
+## Versionierung
+`MAJOR.MINOR.PATCH` in einem einzigen Strom — ein Produkt, keine separat versionierten Module.
+`<Version>` in `Directory.Build.props` und `MyAppVersion` in `installer/HaelpMiCommon.iss.inc`
+müssen bei jedem Versionssprung von Hand synchron gehalten werden (Kommentar an beiden Stellen
+verweist aufeinander). PATCH für Bugfixes/Doku/Refactoring ohne Verhaltensänderung, MINOR für
+neue Features oder dringende Produktions-Fixes, MAJOR für Breaking Changes/offizielle Releases —
+direkt beim Commit entschieden (kein Typ-Präfix-System nötig, die Versionsnummer selbst codiert
+den Bump-Grad schon). Commit-Message-Stil: `vX.Y.Z: Beschreibung` (siehe bisherige Historie). Bei
+jedem Bump einen Git-Tag `vX.Y.Z` setzen.
+
+**Background-/Worktree-Sessions** integrieren nach `main` per Branch → Rebase → `merge --ff-only`,
+automatisch sobald die passende Test-Stufe grün ist — keine Rückfrage vorher, nur ein
+Abschluss-Hinweis danach. Details, inkl. Umgang mit Versionsnummer-Kollisionen: `docs/WORKFLOW.md`.
+Grund für die Pflicht hier: genau das Fehlen dieses Ablaufs hat dazu geführt, dass ein per
+Background-Job fertiggestellter Fix (v0.7.6, Branch nie zurückgeführt) auf `main` schlicht
+gefehlt hat, während eine andere Session parallel auf demselben Vorgänger-Stand weitergearbeitet hat.
+
+**Interaktive Sessions im Haupt-Checkout** (du bist live im Chat dabei) committen weiterhin direkt
+auf `main` wie bisher — dort bist du selbst schon die Freigabe in Echtzeit, ein Branch+Rebase-Umweg
+wäre Prozess ohne Gegenwert für diesen Fall.
+
+Bezieht sich ausschließlich auf lokale Git-Operationen: `git push` in ein Remote gibt es nicht.
+
+## Status-Updates
+Bei aktiver Branch-/Versions-/Git-Arbeit wird der Stand als Pipe/Dash-Tabelle zusammengefasst
+(Bereich, Branch, Version main, Version dieser Änderung, Status), kein Fettdruck. Details, inkl.
+Vorlage: `docs/WORKFLOW.md`.
+
+## Anforderungen klären, dann durcharbeiten
+- Vor Coding-Start: offene Anforderungsfragen gebündelt stellen. Erst wenn alles geklärt ist,
+  beginnt die Umsetzung.
+- Während der Umsetzung: alles Eindeutige ohne weitere Rückfrage umsetzen. Rückfragen nur, wenn
+  eine Entscheidung wirklich blockiert – dann klären und weiterarbeiten, nicht auf einen
+  Sammel-Termin warten.
+
+## Tests
+- Aktive automatisierte Suite: `tests/HaelpMi.Core.Tests` (xUnit, läuft bei jedem `dotnet test`,
+  keine Systemänderung) und `tests/HaelpMi.Installer.Tests` (xUnit, **verändert das ausführende
+  System** — Program Files, ProgramData, Dienste, Registry, Firewall-Regeln, läuft nicht
+  automatisch mit). `TEST-STRATEGY.md` ist die Quelle der Wahrheit für Umfang und Gates,
+  `ALPHA-TESTPLAN.md` deckt das (noch) nicht Automatisierte manuell ab.
+- Jedes neue Feature bekommt mindestens formulierte Testfälle, im besten Fall geschriebene und
+  ausgeführte automatisierte Tests.
+- Versions-Gates (aus `TEST-STRATEGY.md`): Patch → 🔹-Smoke-Set, Minor → volle coded Suite
+  (Core + Installer), Major/1.0+ → zusätzlich FlaUI-UI-Suite + Audio-Loopback-Suite, sobald gebaut.
+- Vor Abschluss einer Version muss die für den jeweiligen Bump-Grad geforderte Stufe grün sein.
+  Bei Fehlschlag: bis zu 3 Selbstkorrektur-Versuche, danach nachfragen statt weiter raten.
+- Durch Anforderungsänderungen hinfällige Tests werden nicht kommentarlos gelöscht: Grund + Datum
+  im Test selbst vermerken (z. B. `[Fact(Skip = "...")]` mit Begründung), bevor sie entfernt werden.
 
 ## Bei Widersprüchen
 Wenn eine Anforderung aus dem Task-Prompt dieser CLAUDE.md widerspricht: stoppen, nicht selbst
