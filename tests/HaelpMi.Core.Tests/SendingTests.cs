@@ -77,7 +77,73 @@ public class SendingTests
             // Deutlich unter AppConstants.AlarmMaxDuration (5 Minuten) - die Session muss
             // durch die Schwellwert-Antwort stoppen, nicht durch den Hard-Timeout.
             await finished.Task.WaitAsync(TimeSpan.FromSeconds(5));
-            await runTask.WaitAsync(TimeSpan.FromSeconds(1));
+
+            // runTask absichtlich NICHT auf Abschluss abwarten (09.08.2026): RunAsync läuft
+            // nach Finished noch bis zu AppConstants.AlarmAutoCloseAfterLastSignal (1 Minute)
+            // weiter, um Nachzügler-"bin unterwegs"-Antworten noch als Info-Update zu
+            // relayen (siehe Klassendoku) - genau das war der hier gemeldete Fehler
+            // ("Nachzügler-Antworten verschwinden spurlos"). Finished bleibt der richtige,
+            // schnelle Nachweis dafür, dass das eigentliche PINGEN sofort gestoppt hat.
+        }
+        finally
+        {
+            session.Dispose();
+        }
+    }
+
+    [Fact]
+    public async Task RepeatingAlarmSession_RelaysLateOnMyWayAfterThreshold_TaggedAsNoLongerSending()
+    {
+        // Regressionstest für den Fehlerbericht vom 09.08.2026 ("Nachzügler-Antworten nach
+        // Schwellwert verschwinden spurlos, andere Geräte erfahren nichts davon"):
+        // RepeatingAlarmSession kappte bisher sofort nach dem Schwellwert-Stopp (bzw. jedem
+        // anderen Stopp-Grund) über Dispose() die OnMyWayReceived-Subscription - eine "bin
+        // unterwegs"-Antwort, die auch nur eine Millisekunde später ankam, ging komplett
+        // verloren: kein Relay an die übrigen Geräte, keine Aktualisierung der eigenen
+        // Statusanzeige. Die Anforderung ist explizit die Ausnahme: solche Spätantworten
+        // sollen weiterhin als Anzeige-Update relayt werden (Namensliste bleibt korrekt),
+        // nur eben mit SenderStillSending=false markiert statt als neue Ping-Welle zu zählen.
+        var customerGroupId = Guid.NewGuid();
+        var senderIdentity = new LiveIdentity(customerGroupId, Guid.NewGuid(), "Sender-PC", "Frau Meier", "Zimmer", "1", Role.User, false, "0.0.0", 0);
+
+        var feedbackChannel = new AlarmFeedbackChannel(() => senderIdentity);
+        var profile = new AlarmProfile { Text = "Bitte kommen!", ResponseThreshold = 1 };
+        var session = new RepeatingAlarmSession(profile, Array.Empty<DeviceEntry>(), senderIdentity, new AlarmSender(), feedbackChannel, DateTimeOffset.UtcNow);
+        try
+        {
+            var finished = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            session.Finished += (_, _) => finished.TrySetResult();
+
+            var statusUpdates = new List<AlarmSessionStatus>();
+            session.StatusChanged += (_, status) => statusUpdates.Add(status);
+
+            _ = session.RunAsync();
+
+            var handler = typeof(RepeatingAlarmSession).GetMethod("OnMyWayReceived", BindingFlags.NonPublic | BindingFlags.Instance)
+                ?? throw new InvalidOperationException("OnMyWayReceived nicht gefunden - wurde die Methode umbenannt?");
+
+            // Erste Antwort erreicht den Schwellwert (=1) und stoppt das Pingen.
+            var firstResponder = new AlarmOnMyWayMessage(
+                customerGroupId, profile.Id, session.AlarmSessionId, Guid.NewGuid(),
+                "Empf-PC-1", "Herr Novak", "Raum 1", DateTimeOffset.UtcNow);
+            handler.Invoke(session, new object?[] { feedbackChannel, firstResponder });
+            await finished.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+            statusUpdates.Clear();
+
+            // Zweite Antwort trifft ERST NACH Finished ein (Nachzügler) - muss trotzdem
+            // relayt werden, nur eben nicht mehr als "es wird noch gepingt".
+            var lateResponder = new AlarmOnMyWayMessage(
+                customerGroupId, profile.Id, session.AlarmSessionId, Guid.NewGuid(),
+                "Empf-PC-2", "Herr Baumann", "Raum 2", DateTimeOffset.UtcNow);
+            handler.Invoke(session, new object?[] { feedbackChannel, lateResponder });
+
+            // Fire-and-forget-Relay in OnMyWayReceived - kurz auf den StatusChanged-Event warten.
+            await Task.Delay(TimeSpan.FromMilliseconds(200));
+
+            var lateUpdate = Assert.Single(statusUpdates);
+            Assert.False(lateUpdate.StillSending); // kein Hilferuf mehr - nur Anzeige-Update
+            Assert.Equal(2, lateUpdate.OnTheWayNames.Count); // Nachzügler taucht in der Liste auf, geht nicht verloren
         }
         finally
         {

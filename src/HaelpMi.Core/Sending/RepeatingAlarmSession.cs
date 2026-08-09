@@ -28,6 +28,14 @@ public sealed class AlarmSessionStatus
 /// a Config-Sync hot-reload arriving mid-session (6., known Version-2 challenge: "darf
 /// laufende Alarme nicht unterbrechen") cannot change an already-running session's
 /// behavior out from under it; it only affects the *next* time this profile's hotkey fires.
+///
+/// Pinging (repeated <see cref="AlarmSender.SendAsync"/>) stops the moment any of the
+/// three conditions above is met, but the session itself stays alive and keeps listening
+/// for <see cref="AlarmOnMyWayMessage"/> for one more <see cref="AppConstants.AlarmAutoCloseAfterLastSignal"/>
+/// (same 1-minute window a receiver popup uses before auto-closing itself, FR-52): a
+/// late "bin unterwegs" in that window still gets relayed to every recipient so
+/// counts/name lists stay correct, just tagged <c>SenderStillSending: false</c> so it
+/// reads as a display-only update rather than a new alarm wave.
 /// </summary>
 public sealed class RepeatingAlarmSession : IDisposable
 {
@@ -43,8 +51,11 @@ public sealed class RepeatingAlarmSession : IDisposable
     private readonly List<string> _onTheWayNames = new();
     private readonly DateTimeOffset _startedAtUtc;
     private int _lastAckedCount;
+    private bool _pingingActive = true;
 
     public event EventHandler<AlarmSessionStatus>? StatusChanged;
+
+    /// <summary>Fired once pinging has stopped (not once the object is done listening - see class remarks on the 1-minute Nachlauf-Fenster). <see cref="StatusChanged"/> can still fire afterwards for late responses.</summary>
     public event EventHandler? Finished;
 
     public RepeatingAlarmSession(
@@ -94,8 +105,26 @@ public sealed class RepeatingAlarmSession : IDisposable
             // cancelled mid-send - falls through to the final "stopped" relay below
         }
 
+        // Bugfix 09.08.2026 (Fehlerbericht "Nachzügler-Antworten nach Schwellwert/Stop
+        // verschwinden spurlos"): _pingingActive muss VOR dem letzten Relay auf false
+        // gehen, weil OnMyWayReceived unten genau dieses Flag als das per Anforderung
+        // geforderte "kein Hilferuf mehr, nur Anzeige-Update"-Tag weiterreicht (kein
+        // eigenes Protokollfeld nötig - AlarmStatusRelayMessage.SenderStillSending sagt
+        // dem Empfänger schon "der Sender pingt nicht mehr", exakt die Bedeutung).
+        _pingingActive = false;
         await RaiseAndRelayAsync(stillSending: false);
         Finished?.Invoke(this, EventArgs.Empty);
+
+        // Weiterhin bis zu AlarmAutoCloseAfterLastSignal (dieselbe 1-Minute-Frist, nach
+        // der sich ein Empfänger-Popup ohnehin von selbst schließt) auf OnMyWayReceived
+        // hören: bis dahin können Empfänger noch "bin unterwegs" klicken, und diese
+        // Antworten sollen trotz gestopptem Pingen noch als Info-Update an alle Geräte
+        // gehen (Namensliste/Zähler bleiben korrekt), ohne den Empfänger-Timer neu zu
+        // starten (der reagiert nur auf echte Pings, siehe AlarmPopupWindow.
+        // NotifyNewSignalReceived - Relays fassen ihn nicht an). Vorher wurde hier sofort
+        // durchgereicht zu Dispose() (siehe RunSessionAsync), das die Subscription kappte -
+        // jede Spätantwort verschwand dadurch komplett, sender- wie empfängerseitig.
+        await Task.Delay(AppConstants.AlarmAutoCloseAfterLastSignal);
     }
 
     /// <summary>Manual "Abbrechen" (FR-50).</summary>
@@ -117,7 +146,13 @@ public sealed class RepeatingAlarmSession : IDisposable
 
         // Fire-and-forget: RelayStatusAsync/SendEnvelopeAsync already swallow per-target
         // failures internally, so there is nothing here that can throw unobserved.
-        _ = RaiseAndRelayAsync(stillSending: true);
+        //
+        // stillSending: _pingingActive statt fest true (09.08.2026) - eine Antwort, die erst
+        // nach dem Stop reinkommt (Schwellwert schon erreicht/Zeit abgelaufen/Abbrechen
+        // geklickt, siehe Nachlauf-Fenster in RunAsync), ist per Anforderung "kein Hilferuf
+        // mehr, nur Anzeige-Update" - genau das sagt SenderStillSending=false dem Empfänger
+        // schon aus. Während der aktiven Phase bleibt es weiterhin true wie bisher.
+        _ = RaiseAndRelayAsync(stillSending: _pingingActive);
 
         // Bugfix 07.08.2026 (Fehlerbericht "Popup poppt nach Schließen wieder auf, obwohl
         // schon reagiert wurde"): hier stand bisher der feste AppConstants.
