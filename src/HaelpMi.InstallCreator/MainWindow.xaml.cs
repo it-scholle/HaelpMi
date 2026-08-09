@@ -147,7 +147,9 @@ public partial class MainWindow : Window
             PasswordRevealBox.Text = PasswordBox.Password;
             PasswordBox.Visibility = Visibility.Collapsed;
             PasswordRevealBox.Visibility = Visibility.Visible;
-            RevealPasswordToggle.Content = "Verbergen";
+            EyeOpenIcon.Visibility = Visibility.Collapsed;
+            EyeClosedIcon.Visibility = Visibility.Visible;
+            RevealPasswordToggle.ToolTip = "Passwort wieder verbergen";
             PasswordRevealBox.Focus();
             PasswordRevealBox.SelectAll();
         }
@@ -156,7 +158,9 @@ public partial class MainWindow : Window
             PasswordBox.Password = PasswordRevealBox.Text;
             PasswordRevealBox.Visibility = Visibility.Collapsed;
             PasswordBox.Visibility = Visibility.Visible;
-            RevealPasswordToggle.Content = "Anzeigen";
+            EyeClosedIcon.Visibility = Visibility.Collapsed;
+            EyeOpenIcon.Visibility = Visibility.Visible;
+            RevealPasswordToggle.ToolTip = "Passwort anzeigen (zum manuellen Markieren/Kopieren, falls die Zwischenablage nicht mitmacht)";
         }
     }
 

@@ -62,14 +62,67 @@
                              VM-Synchronisation scheitert. -->
                         <PasswordBox Grid.Column="0" x:Name="PasswordBox" Margin="0,0,8,0" PasswordChanged="PasswordBox_PasswordChanged" />
                         <TextBox Grid.Column="0" x:Name="PasswordRevealBox" Margin="0,0,8,0" Visibility="Collapsed" TextChanged="PasswordRevealBox_TextChanged" />
-                        <!-- Nutzerwunsch 04.08.2026 ("das Plus ist ein Punkt") gilt hier genauso:
-                             kein Symbol-Zeichen in einem schmalen Button, Font-Metriken/Emoji-
-                             Unterstützung sind nicht zuverlässig genug - Text statt Icon. -->
-                        <Button Grid.Column="1" x:Name="RevealPasswordToggle" Content="Anzeigen" Margin="0,0,8,0"
+                        <!-- Nutzerwunsch 09.08.2026: die drei Buttons werden Icon-only (siehe
+                             haelpmi-icon-button-preference-Notiz) - gezeichnete Vektorformen statt
+                             Text, aus demselben Grund wie beim "+"/"-" im Admin-Dashboard
+                             (NewProfileButton/DeleteProfileIconButton): Font-Metriken/Emoji-
+                             Glyphen sind in schmalen Buttons nicht zuverlässig genug, ein
+                             gezeichnetes Icon dagegen immer scharf und größenunabhängig.
+                             Width/Height=32, Padding=0: gleiches Muster wie dort. -->
+                        <Button Grid.Column="1" x:Name="RevealPasswordToggle" Width="32" Height="32" Padding="0" Margin="0,0,8,0"
                                 ToolTip="Passwort anzeigen (zum manuellen Markieren/Kopieren, falls die Zwischenablage nicht mitmacht)"
-                                Click="RevealPasswordToggle_Click" />
-                        <Button Grid.Column="2" x:Name="GeneratePasswordButton" Content="Zufällig generieren" Margin="0,0,8,0" Click="GeneratePasswordButton_Click" />
-                        <Button Grid.Column="3" x:Name="CopyPasswordButton" Content="Kopieren" Click="CopyPasswordButton_Click" />
+                                Click="RevealPasswordToggle_Click">
+                            <Grid Width="16" Height="16">
+                                <!-- Auge geöffnet: Standardzustand (Passwort verborgen), Klick zeigt es an. -->
+                                <Grid x:Name="EyeOpenIcon">
+                                    <Ellipse Width="16" Height="9" Stroke="{StaticResource TextPrimaryBrush}" StrokeThickness="1.4" />
+                                    <Ellipse Width="4" Height="4" Fill="{StaticResource TextPrimaryBrush}" />
+                                </Grid>
+                                <!-- Auge durchgestrichen: Passwort ist sichtbar, Klick verbirgt es wieder. -->
+                                <Grid x:Name="EyeClosedIcon" Visibility="Collapsed">
+                                    <Ellipse Width="16" Height="9" Stroke="{StaticResource TextPrimaryBrush}" StrokeThickness="1.4" />
+                                    <Ellipse Width="4" Height="4" Fill="{StaticResource TextPrimaryBrush}" />
+                                    <Line X1="1" Y1="15" X2="15" Y2="1" Stroke="{StaticResource TextPrimaryBrush}" StrokeThickness="1.6" />
+                                </Grid>
+                            </Grid>
+                        </Button>
+                        <Button Grid.Column="2" x:Name="GeneratePasswordButton" Width="32" Height="32" Padding="0" Margin="0,0,8,0"
+                                ToolTip="Zufälliges Passwort generieren" Click="GeneratePasswordButton_Click">
+                            <!-- Zwei Würfel: hinterer oben links (Auge "1"), vorderer unten
+                                 rechts (Auge "2") - eigener Hintergrund am vorderen Würfel, damit
+                                 er den hinteren sichtbar überlappt statt nur die Umrisse zu kreuzen. -->
+                            <Grid Width="16" Height="16">
+                                <Border Width="9" Height="9" CornerRadius="2" BorderThickness="1.2"
+                                        BorderBrush="{StaticResource TextPrimaryBrush}"
+                                        HorizontalAlignment="Left" VerticalAlignment="Top">
+                                    <Ellipse Width="2" Height="2" Fill="{StaticResource TextPrimaryBrush}" />
+                                </Border>
+                                <Border Width="9" Height="9" CornerRadius="2" BorderThickness="1.2"
+                                        BorderBrush="{StaticResource TextPrimaryBrush}" Background="{StaticResource SecondaryButtonBrush}"
+                                        HorizontalAlignment="Right" VerticalAlignment="Bottom">
+                                    <Grid>
+                                        <Ellipse Width="1.8" Height="1.8" Fill="{StaticResource TextPrimaryBrush}"
+                                                 HorizontalAlignment="Left" VerticalAlignment="Top" Margin="1.4,1.4,0,0" />
+                                        <Ellipse Width="1.8" Height="1.8" Fill="{StaticResource TextPrimaryBrush}"
+                                                 HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,1.4,1.4" />
+                                    </Grid>
+                                </Border>
+                            </Grid>
+                        </Button>
+                        <Button Grid.Column="3" x:Name="CopyPasswordButton" Width="32" Height="32" Padding="0"
+                                ToolTip="Passwort in die Zwischenablage kopieren" Click="CopyPasswordButton_Click">
+                            <!-- Zwei hintereinanderliegende Blätter: hinteres oben rechts lugt
+                                 hervor, vorderes unten links deckt es teilweise ab (übliches
+                                 Kopieren-Symbol). -->
+                            <Grid Width="16" Height="16">
+                                <Border Width="9" Height="11" CornerRadius="1.5" BorderThickness="1.3"
+                                        BorderBrush="{StaticResource TextPrimaryBrush}"
+                                        HorizontalAlignment="Right" VerticalAlignment="Top" />
+                                <Border Width="9" Height="11" CornerRadius="1.5" BorderThickness="1.3"
+                                        BorderBrush="{StaticResource TextPrimaryBrush}" Background="{StaticResource SecondaryButtonBrush}"
+                                        HorizontalAlignment="Left" VerticalAlignment="Bottom" />
+                            </Grid>
+                        </Button>
                     </Grid>
                     <TextBlock Margin="0,0,0,0" Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" TextWrapping="Wrap"
                                Text="Wird nirgends zentral gespeichert (kein Log, keine Datei) - nach dem Schließen dieses Fensters ist es nicht mehr abrufbar. Rechtzeitig kopieren/weitergeben." />
