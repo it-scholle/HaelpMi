@@ -7,7 +7,10 @@ namespace HaelpMi.Core.Networking;
 /// recipient assignments (Teil 2, Abschnitt 4) down to a concrete device list for one
 /// specific sender at trigger time. A <see cref="DeviceGroup"/> reference is resolved via
 /// its direct <see cref="DeviceGroup.DeviceIds"/> membership - no indirection anymore (war
-/// früher über Kreis-Mitgliedschaft, siehe EditScope.cs für den Hintergrund). Ein Room-Ref
+/// früher über Kreis-Mitgliedschaft, siehe EditScope.cs für den Hintergrund). Einzige
+/// Ausnahme: die eingebaute "Alle"-Gruppe (<see cref="AppConstants.AllDevicesGroupId"/>,
+/// <see cref="DeviceGroup.IsBuiltInAllDevicesGroup"/>) ignoriert DeviceIds und wird stattdessen
+/// live aus der jeweils übergebenen Geräteliste aufgelöst. Ein Room-Ref
 /// (<see cref="EntityRef.RoomId"/>) wird bei jedem Alarm neu anhand der aktuellen
 /// Raumnummer jedes Geräts aufgelöst - wie bei Gruppen zieht ein Geräteumzug in einen
 /// anderen Raum automatisch nach, ohne dass die Zuordnung angefasst werden muss.
@@ -72,6 +75,13 @@ public static class RecipientResolver
             case EntityKind.Room:
                 return senderRef.Id == EntityRef.RoomId(myRoomNumber);
             default:
+                if (senderRef.Id == AppConstants.AllDevicesGroupId)
+                {
+                    // "Alle" (Nutzerwunsch 09.08.2026): per Definition jedes Gerät im Kreis
+                    // Mitglied, keine DeviceIds-Prüfung nötig - siehe DeviceGroup.IsBuiltInAllDevicesGroup.
+                    return true;
+                }
+
                 var group = groups.FirstOrDefault(g => g.Id == senderRef.Id);
                 return group is not null && group.DeviceIds.Contains(myDeviceId);
         }
@@ -91,6 +101,19 @@ public static class RecipientResolver
                 }
                 yield break;
             default:
+                if (entityRef.Id == AppConstants.AllDevicesGroupId)
+                {
+                    // "Alle" (Nutzerwunsch 09.08.2026): Mitgliedschaft kommt nie aus
+                    // gespeicherten DeviceIds, sondern live aus den gerade per Gossip bekannten
+                    // Geräten (allDevices) - funktioniert dadurch auch, wenn gerade kein
+                    // Admin-Gerät online ist, um eine Mitgliederliste zu synchronisieren.
+                    foreach (var device in allDevices)
+                    {
+                        yield return device.DeviceId;
+                    }
+                    yield break;
+                }
+
                 var group = groups.FirstOrDefault(g => g.Id == entityRef.Id);
                 if (group is null)
                 {

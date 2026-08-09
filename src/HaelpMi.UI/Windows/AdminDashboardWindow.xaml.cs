@@ -377,12 +377,23 @@ public partial class AdminDashboardWindow : Window
             if (_selectedGroup is null)
             {
                 GroupNameBox.Text = string.Empty;
+                GroupNameBox.IsEnabled = true;
+                DeleteGroupButton.IsEnabled = true;
+                GroupDevicesList.IsEnabled = true;
                 GroupRoomsSummaryText.Text = string.Empty;
                 GroupUsersSummaryText.Text = string.Empty;
                 return;
             }
 
+            // "Alle" (Nutzerwunsch 09.08.2026): fest verdrahtete Default-Gruppe, nicht
+            // umbenennbar/löschbar/manuell bearbeitbar - ihre Mitgliedschaft ergibt sich
+            // automatisch aus allen aktuell bekannten Geräten (siehe RebuildGroupDevicesPanel/
+            // RecipientResolver), nicht aus einer im Dashboard gepflegten Auswahl.
+            var isBuiltInAll = _selectedGroup.IsBuiltInAllDevicesGroup;
             GroupNameBox.Text = _selectedGroup.Name;
+            GroupNameBox.IsEnabled = !isBuiltInAll;
+            DeleteGroupButton.IsEnabled = !isBuiltInAll;
+            GroupDevicesList.IsEnabled = !isBuiltInAll;
             UpdateGroupSummaries();
         }
         finally
@@ -394,7 +405,9 @@ public partial class AdminDashboardWindow : Window
     // Nutzerwunsch 04.08.2026 / Bugfix 09.08.2026: dieselbe Aufbau-Logik wie
     // RebuildRecipientPanels - IsAssigned kommt direkt und ausschließlich aus
     // _selectedGroup.DeviceIds (Quelle der Wahrheit), nie aus einer ListBox-eigenen
-    // Auswahl, die bei einem ItemsSource-Reset verloren gehen könnte.
+    // Auswahl, die bei einem ItemsSource-Reset verloren gehen könnte. Ausnahme "Alle"
+    // (Nutzerwunsch 09.08.2026): DeviceIds bleibt bei ihr leer, jedes Gerät gilt trotzdem
+    // als Mitglied - siehe DeviceGroup.IsBuiltInAllDevicesGroup.
     private void RebuildGroupDevicesPanel()
     {
         if (_selectedGroup is null)
@@ -403,8 +416,9 @@ public partial class AdminDashboardWindow : Window
             return;
         }
 
+        var isBuiltInAll = _selectedGroup.IsBuiltInAllDevicesGroup;
         GroupDevicesList.ItemsSource = _deviceChoices
-            .Select(d => new GroupDeviceChoice(d.DeviceId, d.DisplayName, _selectedGroup.DeviceIds.Contains(d.DeviceId)))
+            .Select(d => new GroupDeviceChoice(d.DeviceId, d.DisplayName, isBuiltInAll || _selectedGroup.DeviceIds.Contains(d.DeviceId)))
             .ToList();
     }
 
@@ -417,7 +431,9 @@ public partial class AdminDashboardWindow : Window
             return;
         }
 
-        var members = _context.LoadDevices().Where(d => _selectedGroup.DeviceIds.Contains(d.DeviceId)).ToList();
+        var members = _selectedGroup.IsBuiltInAllDevicesGroup
+            ? _context.LoadDevices().Append(_context.LoadOwnDevice()).ToList()
+            : _context.LoadDevices().Where(d => _selectedGroup.DeviceIds.Contains(d.DeviceId)).ToList();
         var rooms = members.Select(d => string.IsNullOrWhiteSpace(d.RoomName) ? "kein Raum" : d.RoomName)
             .Distinct(StringComparer.CurrentCultureIgnoreCase).OrderBy(r => r, StringComparer.CurrentCultureIgnoreCase).ToList();
         var users = members.Select(d => d.User).Where(u => !string.IsNullOrWhiteSpace(u))
@@ -444,9 +460,9 @@ public partial class AdminDashboardWindow : Window
 
     private void GroupNameBox_LostFocus(object sender, RoutedEventArgs e)
     {
-        if (_isLoadingDetail || _selectedGroup is null)
+        if (_isLoadingDetail || _selectedGroup is null || _selectedGroup.IsBuiltInAllDevicesGroup)
         {
-            return;
+            return; // "Alle" (Nutzerwunsch 09.08.2026): nicht umbenennbar, siehe LoadGroupDetail
         }
 
         var newName = GroupNameBox.Text.Trim();
@@ -466,9 +482,9 @@ public partial class AdminDashboardWindow : Window
     // vorherigen (defekten) nativen ListBox-Mehrfachauswahl.
     private void GroupDevicesList_PreviewMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
     {
-        if (_selectedGroup is null || FindDataContext<GroupDeviceChoice>(e.OriginalSource) is not { } choice)
+        if (_selectedGroup is null || _selectedGroup.IsBuiltInAllDevicesGroup || FindDataContext<GroupDeviceChoice>(e.OriginalSource) is not { } choice)
         {
-            return;
+            return; // "Alle" (Nutzerwunsch 09.08.2026): Mitgliedschaft automatisch, nicht manuell togglebar
         }
 
         var newDeviceIds = choice.IsAssigned
@@ -504,9 +520,9 @@ public partial class AdminDashboardWindow : Window
 
     private async void DeleteGroupButton_Click(object sender, RoutedEventArgs e)
     {
-        if (_selectedGroup is null)
+        if (_selectedGroup is null || _selectedGroup.IsBuiltInAllDevicesGroup)
         {
-            return;
+            return; // "Alle" (Nutzerwunsch 09.08.2026): nicht löschbar, Button ist dafür bereits deaktiviert (LoadGroupDetail)
         }
 
         // Nutzerwunsch 04.08.2026: kein natives MessageBox-Bestätigungsfenster mehr ("noch

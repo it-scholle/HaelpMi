@@ -9,6 +9,17 @@ public static class AppConstants
     /// <summary>UDP port used for boot-call announce/reply (Phase 1 FR-21/FR-22, Teil 2 Abschnitt 9).</summary>
     public const int DiscoveryUdpPort = 51500;
 
+    /// <summary>
+    /// Fest verdrahtete ID der eingebauten "Alle"-Gruppe (Nutzerwunsch 09.08.2026: "Default-
+    /// Gruppe, die auch funktioniert, wenn der Admin gerade nicht online ist"). Jedes Gerät
+    /// kennt diese ID unabhängig und ganz ohne Config-Sync (siehe <c>SharedConfigStore</c>) -
+    /// ihre Mitgliedschaft wird nie aus gespeicherten/synchronisierten DeviceIds gelesen,
+    /// sondern bei jeder Alarm-/Sender-Auflösung live aus den per Gossip (Boot-Call-Reply-
+    /// Anhang, siehe DiscoveryService/KnownDeviceSummary) bekannten Geräten berechnet (siehe
+    /// RecipientResolver). Deshalb braucht "Alle" selbst keine eigene Propagierung.
+    /// </summary>
+    public static readonly Guid AllDevicesGroupId = new("d3f1a000-a11d-4000-9000-000000000001");
+
     /// <summary>TCP port each device listens on for incoming alarms (FR-9) and their acks (FR-13).</summary>
     public const int AlarmTcpPort = 51501;
 

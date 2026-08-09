@@ -255,4 +255,70 @@ public class ModelsTests
 
         Assert.Equal(2, count); // deviceA + deviceB, nicht mehr
     }
+
+    // --- Nutzerwunsch 09.08.2026: eingebaute "Alle"-Gruppe (AppConstants.AllDevicesGroupId) -
+    // Mitgliedschaft kommt live aus den bekannten Geräten, nicht aus DeviceIds/Config-Sync, und
+    // funktioniert daher unabhängig davon, ob sie überhaupt in der übergebenen groups-Liste
+    // steht (so, wie ein frisches, noch nie synchronisiertes Gerät sie lokal kennt). ---
+
+    [Fact]
+    public void RecipientResolver_ResolvesAllDevicesGroupRecipient_ToEveryCurrentlyKnownDevice()
+    {
+        var senderId = Guid.NewGuid();
+        var peer1 = Guid.NewGuid();
+        var peer2 = Guid.NewGuid();
+        var profile = new AlarmProfile
+        {
+            RecipientAssignments =
+            {
+                new RecipientAssignment
+                {
+                    Sender = new EntityRef(EntityKind.Device, senderId),
+                    Recipients = { new EntityRef(EntityKind.Group, AppConstants.AllDevicesGroupId) },
+                },
+            },
+        };
+        // Nur Peers (Sender selbst nicht enthalten) - so wie _deviceStore.Load() zur
+        // Trigger-Zeit tatsächlich befüllt ist (der Sender trägt sich dort nie selbst ein).
+        var devices = new List<DeviceEntry> { new() { DeviceId = peer1 }, new() { DeviceId = peer2 } };
+
+        // Bewusst eine LEERE groups-Liste: "Alle" muss auch auflösen, wenn sie (noch) gar
+        // nicht in der lokal geladenen SharedConfig steht.
+        var result = RecipientResolver.ResolveRecipientsForSender(profile, senderId, "1", devices, groups: new List<DeviceGroup>());
+
+        Assert.Equal(2, result.Count);
+        Assert.Contains(result, d => d.DeviceId == peer1);
+        Assert.Contains(result, d => d.DeviceId == peer2);
+    }
+
+    [Fact]
+    public void RecipientResolver_ResolvesAllDevicesGroupSender_RegardlessOfGroupsList()
+    {
+        var senderId = Guid.NewGuid();
+        var recipientId = Guid.NewGuid();
+        var profile = new AlarmProfile
+        {
+            RecipientAssignments =
+            {
+                new RecipientAssignment
+                {
+                    Sender = new EntityRef(EntityKind.Group, AppConstants.AllDevicesGroupId),
+                    Recipients = { new EntityRef(EntityKind.Device, recipientId) },
+                },
+            },
+        };
+        var devices = new List<DeviceEntry> { new() { DeviceId = senderId }, new() { DeviceId = recipientId } };
+
+        var result = RecipientResolver.ResolveRecipientsForSender(profile, senderId, "1", devices, groups: new List<DeviceGroup>());
+
+        Assert.Single(result);
+        Assert.Equal(recipientId, result[0].DeviceId);
+    }
+
+    [Fact]
+    public void DeviceGroup_IsBuiltInAllDevicesGroup_TrueOnlyForTheReservedId()
+    {
+        Assert.True(new DeviceGroup { Id = AppConstants.AllDevicesGroupId }.IsBuiltInAllDevicesGroup);
+        Assert.False(new DeviceGroup().IsBuiltInAllDevicesGroup); // random Guid.NewGuid() default
+    }
 }

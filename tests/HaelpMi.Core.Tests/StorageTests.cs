@@ -168,4 +168,46 @@ public class StorageTests
         Assert.Equal("A", ordered[0].ComputerName); // the only favorite (FR-19)
     }
 
+    // --- Nutzerwunsch 09.08.2026: eingebaute "Alle"-Gruppe - jedes Gerät ergänzt sie lokal
+    // beim Laden, ganz ohne Config-Sync/Admin, statt sie propagiert zu bekommen. ---
+
+    [Fact]
+    public void SharedConfigStore_LoadOrCreate_AddsAllDevicesGroup_OnAFreshNeverSavedConfig()
+    {
+        using var scope = new TestAppDataScope();
+        var store = new SharedConfigStore();
+
+        var config = store.LoadOrCreate();
+
+        Assert.Contains(config.DeviceGroups, g => g.Id == AppConstants.AllDevicesGroupId && g.Name == "Alle");
+    }
+
+    [Fact]
+    public void SharedConfigStore_LoadOrCreate_BackfillsAllDevicesGroup_OnAnOlderSavedConfigMissingIt()
+    {
+        using var scope = new TestAppDataScope();
+        var store = new SharedConfigStore();
+
+        // Simuliert ein bereits synchronisiertes Gerät, dessen gespeicherte SharedConfig aus
+        // der Zeit vor der "Alle"-Gruppe stammt (kein Save() über LoadOrCreate benutzt).
+        store.Save(new SharedConfig { DeviceGroups = { new DeviceGroup { Name = "Erdgeschoss" } } });
+
+        var config = store.LoadOrCreate();
+
+        Assert.Equal(2, config.DeviceGroups.Count);
+        Assert.Contains(config.DeviceGroups, g => g.Id == AppConstants.AllDevicesGroupId);
+        Assert.Contains(config.DeviceGroups, g => g.Name == "Erdgeschoss");
+    }
+
+    [Fact]
+    public void SharedConfigStore_LoadOrCreate_DoesNotDuplicate_WhenAllDevicesGroupAlreadyPresent()
+    {
+        using var scope = new TestAppDataScope();
+        var store = new SharedConfigStore();
+        store.Save(new SharedConfig { DeviceGroups = { new DeviceGroup { Id = AppConstants.AllDevicesGroupId, Name = "Alle" } } });
+
+        var config = store.LoadOrCreate();
+
+        Assert.Single(config.DeviceGroups);
+    }
 }
