@@ -1,4 +1,6 @@
 using System.Windows;
+using System.Windows.Threading;
+using HaelpMi.Core.Models;
 using HaelpMi.Core.Sending;
 
 namespace HaelpMi.UI.Windows;
@@ -16,6 +18,7 @@ public partial class SenderStatusWindow : Window
     private static readonly List<SenderStatusWindow> OpenWindows = new();
 
     private readonly RepeatingAlarmSession _session;
+    private DispatcherTimer? _autoCloseTimer;
 
     public SenderStatusWindow(RepeatingAlarmSession session, string profileName)
     {
@@ -40,6 +43,7 @@ public partial class SenderStatusWindow : Window
             OpenWindows.Remove(this);
             _session.StatusChanged -= Session_StatusChanged;
             _session.Finished -= Session_Finished;
+            _autoCloseTimer?.Stop(); // sonst tickt ein schon laufender Timer noch gegen ein per X geschlossenes Fenster
         };
         OpenWindows.Add(this);
     }
@@ -47,11 +51,30 @@ public partial class SenderStatusWindow : Window
     private void Session_StatusChanged(object? sender, AlarmSessionStatus status) =>
         Dispatcher.BeginInvoke(() => ApplyStatus(status));
 
+    // Nutzerwunsch 09.08.2026: das Banner soll nicht wie bisher unbegrenzt stehen bleiben.
+    // Bei manuellem Abbrechen sofort weg (der Sender hat gerade selbst aktiv gehandelt,
+    // braucht keine Bestätigungsanzeige mehr) - bei Schwellwert/Zeitablauf noch
+    // SenderStatusBannerAutoCloseAfterFinish (2 Min.) sichtbar, genug Zeit für einen Blick
+    // auf die "Auf dem Weg"-Liste, aber nicht dauerhaft manuell wegzuklicken.
     private void Session_Finished(object? sender, EventArgs e) =>
         Dispatcher.BeginInvoke(() =>
         {
             CancelButton.IsEnabled = false;
             StatusText.Text = "Alarm beendet";
+
+            if (_session.StopReason == AlarmStopReason.Cancelled)
+            {
+                Close();
+                return;
+            }
+
+            _autoCloseTimer = new DispatcherTimer { Interval = AppConstants.SenderStatusBannerAutoCloseAfterFinish };
+            _autoCloseTimer.Tick += (_, _) =>
+            {
+                _autoCloseTimer!.Stop();
+                Close();
+            };
+            _autoCloseTimer.Start();
         });
 
     private void ApplyStatus(AlarmSessionStatus status)

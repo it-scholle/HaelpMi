@@ -13,6 +13,18 @@ public sealed class AlarmSessionStatus
 }
 
 /// <summary>
+/// Why a session stopped pinging (Nutzerwunsch 09.08.2026, siehe <see cref="RepeatingAlarmSession.StopReason"/>):
+/// die Sender-Statusanzeige braucht das, um zwischen "sofort weg" (Cancelled) und
+/// "noch 2 Minuten sichtbar" (die anderen beiden) zu unterscheiden.
+/// </summary>
+public enum AlarmStopReason
+{
+    MaxDuration,
+    ThresholdReached,
+    Cancelled,
+}
+
+/// <summary>
 /// One triggered alarm's full lifecycle (FR-50/FR-53): repeats the send every
 /// <see cref="AppConstants.AlarmRepeatInterval"/>, stops after
 /// <see cref="AppConstants.AlarmMaxDuration"/>, after
@@ -52,11 +64,15 @@ public sealed class RepeatingAlarmSession : IDisposable
     private readonly DateTimeOffset _startedAtUtc;
     private int _lastAckedCount;
     private bool _pingingActive = true;
+    private bool _cancelledByUser;
 
     public event EventHandler<AlarmSessionStatus>? StatusChanged;
 
     /// <summary>Fired once pinging has stopped (not once the object is done listening - see class remarks on the 1-minute Nachlauf-Fenster). <see cref="StatusChanged"/> can still fire afterwards for late responses.</summary>
     public event EventHandler? Finished;
+
+    /// <summary>Set right before <see cref="Finished"/> fires - see <see cref="AlarmStopReason"/>.</summary>
+    public AlarmStopReason StopReason { get; private set; }
 
     public RepeatingAlarmSession(
         AlarmProfile profile,
@@ -112,6 +128,19 @@ public sealed class RepeatingAlarmSession : IDisposable
         // eigenes Protokollfeld nötig - AlarmStatusRelayMessage.SenderStillSending sagt
         // dem Empfänger schon "der Sender pingt nicht mehr", exakt die Bedeutung).
         _pingingActive = false;
+
+        // Nutzerwunsch 09.08.2026: die Sender-Statusanzeige (SenderStatusWindow) soll bei
+        // Abbrechen sofort verschwinden, bei Schwellwert/Zeitablauf aber noch 2 Minuten
+        // sichtbar bleiben - dafür muss sie wissen, WARUM gestoppt wurde, nicht nur DASS.
+        // _cancelledByUser wird ausschließlich vom öffentlichen Cancel() gesetzt; ein
+        // Schwellwert-Stopp läuft intern direkt über _stopCts.Cancel() in OnMyWayReceived,
+        // setzt das Flag also nicht - beide Fälle bleiben damit unterscheidbar.
+        StopReason = _cancelledByUser
+            ? AlarmStopReason.Cancelled
+            : _onTheWayResponderIds.Count >= Profile.ResponseThreshold
+                ? AlarmStopReason.ThresholdReached
+                : AlarmStopReason.MaxDuration;
+
         await RaiseAndRelayAsync(stillSending: false);
         Finished?.Invoke(this, EventArgs.Empty);
 
@@ -128,7 +157,11 @@ public sealed class RepeatingAlarmSession : IDisposable
     }
 
     /// <summary>Manual "Abbrechen" (FR-50).</summary>
-    public void Cancel() => _stopCts.Cancel();
+    public void Cancel()
+    {
+        _cancelledByUser = true;
+        _stopCts.Cancel();
+    }
 
     private void OnMyWayReceived(object? sender, AlarmOnMyWayMessage message)
     {

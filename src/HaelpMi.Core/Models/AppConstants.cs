@@ -48,6 +48,15 @@ public static class AppConstants
     /// <summary>Receiver-side auto-close delay measured from the *last* received signal, not the first (Teil 2, Abschnitt 8).</summary>
     public static readonly TimeSpan AlarmAutoCloseAfterLastSignal = TimeSpan.FromMinutes(1);
 
+    /// <summary>
+    /// Sender-side status banner (SenderStatusWindow): how long it stays visible after
+    /// the alarm ends via threshold or the 5-minute timeout, before closing itself
+    /// (Nutzerwunsch 09.08.2026 - genug Zeit, kurz die "Auf dem Weg"-Liste zu lesen, ohne
+    /// dauerhaft manuell weggeklickt werden zu müssen). Gilt NICHT für ein manuelles
+    /// Abbrechen - das schließt das Banner sofort, siehe SenderStatusWindow.
+    /// </summary>
+    public static readonly TimeSpan SenderStatusBannerAutoCloseAfterFinish = TimeSpan.FromMinutes(2);
+
     /// <summary>Exclusive edit-lock auto-release after this much inactivity (Teil 2, Abschnitt 5).</summary>
     public static readonly TimeSpan EditLockInactivityTimeout = TimeSpan.FromMinutes(10);
 
