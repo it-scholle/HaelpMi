@@ -32,8 +32,21 @@ stillschweigend zu ignorieren.
 - Installer: Inno Setup oder WiX, plus separates Entwickler-Tool "Install-Creator" (siehe unten)
 
 ## Lizenz & Secrets
-- MIT-Lizenz (feste Vorgabe der Stadt als Auftraggeberin). `LICENSE`-Datei, `.gitignore` gegen
-  Secret-Dateimuster von Anfang an.
+- **Lizenztyp (korrigiert 09.08.2026):** Frühere Fassungen dieser Datei sowie
+  `Anweisungen/pflichtenheft-HälpMi.md` (Zeile 24, FR-31) legten die Lizenz konkret auf **MIT**
+  fest. Das war ein veralteter Stand — die tatsächliche Vorgabe der Stadt als Auftraggeberin ist
+  allgemeiner: **Quellcode muss öffentlich einsehbar/"open source" sein**, ohne dass MIT
+  namentlich verlangt wird. Damit ist auch eine **Source-Available-Lizenz** (öffentlicher
+  Quellcode, aber keine freie kommerzielle Weiterverwertung durch Dritte — z. B. Business Source
+  License, Functional Source License oder Elastic License v2, siehe Preis-/Lizenzmodell-Notiz)
+  eine offene, noch nicht final entschiedene Option. **Wichtig:** "Open Source" im engeren
+  (OSI-)Sinn verbietet Einschränkungen der kommerziellen Nutzung durch Dritte per Definition —
+  falls die Stadt den Begriff im engeren Sinn vertraglich verwendet, muss das vor einer
+  Source-Available-Entscheidung schriftlich mit ihr geklärt werden, bevor die `LICENSE`-Datei
+  geändert wird. Bis dahin bleibt die im Repository liegende `LICENSE`-Datei unverändert MIT.
+  `pflichtenheft-HälpMi.md` selbst wird nicht rückwirkend editiert (historische FR-Quelle), diese
+  CLAUDE.md-Notiz gewinnt bei Widersprüchen wie in den Referenzdokumenten oben beschrieben.
+- `.gitignore` gegen Secret-Dateimuster von Anfang an.
 - Drei getrennte kryptografische Schlüsselpaare, niemals verwechseln oder zusammenlegen:
   1. Kunden-Lizenzsignatur (Ed25519) — Soft-Expiry, kein Hard-Lock.
   2. Update-Signatur (Ed25519, **separater** Schlüssel) — nur signierte Programm-Updates werden
