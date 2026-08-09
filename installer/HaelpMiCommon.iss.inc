@@ -13,7 +13,7 @@
 #define MyAppName "HälpMi"
 ; Alpha: 0.x until release, per city/product decision - Version 1.0.0 is reserved for
 ; the actual release. Bump the third number for ordinary fixes, second for a feature.
-#define MyAppVersion "0.8.1"
+#define MyAppVersion "0.8.2"
 #define MyAppPublisher "HälpMi contributors"
 #define MyAgentExeName "HaelpMi.Agent.exe"
 #define MyConfigExeName "HaelpMi.Config.exe"
@@ -566,12 +566,49 @@ begin
       mbConfirmation, MB_YESNO) = IDYES);
 end;
 
+// Untersuchung 09.08.2026 (Fehlerbericht "im Hintergrund läuft nach dem Deinstallieren
+// immer noch eine Alarmmeldung"): Codeanalyse fand ein passendes Risiko in
+// HaelpMi.UpdateService/UpdateServiceWorker.cs - Testinstanzen des Agents aus
+// StartTest() (--update-test-port, volle AlarmFlowCoordinator-Logik, gestartet unter
+// {app}\versions\<Version>\) werden nur in einem In-Memory-Dictionary verfolgt und laufen
+// als Waise unbegrenzt weiter, falls der Update-Dienst währenddessen neu startet (siehe
+// Kommentar dort - jetzt mit eigener Aufräumroutine beim Dienststart gehärtet). Auf der
+// Entwicklungsmaschine ließ sich der Vorfall nicht selbst nachstellen (HälpMi war dort
+// gar nicht installiert) - dieses Log soll beim nächsten Auftreten harte Beweise statt
+// erneuter Vermutung liefern, bevor der Uninstaller die Spuren beseitigt. Bewusst NICHT
+// unter {commonappdata}\HaelpMi (siehe RemoveUserDataOnUninstall unten) - genau der Fall
+// "Nutzer entfernt auch die lokalen Daten" darf die Diagnose nicht mit wegwerfen.
+procedure LogUninstallDiagnostics(const Line: String);
+begin
+  SaveStringToFile(
+    ExpandConstant('{commonappdata}') + '\HaelpMi-uninstall-diagnostics.log',
+    GetDateTimeString('yyyy-mm-dd hh:nn:ss', #0, #0) + '  ' + Line + #13#10,
+    True);
+end;
+
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 var
   ResultCode: Integer;
+  LogPath: String;
 begin
   if CurUninstallStep = usUninstall then
   begin
+    LogPath := ExpandConstant('{commonappdata}') + '\HaelpMi-uninstall-diagnostics.log';
+    LogUninstallDiagnostics('=== HaelpMi {#MyAppVersion} Uninstall gestartet ===');
+    // Momentaufnahme VOR dem Aufräumen unten - genau das, was ein Support-Fall sonst nie
+    // sieht, weil taskkill/DelTree es gleich darauf beseitigen. /V (tasklist) bzw. /FO LIST
+    // (schtasks) liefern den vollen Bildpfad mit - der einzige Weg, um im Log zwischen einer
+    // regulären Instanz ({app}\...) und einer herrenlosen Testinstanz ({app}\versions\...,
+    // siehe Kommentar oben) zu unterscheiden.
+    Exec('cmd.exe', '/C tasklist /FI "IMAGENAME eq {#MyAgentExeName}" /V >> "' + LogPath + '" 2>&1', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+    Exec('cmd.exe', '/C tasklist /FI "IMAGENAME eq {#MyConfigExeName}" /V >> "' + LogPath + '" 2>&1', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+    Exec('cmd.exe', '/C schtasks /Query /TN "HaelpMi Agent" /V /FO LIST >> "' + LogPath + '" 2>&1', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+    Exec('cmd.exe', '/C sc query HaelpMiUpdateService >> "' + LogPath + '" 2>&1', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+    if DirExists(ExpandConstant('{app}\versions')) then
+      LogUninstallDiagnostics('WARNUNG: {app}\versions existiert noch - deutet auf ein unterbrochenes Update hin (siehe UpdateServiceWorker-Kommentar).');
+    if DirExists(ExpandConstant('{app}\_previous')) then
+      LogUninstallDiagnostics('WARNUNG: {app}\_previous existiert noch - deutet auf einen unterbrochenen Swap hin.');
+
     // Bugfix 06.08.2026 ("Uninstall entfernt Programm-Ordner nicht", Fehlerbericht): hier
     // stand bisher NUR der Agent-Kill - HaelpMi.Config.exe (Dashboard/Konfigurationsfenster,
     // z. B. offen gelassen über das Tray-Menü "HälpMi öffnen") wurde nie beendet. Solange
@@ -582,7 +619,9 @@ begin
     // CurStepChanged oben bei der Installation, hier nur bisher vergessen.
     Exec('taskkill.exe', '/IM {#MyConfigExeName} /F', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
     // Stop the Agent first - otherwise its own files can be locked and skipped/
-    // deferred-to-reboot instead of actually being removed.
+    // deferred-to-reboot instead of actually being removed. taskkill /IM matcht nach reinem
+    // Bilddateinamen, unabhängig vom Pfad - trifft also auch eine herrenlose Testinstanz
+    // unter {app}\versions\... (siehe Log-Ausgabe oben), sofern sie überhaupt noch läuft.
     Exec('taskkill.exe', '/IM {#MyAgentExeName} /F', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
     // Task name must match AutostartRegistrar.TaskName in HaelpMi.Core exactly ("HaelpMi
     // Agent", plain ASCII spelling - not "HälpMi") or this silently deletes nothing.
@@ -607,7 +646,12 @@ begin
     // ohne Rückfrage sicher.
     DelTree(ExpandConstant('{app}'), True, True, True);
 
+    if DirExists(ExpandConstant('{app}')) then
+      LogUninstallDiagnostics('WARNUNG: {app} konnte nicht vollstaendig entfernt werden (vermutlich noch eine gesperrte Datei) - siehe tasklist-Ausgabe oben.');
+
     if RemoveUserDataOnUninstall then
       DelTree(ExpandConstant('{commonappdata}\HaelpMi'), True, True, True);
+
+    LogUninstallDiagnostics('=== HaelpMi {#MyAppVersion} Uninstall abgeschlossen ===');
   end;
 end;

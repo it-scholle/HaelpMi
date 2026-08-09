@@ -23,6 +23,16 @@ namespace HaelpMi.UpdateService;
 public sealed class UpdateServiceWorker : BackgroundService
 {
     private readonly ILogger<UpdateServiceWorker> _logger;
+
+    // Untersuchung 09.08.2026 (Nutzerbericht "im Hintergrund läuft immer noch eine
+    // Alarmmeldung", noch nicht live nachgestellt): dieses Dictionary lebt ausschließlich
+    // im Arbeitsspeicher DIESES Worker-Objekts. Stirbt/startet der Dienst neu (Absturz,
+    // "sc.exe stop" mitten in einem laufenden StartTest, Deinstallation während eines
+    // Updates), verliert der neue Worker jede Kenntnis der zuvor gestarteten Testinstanz -
+    // der Kindprozess (eine vollständige HaelpMi.Agent.exe mit eigenem
+    // AlarmFlowCoordinator, siehe StartTest unten) läuft dann als Waise unbegrenzt weiter,
+    // ohne dass irgendetwas ihn je wieder beendet. KillOrphanedTestInstances() räumt genau
+    // das beim Dienststart auf - siehe dort.
     private readonly Dictionary<string, Process> _testProcesses = new();
 
     private static string AppRoot => AppContext.BaseDirectory;
@@ -36,6 +46,8 @@ public sealed class UpdateServiceWorker : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        KillOrphanedTestInstances();
+
         while (!stoppingToken.IsCancellationRequested)
         {
             NamedPipeServerStream server;
@@ -309,6 +321,46 @@ public sealed class UpdateServiceWorker : BackgroundService
             catch (Exception)
             {
                 // best-effort - schon beendet oder kein Zugriff
+            }
+        }
+    }
+
+    // Räumt beim Dienststart Testinstanzen auf, die ein vorheriger (abgestürzter/
+    // neugestarteter) Worker-Prozess über StartTest() angestoßen und danach nicht mehr
+    // selbst beenden konnte - siehe Kommentar bei _testProcesses oben. Eine reguläre
+    // Produktivinstanz läuft nie unterhalb von VersionsRootDir (nur ConfirmSwap verschiebt
+    // Dateien von dort nach AppRoot und löscht das Versionsverzeichnis danach), daher ist
+    // "HaelpMi.Agent.exe unterhalb von VersionsRootDir" ein eindeutiges Merkmal einer
+    // herrenlosen Testinstanz und niemals ein Fehlalarm gegen eine echte Produktivinstanz.
+    private void KillOrphanedTestInstances()
+    {
+        foreach (var process in Process.GetProcessesByName("HaelpMi.Agent"))
+        {
+            string? path;
+            try
+            {
+                path = process.MainModule?.FileName;
+            }
+            catch (Exception)
+            {
+                continue; // z. B. Zugriff auf ein fremdes Sitzungs-Handle verweigert - dann lieber nicht anfassen
+            }
+
+            if (path is null || !path.StartsWith(VersionsRootDir, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            _logger.LogWarning(
+                "Herrenlose Update-Testinstanz beim Dienststart gefunden und beendet: PID {Pid}, Pfad {Path}",
+                process.Id, path);
+            try
+            {
+                process.Kill(entireProcessTree: true);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Herrenlose Testinstanz (PID {Pid}) konnte nicht beendet werden.", process.Id);
             }
         }
     }
