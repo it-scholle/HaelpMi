@@ -297,20 +297,14 @@
                         <TextBox x:Name="GroupNameBox" Padding="4" Margin="0,4,0,12" LostFocus="GroupNameBox_LostFocus" />
 
                         <TextBlock Text="Enthaltene Geräte (Klick fügt hinzu/entfernt - grün = Mitglied)" FontWeight="SemiBold" TextWrapping="Wrap" />
-                        <ListBox x:Name="GroupDevicesList" DisplayMemberPath="DisplayName" SelectionMode="Multiple"
-                                 Height="180" Margin="0,4,0,12" SelectionChanged="GroupDevicesList_SelectionChanged">
-                            <!-- Nutzerwunsch 04.08.2026: "leicht grün hinterlegt" statt der WPF-
-                                 Standard-Blau-Markierung, konsistent mit der Empfänger-Spalte im
-                                 Alarm-Profile-Tab (ToggleListItemStyle) - SelectionMode=Multiple ist
-                                 bereits click-to-toggle, nur die Farbe der Auswahl wird hier
-                                 umdefiniert (funktioniert für fokussiert/unfokussiert). -->
-                            <ListBox.Resources>
-                                <SolidColorBrush x:Key="{x:Static SystemColors.HighlightBrushKey}" Color="#D6F5DD" />
-                                <SolidColorBrush x:Key="{x:Static SystemColors.HighlightTextBrushKey}" Color="#1D1D1F" />
-                                <SolidColorBrush x:Key="{x:Static SystemColors.ControlBrushKey}" Color="#D6F5DD" />
-                                <SolidColorBrush x:Key="{x:Static SystemColors.ControlTextBrushKey}" Color="#1D1D1F" />
-                            </ListBox.Resources>
-                        </ListBox>
+                        <!-- Bugfix 09.08.2026: statt der nativen ListBox-Mehrfachauswahl (samt
+                             SystemColors-Überschreibung, die die Auswahl bei jedem ItemsSource-
+                             Reset verlor) jetzt dasselbe Prinzip wie die Empfänger-Spalte im
+                             Alarm-Profile-Tab - ToggleListItemStyle + IsAssigned direkt aus der
+                             Config, Klick toggelt per Code-Behind. -->
+                        <ListBox x:Name="GroupDevicesList" DisplayMemberPath="DisplayName"
+                                 ItemContainerStyle="{StaticResource ToggleListItemStyle}"
+                                 Height="180" Margin="0,4,0,12" PreviewMouseLeftButtonUp="GroupDevicesList_PreviewMouseLeftButtonUp" />
 
                         <TextBlock Text="Enthaltene Räume" FontWeight="SemiBold" />
                         <TextBlock x:Name="GroupRoomsSummaryText" Margin="0,4,0,10" TextWrapping="Wrap" Foreground="{StaticResource TextSecondaryBrush}" />

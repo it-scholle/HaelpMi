@@ -42,6 +42,16 @@ public partial class AdminDashboardWindow : Window
     private sealed record SenderChoice(EntityRef Ref, string DisplayName, bool IsConfigured, int RecipientCount, bool IsHighlighted);
     private sealed record RecipientChoice(EntityRef Ref, string DisplayName, bool IsAssigned);
 
+    // Bugfix 09.08.2026 ("Benutzerauswahl in Gruppen defekt"): GroupDevicesList lief bisher
+    // über die native ListBox-Mehrfachauswahl (SelectedItems) samt SystemColors-Überschreibung
+    // fürs Grün - die Auswahl ging bei praktisch jedem ReloadAll() (z. B. nach Speichern eines
+    // GANZ ANDEREN Feldes) verloren, weil ItemsSource dabei neu gesetzt wird, ohne
+    // SelectedItems aus _selectedGroup.DeviceIds wiederherzustellen. Jetzt exakt dasselbe
+    // Prinzip wie die Empfänger-Spalte (RecipientChoice/ToggleListItemStyle): IsAssigned kommt
+    // direkt aus der Config, Klick toggelt und schreibt sofort zurück - keine ListBox-eigene
+    // Auswahl mehr, die verloren gehen könnte.
+    private sealed record GroupDeviceChoice(Guid DeviceId, string DisplayName, bool IsAssigned);
+
     private readonly AdminDashboardContext _context;
     private SharedConfig _config = null!;
     private List<DeviceChoice> _deviceChoices = new();
@@ -67,9 +77,10 @@ public partial class AdminDashboardWindow : Window
     private Guid? _heldProfileLockId;
 
     // Unterdrückt die Auto-Speichern-Handler unten, während LoadGroupDetail/
-    // LoadProfileDetail selbst Felder befüllen (z. B. GroupDevicesList.SelectedItems
-    // setzen löst sonst GroupDevicesList_SelectionChanged aus, obwohl der Nutzer nichts
-    // geändert hat).
+    // LoadProfileDetail selbst Felder befüllen (z. B. GroupNameBox.Text setzen löst sonst
+    // GroupNameBox_LostFocus aus, obwohl der Nutzer nichts geändert hat). GroupDevicesList
+    // braucht das nicht mehr (siehe GroupDeviceChoice oben) - Klick dort schreibt direkt,
+    // kein SelectionChanged mehr zu unterdrücken.
     private bool _isLoadingDetail;
 
     // Nutzerwunsch 05.08.2026: automatisch aktualisieren, wenn ein neuer Boot-Call
@@ -109,22 +120,7 @@ public partial class AdminDashboardWindow : Window
             .OrderBy(d => d.DisplayName, StringComparer.CurrentCultureIgnoreCase)
             .ToList();
 
-        var wasLoading = _isLoadingDetail;
-        _isLoadingDetail = true;
-        try
-        {
-            var selectedIds = GroupDevicesList.SelectedItems.Cast<DeviceChoice>().Select(d => d.DeviceId).ToHashSet();
-            GroupDevicesList.ItemsSource = null;
-            GroupDevicesList.ItemsSource = _deviceChoices;
-            foreach (var device in _deviceChoices.Where(d => selectedIds.Contains(d.DeviceId)))
-            {
-                GroupDevicesList.SelectedItems.Add(device);
-            }
-        }
-        finally
-        {
-            _isLoadingDetail = wasLoading;
-        }
+        RebuildGroupDevicesPanel();
 
         if (_selectedGroup is not null)
         {
@@ -197,8 +193,6 @@ public partial class AdminDashboardWindow : Window
         {
             GroupsList.ItemsSource = null;
             GroupsList.ItemsSource = _config.DeviceGroups;
-            GroupDevicesList.ItemsSource = null;
-            GroupDevicesList.ItemsSource = _deviceChoices;
             GroupsList.SelectedItem = _config.DeviceGroups.FirstOrDefault(g => g.Id == groupSelectionId);
 
             ReloadProfileCombo();
@@ -223,6 +217,7 @@ public partial class AdminDashboardWindow : Window
             _selectedProfile = ProfileCombo.SelectedItem as AlarmProfile;
         }
 
+        RebuildGroupDevicesPanel();
         RebuildSenderPanels();
         RebuildRecipientPanels();
         if (_selectedGroup is not null)
@@ -377,7 +372,7 @@ public partial class AdminDashboardWindow : Window
         _isLoadingDetail = true;
         try
         {
-            GroupDevicesList.SelectedItems.Clear();
+            RebuildGroupDevicesPanel();
 
             if (_selectedGroup is null)
             {
@@ -388,17 +383,29 @@ public partial class AdminDashboardWindow : Window
             }
 
             GroupNameBox.Text = _selectedGroup.Name;
-            foreach (var device in _deviceChoices.Where(d => _selectedGroup.DeviceIds.Contains(d.DeviceId)))
-            {
-                GroupDevicesList.SelectedItems.Add(device);
-            }
-
             UpdateGroupSummaries();
         }
         finally
         {
             _isLoadingDetail = false;
         }
+    }
+
+    // Nutzerwunsch 04.08.2026 / Bugfix 09.08.2026: dieselbe Aufbau-Logik wie
+    // RebuildRecipientPanels - IsAssigned kommt direkt und ausschließlich aus
+    // _selectedGroup.DeviceIds (Quelle der Wahrheit), nie aus einer ListBox-eigenen
+    // Auswahl, die bei einem ItemsSource-Reset verloren gehen könnte.
+    private void RebuildGroupDevicesPanel()
+    {
+        if (_selectedGroup is null)
+        {
+            GroupDevicesList.ItemsSource = null;
+            return;
+        }
+
+        GroupDevicesList.ItemsSource = _deviceChoices
+            .Select(d => new GroupDeviceChoice(d.DeviceId, d.DisplayName, _selectedGroup.DeviceIds.Contains(d.DeviceId)))
+            .ToList();
     }
 
     // Nutzerwunsch 04.08.2026: automatisch akkumulierte Anzeige, welche Räume/Nutzer in
@@ -454,18 +461,19 @@ public partial class AdminDashboardWindow : Window
         });
     }
 
-    private void GroupDevicesList_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    // Bugfix 09.08.2026: Klick toggelt direkt Mitgliedschaft, grün = Mitglied - dasselbe
+    // Prinzip wie RecipientList_PreviewMouseLeftButtonUp bei der Empfänger-Spalte, statt der
+    // vorherigen (defekten) nativen ListBox-Mehrfachauswahl.
+    private void GroupDevicesList_PreviewMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
     {
-        if (_isLoadingDetail || _selectedGroup is null)
+        if (_selectedGroup is null || FindDataContext<GroupDeviceChoice>(e.OriginalSource) is not { } choice)
         {
             return;
         }
 
-        var newDeviceIds = GroupDevicesList.SelectedItems.Cast<DeviceChoice>().Select(d => d.DeviceId).ToList();
-        if (newDeviceIds.OrderBy(id => id).SequenceEqual(_selectedGroup.DeviceIds.OrderBy(id => id)))
-        {
-            return;
-        }
+        var newDeviceIds = choice.IsAssigned
+            ? _selectedGroup.DeviceIds.Where(id => id != choice.DeviceId).ToList()
+            : _selectedGroup.DeviceIds.Append(choice.DeviceId).ToList();
 
         SaveGroupFieldAsync("Enthaltene Geräte", $"{_selectedGroup.DeviceIds.Count} Gerät(e)", $"{newDeviceIds.Count} Gerät(e)", cfg =>
         {
