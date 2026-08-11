@@ -94,7 +94,18 @@ stillschweigend zu ignorieren.
 - **Programm-Updates laufen ausschließlich über die Swap-Pipeline** (siehe Update-Prompt Teil 2):
   signiert, parallele Testinstanz auf separatem Testport, Freigabe erst nach lokalem Erfolg +
   mindestens einer Peer-Bestätigung, dann Port-Übernahme und Deinstallation der Altversion.
-  Rollout ist gestaffelt und wird vom Admin freigegeben, nicht unkontrolliert lauffeuerartig.
+- **Rollout-Freigabe (korrigiert 11.08.2026)**: Abschnitt 11 im Update-Prompt Teil 2 beschreibt
+  noch ein gestaffeltes Freigabekontingent (Admin gibt Stufe für Stufe frei, z. B. 1 → 2 → 4 → 8
+  Geräte) — das ist überholt und **nicht** mehr die gültige Regel, CLAUDE.md gewinnt hier wie im
+  Referenzdokumente-Abschnitt festgelegt. Tatsächlich gibt der Admin das Update **genau einmal**
+  frei. Ab da verbreitet sich das Update vollautomatisch von Gerät zu Gerät weiter: jedes Gerät,
+  das das Update selbst erfolgreich übernommen hat, gibt es beim eigenen nächsten Boot-Call an
+  Peers weiter (wie in Abschnitt 11 Schritt 5 ohnehin beschrieben) — ohne Admin-gesteuerte
+  Zwischenstufen, ohne manuell hochzusetzendes Kontingent. Die restlichen Sicherungen aus
+  Abschnitt 11 bleiben unverändert gültig: lokaler Testping + mindestens eine Peer-Bestätigung vor
+  jeder Übernahme, Jitter vor dem Update-Pull, Retry-Obergrenze pro Gerät, Fehlermeldung an den
+  Admin. Der dortige Not-Aus-Mechanismus ("bei mehreren Fehlschlägen stoppt die gesamte
+  Verteilung") gilt jetzt pro Kreis statt pro Stufe, da es keine Stufen mehr gibt.
 
 ## Datenschutz-Prinzipien (konkretisiert aus NFR-5 der Pflichtenheft)
 - Zeige nie mehr personenbezogene Daten an als für die Alarmierung nötig: Raum + Raumnummer
