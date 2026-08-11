@@ -65,6 +65,8 @@ Ausführungs-Hinweis (verändert das System, läuft NICHT automatisch in jedem `
 | A9 🔹 | Admin- vs. User-Installer: korrekte Rolle, korrekte Startmenü-Verknüpfung, Firewall-Regeln nur beim Admin | `[Installer.Tests]` ✅ |
 | A10 | User-Installer-Export (Install-Creator → eingebettete Datei) trägt dieselbe CustomerGroupId wie der Admin-Installer | `[Installer.Tests]` ✅ |
 | A11 🔹 | Zwei unabhängige CustomerGroupId-Installationen im selben Netz beeinflussen sich nie (Kreis-Isolation) | `HaelpMi.Core.Tests` ✅ (DiscoveryService/AlarmTcpListener) |
+| A12 🔹 | Autostart-Task-Prinzipal ist nach frischer Installation BUILTIN\Users (nicht nur der installierende Admin-Account) - Regressionstest 11.08.2026, siehe `ALPHA-TESTPLAN.md` Test 2 | ❌ **Nicht coded** — braucht ein zweites, nicht-lokal-admin Windows-Konto auf der Testmaschine, das `Installer.Tests`-Setup hat nur eines |
+| A13 | Swap-Update repariert einen fehlenden/veralteten Autostart-Task als Nebeneffekt (LocalSystem-Kontext von `HaelpMi.UpdateService`, greift für vor diesem Fix installierte Geräte) | ❌ **Lücke** — `AutostartRegistrar.EnsureRegistered`-Aufruf in `ConfirmSwapAsync` ist neu, noch nicht durch A5 mitabgedeckt |
 
 ## B. Netzwerk / Discovery
 

@@ -3,6 +3,7 @@ using System.IO.Compression;
 using System.IO.Pipes;
 using System.Security.AccessControl;
 using System.Security.Principal;
+using HaelpMi.Core.Autostart;
 using HaelpMi.Core.Ipc;
 using HaelpMi.Core.Models;
 using HaelpMi.Core.Updates;
@@ -245,6 +246,23 @@ public sealed class UpdateServiceWorker : BackgroundService
         var newAgentPath = Path.Combine(AppRoot, "HaelpMi.Agent.exe");
         if (File.Exists(newAgentPath))
         {
+            // Selbstheilungs-Erweiterung 11.08.2026 (Fehlerbericht "Autostart nicht
+            // eingerichtet"): dieser Dienst läuft als LocalSystem - die einzige Stelle im
+            // gesamten Update-Rollout, an der eine Registrierung mit Principal-GroupId
+            // (BUILTIN\Users) garantiert nicht an fehlenden Windows-Adminrechten scheitert
+            // (siehe AutostartRegistrar-Kommentar und installer/HaelpMiCommon.iss.inc). Für
+            // Geräte, die VOR dem installer-seitigen Root-Cause-Fix installiert wurden (und
+            // sich nur per Swap-Update aktualisieren, nie erneut über den Installer laufen -
+            // CLAUDE.md "Programm-Updates laufen ausschließlich über die Swap-Pipeline"),
+            // ist das die einzige Gelegenheit, einen kaputten/fehlenden Autostart-Eintrag
+            // je noch elevated zu reparieren. Best-effort, kein Abbruch bei Fehlschlag -
+            // der Agent versucht es beim eigenen Start ohnehin zusätzlich (unelevated) und
+            // meldet einen verbleibenden Fehlschlag per Tray-Sprechblase an den Admin.
+            if (!AutostartRegistrar.EnsureRegistered(newAgentPath, out var autostartError))
+            {
+                _logger.LogWarning("Autostart-Registrierung nach Swap-Update fehlgeschlagen: {Error}", autostartError);
+            }
+
             Process.Start(new ProcessStartInfo(newAgentPath) { UseShellExecute = true });
         }
 

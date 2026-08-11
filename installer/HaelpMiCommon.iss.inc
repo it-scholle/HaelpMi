@@ -13,7 +13,7 @@
 #define MyAppName "HälpMi"
 ; Alpha: 0.x until release, per city/product decision - Version 1.0.0 is reserved for
 ; the actual release. Bump the third number for ordinary fixes, second for a feature.
-#define MyAppVersion "0.14.0"
+#define MyAppVersion "0.15.0"
 #define MyAppPublisher "HälpMi contributors"
 #define MyAgentExeName "HaelpMi.Agent.exe"
 #define MyConfigExeName "HaelpMi.Config.exe"
@@ -107,6 +107,22 @@ Filename: "sc.exe"; Parameters: "create HaelpMiUpdateService binPath= ""{app}\Ha
 Filename: "sc.exe"; Parameters: "description HaelpMiUpdateService ""Installiert/testet/uebernimmt signierte HaelpMi-Programm-Updates (Abschnitt 11). Laeuft ausschliesslich dafuer mit erhoehten Rechten - die eigentliche App bleibt rechtelos."""; Flags: runhidden
 Filename: "sc.exe"; Parameters: "start HaelpMiUpdateService"; Flags: runhidden
 
+; Bugfix 11.08.2026 (Fehlerbericht "Autostart nicht eingerichtet", auf einem normalen
+; Win11-Rechner reproduziert): der Agent-Start unten läuft mit Absicht "runasoriginaluser"
+; (siehe dortiger Kommentar) - AutostartRegistrar.EnsureRegistered lief deshalb noch NIE
+; elevated, obwohl DIESER Installer selbst gerade mit Adminrechten läuft. Ein Task mit
+; Principal-GroupId (BUILTIN\Users, für "läuft für jede Anmeldung, nicht nur den
+; installierenden Nutzer") lässt sich aber nur mit Adminrechten anlegen - ohne diese Zeile
+; schlägt die Registrierung auf jedem Rechner fehl, auf dem der angemeldete Nutzer kein
+; lokaler Windows-Admin ist (der von CLAUDE.md ausdrücklich vorgesehene Normalfall). Läuft
+; OHNE runasoriginaluser (also elevated wie der Rest des Installers), VOR dem eigentlichen
+; Agent-Start, und wartet auf dessen Ende, damit der Task-Eintrag garantiert schon steht,
+; bevor der echte (de-elevated) Produktivprozess gleich danach seinerseits nur noch prüft
+; statt neu anzulegen. Best-effort: schlägt auch das fehl (z. B. echte GPO-Sperre), bleibt
+; die bestehende Selbstheilung im Agent-Start plus Tray-Meldung an den Admin als
+; Rückfallebene - deshalb kein Abbruch der Installation bei einem Fehlschlag hier.
+Filename: "{app}\{#MyAgentExeName}"; Parameters: "--register-autostart"; Flags: runhidden waituntilterminated
+
 ; Startet den Agent automatisch im Hintergrund - kein Postinstall-Haken, weil der Agent
 ; kein eigenes Fenster hat (ein anhakbarer "jetzt starten"-Punkt ohne sichtbaren Effekt
 ; sah für den Nutzer wie "macht nichts" aus). "runasoriginaluser" ist hier Pflicht, nicht
@@ -114,7 +130,8 @@ Filename: "sc.exe"; Parameters: "start HaelpMiUpdateService"; Flags: runhidden
 ; Installers und liefe beim allerersten Start fälschlich mit Adminrechten, obwohl der
 ; Agent laut CLAUDE.md immer rechtelos im User-Kontext laufen soll - jeder spätere Start
 ; über den selbstregistrierten Autostart-Task läuft ohnehin schon unelevated, das hier
-; nur die (bisher inkonsistente) Erstausführung.
+; nur die (bisher inkonsistente) Erstausführung. Der Autostart-Task selbst steht dank der
+; Zeile oben davor schon fest, auch wenn der hier gestartete Prozess selbst nicht elevated ist.
 Filename: "{app}\{#MyAgentExeName}"; Flags: nowait runasoriginaluser
 
 ; Postinstall-Haken mit sichtbarem Effekt statt des bisherigen "jetzt starten": beim User

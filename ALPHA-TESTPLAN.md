@@ -71,6 +71,16 @@ der drei `payload`-Dateien.
 - [ ] Windows-Dienst "HaelpMiUpdateService" existiert und läuft (`services.msc` oder
       `sc query HaelpMiUpdateService`)
 - [ ] Task-Planer: ein "HaelpMi Agent"-Eintrag existiert (Autostart bei Anmeldung)
+- [ ] **Regressionstest 11.08.2026** ("Autostart nicht eingerichtet" trotz Admin-Install):
+      Task-Planer-Eintrag "HaelpMi Agent" öffnen → Reiter "Allgemein" → Prinzipal muss
+      "BUILTIN\Users" heißen (nicht der installierende Admin-Account) → mit einem ZWEITEN,
+      NICHT-lokal-administrativen Windows-Konto anmelden (nicht dem, das den Installer
+      ausgeführt hat) → HälpMi muss auch dort automatisch starten (Task-Manager/Tray-Icon
+      prüfen), keine Tray-Sprechblase "Autostart nicht eingerichtet". Root Cause war: der
+      Installer startete den Agent zur Erstregistrierung bewusst de-elevated
+      (`runasoriginaluser`), ein Task mit BUILTIN\Users-Prinzipal lässt sich aber nur mit
+      Adminrechten anlegen - Fix registriert ihn jetzt vorab noch im elevated
+      Installer-Kontext (`--register-autostart`, siehe installer/HaelpMiCommon.iss.inc).
 
 **Melde zurück:** Welcher Punkt bricht ab, welche Datei fehlt/ist leer, welche
 Fehlermeldung kam.

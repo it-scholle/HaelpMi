@@ -99,6 +99,26 @@ public partial class App : System.Windows.Application
             return;
         }
 
+        if (ShouldRegisterAutostartOnly(e.Args))
+        {
+            // Root-Cause-Fix 11.08.2026 (Fehlerbericht "Autostart nicht eingerichtet" auf
+            // einem normalen Win11-Rechner, Installation mit Admin-Rechten): [Run] startet
+            // den eigentlichen Agent bewusst mit "runasoriginaluser" (siehe
+            // installer/HaelpMiCommon.iss.inc-Kommentar dort) - der Prozess, der bisher als
+            // EINZIGER AutostartRegistrar.EnsureRegistered aufrief, lief also NIE elevated,
+            // selbst direkt nach einem Admin-Setup nicht. Ein Task mit Principal-GroupId
+            // (BUILTIN\Users, siehe AutostartRegistrar.BuildTaskXml) lässt sich aber nur mit
+            // Administratorrechten anlegen - das erklärt "Access is denied" unabhängig von
+            // jeder Gruppenrichtlinie, auf jedem Rechner, auf dem der angemeldete Nutzer kein
+            // lokaler Admin ist (der Normalfall laut CLAUDE.md: "ein Windows-Standardnutzer
+            // kann App-Admin sein"). Dieser Modus wird stattdessen VOM INSTALLER selbst
+            // aufgerufen, noch bevor er den echten Agent de-elevated startet (siehe [Run]) -
+            // exakt derselbe AutostartRegistrar-Code, nur diesmal tatsächlich elevated.
+            // Läuft ohne Fenster/Hintergrunddienste, meldet Erfolg/Fehlschlag nur per Exit-Code.
+            RunRegisterAutostartOnlyAndExit();
+            return;
+        }
+
         _singleInstanceMutex = new Mutex(initiallyOwned: true, name: SingleInstanceMutexName, out var createdNew);
         _ownsSingleInstanceMutex = createdNew;
         if (!createdNew)
@@ -137,6 +157,15 @@ public partial class App : System.Windows.Application
         var arg = args.FirstOrDefault(a => a.StartsWith(prefix, StringComparison.Ordinal));
         return arg is not null && int.TryParse(arg[prefix.Length..], out var port) ? port : null;
     }
+
+    // Separater Helfer statt Inline-Check (gleiches Muster wie ParseUpdateTestPort oben).
+    // Kein eigener Unit-Test dafür (HaelpMi.Agent hat wie ParseUpdateTestPort daneben
+    // grundsätzlich keine Testinfrastruktur/InternalsVisibleTo - eine würde hier isoliert
+    // nur für diese eine Zeile aufgesetzt, das wäre Aufwand ohne Gegenwert). Der eigentliche
+    // schtasks-Aufruf ist ohnehin System-verändernd und damit HaelpMi.Installer.Tests
+    // vorbehalten (siehe TEST-STRATEGY.md) - Testfall dafür ist unten formuliert.
+    private static bool ShouldRegisterAutostartOnly(string[] args) =>
+        args.Contains("--register-autostart", StringComparer.Ordinal);
 
     /// <summary>
     /// Testmodus für die Update-Pipeline (Abschnitt 11, per HaelpMi.UpdateService
@@ -182,6 +211,21 @@ public partial class App : System.Windows.Application
             listener?.Stop();
             Shutdown();
         }
+    }
+
+    /// <summary>
+    /// Siehe Aufrufstelle in OnStartup: registriert nur den Autostart-Task und beendet sich
+    /// sofort - kein Fenster, keine Netzwerkdienste, keine Einzelinstanz-Sperre (läuft kurz
+    /// VOR dem eigentlichen Produktivprozess, würde sonst mit dessen Mutex kollidieren).
+    /// Exit-Code 0 = registriert, 1 = fehlgeschlagen (der Installer wertet das nicht hart
+    /// aus - schlägt es hier fehl, greift weiterhin der bestehende Selbstheilungsversuch im
+    /// normalen Agent-Start plus die Tray-Meldung an den Admin als Rückfallebene).
+    /// </summary>
+    private void RunRegisterAutostartOnlyAndExit()
+    {
+        var executablePath = Environment.ProcessPath ?? Process.GetCurrentProcess().MainModule?.FileName ?? string.Empty;
+        var ok = !string.IsNullOrEmpty(executablePath) && AutostartRegistrar.EnsureRegistered(executablePath, out _);
+        Shutdown(ok ? 0 : 1);
     }
 
     private LiveIdentity BuildIdentity() => LiveIdentityFactory.Create(_settings, _deployment);
