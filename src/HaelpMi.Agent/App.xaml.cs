@@ -298,6 +298,14 @@ public partial class App : System.Windows.Application
         _configSync.ConfigApplied += (_, _) => RegisterHotkeysFromConfig();
         _configSync.Start();
 
+        // Bugfix 11.08.2026 (Fehlerbericht "frisch installierte Geräte bleiben ohne
+        // Config"): der Config-Sync-Broadcast in PublishAsync erreicht nur Geräte, die zum
+        // Zeitpunkt der Admin-Änderung schon liefen - ein danach installiertes Gerät hört
+        // ihn nie. Der Boot-Call tauscht die ConfigVersion ohnehin schon aus (siehe
+        // DiscoveryService.PeerConfigVersionObserved); diese Verdrahtung macht daraus
+        // zusätzlich einen Config-Pull-Trigger, symmetrisch für beide Seiten des Austauschs.
+        _discovery.PeerConfigVersionObserved += _configSync.OnPeerConfigVersionObserved;
+
         var cacheStore = new UpdatePackageCacheStore();
         // Nutzerwunsch 09.08.2026: "vollautomatisch, sobald der Admin sich selbst aktualisiert
         // hat" - der Installer bringt dafür ein signiertes update-seed\ mit (siehe

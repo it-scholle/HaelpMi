@@ -242,17 +242,35 @@ public sealed class ConfigSyncService : IAsyncDisposable
             return; // our own broadcast looping back
         }
 
+        await EvaluateAndPullAsync(announce.OriginDeviceId, announce.ConfigVersion, ct);
+    }
+
+    /// <summary>An <see cref="DiscoveryService.PeerConfigVersionObserved"/> hängen (Agent-Verdrahtung).</summary>
+    public void OnPeerConfigVersionObserved(object? sender, PeerConfigVersionInfo info) =>
+        _ = EvaluateAndPullAsync(info.DeviceId, info.ConfigVersion, CancellationToken.None);
+
+    /// <summary>
+    /// Gemeinsamer Kern für zwei Auslöser: den dedizierten Config-Sync-Broadcast
+    /// (<see cref="HandleAnnounceAsync"/>, ausgelöst bei jeder Admin-Änderung - erreicht
+    /// nur Geräte, die zu diesem Zeitpunkt schon liefen) und den Boot-Call-Austausch
+    /// (<see cref="OnPeerConfigVersionObserved"/> - schließt die Lücke für ein Gerät, das
+    /// erst NACH der letzten Config-Änderung gestartet/frisch installiert wurde und das
+    /// damalige Announce nie gehört hat; Fehlerbericht 11.08.2026: drei frisch installierte
+    /// Geräte blieben leer, bis der Admin eine weitere Änderung vorgenommen hat).
+    /// </summary>
+    private async Task EvaluateAndPullAsync(Guid originDeviceId, int remoteConfigVersion, CancellationToken ct)
+    {
         var settings = _settingsStore.Load();
-        if (announce.ConfigVersion <= settings.AppliedConfigVersion)
+        if (remoteConfigVersion <= settings.AppliedConfigVersion)
         {
-            return; // already current or stale announce - nothing to do
+            return; // already current or stale - nothing to do
         }
 
-        var originDevice = _deviceListProvider().FirstOrDefault(d => d.DeviceId == announce.OriginDeviceId);
+        var originDevice = _deviceListProvider().FirstOrDefault(d => d.DeviceId == originDeviceId);
         if (originDevice is null)
         {
-            _audit?.Invoke($"configsync announce from unknown device={announce.OriginDeviceId} - awaiting discovery");
-            return; // will be retried on the next announce once we've learned this device via boot-call
+            _audit?.Invoke($"configsync: newer version reported by unknown device={originDeviceId} - awaiting discovery");
+            return; // will be retried on the next announce/boot-call once we've learned this device
         }
 
         await _applyLock.WaitAsync(ct);
@@ -260,17 +278,17 @@ public sealed class ConfigSyncService : IAsyncDisposable
         {
             // Re-check under the lock in case a concurrent pull already applied this or a newer version.
             settings = _settingsStore.Load();
-            if (announce.ConfigVersion <= settings.AppliedConfigVersion)
+            if (remoteConfigVersion <= settings.AppliedConfigVersion)
             {
                 return;
             }
 
-            var pulled = await PullFromAsync(originDevice, identity, ct);
+            var pulled = await PullFromAsync(originDevice, _identityProvider(), ct);
             if (pulled is not null && pulled.ConfigVersion > settings.AppliedConfigVersion)
             {
                 _configStore.Save(pulled);
                 ApplyToSelf(pulled);
-                _audit?.Invoke($"configsync applied version={pulled.ConfigVersion} from device={announce.OriginDeviceId}");
+                _audit?.Invoke($"configsync applied version={pulled.ConfigVersion} from device={originDeviceId}");
             }
         }
         finally

@@ -253,6 +253,108 @@ public class NetworkingTests
         Assert.Equal("Lager", gossiped.RoomName);
     }
 
+    // --- Regressionsschutz 11.08.2026: drei frisch installierte Geräte blieben ohne
+    // Config, obwohl der Admin sie längst über S/E "alle" eingerichtet hatte - erst ein
+    // erneuter Config-Sync-Broadcast (Empfänger entfernt/wieder hinzugefügt) hat sie
+    // erreicht. Ursache: der Boot-Call tauscht ConfigVersion zwar aus, aber nichts wertete
+    // sie aus, solange die ProgramVersion gleich war. PeerConfigVersionObserved schließt
+    // diese Lücke, symmetrisch für beide Seiten des Austauschs. ---
+
+    [Fact]
+    public async Task DiscoveryService_PeerWithNewerConfigVersion_RaisesPeerConfigVersionObserved()
+    {
+        using var scope = new TestAppDataScope();
+        var discoveryPort = GetFreeUdpPort();
+        var customerGroupId = Guid.NewGuid();
+
+        var ownDeviceId = Guid.NewGuid();
+        // Eigene ConfigVersion 0 - genau der Zustand eines frisch installierten Geräts,
+        // das noch nie einen Config-Sync-Broadcast erhalten hat.
+        var ownIdentity = MakeIdentity(customerGroupId, ownDeviceId);
+
+        PeerConfigVersionInfo? observed = null;
+        var observedSignal = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        await using var discovery = new DiscoveryService(() => ownIdentity, discoveryPort: discoveryPort);
+        discovery.PeerConfigVersionObserved += (_, info) =>
+        {
+            observed = info;
+            observedSignal.TrySetResult();
+        };
+        discovery.StartListening();
+
+        using var peerSocket = new UdpClient(0) { EnableBroadcast = true };
+        var peerDeviceId = Guid.NewGuid();
+        var announce = new BootCallMessage(
+            MessageKind.Announce, customerGroupId, peerDeviceId, "PC-ADMIN", "Admin", "Leitstelle", "0",
+            Role.Admin, false, 51999, "9.9.9", 5 /* schon eingerichtet */, DateTimeOffset.UtcNow);
+        var announceBytes = JsonSerializer.SerializeToUtf8Bytes(announce, WireOptions);
+        await peerSocket.SendAsync(announceBytes, announceBytes.Length, new IPEndPoint(IPAddress.Loopback, discoveryPort));
+
+        await observedSignal.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.NotNull(observed);
+        Assert.Equal(peerDeviceId, observed!.DeviceId);
+        Assert.Equal(5, observed.ConfigVersion);
+    }
+
+    [Fact]
+    public async Task ConfigSyncService_PullsAndAppliesNewerConfig_WhenPeerConfigVersionObserved()
+    {
+        using var scope = new TestAppDataScope();
+        var customerGroupId = Guid.NewGuid();
+        var ownDeviceId = Guid.NewGuid();
+
+        // Frisch installiert: settings.json existiert (vom Installer), aber noch nie ein
+        // Config-Sync angewendet.
+        new SettingsStore().Save(new OwnSettings
+        {
+            DeviceId = ownDeviceId,
+            CustomerGroupId = customerGroupId,
+            AppliedConfigVersion = 0,
+        });
+        var ownIdentity = MakeIdentity(customerGroupId, ownDeviceId);
+
+        // Rohsocket statt eines zweiten echten ConfigSyncService: ein zweiter Dienst würde
+        // denselben AppPaths-Test-Root (und damit dieselbe settings.json) teilen - gleiches
+        // Muster wie bei den DiscoveryService-Tests oben ("Gerätespeicherung ist
+        // prozessweit").
+        var peerDeviceId = Guid.NewGuid();
+        // ConfigSyncService.PullFromAsync verbindet fest gegen AppConstants.ConfigSyncTcpPort
+        // (kein pro-Gerät-Port wie DeviceEntry.TcpPort - der ist der Alarm-Port) - der
+        // simulierte Peer muss also genau dort lauschen, kein frei gewählter Port.
+        using var peerListener = new TcpListener(IPAddress.Loopback, AppConstants.ConfigSyncTcpPort);
+        peerListener.Start();
+        var peerTask = Task.Run(async () =>
+        {
+            using var client = await peerListener.AcceptTcpClientAsync();
+            await using var stream = client.GetStream();
+            var line = await BoundedLineReader.ReadLineAsync(stream, CancellationToken.None);
+            var request = line is null ? null : JsonSerializer.Deserialize<ConfigSyncPullRequestMessage>(line, WireOptions);
+            Assert.NotNull(request);
+            Assert.Equal(ownDeviceId, request!.RequesterDeviceId);
+
+            var response = new ConfigSyncPullResponseMessage(customerGroupId, new SharedConfig { ConfigVersion = 5 });
+            var responseBytes = NetworkSerializer.Encoding.GetBytes(JsonSerializer.Serialize(response, WireOptions) + "\n");
+            await stream.WriteAsync(responseBytes);
+        });
+
+        var deviceList = new List<DeviceEntry> { new() { DeviceId = peerDeviceId, IpAddress = "127.0.0.1" } };
+
+        var appliedSignal = new TaskCompletionSource<SharedConfig>(TaskCreationOptions.RunContinuationsAsynchronously);
+        await using var configSync = new ConfigSyncService(() => ownIdentity, () => deviceList);
+        configSync.ConfigApplied += (_, config) => appliedSignal.TrySetResult(config);
+
+        // Simuliert exakt das, was DiscoveryService.PeerConfigVersionObserved beim
+        // Boot-Call auslösen würde.
+        configSync.OnPeerConfigVersionObserved(null, new PeerConfigVersionInfo { DeviceId = peerDeviceId, ConfigVersion = 5 });
+
+        var applied = await appliedSignal.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.Equal(5, applied.ConfigVersion);
+
+        Assert.Equal(5, new SettingsStore().Load().AppliedConfigVersion);
+        await peerTask.WaitAsync(TimeSpan.FromSeconds(5));
+    }
+
     [Fact]
     public async Task DiscoveryService_DifferentCustomerGroupId_NeverUpsertsOrReplies()
     {

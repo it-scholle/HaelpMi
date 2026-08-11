@@ -13,6 +13,13 @@ public sealed class PeerVersionInfo
     public required int ConfigVersion { get; init; }
 }
 
+/// <summary>Siehe <see cref="DiscoveryService.PeerConfigVersionObserved"/>.</summary>
+public sealed class PeerConfigVersionInfo
+{
+    public required Guid DeviceId { get; init; }
+    public required int ConfigVersion { get; init; }
+}
+
 /// <summary>
 /// UDP boot-call discovery (Phase 1 5.5/FR-21/22/23, Teil 2 Abschnitt 9): one socket
 /// bound to <see cref="AppConstants.DiscoveryUdpPort"/> both sends the once-per-startup
@@ -43,6 +50,22 @@ public sealed class DiscoveryService : IAsyncDisposable
 
     /// <summary>Raised whenever a boot-call reveals a peer running a different program version than us - update-pipeline hook (Teil 2, Abschnitt 11).</summary>
     public event EventHandler<PeerVersionInfo>? PeerVersionObserved;
+
+    /// <summary>
+    /// Raised whenever a boot-call reveals a peer whose applied Config-Version is newer
+    /// than ours - Config-Sync-Pull-Hook (Fehlerbericht 11.08.2026: drei frisch installierte
+    /// Geräte blieben ohne Config, obwohl der Admin sie längst eingerichtet hatte, bis er
+    /// eine weitere Änderung vorgenommen hat). Der dedizierte Config-Sync-Broadcast in
+    /// ConfigSyncService.PublishAsync erreicht nur Geräte, die zum Zeitpunkt der jeweiligen
+    /// Änderung schon liefen - ein danach gestartetes/frisch installiertes Gerät hat das
+    /// damalige Announce nie gehört und bliebe sonst dauerhaft ohne Config, bis zufällig die
+    /// nächste Änderung passiert. Der Boot-Call tauscht ConfigVersion ohnehin schon in
+    /// beide Richtungen aus (Klassenkommentar) - dieses Event macht daraus zusätzlich zum
+    /// bestehenden Programmversion-Vergleich auch einen Config-Pull-Trigger, symmetrisch:
+    /// wer auch immer beim Austausch die niedrigere Version meldet, zieht sich die neuere
+    /// vom jeweils anderen, unabhängig davon, wer den Boot-Call initiiert hat.
+    /// </summary>
+    public event EventHandler<PeerConfigVersionInfo>? PeerConfigVersionObserved;
 
     /// <param name="discoveryPort">Overridable only for tests - production always uses <see cref="AppConstants.DiscoveryUdpPort"/> so every device agrees on one port.</param>
     public DiscoveryService(Func<LiveIdentity> identityProvider, Action<string>? audit = null, int? discoveryPort = null)
@@ -231,6 +254,15 @@ public sealed class DiscoveryService : IAsyncDisposable
             {
                 DeviceId = message.DeviceId,
                 ProgramVersion = message.ProgramVersion,
+                ConfigVersion = message.ConfigVersion,
+            });
+        }
+
+        if (message.ConfigVersion > ownIdentity.ConfigVersion)
+        {
+            PeerConfigVersionObserved?.Invoke(this, new PeerConfigVersionInfo
+            {
+                DeviceId = message.DeviceId,
                 ConfigVersion = message.ConfigVersion,
             });
         }
