@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Net;
 using System.Net.Sockets;
+using System.Threading;
 using System.Windows;
 using HaelpMi.Core.Autostart;
 using HaelpMi.Core.Diagnostics;
@@ -34,10 +35,30 @@ namespace HaelpMi.Agent;
 /// </summary>
 public partial class App : System.Windows.Application
 {
+    // Einzelinstanz-Sperre (Bugfix 11.08.2026, Fehlerbericht "Autostart nicht abgeschlossen -
+    // Auto Task Registrierung fehlgeschlagen"): Crash-Log-Fund auf einem Testgerät
+    // (PERSONALBÜRO, unmittelbar nach einem Swap-Update) zeigte eine SocketException "Only
+    // one usage of each socket address" beim Binden von UpdatePackageDistributionService -
+    // zwei HaelpMi.Agent.exe liefen gleichzeitig. Der Update-Dienst startet die neue Version
+    // nach ConfirmSwapAsync per Process.Start, ohne zu prüfen, ob eine Alt-Instanz ihre
+    // Sockets/den Autostart-Task schon vollständig freigegeben hat (UpdateServiceWorker.cs);
+    // fällt das zeitlich zusammen mit einem Logon-Trigger-Start, laufen zwei Instanzen parallel
+    // und konkurrieren dabei auch um denselben schtasks.exe-Aufruf für den Autostart-Task
+    // (AutostartRegistrar.EnsureRegistered) - genau das erklärt die gemeldete Fehlermeldung.
+    // "Local\" statt "Global\" wie beim analogen Schutz in HaelpMi.Config/App.xaml.cs: jede
+    // angemeldete Sitzung bekommt weiterhin ihre eigene Instanz (AutostartRegistrar-Kommentar
+    // "läuft in der jeweils eigenen Sitzung"), nur doppelte Starts INNERHALB derselben Sitzung
+    // werden verhindert - das deckt den hier beobachteten Fall ab, ohne das Mehrbenutzer-Design
+    // einzuschränken.
+    private const string SingleInstanceMutexName = "Local\\HaelpMi.Agent.SingleInstance";
+
     private readonly SettingsStore _settingsStore = new();
     private readonly SharedConfigStore _sharedConfigStore = new();
     private readonly DeviceStore _deviceStore = new();
     private readonly AuditLog _auditLog = new();
+
+    private Mutex? _singleInstanceMutex;
+    private bool _ownsSingleInstanceMutex;
 
     private OwnSettings _settings = null!;
     private DeploymentInfo _deployment = null!;
@@ -71,7 +92,20 @@ public partial class App : System.Windows.Application
         var testPort = ParseUpdateTestPort(e.Args);
         if (testPort is not null)
         {
+            // Testinstanz (siehe Klassenkommentar bei RunUpdateSelfTestAndExit): läuft
+            // absichtlich PARALLEL zu einer echten Produktivinstanz auf eigenen Ports -
+            // die Einzelinstanz-Sperre unten gilt nur für den normalen Produktivpfad.
             RunUpdateSelfTestAndExit(testPort.Value);
+            return;
+        }
+
+        _singleInstanceMutex = new Mutex(initiallyOwned: true, name: SingleInstanceMutexName, out var createdNew);
+        _ownsSingleInstanceMutex = createdNew;
+        if (!createdNew)
+        {
+            // Schon eine Produktivinstanz in dieser Sitzung aktiv (siehe Feldkommentar oben) -
+            // beenden statt um TCP-Ports und den Autostart-Task-Eintrag zu konkurrieren.
+            Shutdown();
             return;
         }
 
@@ -399,6 +433,15 @@ public partial class App : System.Windows.Application
         _ = _updateDistribution?.DisposeAsync();
         _ = _discovery?.DisposeAsync();
         _ = _ipcServer?.DisposeAsync();
+
+        if (_ownsSingleInstanceMutex)
+        {
+            // Nur freigeben, wenn diese Instanz sie auch erworben hat - dieselbe Regel wie
+            // im analogen Schutz in HaelpMi.Config/App.xaml.cs (sonst SynchronizationLockException).
+            _singleInstanceMutex?.ReleaseMutex();
+        }
+        _singleInstanceMutex?.Dispose();
+
         base.OnExit(e);
     }
 }
