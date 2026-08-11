@@ -19,7 +19,14 @@ out/
 ## Inno Setup / installer output
 installer/Output/
 installer/payload/
-tools/InstallCreator/
+installer/UserInstallerPayload/
+## tools/InstallCreator/* statt tools/InstallCreator/ (Bugfix 11.08.2026): die Verzeichnis-
+## Form würde git am Abstieg hindern und die Start.cmd/.ps1-Ausnahmen unten wirkungslos
+## machen - der veröffentlichte exe-Inhalt bleibt weiter ignoriert, nur die beiden
+## Start-Skripte (mit Staleness-Check statt roher exe, siehe dort) sind jetzt getrackt.
+tools/InstallCreator/*
+!tools/InstallCreator/Start.cmd
+!tools/InstallCreator/Start.ps1
 *.exe
 !installer/**/*.exe.stub
 

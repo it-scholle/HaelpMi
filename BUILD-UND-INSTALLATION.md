@@ -124,13 +124,19 @@ die Version dort freigegeben hat (CLAUDE.md: gestaffelter, admin-freigegebener R
 
 ## Schritt 2: Install-Creator - hier baust du den Admin-Installer
 
-Fertig gebautes, doppelklickbares Werkzeug (schon für dich erstellt):
+**Bugfix 11.08.2026: Verknüpfung/Doppelklick auf `Start.cmd` starten, nicht mehr auf die
+exe direkt** - `Start.cmd` (git-getrackt, im Gegensatz zur exe selbst) prüft beim Start, ob
+`src\HaelpMi.InstallCreator` neuer ist als die zuletzt veröffentlichte exe daneben, und baut
+bei Bedarf automatisch neu, bevor sie startet. Vorher blieb eine veraltete exe unbemerkt
+stehen, bis jemand von Hand dran dachte, sie neu zu publishen (siehe Speicher
+`haelpmi-tools-installcreator-stale-copy`):
 
 ```
-HälpMi\tools\InstallCreator\HaelpMi.InstallCreator.exe
+HälpMi\tools\InstallCreator\Start.cmd
 ```
 
-Falls du es nach einer Codeänderung neu bauen willst:
+Ein manuelles Neu-Bauen ist dadurch normalerweise nicht mehr nötig - `Start.cmd` erledigt
+das selbst. Nur falls du es doch einmal von Hand auslösen willst (z. B. zum Debuggen):
 
 ```powershell
 dotnet publish HälpMi\src\HaelpMi.InstallCreator\HaelpMi.InstallCreator.csproj -c Release -r win-x64 -p:Platform=x64 --self-contained true -p:PublishReadyToRun=true -o HälpMi\tools\InstallCreator
