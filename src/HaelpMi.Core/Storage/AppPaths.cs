@@ -36,8 +36,6 @@ public static class AppPaths
 
     public static string ConfigHistoryFilePath => Path.Combine(RootFolder, "config-history.json");
 
-    public static string AuditLogFilePath => Path.Combine(RootFolder, "audit.log");
-
     /// <summary>
     /// Written by the installer (from the Install-Creator's payload) into the install
     /// directory, not %AppData% - it describes the build, not this user's runtime state,

@@ -48,26 +48,7 @@ public static class CrashLogger
         }
     }
 
-    // Alpha-Testphase: geteiltes Z:-Laufwerk, damit Fehlerprotokolle aller Test-VMs an
-    // einem Ort landen statt einzeln auf jeder Maschine gesucht werden zu müssen - pro
-    // Rechnername ein eigener Unterordner, damit gleichzeitige Schreibzugriffe mehrerer
-    // VMs sich nicht in dieselbe Datei mischen. Fällt automatisch auf den bisherigen
-    // lokalen %ProgramData%-Pfad zurück, wenn Z: nicht erreichbar ist (z. B. spätere
-    // echte Kunden-Installation ohne dieses Laufwerk) - die im CLAUDE.md-Gespräch
-    // vorgesehene "nur nach Admin-Bestätigung"-Variante für die Produktivphase ist damit
-    // NICHT umgesetzt, nur dieser pragmatische Alpha-Zwischenschritt.
-    private static string ResolveLogDirectory()
-    {
-        var sharedDir = Path.Combine(@"Z:\", "HaelpMi-Logs", Environment.MachineName);
-        try
-        {
-            Directory.CreateDirectory(sharedDir);
-            return sharedDir;
-        }
-        catch (Exception)
-        {
-            AppPaths.EnsureRootExists();
-            return AppPaths.RootFolder;
-        }
-    }
+    // Siehe SharedLogPaths - Z:-Logik jetzt dort geteilt (11.08.2026), damit AuditLog
+    // denselben Mechanismus mitbenutzen kann statt ihn ein zweites Mal zu duplizieren.
+    private static string ResolveLogDirectory() => SharedLogPaths.ResolveDirectory(AppPaths.RootFolder);
 }
