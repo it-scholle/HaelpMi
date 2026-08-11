@@ -65,13 +65,25 @@ Ausnahme von der ganzen Rebase-Regel: ein bereits laufender, teilweise aufgelös
 Ende gebracht statt nachträglich auf Rebase umgestellt — die Regel gilt für neue Integrationen ab
 jetzt, nicht rückwirkend für Arbeit, die schon mitten im Konflikt-Auflösen steckt.
 
-### Automatisch, sobald die Tests grün sind
+### Automatisch, sobald die Tests grün sind — keine Rückfrage, kein "mach du das selbst"
 
 Sobald die für den Bump-Grad passende Test-Stufe (siehe `TEST-STRATEGY.md`) für eine
 Background-/Worktree-Änderung grün ist, wird automatisch auf `main` gerebased und per
-Fast-Forward integriert — **ohne** vorher extra nachzufragen, ob gemergt werden soll. Diese Datei
-ist die vorab erteilte Erlaubnis dafür; es reicht der Abschluss-Hinweis, was gemergt wurde
-(Branch, Commit, Tag), keine Bestätigung vorher.
+Fast-Forward integriert. Diese Datei (zusammen mit CLAUDE.md, Abschnitt "Versionierung") ist die
+vorab erteilte Erlaubnis dafür — nicht als Hinweis, sondern als bereits erteilte, gültige
+Freigabe. Konkret heißt das:
+
+- **Keine Rückfrage vorher**, ob gemergt/gerebased werden soll — auch nicht in abgeschwächter
+  Form ("bereit zum Mergen, soll ich fortfahren?").
+- **Der Nutzer wird nicht gebeten, den Rebase/Merge selbst auszuführen.** "Bitte selbst
+  rebasen/mergen" ist genau die Situation, die diese Regel verhindern soll — grüne Tests ersetzen
+  diese Bitte vollständig.
+- Es reicht ein knapper **Abschluss-Hinweis danach**: was gemergt wurde (Branch, Commit, Tag).
+
+Einzige zwei Ausnahmen, in denen tatsächlich nachgefragt wird: Tests bleiben nach den drei
+Selbstkorrektur-Versuchen rot (siehe unten), oder ein Rebase-Konflikt lässt sich nicht nach der
+Regel unter "Versionsnummer-Kollisionen" auflösen. Außerhalb dieser zwei Fälle gilt die Freigabe
+uneingeschränkt.
 
 Diese automatische Freigabe deckt ausschließlich die lokale Integration ab: `git rebase`,
 `git merge --ff-only`, Versions-Bump + Git-Tag - alles innerhalb dieses lokalen Repos, auf

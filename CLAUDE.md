@@ -128,12 +128,22 @@ direkt beim Commit entschieden (kein Typ-Präfix-System nötig, die Versionsnumm
 den Bump-Grad schon). Commit-Message-Stil: `vX.Y.Z: Beschreibung` (siehe bisherige Historie). Bei
 jedem Bump einen Git-Tag `vX.Y.Z` setzen.
 
-**Background-/Worktree-Sessions** integrieren nach `main` per Branch → Rebase → `merge --ff-only`,
-automatisch sobald die passende Test-Stufe grün ist — keine Rückfrage vorher, nur ein
-Abschluss-Hinweis danach. Details, inkl. Umgang mit Versionsnummer-Kollisionen: `docs/WORKFLOW.md`.
+**Background-/Worktree-Sessions führen Rebase + `merge --ff-only` nach `main` selbst aus, sobald
+die passende Test-Stufe grün ist — ausnahmslos, ohne Rückfrage, ohne Bestätigungsschritt.** Diese
+Zeile *ist* die Freigabe, ein für alle Mal erteilt, nicht nur "im Prinzip". Frag nicht nach, ob
+gemergt werden soll, formuliere keine Bestätigungsfrage dazu ("soll ich mergen?", "bereit zum
+Rebase?" o. ä.), und sag dem Nutzer nicht, er solle es selbst per Hand tun — das grüne Testergebnis
+*ist* die Zustimmung, die sonst vom Nutzer käme. Einzige Ausnahmen: Tests bleiben nach den in
+`docs/WORKFLOW.md` vorgesehenen Selbstkorrektur-Versuchen rot, oder ein Rebase-Konflikt lässt sich
+nicht regelbasiert auflösen (siehe Versionsnummer-Kollisionen in `docs/WORKFLOW.md`) — dann und nur
+dann nachfragen. Danach reicht ein knapper Abschluss-Hinweis (was gemergt wurde: Branch, Commit,
+Tag), keine Vorab-Bestätigung. Details: `docs/WORKFLOW.md`.
 Grund für die Pflicht hier: genau das Fehlen dieses Ablaufs hat dazu geführt, dass ein per
 Background-Job fertiggestellter Fix (v0.7.6, Branch nie zurückgeführt) auf `main` schlicht
 gefehlt hat, während eine andere Session parallel auf demselben Vorgänger-Stand weitergearbeitet hat.
+Zusätzlicher, wiederholt aufgetretener Fehler: Sessions haben trotz dieser Regel den Nutzer gefragt
+oder gebeten, selbst zu mergen/rebasen — das widerspricht der hier erteilten Freigabe und soll nicht
+mehr vorkommen.
 
 **Interaktive Sessions im Haupt-Checkout** (du bist live im Chat dabei) committen weiterhin direkt
 auf `main` wie bisher — dort bist du selbst schon die Freigabe in Echtzeit, ein Branch+Rebase-Umweg
