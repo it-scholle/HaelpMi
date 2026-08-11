@@ -256,6 +256,91 @@ public class ModelsTests
         Assert.Equal(2, count); // deviceA + deviceB, nicht mehr
     }
 
+    // --- Bugfix 08.08.2026 (TEST-STRATEGY.md E11, "Meine Alarme" zeigte kein Profil mehr,
+    // sobald das eigene Gerät selbst zu seinen aufgelösten Empfängern zählte): der Fehler
+    // saß in ConfigWindow.RebuildMyAlarms (HaelpMi.UI, WPF) - LoadDevices() lieferte dort
+    // nie das eigene Gerät (wie im echten Betrieb, siehe Kommentar bei
+    // RecipientResolver_ResolvesRoomSender_ViaTheSendingDevicesOwnCurrentRoomNumber oben),
+    // wodurch ResolveRecipientsForSender ein an sich korrekt aufgelöstes eigenes Gerät im
+    // letzten Schritt (Abgleich gegen allDevices) wieder herausfilterte. Der WPF-Layer
+    // selbst ist laut TEST-STRATEGY.md bewusst (noch) nicht coded getestet (FlaUI erst ab
+    // 1.0/Layout-Stabilität) - diese drei Fälle sichern stattdessen die Resolver-Annahme
+    // ab, auf der der Fix (ConfigWindowContext.LoadOwnDevice + `.Append(ownDevice)`) beruht:
+    // sobald das eigene Gerät in allDevices steht, muss es korrekt als Empfänger
+    // durchgereicht werden, egal auf welchem Weg (direkt/Gruppe/Raum). ---
+
+    [Fact]
+    public void RecipientResolver_IncludesSenderDevice_WhenSenderIsItsOwnDirectRecipient()
+    {
+        var senderId = Guid.NewGuid();
+        var profile = new AlarmProfile
+        {
+            RecipientAssignments =
+            {
+                new RecipientAssignment
+                {
+                    Sender = new EntityRef(EntityKind.Device, senderId),
+                    Recipients = { new EntityRef(EntityKind.Device, senderId) },
+                },
+            },
+        };
+        // Anders als sonst in dieser Testklasse: das eigene Gerät ist HIER in allDevices
+        // enthalten - genau das, was LoadOwnDevice seit dem Fix sicherstellt.
+        var devices = new List<DeviceEntry> { new() { DeviceId = senderId } };
+
+        var result = RecipientResolver.ResolveRecipientsForSender(profile, senderId, "1", devices, new List<DeviceGroup>());
+
+        Assert.Single(result);
+        Assert.Equal(senderId, result[0].DeviceId);
+    }
+
+    [Fact]
+    public void RecipientResolver_IncludesSenderDevice_WhenSenderIsRecipientViaItsOwnGroup()
+    {
+        var senderId = Guid.NewGuid();
+        var group = new DeviceGroup { DeviceIds = { senderId } };
+        var profile = new AlarmProfile
+        {
+            RecipientAssignments =
+            {
+                new RecipientAssignment
+                {
+                    Sender = new EntityRef(EntityKind.Device, senderId),
+                    Recipients = { new EntityRef(EntityKind.Group, group.Id) },
+                },
+            },
+        };
+        var devices = new List<DeviceEntry> { new() { DeviceId = senderId } };
+
+        var result = RecipientResolver.ResolveRecipientsForSender(profile, senderId, "1", devices, new List<DeviceGroup> { group });
+
+        Assert.Single(result);
+        Assert.Equal(senderId, result[0].DeviceId);
+    }
+
+    [Fact]
+    public void RecipientResolver_IncludesSenderDevice_WhenSenderIsRecipientViaItsOwnRoom()
+    {
+        var senderId = Guid.NewGuid();
+        var profile = new AlarmProfile
+        {
+            RecipientAssignments =
+            {
+                new RecipientAssignment
+                {
+                    Sender = new EntityRef(EntityKind.Device, senderId),
+                    Recipients = { EntityRef.ForRoom("214") },
+                },
+            },
+        };
+        var devices = new List<DeviceEntry> { new() { DeviceId = senderId, RoomNumber = "214" } };
+
+        var result = RecipientResolver.ResolveRecipientsForSender(profile, senderId, "214", devices, new List<DeviceGroup>());
+
+        Assert.Single(result);
+        Assert.Equal(senderId, result[0].DeviceId);
+    }
+
     // --- Nutzerwunsch 09.08.2026: eingebaute "Alle"-Gruppe (AppConstants.AllDevicesGroupId) -
     // Mitgliedschaft kommt live aus den bekannten Geräten, nicht aus DeviceIds/Config-Sync, und
     // funktioniert daher unabhängig davon, ob sie überhaupt in der übergebenen groups-Liste

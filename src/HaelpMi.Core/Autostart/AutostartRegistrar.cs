@@ -102,7 +102,12 @@ public static class AutostartRegistrar
     // je XML-Sonderzeichen enthalten sollte (theoretisch möglich bei ungewöhnlichen
     // Verzeichnisnamen) - dieselbe Lehre wie "nie roh zusammenbauen, was strukturiert
     // gebaut werden kann" aus den JSON-Stellen in den Installer-Skripten.
-    private static string BuildTaskXml(string executablePath)
+    //
+    // internal statt private (10.08.2026): direkt per InternalsVisibleTo aus
+    // AutostartRegistrarTests abgedeckt, statt den 08.08.2026-Multi-User-Fix nur indirekt
+    // über einen echten schtasks.exe-Aufruf zu prüfen (der auf dem Test-/Build-Rechner
+    // Rechte/Umgebung voraussetzen würde, die hier nicht garantiert sind).
+    internal static string BuildTaskXml(string executablePath)
     {
         XNamespace ns = "http://schemas.microsoft.com/windows/2004/02/mit/task";
         var doc = new XDocument(
