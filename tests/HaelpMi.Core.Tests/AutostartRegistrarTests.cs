@@ -70,4 +70,68 @@ public class AutostartRegistrarTests
         var command = doc.Root!.Element(Ns + "Actions")!.Element(Ns + "Exec")!.Element(Ns + "Command")!;
         Assert.Equal(pathWithAmpersand, command.Value);
     }
+
+    private const string ExePath = @"C:\Program Files\HaelpMi\HaelpMi.Agent.exe";
+
+    [Fact]
+    public void TaskXmlIsUpToDate_FreshlyBuiltXml_IsConsideredUpToDate()
+    {
+        // Was EnsureRegistered selbst erzeugt, muss sich auch selbst als "passt schon" erkennen -
+        // sonst würde jeder Agent-Start den Task unnötig neu schreiben.
+        var xml = AutostartRegistrar.BuildTaskXml(ExePath);
+
+        Assert.True(AutostartRegistrar.TaskXmlIsUpToDate(xml, ExePath));
+    }
+
+    [Fact]
+    public void TaskXmlIsUpToDate_PreFix_UserIdBoundTask_IsNotUpToDate()
+    {
+        // Bugfix 11.08.2026: ein Task von VOR dem 08.08.2026-Multi-User-Fix (UserId statt
+        // GroupId) muss als veraltet erkannt werden, sonst repariert sich eine alte
+        // Installation nie selbst - genau das war der gemeldete "Autostart nach
+        // Geräteneustart geht nicht"-Fall.
+        const string preFixXml = """
+            <?xml version="1.0" encoding="UTF-16"?>
+            <Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
+              <Triggers>
+                <LogonTrigger>
+                  <Enabled>true</Enabled>
+                  <UserId>S-1-5-21-1111111111-2222222222-3333333333-1001</UserId>
+                </LogonTrigger>
+              </Triggers>
+              <Principals>
+                <Principal id="Author">
+                  <UserId>S-1-5-21-1111111111-2222222222-3333333333-1001</UserId>
+                  <LogonType>InteractiveToken</LogonType>
+                  <RunLevel>LeastPrivilege</RunLevel>
+                </Principal>
+              </Principals>
+              <Actions Context="Author">
+                <Exec>
+                  <Command>C:\Program Files\HaelpMi\HaelpMi.Agent.exe</Command>
+                </Exec>
+              </Actions>
+            </Task>
+            """;
+
+        Assert.False(AutostartRegistrar.TaskXmlIsUpToDate(preFixXml, ExePath));
+    }
+
+    [Fact]
+    public void TaskXmlIsUpToDate_CommandPointsAtDifferentPath_IsNotUpToDate()
+    {
+        // Installationsort hat sich geändert (z. B. Reparatur-Installation in einen anderen
+        // Ordner) - der alte, jetzt ungültige Pfad im Task darf nicht als "passt schon" gelten.
+        var xmlForOldPath = AutostartRegistrar.BuildTaskXml(@"C:\Program Files\HaelpMi-Alt\HaelpMi.Agent.exe");
+
+        Assert.False(AutostartRegistrar.TaskXmlIsUpToDate(xmlForOldPath, ExePath));
+    }
+
+    [Fact]
+    public void TaskXmlIsUpToDate_UnparsableXml_IsNotUpToDate()
+    {
+        // Im Zweifel neu registrieren statt eine möglicherweise kaputte Registrierung stehen
+        // zu lassen.
+        Assert.False(AutostartRegistrar.TaskXmlIsUpToDate("not-xml-at-all", ExePath));
+    }
 }

@@ -36,12 +36,74 @@ public static class AutostartRegistrar
         return process.ExitCode == 0;
     }
 
+    // Siehe Kommentar in EnsureRegistered: prüft nicht nur "existiert der Task", sondern
+    // liest dessen gespeicherte XML zurück und vergleicht Principal (GroupId statt
+    // UserId - der eigentliche 08.08.2026-Fix) und den Action-Pfad (aktueller
+    // executablePath, falls sich der Installationsort seither geändert hat). Nur wenn
+    // beides passt, gilt der bestehende Task als in Ordnung - sonst wird unten neu
+    // registriert (schtasks /Create .../F überschreibt einen vorhandenen Task anstandslos).
+    private static bool IsRegisteredAndUpToDate(string executablePath)
+    {
+        using var process = StartSchtasks(psi =>
+        {
+            psi.ArgumentList.Add("/Query");
+            psi.ArgumentList.Add("/TN");
+            psi.ArgumentList.Add(TaskName);
+            psi.ArgumentList.Add("/XML");
+        });
+
+        var stdout = process.StandardOutput.ReadToEnd();
+        process.WaitForExit();
+        if (process.ExitCode != 0)
+        {
+            return false; // kein Task mit diesem Namen vorhanden
+        }
+
+        return TaskXmlIsUpToDate(stdout, executablePath);
+    }
+
+    // Reiner String/XML-Vergleich, getrennt vom schtasks.exe-Aufruf oben - internal statt
+    // private aus demselben Grund wie bei BuildTaskXml: direkt per InternalsVisibleTo aus
+    // AutostartRegistrarTests abgedeckt, ohne einen echten schtasks.exe-Aufruf zu brauchen.
+    internal static bool TaskXmlIsUpToDate(string existingTaskXml, string executablePath)
+    {
+        try
+        {
+            XNamespace ns = "http://schemas.microsoft.com/windows/2004/02/mit/task";
+            var doc = XDocument.Parse(existingTaskXml);
+            var principal = doc.Root?.Element(ns + "Principals")?.Element(ns + "Principal");
+            var command = doc.Root?.Element(ns + "Actions")?.Element(ns + "Exec")?.Element(ns + "Command")?.Value;
+
+            var hasGroupPrincipal = principal?.Element(ns + "GroupId") is not null
+                                     && principal.Element(ns + "UserId") is null;
+            var commandMatchesCurrentPath = string.Equals(command, executablePath, StringComparison.OrdinalIgnoreCase);
+
+            return hasGroupPrincipal && commandMatchesCurrentPath;
+        }
+        catch (System.Xml.XmlException)
+        {
+            // Unerwartete/unparsbare Ausgabe - im Zweifel neu registrieren statt einen
+            // möglicherweise kaputten Task stehen zu lassen.
+            return false;
+        }
+    }
+
     /// <summary>Idempotent: safe to call on every Agent startup, not just the very first one.</summary>
     public static bool EnsureRegistered(string executablePath, out string? error)
     {
         error = null;
 
-        if (IsRegistered())
+        // Bugfix 11.08.2026 (Fehlerbericht "Autostart nach Geräteneustart geht nicht"):
+        // die alte Fassung prüfte hier nur IsRegistered() - also nur "existiert ein Task
+        // mit diesem Namen", nicht ob dessen Inhalt noch stimmt. Ein Task, der VOR dem
+        // 08.08.2026-Multi-User-Fix (per <UserId> statt <GroupId>) angelegt wurde, oder
+        // dessen <Command> noch auf einen alten/gelöschten Installationspfad zeigt (z. B.
+        // nach manueller Neuinstallation in einen anderen Ordner), wurde dadurch NIE MEHR
+        // repariert: sobald der Name einmal existierte, hat EnsureRegistered() für immer
+        // "true" zurückgegeben, ohne die kaputte Registrierung je neu zu schreiben - und
+        // genau ein kaputter/veralteter Eintrag erklärt "Task-Planer zeigt was an, aber
+        // beim Neustart passiert nichts" ohne jede sichtbare Fehlermeldung.
+        if (IsRegisteredAndUpToDate(executablePath))
         {
             return true;
         }
