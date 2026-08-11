@@ -14,11 +14,17 @@
 ; Machine-Scope (FR-34): braucht Adminrechte, weil lokaler Zustand seit Teil 2 unter dem
 ; maschinenweiten %ProgramData%\HaelpMi liegt (siehe [Dirs]/Permissions unten im .inc).
 ;
-; Build the payload first (from the repo root):
-;   dotnet publish src\HaelpMi.Agent\HaelpMi.Agent.csproj  -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o installer\payload
-;   dotnet publish src\HaelpMi.Config\HaelpMi.Config.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o installer\payload
-;   dotnet publish src\HaelpMi.UpdateService\HaelpMi.UpdateService.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o installer\payload
+; Build the payload first (from the repo root - siehe BUILD-UND-INSTALLATION.md für die
+; verbindliche, zuletzt geprüfte Fassung dieser Befehle):
+;   dotnet publish src\HaelpMi.Agent\HaelpMi.Agent.csproj  -c Release -r win-x64 -p:Platform=x64 --self-contained true -p:PublishReadyToRun=true -o installer\payload
+;   dotnet publish src\HaelpMi.Config\HaelpMi.Config.csproj -c Release -r win-x64 -p:Platform=x64 --self-contained true -p:PublishReadyToRun=true -o installer\payload
+;   dotnet publish src\HaelpMi.UpdateService\HaelpMi.UpdateService.csproj -c Release -r win-x64 -p:Platform=x64 --self-contained true -p:PublishReadyToRun=true -o installer\payload
 ; then compile this script with ISCC.exe (Inno Setup 6 or 7).
+;
+; NICHT mehr -p:PublishSingleFile=true (06.08.2026 verworfen): ein normaler mehrdateiiger
+; self-contained-Ordner mit PublishReadyToRun startet nachweislich spürbar schneller (eigene
+; App-DLLs vorkompiliert statt kalt gejittet, kein Bundle-Extraktions-Overhead) - siehe
+; BUILD-UND-INSTALLATION.md für die Messung/Begründung.
 ;
 ; Self-contained (bundles the .NET 8 runtime) so office workstations need no separate
 ; runtime install/internet access (Pflichtenheft 2.: no internet dependency). Built for

@@ -16,6 +16,15 @@ public sealed class ConfigWindowContext
     public required Action<List<DeviceEntry>> SaveDevices { get; init; }
 
     /// <summary>
+    /// Bugfix 08.08.2026: LoadDevices enthält nur über Boot-Call entdeckte PEERS, nie das
+    /// eigene Gerät (dasselbe Prinzip wie AdminDashboardContext.LoadOwnDevice) - ohne das
+    /// hier ebenfalls verfügbar zu haben, verschwindet ein Alarm-Profil aus "Meine Alarme",
+    /// sobald das eigene Gerät (direkt/über Gruppe/über Raum) zu seinen eigenen Empfängern
+    /// zählt, siehe RebuildMyAlarms().
+    /// </summary>
+    public required Func<DeviceEntry> LoadOwnDevice { get; init; }
+
+    /// <summary>
     /// Nutzerwunsch 05.08.2026: "Meine Alarme" - eine reine Lesansicht, welche Alarm-Profile
     /// dieses Gerät (als Sender, direkt/über Raum/über Gruppe) überhaupt betreffen, mit
     /// Tastenkürzel und den für dieses Gerät konfigurierten Empfängern. Der eigentliche

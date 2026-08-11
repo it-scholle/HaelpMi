@@ -51,6 +51,8 @@ public partial class App : System.Windows.Application
     private IpcServer? _ipcServer;
     private AlarmFlowCoordinator? _coordinator;
     private System.Windows.Forms.NotifyIcon? _trayIcon;
+    private bool _autostartRegistered = true; // true = kein Registrierungsversuch nötig (unerwarteter leerer executablePath) oder erfolgreich
+    private string? _autostartError;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -182,7 +184,23 @@ public partial class App : System.Windows.Application
         {
             // Best-effort (5.7): if GPO blocks task creation, the Agent still runs for
             // this session - see Pflichtenheft 6./8. for the known rollout risk.
-            AutostartRegistrar.EnsureRegistered(executablePath, out _);
+            //
+            // Bugfix 08.08.2026 (Fehlerbericht "Autostart nach Geräteneustart geht nicht"):
+            // live nachgestellt - schtasks.exe /Create mit /SC ONLOGON kann mit "Access is
+            // denied" fehlschlagen (in dieser Testumgebung reproduzierbar, unabhängig von
+            // /RL; andere Trigger-Typen wie /SC ONCE funktionieren auf demselben Konto
+            // problemlos - passt zu einer Richtlinieneinschränkung genau für
+            // Anmelde-Trigger, wie im Kommentar oben schon vermutet). Der eigentliche Fehler
+            // war nicht "es kann fehlschlagen" (das ist umgebungsabhängig, nicht reparierbar
+            // ohne GPO-Änderung) - sondern dass ein Fehlschlag bisher komplett spurlos war
+            // (out _ verwarf die Fehlermeldung). Jetzt gemerkt und nach InitializeTrayIcon()
+            // sichtbar gemacht (Audit-Log + Tray-Sprechblase), damit ein Admin das
+            // überhaupt bemerken und per GPO nachrüsten kann, statt es nie zu erfahren.
+            _autostartRegistered = AutostartRegistrar.EnsureRegistered(executablePath, out _autostartError);
+            if (!_autostartRegistered)
+            {
+                _auditLog.Append($"Autostart-Registrierung fehlgeschlagen: {_autostartError}");
+            }
         }
 
         _feedbackChannel = new AlarmFeedbackChannel(BuildIdentity, _auditLog.Append);
@@ -227,6 +245,18 @@ public partial class App : System.Windows.Application
         RegisterHotkeysFromConfig();
 
         InitializeTrayIcon();
+
+        // Erst jetzt möglich (Tray-Icon existiert erst ab hier) - siehe Kommentar bei der
+        // Registrierung oben. Nur eine einmalige Sprechblase pro Prozessstart, nicht
+        // wiederholt - Autostart-Status ändert sich innerhalb einer laufenden Sitzung nicht.
+        if (!_autostartRegistered)
+        {
+            _trayIcon?.ShowBalloonTip(
+                10000,
+                "HälpMi - Autostart nicht eingerichtet",
+                "HälpMi startet nach einem Geräteneustart NICHT automatisch (Task-Planer-Registrierung fehlgeschlagen, vermutlich durch eine Richtlinie blockiert). Bitte den Systemadministrator informieren - Details im lokalen Protokoll.",
+                System.Windows.Forms.ToolTipIcon.Warning);
+        }
     }
 
     // Nutzerwunsch 05.08.2026: Tray-Icon zum Öffnen von Konfiguration/Dashboard - siehe

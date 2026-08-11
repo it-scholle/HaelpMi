@@ -120,6 +120,7 @@ improvisiert wurden). Aufbau erst, wenn ein Bereich strukturell 2+ Versionen sta
 | E8 | Tray-Menü zeigt "Dashboard öffnen" nur bei Admin-Rolle | Manuell (heute per Screenshot stichprobenartig geprüft) |
 | E9 | "Empfängerliste übertragen" nur aktivierbar, wenn gewählter Sender mindestens einen Empfänger hat | 07.08.2026 per Screenshot live verifiziert, siehe Chat-Verlauf — guter FlaUI-Kandidat |
 | E10 | Sender-Auswahl bleibt erhalten, wenn währenddessen ein Empfänger (de-)markiert wird | 07.08.2026 live gefundener und gefixter Bug (WPF `ItemsSource=null`-Reload-Race), per Screenshot verifiziert - **hoher Regressions-Wert, da die Ursache strukturell ist (jeder ComboBox/ListBox-Reload-Reset), nicht nur dieser eine Klickpfad** |
+| E11 | ConfigWindow "Meine Alarme" zeigt ein Profil, bei dem das eigene Gerät (direkt/Gruppe/Raum) selbst zu seinen Empfängern zählt | 08.08.2026 live gefundener und gefixter Bug (`ConfigWindowContext` fehlte `LoadOwnDevice`, das eigene Gerät fiel beim finalen Geräteliste-Abgleich in `RecipientResolver.ResolveRecipientsForSender` heraus - Profil verschwand komplett aus der Liste), per Screenshot verifiziert |
 
 ## F. Ton-Wiedergabe (geplant, noch nicht coded)
 

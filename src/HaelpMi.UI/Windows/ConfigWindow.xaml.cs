@@ -70,7 +70,11 @@ public partial class ConfigWindow : Window
     private void RebuildMyAlarms()
     {
         var config = _context.LoadConfig();
-        var devices = _context.LoadDevices();
+        // Bugfix 08.08.2026: eigenes Gerät ergänzen (siehe ConfigWindowContext.LoadOwnDevice-
+        // Kommentar) - sonst verschwindet ein Profil aus "Meine Alarme", sobald dieses Gerät
+        // selbst zu seinen eigenen aufgelösten Empfängern zählt.
+        var ownDevice = _context.LoadOwnDevice();
+        var devices = _context.LoadDevices().Append(ownDevice).ToList();
 
         var choices = new List<MyAlarmChoice>();
         foreach (var profile in config.AlarmProfiles)

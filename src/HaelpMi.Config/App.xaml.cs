@@ -315,6 +315,31 @@ public partial class App : System.Windows.Application
             SaveSettings = settingsStore.Save,
             LoadDevices = deviceStore.Load,
             SaveDevices = deviceStore.Save,
+            // Bugfix 08.08.2026 (Fehlerbericht "ich komme gar nicht in die Auswahl" -
+            // "Meine Alarme" blieb leer, obwohl im Dashboard ein passendes Profil samt
+            // Sender-/Empfänger-Zuordnung für genau dieses Gerät existierte): LoadDevices
+            // enthält nur über Boot-Call entdeckte PEERS, nie das eigene Gerät (siehe
+            // Kommentar bei AdminDashboardContext.LoadOwnDevice) - RebuildMyAlarms() in
+            // ConfigWindow reichte bisher nur LoadDevices() an RecipientResolver weiter.
+            // Sobald das eigene Gerät selbst (direkt, über eine Gruppe oder einen Raum) zu
+            // seinen eigenen Empfängern zählte, filterte ResolveRecipientsForSenders
+            // letzter Schritt (Abgleich der aufgelösten IDs gegen die Geräteliste) das
+            // eigene Gerät lautlos wieder heraus - null Empfänger, Profil verschwand komplett
+            // aus "Meine Alarme". AdminDashboardContext hatte LoadOwnDevice dafür schon immer,
+            // ConfigWindowContext bisher nicht.
+            LoadOwnDevice = () =>
+            {
+                var identity = LiveIdentityFactory.Create(settingsStore.Load(), deployment);
+                return new DeviceEntry
+                {
+                    DeviceId = identity.DeviceId,
+                    ComputerName = identity.ComputerName,
+                    User = identity.User,
+                    RoomName = identity.RoomName,
+                    RoomNumber = identity.RoomNumber,
+                    Role = identity.Role,
+                };
+            },
             LoadConfig = sharedConfigStore.LoadOrCreate,
             RequestRebroadcast = async () => (await ipcClient.SendAsync(IpcCommandType.Rebroadcast, TimeSpan.FromSeconds(10))).Success,
             RequestSearchAgain = async () => (await ipcClient.SendAsync(IpcCommandType.SearchAgain, TimeSpan.FromSeconds(10))).Success,
