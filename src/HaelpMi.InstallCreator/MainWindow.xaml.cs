@@ -322,13 +322,26 @@ public partial class MainWindow : Window
             return;
         }
 
+        // Bugfix 11.08.2026 (Fehlerbericht "Fix war im Installer nicht drin, obwohl main
+        // längst korrekt war"): installer/payload/ ist ein reiner Datei-Cache, den bisher
+        // niemand automatisch aktuell hielt - Install-Creator hat ISCC bis hierhin klaglos
+        // auf einen tagealten Payload losgelassen, ohne das zu bemerken (ISCC kompiliert
+        // keinen C#-Code, es kopiert nur, was im Ordner liegt). Jetzt läuft der Publish
+        // IMMER zuerst mit, garantiert aktuellen Code statt sich auf "vorher dran gedacht"
+        // zu verlassen.
+        if (!await RefreshPayloadAsync(installerDir))
+        {
+            Log("Payload-Aktualisierung fehlgeschlagen - Installer wird nicht gebaut.");
+            return;
+        }
+
         // Nutzer-Wunsch 04.08.2026: der User-Installer wird nicht mehr auf dem
         // Kundenrechner live nachgebaut (siehe HaelpMiCommon.iss.inc-Kommentar), sondern
         // hier EINMALIG fertig kompiliert und danach als bereits fertige Datei in den
         // Admin-Installer eingebettet - Reihenfolge ist deshalb zwingend User vor Admin.
         var userPayloadDir = Path.Combine(installerDir, "UserInstallerPayload");
         Directory.CreateDirectory(userPayloadDir);
-        Log("Schritt 1/2: User-Installer wird kompiliert (für die Einbettung in den Admin-Installer)...");
+        Log("Schritt 2/3: User-Installer wird kompiliert (für die Einbettung in den Admin-Installer)...");
         // Nutzerfrage 06.08.2026 ("braucht der User-Installer wirklich ein Passwort?"): nein -
         // das Passwort gilt bewusst nur für den Admin-Installer (siehe XAML-Kommentar beim
         // PasswordBox). Bewusst KEIN /DInstallerPassword hier, auch wenn eines gesetzt ist.
@@ -350,7 +363,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        Log("Schritt 2/2: Admin-Installer wird kompiliert (bettet den eben gebauten User-Installer ein)...");
+        Log("Schritt 3/3: Admin-Installer wird kompiliert (bettet den eben gebauten User-Installer ein)...");
         var adminExitCode = await RunIsccAsync(isccPath, installerDir, adminScriptPath, args =>
         {
             args.Add($"/DCustomerGroupId={customerGroupId}");
@@ -381,9 +394,77 @@ public partial class MainWindow : Window
         }
     }
 
-    private async Task<int> RunIsccAsync(string isccPath, string workingDirectory, string scriptPath, Action<System.Collections.Generic.IList<string>> addArgs)
+    // installer/HaelpMi.iss (Kopfkommentar) dokumentiert dieselben drei Befehle als
+    // manuellen Schritt für alle, die ohne Install-Creator direkt per ISCC bauen (z. B.
+    // schnelles lokales Testen, siehe BUILD-UND-INSTALLATION.md) - hier laufen sie
+    // automatisch vor jedem Install-Creator-Build mit.
+    private static readonly string[] PayloadProjects =
     {
-        var startInfo = new ProcessStartInfo(isccPath)
+        Path.Combine("src", "HaelpMi.Agent", "HaelpMi.Agent.csproj"),
+        Path.Combine("src", "HaelpMi.Config", "HaelpMi.Config.csproj"),
+        Path.Combine("src", "HaelpMi.UpdateService", "HaelpMi.UpdateService.csproj"),
+    };
+
+    private async Task<bool> RefreshPayloadAsync(string installerDir)
+    {
+        var repoRoot = Directory.GetParent(installerDir)?.FullName;
+        if (repoRoot is null)
+        {
+            Log("Fehler: Repo-Wurzel (oberhalb von installer/) konnte nicht bestimmt werden.");
+            return false;
+        }
+
+        var payloadDir = Path.Combine(installerDir, "payload");
+        Directory.CreateDirectory(payloadDir);
+
+        for (var i = 0; i < PayloadProjects.Length; i++)
+        {
+            var project = Path.Combine(repoRoot, PayloadProjects[i]);
+            if (!File.Exists(project))
+            {
+                Log($"Fehler: {project} nicht gefunden.");
+                return false;
+            }
+
+            Log($"Schritt 1/3: Payload wird aktualisiert ({i + 1}/{PayloadProjects.Length}: {Path.GetFileNameWithoutExtension(project)})...");
+            var exitCode = await RunProcessAsync("dotnet", repoRoot, args =>
+            {
+                args.Add("publish");
+                args.Add(project);
+                args.Add("-c");
+                args.Add("Release");
+                args.Add("-r");
+                args.Add("win-x64");
+                args.Add("-p:Platform=x64");
+                args.Add("--self-contained");
+                args.Add("true");
+                args.Add("-p:PublishReadyToRun=true");
+                args.Add("-o");
+                args.Add(payloadDir);
+            }, "[dotnet publish] ");
+
+            if (exitCode != 0)
+            {
+                Log($"Fehler: dotnet publish für {Path.GetFileName(project)} fehlgeschlagen (Exitcode {exitCode}).");
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private Task<int> RunIsccAsync(string isccPath, string workingDirectory, string scriptPath, Action<System.Collections.Generic.IList<string>> addArgs) =>
+        RunProcessAsync(isccPath, workingDirectory, args =>
+        {
+            // ArgumentList statt eines zusammengesetzten Kommandozeilen-Strings - vermeidet
+            // Escaping-Fehler/Injection, falls Kundenname oder Passwort Sonderzeichen enthalten.
+            addArgs(args);
+            args.Add(scriptPath);
+        }, "[ISCC] ");
+
+    private async Task<int> RunProcessAsync(string exePath, string workingDirectory, Action<System.Collections.Generic.IList<string>> addArgs, string errorLogPrefix)
+    {
+        var startInfo = new ProcessStartInfo(exePath)
         {
             WorkingDirectory = workingDirectory,
             RedirectStandardOutput = true,
@@ -391,10 +472,7 @@ public partial class MainWindow : Window
             UseShellExecute = false,
             CreateNoWindow = true,
         };
-        // ArgumentList statt eines zusammengesetzten Kommandozeilen-Strings - vermeidet
-        // Escaping-Fehler/Injection, falls Kundenname oder Passwort Sonderzeichen enthalten.
         addArgs(startInfo.ArgumentList);
-        startInfo.ArgumentList.Add(scriptPath);
 
         using var process = new Process { StartInfo = startInfo, EnableRaisingEvents = true };
         process.OutputDataReceived += (_, args) =>
@@ -408,7 +486,7 @@ public partial class MainWindow : Window
         {
             if (args.Data is not null)
             {
-                Dispatcher.Invoke(() => Log("[ISCC] " + args.Data));
+                Dispatcher.Invoke(() => Log(errorLogPrefix + args.Data));
             }
         };
 

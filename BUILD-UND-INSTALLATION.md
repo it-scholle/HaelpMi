@@ -37,6 +37,14 @@ Das war's - kein weiterer manueller Schritt. Alles Folgende automatisiert Instal
 
 ## Schritt 1: Payload bauen
 
+**Bugfix 11.08.2026: dieser Schritt läuft jetzt automatisch als Teil von Install-Creator
+(Schritt 2 unten) - vor jedem Admin-Installer-Build mit den exakt gleichen Befehlen wie
+unten dokumentiert (siehe `RefreshPayloadAsync` in `HaelpMi.InstallCreator/MainWindow.xaml.cs`).**
+Vorher blieb das reine Handarbeit, die niemand automatisch erinnert hat - ein vergessener
+Durchlauf hier bedeutete, dass Install-Creator klaglos einen Installer mit veraltetem Code
+gebaut hat, ohne jede Warnung. Manuell nur noch nötig, wer Schritt 2 nicht über
+Install-Creator, sondern direkt per ISCC fährt (siehe "Direkt per ISCC kompilieren" unten):
+
 Im Projekt-Root (`HälpMi\`):
 
 ```powershell
@@ -135,7 +143,9 @@ Rechner kopieren, ohne den Rest des Repos mitzunehmen.
 In der App:
 1. Häkchen "Test-Installer" setzen (für interne Tests) oder Kundenname + Passwort
    eintragen (für eine echte Auslieferung).
-2. "Admin-Installer erstellen" klicken.
+2. "Admin-Installer erstellen" klicken - baut jetzt zuerst automatisch den Payload (Schritt 1
+   oben) neu, bevor ISCC läuft. Dauert dadurch spürbar länger als früher (mehrere `dotnet
+   publish`-Durchläufe), garantiert dafür aktuellen Code statt eines vergessenen Handschritts.
 3. Ergebnis liegt unter `HälpMi\installer\Output\HaelpMi-Setup-Admin-<Version>.exe` -
    **das** ist die eine Datei für den Sysadmin.
 

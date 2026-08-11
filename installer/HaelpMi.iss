@@ -21,6 +21,12 @@
 ;   dotnet publish src\HaelpMi.UpdateService\HaelpMi.UpdateService.csproj -c Release -r win-x64 -p:Platform=x64 --self-contained true -p:PublishReadyToRun=true -o installer\payload
 ; then compile this script with ISCC.exe (Inno Setup 6 or 7).
 ;
+; Bugfix 11.08.2026: dieser Payload-Schritt ging bisher an nichts gekoppelt - ISCC kompiliert
+; keinen Code, es kopiert nur, was im payload-Ordner liegt, und lief klaglos auch mit
+; tagealtem Stand weiter. Wer über Install-Creator baut (MainWindow.xaml.cs,
+; RefreshPayloadAsync), bekommt die drei Befehle oben jetzt automatisch VOR jedem ISCC-Lauf -
+; nur beim direkten ISCC-Aufruf hier unten (Testen ohne Install-Creator) bleibt es manuell.
+;
 ; NICHT mehr -p:PublishSingleFile=true (06.08.2026 verworfen): ein normaler mehrdateiiger
 ; self-contained-Ordner mit PublishReadyToRun startet nachweislich spürbar schneller (eigene
 ; App-DLLs vorkompiliert statt kalt gejittet, kein Bundle-Extraktions-Overhead) - siehe
