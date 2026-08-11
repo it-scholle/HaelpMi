@@ -80,28 +80,52 @@ public partial class MainWindow : Window
         // fehlschlägt, ist es ein echter Fehler.
         var password = PasswordBox.Password;
 
-        try
+        // Bugfix 11.08.2026 (Fehlerbericht "Kopierfehler erscheint wieder" - live per UI
+        // Automation nachgestellt, echtes HRESULT 0x800401D0/CLIPBRD_E_CANT_OPEN im
+        // Protokoll bestätigt, siehe Chat-Verlauf): kein Regressionsfehler aus der Icon-
+        // Umstellung (dieser gesamte Block war seit dem allerersten Fix unverändert), aber
+        // der bisherige EINE Anlauf (30 Retries × 100ms ≈ 3s, danach 10×100ms Rücklese-
+        // Verify ≈ 1s) reicht nicht, wenn der blockierende Fremdprozess (VM-Zwischenablage-
+        // Synchronisation) länger als dieses gesamte Zeitfenster braucht - alle Retries
+        // liegen dann im selben Blockierungsfenster. Ein zweiter, komplett frischer Anlauf
+        // nach einer kurzen Verschnaufpause (700ms, bewusst außerhalb der engen 100ms-
+        // Taktung) trifft mit guter Wahrscheinlichkeit ein anderes Zeitfenster. Blockiert
+        // die UI dadurch im schlechtesten Fall knapp 9s statt 4s - für einen manuell
+        // angestoßenen Klick in einem internen Entwickler-Werkzeug hinnehmbar.
+        const int maxAttempts = 2;
+        for (var attempt = 1; attempt <= maxAttempts; attempt++)
         {
-            System.Windows.Forms.Clipboard.SetDataObject(password, copy: true, retryTimes: 30, retryDelay: 100);
-            Log("Passwort in die Zwischenablage kopiert.");
-            return;
-        }
-        catch (System.Runtime.InteropServices.ExternalException ex)
-        {
-            if (VerifyClipboardEventuallyMatches(password))
+            try
             {
-                // SetDataObject hat sich geirrt (siehe Kommentar oben) - tatsächlich erfolgreich.
+                System.Windows.Forms.Clipboard.SetDataObject(password, copy: true, retryTimes: 30, retryDelay: 100);
                 Log("Passwort in die Zwischenablage kopiert.");
                 return;
             }
+            catch (System.Runtime.InteropServices.ExternalException ex)
+            {
+                if (VerifyClipboardEventuallyMatches(password))
+                {
+                    // SetDataObject hat sich geirrt (siehe Kommentar oben) - tatsächlich erfolgreich.
+                    Log("Passwort in die Zwischenablage kopiert.");
+                    return;
+                }
 
-            // Erst jetzt ein wirklicher Fehlschlag - Nutzer soll wissen, dass das Passwort
-            // NICHT sicher kopiert wurde. "Anzeigen"-Knopf ist der tatsächlich funktionierende
-            // Fallback - WPFs PasswordBox blockt Strg+C absichtlich (Schutz gegen Mitlesen),
-            // "manuell markieren/kopieren" war daher vorher nie umsetzbar.
-            var message = $"Kopieren in die Zwischenablage fehlgeschlagen (HRESULT 0x{ex.ErrorCode:X8}) - die Zwischenablage blieb auch nach mehreren Sekunden Wiederholungsversuchen dauerhaft von einem anderen Prozess blockiert (z. B. VM-Zwischenablage-Synchronisation). Über den \"Anzeigen\"-Knopf lässt sich das Passwort anzeigen und stattdessen von Hand markieren/kopieren.";
-            Log(message);
-            System.Windows.MessageBox.Show(message, "HälpMi Install-Creator", MessageBoxButton.OK, MessageBoxImage.Warning);
+                if (attempt < maxAttempts)
+                {
+                    Log($"Kopieren im {attempt}. Anlauf fehlgeschlagen (HRESULT 0x{ex.ErrorCode:X8}) - neuer Versuch nach kurzer Pause.");
+                    System.Threading.Thread.Sleep(700);
+                    continue;
+                }
+
+                // Erst jetzt, nach zwei vollständigen Anläufen, ein wirklicher Fehlschlag -
+                // Nutzer soll wissen, dass das Passwort NICHT sicher kopiert wurde.
+                // "Anzeigen"-Knopf ist der tatsächlich funktionierende Fallback - WPFs
+                // PasswordBox blockt Strg+C absichtlich (Schutz gegen Mitlesen),
+                // "manuell markieren/kopieren" war daher vorher nie umsetzbar.
+                var message = $"Kopieren in die Zwischenablage fehlgeschlagen (HRESULT 0x{ex.ErrorCode:X8}) - die Zwischenablage blieb auch nach zwei vollständigen Versuchen (je mehrere Sekunden Wiederholungen) dauerhaft von einem anderen Prozess blockiert (z. B. VM-Zwischenablage-Synchronisation). Über den \"Anzeigen\"-Knopf lässt sich das Passwort anzeigen und stattdessen von Hand markieren/kopieren.";
+                Log(message);
+                System.Windows.MessageBox.Show(message, "HälpMi Install-Creator", MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
         }
     }
 
