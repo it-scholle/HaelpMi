@@ -63,6 +63,28 @@ stillschweigend zu ignorieren.
   lokale `.txt`-Datei) bleibt als Fallback für Maschinen ohne Vaultwarden-Zugriff bestehen, siehe
   `BUILD-UND-INSTALLATION.md` Schritt 1b.
 
+## Entwickler-Tool Install-Creator — bei Bedarf immer direkt neu bauen
+- **Für Claude Code (diese Datei gilt als Sitzung):** sobald eine Sitzung `tools/InstallCreator/`
+  bzw. `src/HaelpMi.InstallCreator` selbst benutzt oder gerade daran etwas geändert hat, wird das
+  Tool bei Bedarf **direkt neu gebaut** (`dotnet publish`), ohne Rückfrage und ohne sich auf einen
+  zufällig schon frischen Stand zu verlassen. "Bei Bedarf" heißt: Quelle neuer als letzte
+  gebaute `.exe`, oder unklar/nicht geprüft, welcher Stand gerade vorliegt — im Zweifel neu bauen
+  statt zu raten.
+- Blockiert dabei eine offen herumliegende, nicht aktiv genutzte Instanz den Build (Datei-in-
+  Benutzung-Fehler), wird sie beendet und der Build sofort wiederholt, ohne den Nutzer vorher zu
+  bitten, sie zu schließen — diese Tools bleiben erfahrungsgemäß nur idle offen, kein Zeichen
+  ungesicherter Arbeit. Ausnahme: konkreter Hinweis, dass die Instanz gerade aktiv benutzt wird
+  (z. B. mitten in einer Passwort-Eingabe).
+- **Für den Menschen bleibt unverändert `tools/InstallCreator/Start.cmd` (bzw. `Start.ps1`)** der
+  vorgesehene Weg: vergleicht Quell- und Exe-Zeitstempel selbst und baut bei Bedarf automatisch
+  neu, bevor das Tool startet. Der rohe Aufruf von `HaelpMi.InstallCreator.exe` prüft das nicht
+  und bleibt potenziell veraltet — bei Verdacht auf einen veralteten Stand zuerst prüfen, ob die
+  Desktop-Verknüpfung noch auf die rohe `.exe` statt auf `Start.cmd` zeigt.
+- Grund für diese Regel: ein 3 Tage alter, still veralteter Stand von `tools/InstallCreator.exe`
+  hat schon einmal zu einem falschen Fehlerbericht geführt (fehlende Icon-Buttons, die auf `main`
+  längst gefixt waren). Direkt-Neubau statt Vertrauen auf einen vermeintlich aktuellen Stand
+  verhindert das strukturell, nicht nur für diesen einen Fall.
+
 ## Architekturprinzipien — nicht verhandelbar
 
 ### Weiterhin gültig
