@@ -40,13 +40,6 @@ public partial class MainWindow : Window
         var settings = InstallCreatorSettings.Load();
         VaultwardenServerBox.Text = settings.VaultwardenServerUrl;
         VaultwardenEmailBox.Text = settings.VaultwardenEmail;
-
-        // "Beim Boot" (Nutzerwunsch): Master-Passwort-Feld ist der erste Fokus beim Öffnen,
-        // Laden bleibt aber ein bewusster Klick - ein automatischer Netzwerk-Aufruf ohne
-        // jedes Zutun beim bloßen Fensteröffnen wäre überraschend/unerwünscht, falls man
-        // gerade nur einen Test-Installer ohne Update-Signierung bauen will (siehe
-        // "Überspringen"-Knopf).
-        Loaded += (_, _) => VaultwardenPasswordBox.Focus();
     }
 
     private void GeneratePasswordButton_Click(object sender, RoutedEventArgs e) =>
@@ -250,17 +243,20 @@ public partial class MainWindow : Window
 
     // --- Vaultwarden / Update-Signatur (Nutzerwunsch 13.08.2026, "Update-Ei") ---------------
 
-    // Server-URL/E-Mail bleiben eingeklappt, bis man sie braucht (Nutzerwunsch 13.08.2026,
-    // zweite Runde: Panel sitzt neben dem Protokoll statt in der Vaultwarden-Karte selbst) -
-    // reines Ein-/Ausblenden, kein eigener Zustand nötig, die Textboxen selbst behalten ihren
-    // Inhalt unabhängig von der Sichtbarkeit. Die "*"-Protokoll-Spalte schrumpft dabei von
-    // selbst (siehe Grid.ColumnDefinitions in MainWindow.xaml), ohne dass hier eine Breite
-    // gesetzt werden muss.
-    private void VaultwardenCredentialsToggle_Click(object sender, RoutedEventArgs e)
+    // Die komplette Karte bleibt versteckt, bis man sie braucht (Nutzerkorrektur 13.08.2026,
+    // dritte Runde) - nur noch ein Schlüssel-Icon oben rechts im Fenster schaltet sie um. Die
+    // "*"-Protokoll-Zeile darunter schrumpft dabei von selbst (siehe Grid.RowDefinitions in
+    // MainWindow.xaml), ohne dass hier eine Höhe gesetzt werden muss. Fokus aufs Master-
+    // Passwort-Feld passiert jetzt beim Öffnen statt beim Fensterstart, weil die Karte vorher
+    // gar nicht sichtbar ist.
+    private void VaultwardenToggleButton_Click(object sender, RoutedEventArgs e)
     {
-        var show = VaultwardenCredentialsPanel.Visibility != Visibility.Visible;
-        VaultwardenCredentialsPanel.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
-        VaultwardenCredentialsToggle.Content = show ? "Konto schließen" : "Konto";
+        var show = VaultwardenPanel.Visibility != Visibility.Visible;
+        VaultwardenPanel.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
+        if (show)
+        {
+            VaultwardenPasswordBox.Focus();
+        }
     }
 
     private async void VaultwardenUnlockButton_Click(object sender, RoutedEventArgs e)
