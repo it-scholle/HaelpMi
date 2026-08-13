@@ -49,7 +49,8 @@ public partial class AlarmPopupWindow : Window
         int responseThreshold,
         Guid alarmProfileId,
         Guid alarmSessionId,
-        DateTimeOffset sentAtUtc)
+        DateTimeOffset sentAtUtc,
+        bool isTest = false)
     {
         InitializeComponent();
 
@@ -65,6 +66,19 @@ public partial class AlarmPopupWindow : Window
         SenderSubText.Text = $"Ausgelöst von: {senderComputerName} - {senderUser}{remoteSuffix}";
         TimestampText.Text = sentAtUtc.ToLocalTime().ToString("HH:mm:ss");
         UpdateThresholdStatus(0);
+
+        // Testmodus-Toggle (Nutzerwunsch 13.08.2026): Grün statt Rot + Wasserzeichen, damit ein
+        // Empfänger einen Testalarm nie mit einem echten Notruf verwechselt (siehe TestModeArmState-
+        // Klassendoku für die Sicherheitsbegründung auf Sender-Seite). Datenschutz-Layout (Raum
+        // prominent, Username klein) bleibt unangetastet - nur Rahmenfarbe/Kopfzeile/Wasserzeichen ändern sich.
+        if (isTest)
+        {
+            var successBrush = (System.Windows.Media.Brush)FindResource("SuccessBrush");
+            RootBorder.BorderBrush = successBrush;
+            HeaderBorder.Background = successBrush;
+            HeaderSubText.Text = "HälpMi - TESTALARM";
+            TestWatermarkText.Visibility = Visibility.Visible;
+        }
 
         var offset = (System.Threading.Interlocked.Increment(ref _openCount) - 1) % 6 * 28;
         Loaded += (_, _) =>

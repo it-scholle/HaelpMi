@@ -26,6 +26,16 @@ public partial class SenderStatusWindow : Window
         _session = session;
         ProfileText.Text = profileName;
 
+        // Testmodus-Toggle: aus der Session selbst gelesen statt als eigener Parameter -
+        // RepeatingAlarmSession.IsTest trägt die Information bereits (kein Sinn, sie ein
+        // zweites Mal durchzureichen).
+        if (_session.IsTest)
+        {
+            TestModeBadgeText.Visibility = Visibility.Visible;
+            RootBorder.BorderBrush = (System.Windows.Media.Brush)FindResource("SuccessBrush");
+            RootBorder.BorderThickness = new Thickness(2);
+        }
+
         _session.StatusChanged += Session_StatusChanged;
         _session.Finished += Session_Finished;
 

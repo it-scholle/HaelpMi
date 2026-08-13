@@ -177,6 +177,40 @@ konnte.
 
 ---
 
+## Test 6b: Testmodus-Toggle (Nutzerwunsch 13.08.2026)
+
+Testet den kompletten echten Alarm-Workflow (Hotkey → P2P-Send → Empfänger-Popup →
+Threshold-Gate → "Bin unterwegs" → Sound) gegen ein echtes zweites Gerät, aber eindeutig
+als Test gekennzeichnet - nicht zu verwechseln mit dem bestehenden "Selbsttest"-Button
+(FR-27, nur Loopback zu sich selbst).
+
+- [ ] Konfigurationsprogramm öffnen, im Bereich "Meine Alarme": Häkchen "Testmodus"
+      setzen → Statustext zeigt einen laufenden Countdown ("Testmodus aktiv - noch 1:5x")
+- [ ] Konfiguriertes Tastenkürzel eines Alarm-Profils drücken
+- [ ] Empfangendes Gerät zeigt das Popup **grün** statt rot, mit diagonalem
+      "TEST"-Wasserzeichen und Kopfzeile "HälpMi - TESTALARM" - Raum/Nutzer/Threshold-
+      Anzeige unverändert wie bei einem echten Alarm
+- [ ] Signalton ist identisch zu einem echten Alarm (keine Abschwächung)
+- [ ] Sender-Status-Fenster (unten rechts) zeigt sichtbar "TESTMODUS"
+- [ ] "Bin unterwegs" klicken → Threshold-Gate funktioniert wie bei einem echten Alarm
+- [ ] Nach dem Trigger: Konfigurationsprogramm zeigt den Toggle automatisch wieder als
+      "aus" (Häkchen verschwunden, kein Countdown mehr) - auch nach Neu-Fokussieren des
+      Fensters
+- [ ] Timeout-Fall: Toggle setzen, **nicht** auslösen, 2 Minuten warten → Toggle springt
+      von selbst wieder auf "aus"
+- [ ] Negativfall: Toggle setzen, dann manuell wieder ausschalten (Häkchen entfernen) vor
+      Ablauf → nächster Hotkey-Trigger kommt beim Empfänger als **normaler** (roter,
+      nicht-Test) Alarm an
+- [ ] `audit.log` (siehe `Z:\HaelpMi-Logs\`) enthält auf Sender- wie Empfängerseite
+      `isTest=true`-Einträge für den Testlauf, `isTest=false` für einen anschließenden
+      echten Alarm
+
+**Melde zurück:** Vor allem, ob der Toggle-Status im Konfigurator jederzeit korrekt
+anzeigt (auch nach Fenster-Minimieren/Wiederherstellen) - das ist die Absicherung gegen
+einen versehentlich scharf bleibenden Testmodus.
+
+---
+
 ## Test 7: Konfigurations-Synchronisation (Hot-Reload)
 
 - [ ] Auf Gerät #1 im Dashboard einen bestehenden Kreis umbenennen

@@ -106,6 +106,20 @@
                 <TextBlock x:Name="MyAlarmsEmptyText" Foreground="{StaticResource TextSecondaryBrush}" FontSize="11"
                            Margin="0,4,0,0" TextWrapping="Wrap" Visibility="Collapsed"
                            Text="Für dieses Gerät ist aktuell kein Alarm-Profil als Sender eingerichtet." />
+
+                <!-- Testmodus-Toggle (Nutzerwunsch 13.08.2026): One-Shot, gilt für den nächsten
+                     Hotkey-Alarm über dieses Gerät - Konfigurator-/User-Setting, kein Admin-
+                     Dashboard-Feature, jede Rolle darf ihn nutzen. Countdown-Text ist Pflicht,
+                     nicht nur Kosmetik: er ist der einzige Weg, jederzeit unmissverständlich zu
+                     sehen, ob noch scharf oder nicht (siehe TestModeArmState-Klassendoku). -->
+                <Border Background="{StaticResource SuccessLightBrush}" CornerRadius="6" Padding="10,8" Margin="0,12,0,0">
+                    <StackPanel Orientation="Horizontal">
+                        <CheckBox x:Name="TestModeToggle" Content="Testmodus (nächster Alarm über meinen Hotkey als TEST markieren)"
+                                  VerticalAlignment="Center" Checked="TestModeToggle_Checked" Unchecked="TestModeToggle_Unchecked" />
+                        <TextBlock x:Name="TestModeStatusText" Foreground="{StaticResource SuccessBrush}" FontWeight="SemiBold"
+                                   Margin="14,0,0,0" VerticalAlignment="Center" />
+                    </StackPanel>
+                </Border>
             </StackPanel>
         </GroupBox>
 

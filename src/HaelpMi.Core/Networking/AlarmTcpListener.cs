@@ -140,7 +140,7 @@ public sealed class AlarmTcpListener : IAsyncDisposable
                 return; // different deployment sharing the same physical network (Teil 2, Abschnitt 6)
             }
 
-            _audit?.Invoke($"alarm received from deviceId={request.SenderDeviceId}");
+            _audit?.Invoke($"alarm received from deviceId={request.SenderDeviceId} isTest={request.IsTest}");
             AlarmReceived?.Invoke(this, new AlarmReceivedEventArgs { Request = request, SenderAddress = senderAddress });
 
             var ack = new AlarmAckMessage(request.CustomerGroupId, request.AlarmProfileId, request.AlarmSessionId, identity.DeviceId, DateTimeOffset.UtcNow);

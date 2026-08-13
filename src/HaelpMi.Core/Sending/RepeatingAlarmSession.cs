@@ -55,6 +55,9 @@ public sealed class RepeatingAlarmSession : IDisposable
     public AlarmProfile Profile { get; }
     public IReadOnlyList<DeviceEntry> Targets { get; }
 
+    /// <summary>Testmodus-Toggle (Nutzerwunsch 13.08.2026): reicht ins Wire-Format (<see cref="AlarmRequestMessage.IsTest"/>) durch und steuert die Sender-/Empfänger-UI-Kennzeichnung.</summary>
+    public bool IsTest { get; }
+
     private readonly AlarmSender _alarmSender;
     private readonly AlarmFeedbackChannel _feedbackChannel;
     private readonly LiveIdentity _ownIdentity;
@@ -80,7 +83,8 @@ public sealed class RepeatingAlarmSession : IDisposable
         LiveIdentity ownIdentity,
         AlarmSender alarmSender,
         AlarmFeedbackChannel feedbackChannel,
-        DateTimeOffset startedAtUtc)
+        DateTimeOffset startedAtUtc,
+        bool isTest = false)
     {
         Profile = profile;
         Targets = targets;
@@ -88,6 +92,7 @@ public sealed class RepeatingAlarmSession : IDisposable
         _alarmSender = alarmSender;
         _feedbackChannel = feedbackChannel;
         _startedAtUtc = startedAtUtc;
+        IsTest = isTest;
         _feedbackChannel.OnMyWayReceived += OnMyWayReceived;
     }
 
@@ -102,7 +107,7 @@ public sealed class RepeatingAlarmSession : IDisposable
                     break;
                 }
 
-                var result = await _alarmSender.SendAsync(Profile, AlarmSessionId, _ownIdentity, Targets, ct: _stopCts.Token);
+                var result = await _alarmSender.SendAsync(Profile, AlarmSessionId, _ownIdentity, Targets, isTest: IsTest, ct: _stopCts.Token);
                 _lastAckedCount = result.AckedCount;
                 await RaiseAndRelayAsync(stillSending: true);
 

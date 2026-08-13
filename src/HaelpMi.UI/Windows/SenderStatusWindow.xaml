@@ -13,7 +13,7 @@
             </ResourceDictionary.MergedDictionaries>
         </ResourceDictionary>
     </Window.Resources>
-    <Border Background="#DD2C3E50" CornerRadius="14" Padding="14,10">
+    <Border x:Name="RootBorder" Background="#DD2C3E50" CornerRadius="14" Padding="14,10">
         <StackPanel>
             <Grid>
                 <Grid.ColumnDefinitions>
@@ -22,6 +22,10 @@
                 </Grid.ColumnDefinitions>
 
                 <StackPanel Grid.Column="0">
+                    <!-- Testmodus-Toggle (Nutzerwunsch 13.08.2026): der Auslösende selbst muss
+                         ebenso eindeutig sehen, dass gerade kein echter Alarm läuft. -->
+                    <TextBlock x:Name="TestModeBadgeText" Text="TESTMODUS" Foreground="{StaticResource SuccessBrush}"
+                               FontWeight="Bold" FontSize="11" Margin="0,0,0,2" Visibility="Collapsed" />
                     <TextBlock x:Name="StatusText" Foreground="White" FontWeight="Bold" FontSize="14" />
                     <TextBlock x:Name="ProfileText" Foreground="#D6DBDF" FontSize="11" Margin="0,2,0,0" />
                     <TextBlock x:Name="AckedText" Foreground="#D6DBDF" FontSize="11" Margin="0,4,0,0" />

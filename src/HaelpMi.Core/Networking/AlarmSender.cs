@@ -45,6 +45,7 @@ public sealed class AlarmSender
         Guid alarmSessionId,
         LiveIdentity ownIdentity,
         IReadOnlyList<DeviceEntry> targets,
+        bool isTest = false,
         IPreSendConfirmation? confirmation = null,
         IProgress<AlarmSendProgress>? progress = null,
         CancellationToken ct = default)
@@ -59,8 +60,8 @@ public sealed class AlarmSender
         var request = new AlarmRequestMessage(
             ownIdentity.CustomerGroupId, profile.Id, alarmSessionId, ownIdentity.DeviceId,
             ownIdentity.ComputerName, ownIdentity.User, ownIdentity.RoomName, ownIdentity.RoomNumber,
-            ownIdentity.IsRemoteSession, profile.Text, profile.ResponseThreshold, DateTimeOffset.UtcNow);
-        _audit?.Invoke($"alarm sent alarmProfileId={profile.Id} sessionId={alarmSessionId} targetCount={targets.Count}");
+            ownIdentity.IsRemoteSession, profile.Text, profile.ResponseThreshold, DateTimeOffset.UtcNow, IsTest: isTest);
+        _audit?.Invoke($"alarm sent alarmProfileId={profile.Id} sessionId={alarmSessionId} targetCount={targets.Count} isTest={isTest}");
 
         var ackedCount = 0;
         var sendTasks = targets.Select(async target =>

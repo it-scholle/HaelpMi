@@ -466,6 +466,36 @@ public class NetworkingTests
     }
 
     [Fact]
+    public void AlarmRequestMessage_RoundTrips_ThroughWireFormat_WhenIsTestTrue()
+    {
+        var original = new AlarmRequestMessage(
+            Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(),
+            "Sachbearbeitung 3", "Frau Meier", "Zimmer 214", "214", false,
+            "Bitte kommen!", 1, DateTimeOffset.UtcNow, IsTest: true);
+
+        var json = JsonSerializer.Serialize(original, WireOptions);
+        var roundTripped = JsonSerializer.Deserialize<AlarmRequestMessage>(json, WireOptions);
+
+        Assert.Equal(original, roundTripped);
+        Assert.True(roundTripped!.IsTest);
+    }
+
+    [Fact]
+    public void AlarmRequestMessage_Deserializes_WithMissingIsTestField_AsFalse()
+    {
+        // Simuliert einen alten Sender ohne das Feld (Rollout-Übergang) - der Fallback muss
+        // sicher in Richtung "kein Test" gehen, nie fälschlich einen echten Alarm als Test markieren.
+        var jsonWithoutIsTest = """
+            {"customerGroupId":"11111111-1111-1111-1111-111111111111","alarmProfileId":"22222222-2222-2222-2222-222222222222","alarmSessionId":"33333333-3333-3333-3333-333333333333","senderDeviceId":"44444444-4444-4444-4444-444444444444","senderComputerName":"PC","senderUser":"User","senderRoomName":"Raum","senderRoomNumber":"1","senderIsRemoteSession":false,"text":"Alarm!","responseThreshold":1,"sentAtUtc":"2026-08-13T12:00:00Z"}
+            """;
+
+        var result = JsonSerializer.Deserialize<AlarmRequestMessage>(jsonWithoutIsTest, WireOptions);
+
+        Assert.NotNull(result);
+        Assert.False(result!.IsTest);
+    }
+
+    [Fact]
     public void AlarmAckMessage_RoundTrips_ThroughWireFormat()
     {
         var original = new AlarmAckMessage(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), DateTimeOffset.UtcNow);

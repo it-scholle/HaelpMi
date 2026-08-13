@@ -344,6 +344,9 @@ public partial class App : System.Windows.Application
             RequestRebroadcast = async () => (await ipcClient.SendAsync(IpcCommandType.Rebroadcast, TimeSpan.FromSeconds(10))).Success,
             RequestSearchAgain = async () => (await ipcClient.SendAsync(IpcCommandType.SearchAgain, TimeSpan.FromSeconds(10))).Success,
             RequestSelfTest = async () => (await ipcClient.SendAsync(IpcCommandType.SelfTest, TimeSpan.FromSeconds(10))).Success,
+            RequestArmTestMode = async () => (await ipcClient.SendAsync(IpcCommandType.ArmTestMode, TimeSpan.FromSeconds(10))).Success,
+            RequestDisarmTestMode = async () => (await ipcClient.SendAsync(IpcCommandType.DisarmTestMode, TimeSpan.FromSeconds(10))).Success,
+            RequestTestModeStatus = async () => (await ipcClient.SendAsync(IpcCommandType.TestModeStatus, TimeSpan.FromSeconds(5))).Remaining,
             OpenAdminDashboard = settings.Role == Role.Admin
                 ? () => OpenAdminDashboardAsync(settingsStore, deployment, deviceStore)
                 : null,

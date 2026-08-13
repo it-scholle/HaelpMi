@@ -68,6 +68,16 @@ public static class AppConstants
     /// </summary>
     public static readonly TimeSpan SenderStatusBannerAutoCloseAfterFinish = TimeSpan.FromMinutes(2);
 
+    /// <summary>
+    /// Testmodus-Toggle im Konfigurator (Nutzerwunsch 13.08.2026): One-Shot, gilt für den
+    /// nächsten Hotkey-Trigger und deaktiviert sich automatisch nach dieser Zeitspanne,
+    /// falls bis dahin kein Hotkey gedrückt wurde - kein Dauerzustand, keine Persistierung.
+    /// Siehe <see cref="TestModeArmState"/>: das Ablaufen ist reine Zeitstempel-Arithmetik,
+    /// kein separater Reset-Pfad muss dafür erfolgreich laufen (Sicherheitsgarantie gegen
+    /// einen liegen gelassenen Toggle).
+    /// </summary>
+    public static readonly TimeSpan TestModeTimeout = TimeSpan.FromMinutes(2);
+
     /// <summary>Exclusive edit-lock auto-release after this much inactivity (Teil 2, Abschnitt 5).</summary>
     public static readonly TimeSpan EditLockInactivityTimeout = TimeSpan.FromMinutes(10);
 

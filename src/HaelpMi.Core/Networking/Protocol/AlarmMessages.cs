@@ -22,7 +22,12 @@ public sealed record AlarmRequestMessage(
     bool SenderIsRemoteSession,
     string Text,
     int ResponseThreshold,
-    DateTimeOffset SentAtUtc);
+    DateTimeOffset SentAtUtc,
+    // Testmodus-Toggle (Nutzerwunsch 13.08.2026): additiv ans Ende angehängt, Default false
+    // haelt einen alten Sender ohne dieses Feld sicher auf "kein Test" - nie faelschlich als
+    // harmlos markiert. Wird nicht in IsPlausible() geprueft (bool ist immer plausibel,
+    // analog SenderIsRemoteSession oben).
+    bool IsTest = false);
 
 /// <summary>
 /// Sent back immediately after the popup has been *displayed* (Phase 1 FR-13) - not

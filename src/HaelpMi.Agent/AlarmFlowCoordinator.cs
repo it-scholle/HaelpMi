@@ -33,6 +33,9 @@ public sealed class AlarmFlowCoordinator
     private readonly MultiDeviceAlarmPlayer _audioPlayer;
     private readonly ConcurrentDictionary<Guid, AlarmPopupWindow> _openPopups = new();
 
+    /// <summary>Testmodus-Toggle (Nutzerwunsch 13.08.2026), scharfgeschaltet per IPC vom Konfigurator aus - siehe TestModeArmState-Klassendoku für die Sicherheitsbegründung des Zeitstempel-Ansatzes.</summary>
+    private readonly TestModeArmState _testModeArmState = new();
+
     public AlarmFlowCoordinator(
         Func<LiveIdentity> identityProvider,
         Func<OwnSettings> settingsProvider,
@@ -75,7 +78,8 @@ public sealed class AlarmFlowCoordinator
                 request.ResponseThreshold,
                 request.AlarmProfileId,
                 request.AlarmSessionId,
-                request.SentAtUtc);
+                request.SentAtUtc,
+                request.IsTest);
 
             popup.OnMyWayRequested += (_, _) => _ = ReportOnMyWayAsync(request, args);
             popup.Closed += (_, _) => _openPopups.TryRemove(request.AlarmSessionId, out _);
@@ -117,6 +121,11 @@ public sealed class AlarmFlowCoordinator
     /// <summary>Hotkey-triggered send for one <see cref="AlarmProfile"/> (FR-50): resolves this sender's asymmetric recipient set and starts a repeating session.</summary>
     public void TriggerAlarmProfile(AlarmProfile profile)
     {
+        // Testmodus-Toggle: verbraucht die Scharfschaltung beim Trigger-VERSUCH, nicht erst
+        // beim erfolgreichen Versand - "gilt für den nächsten Hotkey-Trigger" (Nutzerwunsch
+        // 13.08.2026), auch wenn unten z.B. wegen leerem Empfängerkreis nichts verschickt wird.
+        var isTest = _testModeArmState.TryConsume(DateTimeOffset.UtcNow);
+
         var identity = _identityProvider();
         var devices = _deviceStore.Load();
         var groups = _sharedConfigProvider().DeviceGroups;
@@ -126,7 +135,7 @@ public sealed class AlarmFlowCoordinator
             return; // nothing to send, nothing to show (Teil 2, Abschnitt 4: an empty recipient set is a valid, if useless, admin configuration)
         }
 
-        var session = new RepeatingAlarmSession(profile, targets, identity, _sender, _feedbackChannel, DateTimeOffset.UtcNow);
+        var session = new RepeatingAlarmSession(profile, targets, identity, _sender, _feedbackChannel, DateTimeOffset.UtcNow, isTest);
         System.Windows.Application.Current.Dispatcher.Invoke(() =>
         {
             var window = new SenderStatusWindow(session, profile.Name);
@@ -135,6 +144,15 @@ public sealed class AlarmFlowCoordinator
 
         _ = RunSessionAsync(session);
     }
+
+    /// <summary>Scharfschalten des Testmodus-Toggles (Konfigurator-IPC, "ArmTestMode").</summary>
+    public void ArmTestModeOnce() => _testModeArmState.Arm(DateTimeOffset.UtcNow);
+
+    /// <summary>Manuelles Wieder-Ausschalten (Konfigurator-IPC, "DisarmTestMode") - reiner UX-Komfort, siehe TestModeArmState-Klassendoku.</summary>
+    public void DisarmTestMode() => _testModeArmState.Disarm();
+
+    /// <summary>Für die Konfigurator-Countdown-Anzeige ("TestModeStatus"-IPC) - null, falls gerade nicht scharf.</summary>
+    public TimeSpan? TestModeRemaining => _testModeArmState.Remaining(DateTimeOffset.UtcNow);
 
     private static async Task RunSessionAsync(RepeatingAlarmSession session)
     {

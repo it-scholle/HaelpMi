@@ -189,4 +189,14 @@ public class MessageValidationTests
     [Fact]
     public void AlarmRequestMessage_MaxAllowedTextLength_IsPlausible() =>
         Assert.True((ValidAlarmRequest() with { Text = new string('a', 500) }).IsPlausible());
+
+    [Fact]
+    public void AlarmRequestMessage_IsPlausible_ReturnsTrue_RegardlessOfIsTestValue()
+    {
+        // bool ist immer plausibel (analog SenderIsRemoteSession, das ebenfalls nicht
+        // geprüft wird) - kein neuer Ablehnungsfall, nur Absicherung gegen eine
+        // versehentliche künftige Prüfung, die IsTest fälschlich einschränkt.
+        Assert.True((ValidAlarmRequest() with { IsTest = true }).IsPlausible());
+        Assert.True((ValidAlarmRequest() with { IsTest = false }).IsPlausible());
+    }
 }

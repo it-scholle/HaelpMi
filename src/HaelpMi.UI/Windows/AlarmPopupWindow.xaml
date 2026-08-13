@@ -14,51 +14,66 @@
             </ResourceDictionary.MergedDictionaries>
         </ResourceDictionary>
     </Window.Resources>
-    <Border Background="White" BorderBrush="#C0392B" BorderThickness="2" CornerRadius="14">
+    <Border x:Name="RootBorder" Background="White" BorderBrush="#C0392B" BorderThickness="2" CornerRadius="14">
         <Border.Effect>
             <DropShadowEffect BlurRadius="18" ShadowDepth="2" Opacity="0.4" />
         </Border.Effect>
-        <StackPanel Margin="0,0,0,16">
-            <Border Background="#C0392B" CornerRadius="12,12,0,0" Padding="16,12">
-                <StackPanel Orientation="Horizontal">
-                    <TextBlock Text="&#9888;" FontSize="20" Foreground="White" VerticalAlignment="Center" Margin="0,0,10,0" />
-                    <StackPanel>
-                        <TextBlock Text="HälpMi - Alarm" FontSize="12" Foreground="#F5B7B1" />
-                        <!-- FR-40: Raum + Raumnummer prominent - this is the biggest text in the window. -->
-                        <TextBlock x:Name="RoomText" FontSize="20" FontWeight="Bold" Foreground="White" />
+        <Grid>
+            <StackPanel Margin="0,0,0,16">
+                <Border x:Name="HeaderBorder" Background="#C0392B" CornerRadius="12,12,0,0" Padding="16,12">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="&#9888;" FontSize="20" Foreground="White" VerticalAlignment="Center" Margin="0,0,10,0" />
+                        <StackPanel>
+                            <TextBlock x:Name="HeaderSubText" Text="HälpMi - Alarm" FontSize="12" Foreground="#F5B7B1" />
+                            <!-- FR-40: Raum + Raumnummer prominent - this is the biggest text in the window. -->
+                            <TextBlock x:Name="RoomText" FontSize="20" FontWeight="Bold" Foreground="White" />
+                        </StackPanel>
                     </StackPanel>
-                </StackPanel>
-            </Border>
+                </Border>
 
-            <TextBlock x:Name="MessageText" FontSize="18" FontWeight="SemiBold"
-                       Margin="20,18,20,4" TextWrapping="Wrap" />
+                <TextBlock x:Name="MessageText" FontSize="18" FontWeight="SemiBold"
+                           Margin="20,18,20,4" TextWrapping="Wrap" />
 
-            <!-- FR-40: Benutzername klein und untergeordnet. FR-41: RDP-Kennzeichnung, wenn zutreffend. -->
-            <TextBlock x:Name="SenderSubText" FontSize="11" Foreground="Gray" Margin="20,0,20,4" />
-            <TextBlock x:Name="TimestampText" FontSize="11" Foreground="Gray" Margin="20,0,20,12" />
+                <!-- FR-40: Benutzername klein und untergeordnet. FR-41: RDP-Kennzeichnung, wenn zutreffend. -->
+                <TextBlock x:Name="SenderSubText" FontSize="11" Foreground="Gray" Margin="20,0,20,4" />
+                <TextBlock x:Name="TimestampText" FontSize="11" Foreground="Gray" Margin="20,0,20,12" />
 
-            <!-- FR-47/FR-51: Schwellwert-Status - wie viele Bestätigungen fehlen noch, bis das Fenster schließbar wird. -->
-            <Border Background="#F4F6F6" CornerRadius="4" Margin="20,4,20,14" Padding="10,8">
-                <TextBlock x:Name="ThresholdStatusText" FontSize="12" TextWrapping="Wrap" Foreground="#34495E" />
-            </Border>
+                <!-- FR-47/FR-51: Schwellwert-Status - wie viele Bestätigungen fehlen noch, bis das Fenster schließbar wird. -->
+                <Border Background="#F4F6F6" CornerRadius="4" Margin="20,4,20,14" Padding="10,8">
+                    <TextBlock x:Name="ThresholdStatusText" FontSize="12" TextWrapping="Wrap" Foreground="#34495E" />
+                </Border>
 
-            <Grid Margin="20,0,20,0">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="Auto" />
-                </Grid.ColumnDefinitions>
+                <Grid Margin="20,0,20,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
 
-                <!-- FR-51: "bin unterwegs" - Rückmeldung an den Sender. -->
-                <Button Grid.Column="1" x:Name="OnMyWayButton" Content="Bin unterwegs" Margin="0,0,8,0"
-                        Padding="16,8" Background="#27AE60" Foreground="White" BorderThickness="0"
-                        Click="OnMyWayButton_Click" />
+                    <!-- FR-51: "bin unterwegs" - Rückmeldung an den Sender. -->
+                    <Button Grid.Column="1" x:Name="OnMyWayButton" Content="Bin unterwegs" Margin="0,0,8,0"
+                            Padding="16,8" Background="#27AE60" Foreground="White" BorderThickness="0"
+                            Click="OnMyWayButton_Click" />
 
-                <!-- FR-51: erst klickbar (aktiviert), sobald der Schwellwert erreicht ist. -->
-                <Button Grid.Column="2" x:Name="CloseButton" Content="Schließen" IsEnabled="False"
-                        Padding="16,8" Background="#2E86C1" Foreground="White" BorderThickness="0"
-                        Click="CloseButton_Click" />
-            </Grid>
-        </StackPanel>
+                    <!-- FR-51: erst klickbar (aktiviert), sobald der Schwellwert erreicht ist. -->
+                    <Button Grid.Column="2" x:Name="CloseButton" Content="Schließen" IsEnabled="False"
+                            Padding="16,8" Background="#2E86C1" Foreground="White" BorderThickness="0"
+                            Click="CloseButton_Click" />
+                </Grid>
+            </StackPanel>
+
+            <!-- Testmodus-Toggle (Nutzerwunsch 13.08.2026): diagonales Wasserzeichen zusätzlich
+                 zur Grün-Umschaltung von RootBorder/HeaderBorder - wegen Rot/Grün-Sehschwäche
+                 trägt der Text, nicht die Farbe, das Hauptsignal "das ist kein echter Alarm".
+                 IsHitTestVisible=False, damit es die Buttons darunter nicht blockiert. -->
+            <TextBlock x:Name="TestWatermarkText" Text="TEST" FontSize="64" FontWeight="Bold"
+                       Foreground="#3334C759" Opacity="0.6"
+                       HorizontalAlignment="Center" VerticalAlignment="Center"
+                       IsHitTestVisible="False" Visibility="Collapsed">
+                <TextBlock.RenderTransform>
+                    <RotateTransform Angle="-25" />
+                </TextBlock.RenderTransform>
+            </TextBlock>
+        </Grid>
     </Border>
 </Window>

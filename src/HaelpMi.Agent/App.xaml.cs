@@ -255,6 +255,9 @@ public partial class App : System.Windows.Application
         _ipcServer.On(IpcCommandType.Rebroadcast, HandleRebroadcastRequestAsync);
         _ipcServer.On(IpcCommandType.SearchAgain, HandleSearchAgainRequestAsync);
         _ipcServer.On(IpcCommandType.SelfTest, HandleSelfTestRequestAsync);
+        _ipcServer.On(IpcCommandType.ArmTestMode, HandleArmTestModeRequestAsync);
+        _ipcServer.On(IpcCommandType.DisarmTestMode, HandleDisarmTestModeRequestAsync);
+        _ipcServer.On(IpcCommandType.TestModeStatus, HandleTestModeStatusRequestAsync);
         _ipcServer.Start();
 
         var executablePath = Environment.ProcessPath ?? Process.GetCurrentProcess().MainModule?.FileName ?? string.Empty;
@@ -466,6 +469,29 @@ public partial class App : System.Windows.Application
         var ok = await _coordinator!.SendSelfTestAsync(profile);
         return new IpcResponse(ok);
     }
+
+    private Task<IpcResponse> HandleArmTestModeRequestAsync()
+    {
+        _coordinator!.ArmTestModeOnce();
+        _auditLog.Append("testmodus scharfgeschaltet - gilt fuer den naechsten Hotkey-Alarm");
+        return Task.FromResult(new IpcResponse(true, Remaining: AppConstants.TestModeTimeout));
+    }
+
+    private Task<IpcResponse> HandleDisarmTestModeRequestAsync()
+    {
+        // Nur protokollieren, wenn tatsächlich noch etwas scharf war - ein Disarm auf einen
+        // längst abgelaufenen/nie scharfgeschalteten Zustand ist kein meldenswertes Ereignis.
+        if (_coordinator!.TestModeRemaining is not null)
+        {
+            _auditLog.Append("testmodus manuell deaktiviert");
+        }
+
+        _coordinator!.DisarmTestMode();
+        return Task.FromResult(new IpcResponse(true));
+    }
+
+    private Task<IpcResponse> HandleTestModeStatusRequestAsync() =>
+        Task.FromResult(new IpcResponse(true, Remaining: _coordinator!.TestModeRemaining));
 
     protected override void OnExit(ExitEventArgs e)
     {
