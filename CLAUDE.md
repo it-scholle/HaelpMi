@@ -54,6 +54,14 @@ stillschweigend zu ignorieren.
   3. Optional pro Kunde: Installer-Passwort (kein Schlüsselpaar, siehe Install-Creator).
 - Nur die jeweiligen **öffentlichen** Schlüssel werden ins Repository/die Binary eingebettet.
   Private Schlüssel gehören nie ins Repo, nie ins Log, nie in eine Fehlermeldung.
+- **Aufbewahrung des privaten Update-Signaturschlüssels (seit 13.08.2026):** liegt verschlüsselt
+  in Vaultwarden (Secure Note `HälpMi-Update-PrivateKey`), nicht als Klartextdatei auf einer
+  Build-Maschine. `HaelpMi.InstallCreator` ("Update-Ei"-Häkchen, Knopf "Update-Paket
+  veröffentlichen") holt ihn dort bei Bedarf per Bitwarden-CLI ab (Master-Passwort einmal pro
+  Programmstart), hält ihn ausschließlich im Arbeitsspeicher dieses einen Laufs und schreibt ihn
+  nie auf die Platte. Der bisherige rein manuelle Weg über `HaelpMi.UpdateSigner` (Schlüssel als
+  lokale `.txt`-Datei) bleibt als Fallback für Maschinen ohne Vaultwarden-Zugriff bestehen, siehe
+  `BUILD-UND-INSTALLATION.md` Schritt 1b.
 
 ## Architekturprinzipien — nicht verhandelbar
 

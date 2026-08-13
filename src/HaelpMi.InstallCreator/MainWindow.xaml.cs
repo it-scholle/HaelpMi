@@ -6,6 +6,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Windows;
 using System.Windows.Controls;
+using HaelpMi.UpdateSigner;
 
 namespace HaelpMi.InstallCreator;
 
@@ -20,14 +21,32 @@ namespace HaelpMi.InstallCreator;
 /// </summary>
 public partial class MainWindow : Window
 {
+    // Update-Schlüssel-Zustand (Nutzerwunsch 13.08.2026, "Update-Ei"): ausschließlich im
+    // Arbeitsspeicher dieses Programmlaufs, nie auf der Platte - siehe VaultwardenClient.
+    private VaultwardenClient? _vaultwardenClient;
+    private string? _vaultSessionKey;
+    private byte[]? _updatePrivateKeyBytes;
+    private readonly string _productVersion;
+
     public MainWindow()
     {
         InitializeComponent();
 
         // Kein ProjectReference auf HaelpMi.Core (siehe .csproj), daher hier lokal statt
         // LiveIdentityFactory.CurrentProgramVersion.
-        var version = Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "0.0.0";
-        VersionText.Text = $"v{version}";
+        _productVersion = Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "0.0.0";
+        VersionText.Text = $"v{_productVersion}";
+
+        var settings = InstallCreatorSettings.Load();
+        VaultwardenServerBox.Text = settings.VaultwardenServerUrl;
+        VaultwardenEmailBox.Text = settings.VaultwardenEmail;
+
+        // "Beim Boot" (Nutzerwunsch): Master-Passwort-Feld ist der erste Fokus beim Öffnen,
+        // Laden bleibt aber ein bewusster Klick - ein automatischer Netzwerk-Aufruf ohne
+        // jedes Zutun beim bloßen Fensteröffnen wäre überraschend/unerwünscht, falls man
+        // gerade nur einen Test-Installer ohne Update-Signierung bauen will (siehe
+        // "Überspringen"-Knopf).
+        Loaded += (_, _) => VaultwardenPasswordBox.Focus();
     }
 
     private void GeneratePasswordButton_Click(object sender, RoutedEventArgs e) =>
@@ -229,6 +248,202 @@ public partial class MainWindow : Window
         }
     }
 
+    // --- Vaultwarden / Update-Signatur (Nutzerwunsch 13.08.2026, "Update-Ei") ---------------
+
+    private async void VaultwardenUnlockButton_Click(object sender, RoutedEventArgs e)
+    {
+        var serverUrl = VaultwardenServerBox.Text.Trim();
+        var email = VaultwardenEmailBox.Text.Trim();
+        var password = VaultwardenPasswordBox.Password;
+
+        if (serverUrl.Length == 0 || email.Length == 0 || password.Length == 0)
+        {
+            VaultwardenStatusText.Text = "Server-URL, E-Mail und Master-Passwort ausfüllen.";
+            return;
+        }
+
+        _vaultwardenClient ??= VaultwardenClient.TryCreate();
+        if (_vaultwardenClient is null)
+        {
+            VaultwardenStatusText.Text = "bw.exe (Bitwarden-CLI) nicht im PATH gefunden - Update-Signierung ohne sie nicht möglich.";
+            Log("Fehler: bw.exe nicht gefunden.");
+            return;
+        }
+
+        VaultwardenUnlockButton.IsEnabled = false;
+        VaultwardenStatusText.Text = "Verbinde mit Vaultwarden...";
+        try
+        {
+            var unlock = await _vaultwardenClient.UnlockAsync(serverUrl, email, password);
+            // Passwort wird in keinem Fall weiter gebraucht/gemerkt - unabhängig vom Ausgang leeren.
+            VaultwardenPasswordBox.Password = string.Empty;
+
+            if (!unlock.Ok)
+            {
+                VaultwardenStatusText.Text = $"Fehlgeschlagen: {unlock.Error}";
+                Log($"Vaultwarden-Entsperren fehlgeschlagen: {unlock.Error}");
+                return;
+            }
+
+            _vaultSessionKey = unlock.SessionKey;
+            new InstallCreatorSettings { VaultwardenServerUrl = serverUrl, VaultwardenEmail = email }.Save();
+            Log("Vaultwarden entsperrt.");
+
+            var existingKey = await _vaultwardenClient.TryGetUpdatePrivateKeyAsync(_vaultSessionKey!);
+            if (existingKey is not null)
+            {
+                _updatePrivateKeyBytes = Convert.FromBase64String(existingKey);
+                VaultwardenStatusText.Text = "Schlüssel geladen (aus Vaultwarden).";
+                Log("Update-Signaturschlüssel aus Vaultwarden geladen.");
+            }
+            else
+            {
+                VaultwardenStatusText.Text = "Vaultwarden entsperrt, aber noch kein Schlüssel vorhanden - \"Neuen Schlüssel erzeugen\" nutzen.";
+            }
+
+            GenerateUpdateKeyButton.IsEnabled = true;
+            UpdateEggCheckBox.IsEnabled = _updatePrivateKeyBytes is not null;
+            UpdateEggHintText.Visibility = _updatePrivateKeyBytes is not null ? Visibility.Collapsed : Visibility.Visible;
+            PublishUpdatePackageButton.IsEnabled = _updatePrivateKeyBytes is not null;
+        }
+        catch (Exception ex)
+        {
+            Log($"Unerwarteter Fehler beim Vaultwarden-Zugriff: {ex.Message}");
+            CrashLogger.Log("VaultwardenUnlockButton_Click", ex);
+            VaultwardenStatusText.Text = "Unerwarteter Fehler - siehe Protokoll.";
+        }
+        finally
+        {
+            VaultwardenUnlockButton.IsEnabled = true;
+        }
+    }
+
+    private void VaultwardenSkipButton_Click(object sender, RoutedEventArgs e)
+    {
+        VaultwardenPasswordBox.Password = string.Empty;
+        VaultwardenStatusText.Text = "Übersprungen - dieser Build läuft ohne Update-Signierung (Update-Ei bleibt deaktiviert).";
+        Log("Vaultwarden-Anmeldung übersprungen.");
+    }
+
+    private async void GenerateUpdateKeyButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_vaultwardenClient is null || _vaultSessionKey is null)
+        {
+            return; // Button ist ohne entsperrte Session ohnehin deaktiviert
+        }
+
+        if (_updatePrivateKeyBytes is not null)
+        {
+            var confirm = System.Windows.MessageBox.Show(
+                "Es liegt bereits ein Schlüssel in Vaultwarden. Ein neuer Schlüssel macht alle bisher " +
+                "ausgelieferten öffentlichen Schlüssel ungültig - Geräte, die den alten eingebettet haben, " +
+                "können künftige Updates dann nicht mehr verifizieren, bis sie den neuen erhalten. Wirklich ersetzen?",
+                "HälpMi Install-Creator", MessageBoxButton.YesNo, MessageBoxImage.Warning);
+            if (confirm != MessageBoxResult.Yes)
+            {
+                return;
+            }
+        }
+
+        GenerateUpdateKeyButton.IsEnabled = false;
+        try
+        {
+            var keyPair = UpdateSigningOperations.GenerateKeyPair();
+            var pushed = await _vaultwardenClient.CreateUpdatePrivateKeyNoteAsync(_vaultSessionKey, Convert.ToBase64String(keyPair.PrivateKey));
+            if (!pushed)
+            {
+                Log("Fehler: Neuer Schlüssel konnte nicht in Vaultwarden gespeichert werden.");
+                VaultwardenStatusText.Text = "Schlüsselerzeugung fehlgeschlagen - siehe Protokoll.";
+                return;
+            }
+
+            _updatePrivateKeyBytes = keyPair.PrivateKey;
+            var publicKeyBase64 = Convert.ToBase64String(keyPair.PublicKey);
+
+            Log("Neuer Update-Signaturschlüssel erzeugt und in Vaultwarden gespeichert.");
+            Log($"OEFFENTLICHER Schlüssel (in HaelpMi.Core/Updates/UpdateSignaturePublicKey.cs eintragen): {publicKeyBase64}");
+            TryCopyToClipboard(publicKeyBase64);
+
+            VaultwardenStatusText.Text = "Neuer Schlüssel gespeichert. Öffentlicher Schlüssel wurde kopiert - bitte manuell in UpdateSignaturePublicKey.cs eintragen.";
+            UpdateEggCheckBox.IsEnabled = true;
+            UpdateEggHintText.Visibility = Visibility.Collapsed;
+            PublishUpdatePackageButton.IsEnabled = true;
+        }
+        catch (Exception ex)
+        {
+            Log($"Unerwarteter Fehler bei der Schlüsselerzeugung: {ex.Message}");
+            CrashLogger.Log("GenerateUpdateKeyButton_Click", ex);
+        }
+        finally
+        {
+            GenerateUpdateKeyButton.IsEnabled = true;
+        }
+    }
+
+    // Bewusst kein Retry/Rückmeldung über MessageBox hier wie bei CopyPasswordButton_Click -
+    // das dortige aufwendige Retry-Muster ist für ein Passwort gedacht, das der Nutzer aktiv
+    // weitergeben will; hier reicht best-effort, der Wert steht ohnehin auch im Protokoll.
+    private static void TryCopyToClipboard(string text)
+    {
+        try
+        {
+            System.Windows.Forms.Clipboard.SetDataObject(text, copy: true, retryTimes: 10, retryDelay: 100);
+        }
+        catch (System.Runtime.InteropServices.ExternalException)
+        {
+            // best-effort - der Wert steht zusätzlich im Protokoll, siehe Aufrufer
+        }
+    }
+
+    private async void PublishUpdatePackageButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_updatePrivateKeyBytes is null)
+        {
+            return; // Button ist ohne geladenen Schlüssel ohnehin deaktiviert
+        }
+
+        SetBusy(true);
+        PublishUpdatePackageButton.IsEnabled = false;
+        try
+        {
+            Log("--- Update-Paket wird veröffentlicht ---");
+            var installerDir = FindInstallerDirectory();
+
+            if (!await RefreshPayloadAsync(installerDir))
+            {
+                Log("Payload-Aktualisierung fehlgeschlagen - Update-Paket wird nicht veröffentlicht.");
+                return;
+            }
+
+            var payloadDir = Path.Combine(installerDir, "payload");
+            var result = UpdatePackageBuilder.Build(payloadDir, _productVersion, _updatePrivateKeyBytes);
+            UpdatePackageBuilder.WriteToPayloadSeed(installerDir, result);
+            Log($"Update-Paket für Version {_productVersion} signiert und nach installer/payload/update-seed/ geschrieben.");
+
+            if (UpdatePackageBuilder.TryWriteToLocalDeviceCache(_productVersion, result))
+            {
+                Log("Zusätzlich in den lokalen P2P-Cache dieser Maschine geschrieben (%ProgramData%\\HaelpMi\\updates-cache) - " +
+                    "dieses Gerät kann die Version jetzt sofort an Peers weiterverteilen, sobald sie im Admin-Dashboard freigegeben ist.");
+            }
+            else
+            {
+                Log("HälpMi ist auf dieser Maschine nicht installiert - lokaler Cache wurde nicht befüllt (nur der Installer-Payload).");
+            }
+        }
+        catch (Exception ex)
+        {
+            Log($"Unerwarteter Fehler: {ex.Message}");
+            CrashLogger.Log("PublishUpdatePackageButton_Click", ex);
+            System.Windows.MessageBox.Show($"Update-Paket-Veröffentlichung fehlgeschlagen:{Environment.NewLine}{ex.Message}",
+                "HälpMi Install-Creator", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+        finally
+        {
+            SetBusy(false);
+            PublishUpdatePackageButton.IsEnabled = _updatePrivateKeyBytes is not null;
+        }
+    }
+
     private async void BuildAdminButton_Click(object sender, RoutedEventArgs e)
     {
         if (!TryValidate(out var error))
@@ -290,6 +505,11 @@ public partial class MainWindow : Window
         BuildAdminButton.IsEnabled = !busy;
         TestInstallerCheckBox.IsEnabled = !busy;
         CustomerNameBox.IsEnabled = !busy;
+        UpdateEggCheckBox.IsEnabled = !busy && _updatePrivateKeyBytes is not null;
+        // PublishUpdatePackageButton greift auf denselben installer/payload/-Ordner zu wie
+        // RefreshPayloadAsync - während eines Baus (egal welcher der beiden Aktionen) darf
+        // der jeweils andere Weg nicht gleichzeitig hineinschreiben.
+        PublishUpdatePackageButton.IsEnabled = !busy && _updatePrivateKeyBytes is not null;
     }
 
     private async Task BuildAdminInstallerAsync(Guid customerGroupId, bool isTestInstaller, string password, string customerNameOrTestLabel)
@@ -333,6 +553,24 @@ public partial class MainWindow : Window
         {
             Log("Payload-Aktualisierung fehlgeschlagen - Installer wird nicht gebaut.");
             return;
+        }
+
+        // "Update-Ei" (Nutzerwunsch 13.08.2026): NACH RefreshPayloadAsync (frischer Payload-
+        // Ordner), VOR dem User-Installer-ISCC-Lauf unten - der kopiert "payload\*" 1:1 in
+        // beide Installer, update-seed/ muss also schon drinstehen, bevor ISCC läuft.
+        if (UpdateEggCheckBox.IsChecked == true)
+        {
+            if (_updatePrivateKeyBytes is null)
+            {
+                Log("Fehler: Update-Ei ist angehakt, aber kein Update-Schlüssel geladen - Installer wird nicht gebaut.");
+                return;
+            }
+
+            Log("Update-Ei: Update-Paket wird für diesen Build signiert und eingebettet...");
+            var payloadDir = Path.Combine(installerDir, "payload");
+            var eggResult = UpdatePackageBuilder.Build(payloadDir, _productVersion, _updatePrivateKeyBytes);
+            UpdatePackageBuilder.WriteToPayloadSeed(installerDir, eggResult);
+            Log($"Update-Ei: Version {_productVersion} signiert, landet in payload/update-seed/.");
         }
 
         // Nutzer-Wunsch 04.08.2026: der User-Installer wird nicht mehr auf dem

@@ -87,8 +87,29 @@ Nutzerwunsch 09.08.2026: "vollautomatisch, sobald der Admin sich selbst aktualis
 dafür muss der Installer selbst schon ein signiertes P2P-Update-Paket für genau diese
 Version mitbringen (siehe `HaelpMi.Core/Updates/UpdateSeedImporter.cs`). Dieser Schritt ist
 **optional** - ohne ihn baut der Installer genauso wie bisher, nur ohne das automatische
-Auto-Seeding (dann bleibt der bisherige, rein manuelle Weg nötig, um die allererste Version
-ins P2P-Netz zu bringen).
+Auto-Seeding (dann bleibt der Weg unten nötig, um eine Version ins P2P-Netz zu bringen).
+
+**Empfohlen (automatisiert, seit 13.08.2026, "Update-Ei"):** Install-Creator selbst signiert
+und bettet das Update-Paket ein - kein manuelles `UpdateSigner`/`Compress-Archive`/Kopieren
+mehr nötig. Der private Schlüssel liegt dafür verschlüsselt in Vaultwarden (Notiz
+`HälpMi-Update-PrivateKey`), nicht als Klartextdatei auf der Build-Maschine:
+
+1. Install-Creator öffnen - beim Start automatisch die Vaultwarden-Karte ausfüllen
+   (Server-URL, Konto-E-Mail, Master-Passwort) und auf "Schlüssel laden" klicken. Existiert
+   noch kein Schlüssel, "Neuen Schlüssel erzeugen" nutzen - der öffentliche Schlüssel wird
+   dabei angezeigt/in die Zwischenablage kopiert und muss einmalig manuell in
+   `HälpMi\src\HaelpMi.Core\Updates\UpdateSignaturePublicKey.cs` eingetragen werden (bewusst
+   kein automatisches Editieren von Quelltext durch das Tool).
+2. Häkchen "Update-Ei" setzen, dann wie gewohnt "Admin-Installer erstellen" klicken - das
+   Update-Paket wird nach dem Payload-Publish signiert und landet automatisch in
+   `installer/payload/update-seed/`, bevor ISCC läuft.
+3. Für den häufigeren Fall "nur eine neue Version an bereits installierte Geräte
+   verteilen" (kein neuer Kunde, kein neuer Installer nötig): stattdessen "Update-Paket
+   veröffentlichen" klicken - läuft ohne ISCC/Kundengruppen-ID/Installer-Passwort durch und
+   schreibt zusätzlich in den lokalen P2P-Cache dieser Maschine, falls HälpMi hier installiert
+   ist.
+
+**Fallback (manuell, z. B. auf einer Maschine ohne Vaultwarden-Zugriff):**
 
 1. Einmalig (nur beim allerersten Mal): Schlüsselpaar erzeugen und **außerhalb** des
    Repo-Checkouts sichern (die Namenskonvention unten matcht `.gitignore`, falls doch
@@ -120,7 +141,8 @@ Jedes damit gebaute Gerät (Admin **und** User - kein Rollen-Sonderfall) importi
 mitgebrachtes Paket beim ersten Start automatisch ins lokale P2P-Cache und dient danach als
 Quelle für andere Peers. Das ersetzt **nicht** die Freigabe im Admin-Dashboard
 (`SharedConfig.UpdateRollout`) - andere Geräte pullen es weiterhin erst, nachdem der Admin
-die Version dort freigegeben hat (CLAUDE.md: gestaffelter, admin-freigegebener Rollout).
+die Version dort einmalig freigegeben hat (CLAUDE.md "Rollout-Freigabe": kein Kontingent mehr,
+ab der Freigabe verbreitet sich die Version automatisch von Gerät zu Gerät weiter).
 
 ## Schritt 2: Install-Creator - hier baust du den Admin-Installer
 

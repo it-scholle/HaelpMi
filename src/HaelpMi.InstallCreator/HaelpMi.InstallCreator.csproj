@@ -33,6 +33,17 @@
     <Resource Include="Assets\haelpmi_icon.ico" />
   </ItemGroup>
 
+  <!-- Nutzerwunsch 13.08.2026 ("Update-Ei"): Install-Creator soll Update-Pakete selbst
+       signieren/Schlüssel erzeugen können, ohne den privaten Schlüssel über eine
+       Kommandozeile oder eine temporäre Datei an einen HaelpMi.UpdateSigner-Kindprozess zu
+       reichen - deshalb hier (anders als bei Core/UI oben) eine gezielte ProjectReference
+       auf genau die Ed25519-Logik (UpdateSigningOperations.cs). UpdateSigner selbst bleibt
+       ein reines Kommandozeilen-Release-Werkzeug ohne WPF/Core-Abhängigkeiten, das Risiko
+       einer versehentlichen Payload-Vermischung entfällt damit. -->
+  <ItemGroup>
+    <ProjectReference Include="..\HaelpMi.UpdateSigner\HaelpMi.UpdateSigner.csproj" />
+  </ItemGroup>
+
   <!-- Splashscreen (05.08.2026) am 06.08.2026 wieder entfernt - siehe HaelpMi.Config.csproj
        für die ausführliche Begründung (WPF SplashScreen.Show() stürzt in einer self-contained
        Veröffentlichung mit MissingManifestResourceException ab, VOR jeder eigenen

@@ -1,9 +1,5 @@
-using System.Security.Cryptography;
 using HaelpMi.Core.Updates;
-using Org.BouncyCastle.Crypto.Generators;
-using Org.BouncyCastle.Crypto.Parameters;
-using Org.BouncyCastle.Crypto.Signers;
-using Org.BouncyCastle.Security;
+using HaelpMi.UpdateSigner;
 using Xunit;
 
 namespace HaelpMi.Core.Tests;
@@ -11,29 +7,32 @@ namespace HaelpMi.Core.Tests;
 /// <summary>
 /// Abschnitt 11: "nur signierte Programm-Updates werden von einem Client angenommen".
 /// Nutzt ein eigenes Wegwerf-Schlüsselpaar (nie den echten eingebetteten Produktions-
-/// schlüssel) über den 3-Parameter-Overload von <see cref="UpdatePackageVerifier.Verify(byte[], UpdatePackageManifest, byte[])"/>.
+/// schlüssel), erzeugt/signiert über <see cref="UpdateSigningOperations"/> - dieselbe Klasse,
+/// die auch HaelpMi.UpdateSigner (CLI) und HaelpMi.InstallCreator ("Update-Ei", 13.08.2026)
+/// verwenden. Damit sind das hier zugleich Round-Trip-Tests für den echten Signierpfad, nicht
+/// nur für die Verify-Seite: GenerateKeyPair -&gt; Sign -&gt; <see cref="UpdatePackageVerifier.Verify(byte[], UpdatePackageManifest, byte[])"/>.
 /// </summary>
 public class UpdatesTests
 {
-    private static (Ed25519PrivateKeyParameters Private, byte[] PublicKeyBytes) GenerateTestKeyPair()
+    private static (byte[] PrivateKey, byte[] PublicKeyBytes) GenerateTestKeyPair()
     {
-        var generator = new Ed25519KeyPairGenerator();
-        generator.Init(new Ed25519KeyGenerationParameters(new SecureRandom()));
-        var keyPair = generator.GenerateKeyPair();
-        var priv = (Ed25519PrivateKeyParameters)keyPair.Private;
-        var pub = (Ed25519PublicKeyParameters)keyPair.Public;
-        return (priv, pub.GetEncoded());
+        var pair = UpdateSigningOperations.GenerateKeyPair();
+        return (pair.PrivateKey, pair.PublicKey);
     }
 
-    private static UpdatePackageManifest SignPayload(byte[] payload, Ed25519PrivateKeyParameters privateKey, string version = "1.2.3")
+    private static UpdatePackageManifest SignPayload(byte[] payload, byte[] privateKey, string version = "1.2.3")
     {
-        var hash = SHA256.HashData(payload);
-        var signer = new Ed25519Signer();
-        signer.Init(true, privateKey);
-        signer.BlockUpdate(hash, 0, hash.Length);
-        var signature = signer.GenerateSignature();
+        var manifest = UpdateSigningOperations.Sign(payload, privateKey, version);
+        return new UpdatePackageManifest(manifest.Version, manifest.Sha256Hex, manifest.SignatureBase64, manifest.BuiltAtUtc);
+    }
 
-        return new UpdatePackageManifest(version, Convert.ToHexString(hash).ToLowerInvariant(), Convert.ToBase64String(signature), DateTimeOffset.UtcNow);
+    [Fact]
+    public void GenerateKeyPair_ProducesStandardEd25519KeyLengths()
+    {
+        var pair = UpdateSigningOperations.GenerateKeyPair();
+
+        Assert.Equal(32, pair.PrivateKey.Length);
+        Assert.Equal(32, pair.PublicKey.Length);
     }
 
     [Fact]

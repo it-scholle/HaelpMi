@@ -6,13 +6,13 @@
 // Verwendung:
 //   HaelpMi.UpdateSigner genkey <privateKeyOut.txt> <publicKeyOut.txt>
 //   HaelpMi.UpdateSigner sign <payload.zip> <privateKey.txt> <version> <manifestOut.json>
+//
+// Die eigentliche Ed25519-Logik liegt in UpdateSigningOperations.cs - HaelpMi.InstallCreator
+// ruft dieselben Methoden direkt in-process auf (ProjectReference), statt diese CLI als
+// Kindprozess zu starten, damit der private Schlüssel dort nie über eine Kommandozeile oder
+// eine temporäre Datei laufen muss.
 
-using System.Security.Cryptography;
-using System.Text.Json;
-using Org.BouncyCastle.Crypto.Generators;
-using Org.BouncyCastle.Crypto.Parameters;
-using Org.BouncyCastle.Crypto.Signers;
-using Org.BouncyCastle.Security;
+using HaelpMi.UpdateSigner;
 
 if (args.Length == 0)
 {
@@ -41,15 +41,10 @@ static int GenKey(string[] args)
         return 1;
     }
 
-    var generator = new Ed25519KeyPairGenerator();
-    generator.Init(new Ed25519KeyGenerationParameters(new SecureRandom()));
-    var keyPair = generator.GenerateKeyPair();
+    var keyPair = UpdateSigningOperations.GenerateKeyPair();
 
-    var privateKey = (Ed25519PrivateKeyParameters)keyPair.Private;
-    var publicKey = (Ed25519PublicKeyParameters)keyPair.Public;
-
-    File.WriteAllText(args[1], Convert.ToBase64String(privateKey.GetEncoded()));
-    File.WriteAllText(args[2], Convert.ToBase64String(publicKey.GetEncoded()));
+    File.WriteAllText(args[1], Convert.ToBase64String(keyPair.PrivateKey));
+    File.WriteAllText(args[2], Convert.ToBase64String(keyPair.PublicKey));
 
     Console.WriteLine("Schlüsselpaar erzeugt.");
     Console.WriteLine($"PRIVAT (niemals ins Repo, niemals loggen): {Path.GetFullPath(args[1])}");
@@ -71,25 +66,11 @@ static int Sign(string[] args)
     var manifestOutPath = args[4];
 
     var payload = File.ReadAllBytes(payloadPath);
-    var hash = SHA256.HashData(payload);
-
     var privateKeyBytes = Convert.FromBase64String(File.ReadAllText(privateKeyPath).Trim());
-    var privateKey = new Ed25519PrivateKeyParameters(privateKeyBytes, 0);
 
-    var signer = new Ed25519Signer();
-    signer.Init(true, privateKey);
-    signer.BlockUpdate(hash, 0, hash.Length);
-    var signature = signer.GenerateSignature();
+    var manifest = UpdateSigningOperations.Sign(payload, privateKeyBytes, version);
 
-    var manifest = new
-    {
-        Version = version,
-        Sha256Hex = Convert.ToHexString(hash).ToLowerInvariant(),
-        SignatureBase64 = Convert.ToBase64String(signature),
-        BuiltAtUtc = DateTimeOffset.UtcNow,
-    };
-
-    File.WriteAllText(manifestOutPath, JsonSerializer.Serialize(manifest, new JsonSerializerOptions { WriteIndented = true }));
+    File.WriteAllText(manifestOutPath, UpdateSigningOperations.ToManifestJson(manifest));
     Console.WriteLine($"Manifest geschrieben: {Path.GetFullPath(manifestOutPath)}");
     return 0;
 }

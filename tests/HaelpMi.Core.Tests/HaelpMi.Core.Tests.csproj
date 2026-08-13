@@ -17,6 +17,11 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\HaelpMi.Core\HaelpMi.Core.csproj" />
+    <!-- 13.08.2026 ("Update-Ei"): UpdatesTests.cs signiert jetzt über die echte
+         UpdateSigningOperations-Klasse statt eine eigene BouncyCastle-Kopie zu pflegen -
+         macht die bestehenden Verify-Tests nebenbei zu Round-Trip-Tests des echten
+         Signierpfads (siehe HaelpMi.InstallCreator/HaelpMi.UpdateSigner). -->
+    <ProjectReference Include="..\..\src\HaelpMi.UpdateSigner\HaelpMi.UpdateSigner.csproj" />
   </ItemGroup>
 
   <ItemGroup>
