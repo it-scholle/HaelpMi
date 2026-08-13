@@ -37,12 +37,6 @@
             <TextBlock x:Name="SenderSubText" FontSize="11" Foreground="Gray" Margin="20,0,20,4" />
             <TextBlock x:Name="TimestampText" FontSize="11" Foreground="Gray" Margin="20,0,20,12" />
 
-            <StackPanel Orientation="Horizontal" Margin="20,0,20,10">
-                <TextBlock Text="&#128266;" FontSize="16" Margin="0,0,8,0" />
-                <TextBlock Text="Signalton auf allen Lautsprechern - auch bei Stummschaltung oder Kopfhörer"
-                           FontSize="11" Foreground="Gray" TextWrapping="Wrap" MaxWidth="330" />
-            </StackPanel>
-
             <!-- FR-47/FR-51: Schwellwert-Status - wie viele Bestätigungen fehlen noch, bis das Fenster schließbar wird. -->
             <Border Background="#F4F6F6" CornerRadius="4" Margin="20,4,20,14" Padding="10,8">
                 <TextBlock x:Name="ThresholdStatusText" FontSize="12" TextWrapping="Wrap" Foreground="#34495E" />
