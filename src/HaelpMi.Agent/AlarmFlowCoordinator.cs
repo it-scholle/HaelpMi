@@ -148,7 +148,17 @@ public sealed class AlarmFlowCoordinator
         }
     }
 
-    /// <summary>"Testalarm an mich selbst senden" (FR-27): a single-wave send to our own listener via loopback, not a full repeating session.</summary>
+    /// <summary>
+    /// "Testalarm an mich selbst senden" (FR-27): eine echte <see cref="RepeatingAlarmSession"/>
+    /// mit sich selbst als einzigem Ziel, statt nur eines einzelnen Sende-Waves. Nutzervorgabe
+    /// 13.08.2026: der Selbsttest braucht immer nur die eigene Bestätigung und muss sich danach
+    /// sofort schließen lassen - unabhängig vom im Profil konfigurierten Schwellwert. Ein reiner
+    /// Einzel-Send (vorherige Fassung) hängte das Testfenster bis zum unbedingten 1-Minuten-
+    /// Auto-Close fest, weil niemand auf die eigene "bin unterwegs"-Antwort lauschte: nur eine
+    /// laufende RepeatingAlarmSession hört auf AlarmFeedbackChannel.OnMyWayReceived und schickt
+    /// danach den Status-Relay, der AlarmPopupWindow.UpdateOnTheWayCount (und damit den
+    /// Schließen-Button) freischaltet.
+    /// </summary>
     public async Task<bool> SendSelfTestAsync(AlarmProfile profile)
     {
         var identity = _identityProvider();
@@ -163,7 +173,32 @@ public sealed class AlarmFlowCoordinator
             TcpPort = AppConstants.AlarmTcpPort,
         };
 
-        var result = await _sender.SendAsync(profile, Guid.NewGuid(), identity, new[] { selfTarget });
-        return result.AckedCount > 0;
+        // Schwellwert für den Selbsttest hart auf 1 überschreiben (siehe Kommentar oben) - nur
+        // Id/Text werden auf diesem Pfad überhaupt gelesen (RepeatingAlarmSession/AlarmSender),
+        // RecipientAssignments/Hotkey/Name sind hier irrelevant, da das Ziel explizit selfTarget
+        // ist statt über den RecipientResolver aufgelöst zu werden.
+        var selfTestProfile = new AlarmProfile
+        {
+            Id = profile.Id,
+            Text = profile.Text,
+            ResponseThreshold = 1,
+        };
+
+        var session = new RepeatingAlarmSession(selfTestProfile, new[] { selfTarget }, identity, _sender, _feedbackChannel, DateTimeOffset.UtcNow);
+
+        // Nur auf die erste Ping-Welle warten (für den IPC-Rückgabewert "hat's angekommen?"),
+        // danach läuft die Session wie bei TriggerAlarmProfile im Hintergrund weiter, um auf die
+        // eigene Bestätigung zu warten und den Relay zu schicken, der das Fenster freischaltet.
+        var firstWaveAcked = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        void OnFirstStatus(object? _, AlarmSessionStatus status)
+        {
+            session.StatusChanged -= OnFirstStatus;
+            firstWaveAcked.TrySetResult(status.AckedCount > 0);
+        }
+        session.StatusChanged += OnFirstStatus;
+
+        _ = RunSessionAsync(session);
+
+        return await firstWaveAcked.Task;
     }
 }
