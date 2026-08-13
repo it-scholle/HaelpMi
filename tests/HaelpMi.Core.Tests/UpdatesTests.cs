@@ -1,5 +1,4 @@
 using System.Security.Cryptography;
-using HaelpMi.Core.Models;
 using HaelpMi.Core.Updates;
 using Org.BouncyCastle.Crypto.Generators;
 using Org.BouncyCastle.Crypto.Parameters;
@@ -96,37 +95,11 @@ public class UpdatesTests
         Assert.Equal(expectedNewer, UpdateOrchestrator.IsNewer(candidate, current));
     }
 
-    // --- UpdateOrchestrator.IsMyTurn: gestaffelte, kundengruppenweite Quote (Abschnitt 11,
-    // seit 04.08.2026 global statt pro Kreis - siehe EditScope.cs für den Hintergrund) ---
-
-    private static LiveIdentity MakeIdentity(Guid deviceId) =>
-        new(Guid.NewGuid(), deviceId, "PC", "User", "Raum", "1", Role.User, false, "1.0.0", 0);
-
-    [Fact]
-    public void IsMyTurn_False_WhenNoQuotaSet()
-    {
-        var identity = MakeIdentity(Guid.NewGuid());
-        var config = new SharedConfig(); // ApprovedDeviceQuota bleibt 0
-
-        Assert.False(UpdateOrchestrator.IsMyTurn(identity, config, new List<DeviceEntry>()));
-    }
-
-    [Fact]
-    public void IsMyTurn_True_ForTheFirstNDevicesInStableDeviceIdOrder()
-    {
-        var ids = Enumerable.Range(0, 4).Select(_ => Guid.NewGuid()).OrderBy(id => id).ToList();
-        var allDevices = ids.Select(id => new DeviceEntry { DeviceId = id }).ToList();
-        var config = new SharedConfig { UpdateRollout = new UpdateRolloutState { ApprovedDeviceQuota = 2 } };
-
-        // Wie im echten Betrieb: der Geräteliste-Provider liefert von JEDEM Gerät aus
-        // gesehen "alle ANDEREN" - das eigene Gerät fügt IsMyTurn selbst hinzu.
-        bool IsTurnFor(Guid deviceId) =>
-            UpdateOrchestrator.IsMyTurn(MakeIdentity(deviceId), config, allDevices.Where(d => d.DeviceId != deviceId).ToList());
-
-        // Die ersten beiden (Index 0,1) der stabil sortierten Geräte-IDs sind dran, die anderen beiden nicht.
-        Assert.True(IsTurnFor(ids[0]));
-        Assert.True(IsTurnFor(ids[1]));
-        Assert.False(IsTurnFor(ids[2]));
-        Assert.False(IsTurnFor(ids[3]));
-    }
+    // --- UpdateOrchestrator.IsMyTurn: entfernt am 13.08.2026 -------------------------------
+    // Testete das frühere gestaffelte Freigabekontingent (ApprovedDeviceQuota, "die ersten N
+    // Geräte in stabiler ID-Sortierung"). Nach der CLAUDE.md-Korrektur "Rollout-Freigabe"
+    // (11.08.2026) entfällt die Staffelung ersatzlos: der Admin gibt eine Version genau
+    // einmal frei, danach darf JEDES Gerät sie sofort ziehen (kein Kontingent-Gate mehr) -
+    // IsMyTurn und ApprovedDeviceQuota existieren im Code nicht mehr, damit sind auch diese
+    // Tests hinfällig.
 }

@@ -1383,8 +1383,7 @@ public partial class AdminDashboardWindow : Window
             var rollout = _config.UpdateRollout;
             ApprovedVersionText.Text = string.IsNullOrWhiteSpace(rollout.ApprovedVersion)
                 ? "Kein aktiver Rollout."
-                : $"Version {rollout.ApprovedVersion}, freigegeben für {rollout.ApprovedDeviceQuota} von {_deviceChoices.Count} Geräten.";
-            QuotaBox.Text = rollout.ApprovedDeviceQuota.ToString();
+                : $"Version {rollout.ApprovedVersion} freigegeben - verbreitet sich automatisch von Gerät zu Gerät weiter.";
         }
         finally
         {
@@ -1400,69 +1399,9 @@ public partial class AdminDashboardWindow : Window
             return;
         }
 
-        await SaveUpdateRolloutFieldAsync("Version freigegeben (Stufe 1)", _config.UpdateRollout.ApprovedVersion, version, cfg =>
+        await SaveUpdateRolloutFieldAsync("Version freigegeben", _config.UpdateRollout.ApprovedVersion, version, cfg =>
         {
             cfg.UpdateRollout.ApprovedVersion = version;
-            cfg.UpdateRollout.ApprovedDeviceQuota = 1;
-        });
-    }
-
-    private void QuotaBox_LostFocus(object sender, RoutedEventArgs e)
-    {
-        if (_isLoadingDetail)
-        {
-            return;
-        }
-
-        if (!int.TryParse(QuotaBox.Text.Trim(), out var newQuota) || newQuota < 0)
-        {
-            UpdatesStatusText.Text = "Kontingent muss eine ganze Zahl ≥ 0 sein - nicht gespeichert.";
-            return;
-        }
-
-        if (newQuota == _config.UpdateRollout.ApprovedDeviceQuota)
-        {
-            return;
-        }
-
-        _ = SaveUpdateRolloutFieldAsync("Freigabekontingent", _config.UpdateRollout.ApprovedDeviceQuota.ToString(), newQuota.ToString(), cfg =>
-        {
-            cfg.UpdateRollout.ApprovedDeviceQuota = newQuota;
-        });
-    }
-
-    // Nutzerwunsch: "Admin gibt Freigabestufen frei (z. B. 1 -> 2 -> 4 -> 8 Geräte)"
-    // (Anweisungen/claude-code-prompt-teil2-admin-update.md, Abschnitt 11) - Verdopplung
-    // gedeckelt auf die Gesamtzahl bekannter Geräte, ein größeres Kontingent hätte ohnehin
-    // keine zusätzliche Wirkung (UpdateOrchestrator.IsMyTurn).
-    private async void NextStageButton_Click(object sender, RoutedEventArgs e)
-    {
-        var current = _config.UpdateRollout.ApprovedDeviceQuota;
-        var deviceCount = Math.Max(1, _deviceChoices.Count);
-        var next = Math.Min(current <= 0 ? 1 : current * 2, deviceCount);
-        if (next == current)
-        {
-            return;
-        }
-
-        await SaveUpdateRolloutFieldAsync("Freigabekontingent - nächste Stufe", current.ToString(), next.ToString(), cfg =>
-        {
-            cfg.UpdateRollout.ApprovedDeviceQuota = next;
-        });
-    }
-
-    private async void StopRolloutButton_Click(object sender, RoutedEventArgs e)
-    {
-        var oldVersion = _config.UpdateRollout.ApprovedVersion;
-        if (string.IsNullOrWhiteSpace(oldVersion))
-        {
-            return; // schon kein aktiver Rollout
-        }
-
-        await SaveUpdateRolloutFieldAsync("Rollout gestoppt", oldVersion, null, cfg =>
-        {
-            cfg.UpdateRollout.ApprovedVersion = null;
-            cfg.UpdateRollout.ApprovedDeviceQuota = 0;
         });
     }
 
@@ -1482,19 +1421,4 @@ public partial class AdminDashboardWindow : Window
         }
     }
 
-    private async void UndoUpdatesButton_Click(object sender, RoutedEventArgs e)
-    {
-        try
-        {
-            var ok = await _context.Undo(EditScopeKind.UpdateRollout, AppConstants.UpdateRolloutScopeId);
-            UpdatesStatusText.Text = ok ? "Letzte Änderung rückgängig gemacht." : "Keine Änderung zum Rückgängigmachen vorhanden.";
-            ReloadAll();
-            LoadUpdatesTab();
-        }
-        catch (Exception ex)
-        {
-            UpdatesStatusText.Text = "Fehlgeschlagen - siehe Fehlermeldung.";
-            ActionErrorHandler.Show(this, "Update-Rollout-Änderung rückgängig machen", ex);
-        }
-    }
 }

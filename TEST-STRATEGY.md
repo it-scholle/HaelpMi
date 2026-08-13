@@ -153,8 +153,9 @@ geworfen" unterscheiden.
 - **Firewall-Regeln** — jetzt in `[Installer.Tests]` (A9) abgedeckt.
 - **Kreis-Isolation** — bereits als A11 vorhanden, aber es lohnt sich, das explizit als
   "nicht verhandelbar" (CLAUDE.md) zu markieren, nicht nur als Detail.
-- **Interop während gestaffeltem Rollout** (alte + neue Version gleichzeitig im Netz) —
-  fehlt komplett, auch als manueller Testfall. Ergänzt in `ALPHA-TESTPLAN.md` sinnvoll.
+- **Interop während laufender automatischer Weiterverteilung** (alte + neue Version
+  gleichzeitig im Netz, solange noch nicht jedes Gerät gebootet/gezogen hat) — fehlt
+  komplett, auch als manueller Testfall. Ergänzt in `ALPHA-TESTPLAN.md` sinnvoll.
 - **Update-Signatur-Ablehnung End-to-End** (nicht nur die reine Kryptoprüfung) — D5 deckt
   das konzeptionell ab, ist aber bewusst nicht automatisiert (siehe oben).
 - **CrashLogger-Zuverlässigkeit** — ob ein echter Crash wirklich geloggt wird, wurde diese

@@ -10,19 +10,20 @@ namespace HaelpMi.Core.Updates;
 /// <summary>
 /// Orchestriert die 0-Downtime-Update-Pipeline (Abschnitt 11) auf einem Gerät: hört auf
 /// <see cref="DiscoveryService.PeerVersionObserved"/> (bereits vorhandener Boot-Call-
-/// Mechanismus), entscheidet ob/wann dieses Gerät dran ist (Admin-Freigabe + gestaffelte
-/// Kreis-Quote + Kill-Switch-Sperre + zufälliger Jitter), zieht das Paket per P2P, lässt
-/// den privilegierten HaelpMi.UpdateService installieren/testen/swappen und wertet den
-/// eigenen Selbsttest sowie eine einfache Peer-Erreichbarkeits-Bestätigung aus, bevor der
-/// eigentliche Swap freigegeben wird.
+/// Mechanismus), entscheidet ob dieses Gerät aktualisieren darf (Admin-Freigabe genau
+/// dieser Version + Kill-Switch-Sperre + zufälliger Jitter - siehe CLAUDE.md
+/// "Rollout-Freigabe"), zieht das Paket per P2P, lässt den privilegierten
+/// HaelpMi.UpdateService installieren/testen/swappen und wertet den eigenen Selbsttest
+/// sowie eine einfache Peer-Erreichbarkeits-Bestätigung aus, bevor der eigentliche Swap
+/// freigegeben wird. Kein Freigabekontingent mehr: sobald der Admin eine Version einmal
+/// freigegeben hat, darf jedes Gerät, das die neuere Version bei einem Peer sieht,
+/// sofort (nach Jitter) selbst aktualisieren und verbreitet sie danach über den eigenen
+/// nächsten Boot-Call automatisch weiter.
 ///
-/// Vereinfachungen ggü. einem vollständigen Ausbau (bewusst, siehe CLAUDE.md "kein
-/// Over-Engineering" - hier nicht weiter spezifiziert):
-/// - "Peer-Bestätigung" ist ein reiner TCP-Erreichbarkeits-Handshake zu einem beliebigen
-///   bekannten Gerät (Alarm-Port), kein vollständiger "Peer führt denselben Testlauf
-///   selbst nochmal aus"-Runde.
-/// - Die Kreis-Quote bestimmt "wer ist dran" über eine stabile Sortierung der Geräte-IDs
-///   im Kreis, nicht über eine vom Admin einzeln kuratierte Geräteliste.
+/// Vereinfachung ggü. einem vollständigen Ausbau (bewusst, siehe CLAUDE.md "kein
+/// Over-Engineering" - hier nicht weiter spezifiziert): "Peer-Bestätigung" ist ein reiner
+/// TCP-Erreichbarkeits-Handshake zu einem beliebigen bekannten Gerät (Alarm-Port), kein
+/// vollständiger "Peer führt denselben Testlauf selbst nochmal aus"-Runde.
 /// </summary>
 public sealed class UpdateOrchestrator
 {
@@ -88,10 +89,6 @@ public sealed class UpdateOrchestrator
             }
 
             var devices = _deviceListProvider();
-            if (!IsMyTurn(identity, config, devices))
-            {
-                return; // Kreis-Quote für diese Version noch nicht erreicht
-            }
 
             var jitterSeconds = Random.Shared.Next(AppConstants.UpdatePullJitter.MinSeconds, AppConstants.UpdatePullJitter.MaxSeconds + 1);
             await Task.Delay(TimeSpan.FromSeconds(jitterSeconds));
@@ -136,26 +133,6 @@ public sealed class UpdateOrchestrator
             }
         }
         return false;
-    }
-
-    // War früher pro Kreis gestaffelt (Dictionary&lt;CircleId, Quota&gt;) - mit dem Wegfall
-    // des Kreis-Konzepts (04.08.2026, siehe EditScope.cs) auf eine einzige kundengruppen-
-    // weite Quote vereinfacht: die ersten N Geräte (stabile Sortierung nach Geräte-ID)
-    // dürfen aktualisieren.
-    internal static bool IsMyTurn(LiveIdentity identity, SharedConfig config, IReadOnlyList<DeviceEntry> devices)
-    {
-        var quota = config.UpdateRollout.ApprovedDeviceQuota;
-        if (quota <= 0)
-        {
-            return false;
-        }
-
-        var allIds = devices.Select(d => d.DeviceId).ToHashSet();
-        allIds.Add(identity.DeviceId); // die eigene Geräteliste kennt das eigene Gerät nicht als "anderes Gerät"
-
-        var ordered = allIds.OrderBy(id => id).ToList();
-        var myIndex = ordered.IndexOf(identity.DeviceId);
-        return myIndex >= 0 && myIndex < quota;
     }
 
     private async Task<bool> AttemptUpdateAsync(PeerVersionInfo info, IReadOnlyList<DeviceEntry> devices)

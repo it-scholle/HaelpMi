@@ -18,9 +18,9 @@ namespace HaelpMi.Core.Updates;
 /// App-internes Rollenkonzept.
 ///
 /// Setzt NICHT <see cref="Models.SharedConfig.UpdateRollout"/> - die eigentliche Freigabe,
-/// dass andere Geräte diese Version überhaupt pullen dürfen, bleibt ein bewusster
-/// Admin-Klick im Dashboard (CLAUDE.md: "Rollout ist gestaffelt und wird vom Admin
-/// freigegeben, nicht unkontrolliert lauffeuerartig").
+/// dass andere Geräte diese Version überhaupt pullen dürfen, bleibt ein bewusster,
+/// einmaliger Admin-Klick im Dashboard (CLAUDE.md: "der Admin gibt das Update genau
+/// einmal frei"); danach verbreitet sich die Version automatisch weiter.
 /// </summary>
 public static class UpdateSeedImporter
 {

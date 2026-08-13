@@ -321,17 +321,17 @@
                 </Grid>
             </TabItem>
 
-            <!-- Updates (Nutzerwunsch 09.08.2026): "vollautomatisch, sobald der Admin sich
-                 selbst aktualisiert hat" - aber der Freigabe-Klick hier bleibt Pflicht
-                 (CLAUDE.md: "Rollout ist gestaffelt und wird vom Admin freigegeben, nicht
-                 unkontrolliert lauffeuerartig"). Alles danach (Boot-Erkennung, P2P-Pull,
-                 Weiterverteilung, Background-Install ohne erneuten UAC-Prompt) läuft ohne
-                 weiteres Zutun - siehe UpdateOrchestrator/UpdateServiceWorker. -->
+            <!-- Updates (Nutzerwunsch 09.08.2026, Rollout-Freigabe korrigiert 13.08.2026):
+                 der Freigabe-Klick hier bleibt Pflicht (CLAUDE.md: "der Admin gibt das
+                 Update genau einmal frei"). Alles danach (Boot-Erkennung, P2P-Pull,
+                 automatische Weiterverteilung von Gerät zu Gerät ohne Freigabekontingent,
+                 Background-Install ohne erneuten UAC-Prompt) läuft ohne weiteres Zutun -
+                 siehe UpdateOrchestrator/UpdateServiceWorker. -->
             <TabItem x:Name="UpdatesTabItem" Header="Updates">
                 <StackPanel Margin="10" x:Name="UpdatesPanel" IsEnabled="False">
                     <TextBlock Text="Programm-Updates" FontSize="16" FontWeight="Bold" Margin="0,0,0,4" />
                     <TextBlock TextWrapping="Wrap" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,0,14"
-                               Text="Geräte ziehen eine neue Version erst, nachdem sie hier freigegeben ist - kein automatischer Rollout ohne diesen Klick." />
+                               Text="Geräte ziehen eine neue Version erst, nachdem sie hier freigegeben ist - kein automatischer Rollout ohne diesen Klick. Danach verbreitet sie sich von Gerät zu Gerät vollautomatisch weiter." />
 
                     <TextBlock Text="Eigene, gerade laufende Version" FontWeight="SemiBold" />
                     <TextBlock x:Name="OwnVersionText" Margin="0,4,0,14" />
@@ -340,7 +340,7 @@
                     <TextBlock x:Name="AvailableVersionsText" Margin="0,4,0,6" TextWrapping="Wrap" Foreground="{StaticResource TextSecondaryBrush}" />
                     <DockPanel Margin="0,0,0,14" LastChildFill="False">
                         <ComboBox DockPanel.Dock="Left" x:Name="AvailableVersionsCombo" MinWidth="120" />
-                        <Button DockPanel.Dock="Left" x:Name="ReleaseVersionButton" Content="Freigeben (Stufe 1)" Margin="8,0,0,0" Padding="14,6"
+                        <Button DockPanel.Dock="Left" x:Name="ReleaseVersionButton" Content="Freigeben" Margin="8,0,0,0" Padding="14,6"
                                 Background="{StaticResource SuccessBrush}" Foreground="White" BorderThickness="0" Click="ReleaseVersionButton_Click" />
                     </DockPanel>
 
@@ -348,17 +348,6 @@
 
                     <TextBlock Text="Aktueller Rollout" FontWeight="SemiBold" />
                     <TextBlock x:Name="ApprovedVersionText" Margin="0,4,0,10" TextWrapping="Wrap" />
-
-                    <StackPanel Width="220" HorizontalAlignment="Left">
-                        <TextBlock Text="Freigabekontingent (Geräteanzahl)" FontWeight="SemiBold" TextWrapping="Wrap" />
-                        <TextBox x:Name="QuotaBox" Padding="4" Margin="0,4,0,0" LostFocus="QuotaBox_LostFocus" />
-                    </StackPanel>
-
-                    <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
-                        <Button x:Name="NextStageButton" Content="Nächste Stufe (verdoppeln)" Padding="14,6" Margin="0,0,8,0" Click="NextStageButton_Click" />
-                        <Button x:Name="StopRolloutButton" Content="Rollout stoppen" Padding="14,6" Margin="0,0,8,0" Click="StopRolloutButton_Click" />
-                        <Button x:Name="UndoUpdatesButton" Content="Rückgängig" Padding="14,6" Click="UndoUpdatesButton_Click" />
-                    </StackPanel>
                     <TextBlock x:Name="UpdatesStatusText" Margin="0,8,0,0" Foreground="Gray" TextWrapping="Wrap" />
                 </StackPanel>
             </TabItem>

@@ -22,27 +22,20 @@ public sealed class SharedConfig
 
     public Dictionary<Guid, DeviceAssignment> DeviceAssignments { get; set; } = new();
 
-    /// <summary>Admin-gesteuerte Freigabe/Staffelung für Programm-Updates (Abschnitt 11).</summary>
+    /// <summary>Admin-gesteuerte Freigabe für Programm-Updates (Abschnitt 11).</summary>
     public UpdateRolloutState UpdateRollout { get; set; } = new();
 }
 
 /// <summary>
-/// "Rollout ist gestaffelt und wird vom Admin freigegeben, nicht unkontrolliert
-/// lauffeuerartig" (CLAUDE.md). Kein aktives Rollout (<see cref="ApprovedVersion"/> leer)
-/// heißt: kein Gerät darf über die Update-Pipeline automatisch aktualisieren, ganz gleich
-/// welche neuere Version es bei einem Peer sieht.
+/// "Der Admin gibt das Update genau einmal frei. Ab da verbreitet sich das Update
+/// vollautomatisch von Gerät zu Gerät weiter" (CLAUDE.md, Rollout-Freigabe korrigiert
+/// 11.08.2026 - ersetzt das frühere gestaffelte Freigabekontingent). Kein aktives Rollout
+/// (<see cref="ApprovedVersion"/> leer) heißt: kein Gerät darf über die Update-Pipeline
+/// automatisch aktualisieren, ganz gleich welche neuere Version es bei einem Peer sieht.
+/// Sobald eine Version hier freigegeben ist, darf jedes Gerät sie ziehen und beim eigenen
+/// nächsten Boot-Call weiterverteilen - kein Kontingent, keine Zwischenstufen.
 /// </summary>
 public sealed class UpdateRolloutState
 {
     public string? ApprovedVersion { get; set; }
-
-    /// <summary>
-    /// Wie viele Geräte insgesamt (kundengruppenweit) gerade aktualisieren dürfen. Admin
-    /// steigert schrittweise (Beispiel aus Abschnitt 11: 1 -&gt; 2 -&gt; 4 -&gt; 8); welche
-    /// konkreten Geräte "die ersten N" sind, wird deterministisch über eine stabile
-    /// Sortierung der Geräte-IDs entschieden (siehe UpdateOrchestrator), nicht über eine
-    /// vom Admin einzeln kuratierte Geräteliste. War früher pro Kreis gestaffelt - mit dem
-    /// Wegfall des Kreis-Konzepts (04.08.2026) global vereinfacht.
-    /// </summary>
-    public int ApprovedDeviceQuota { get; set; }
 }
