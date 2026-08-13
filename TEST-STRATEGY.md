@@ -7,6 +7,9 @@ bestehenden Dateien, sondern verbindet sie:
 - `tests/HaelpMi.Core.Tests/` — coded, läuft bei jedem `dotnet test`, keine Systemänderung.
 - `tests/HaelpMi.Installer.Tests/` — coded, **verändert das ausführende System** (Program
   Files, ProgramData, Dienste, Registry, Firewall-Regeln). Siehe Warnhinweis dort.
+- `tests/HaelpMi.Audio.Tests/` — coded, **spielt hörbar den echten Alarmton auf jedem
+  aktiven Wiedergabegerät ab** (seit 13.08.2026 aus `HaelpMi.Core.Tests` ausgelagert,
+  siehe README dort). Läuft ebenfalls nicht automatisch bei jedem `dotnet test`.
 - `ALPHA-TESTPLAN.md` — manuelle Checkliste für alles, was (noch) nicht coded ist
   (UI-Erreichbarkeit, Ton, erzwungener Vordergrund). Wird schrittweise kleiner, je mehr
   hier automatisiert wird.
@@ -132,7 +135,7 @@ geworfen" unterscheiden.
 
 | # | Test | Aktuell |
 |---|---|---|
-| F0 🔹 | `PlayOnAllActiveDevicesAsync` kehrt in begrenzter Zeit zurück, hängt sich nie auf | ✅ (07.08.2026, `AudioTests.cs` - Regressionstest für live gefundenen Hang: NAudios `SampleToWaveProvider` + `WasapiOut.Dispose()` blieben auf mind. einer Testumgebung unbegrenzt hängen, siehe Kommentar in `MultiDeviceAlarmPlayer.cs`) |
+| F0 🔹 | `PlayOnAllActiveDevicesAsync` kehrt in begrenzter Zeit zurück, hängt sich nie auf | ✅ (07.08.2026, `[Audio.Tests]` - Regressionstest für live gefundenen Hang: NAudios `SampleToWaveProvider` + `WasapiOut.Dispose()` blieben auf mind. einer Testumgebung unbegrenzt hängen, siehe Kommentar in `MultiDeviceAlarmPlayer.cs`. Seit 13.08.2026 in einem eigenen Projekt statt in `HaelpMi.Core.Tests` - spielt hörbar echten Ton ab, siehe README dort) |
 | F1 | Ton wird beim Alarmempfang tatsächlich HÖRBAR abgespielt (Loopback-Aufnahme zeigt Audiopegel) | Manuell — F0 prüft nur "hängt nicht/wirft nicht", nicht "war wirklich etwas zu hören" |
 | F2 | Ton wird auch bei stummgeschaltetem Standard-Windows-Ausgabegerät abgespielt (Mehrgeräte-Ausgabe, NAudio) | Manuell — der unsicherste Punkt im ganzen Testplan |
 | F3 | Korrekter Ton je `IncomingSoundId` wird gewählt | Teilweise coded (`IncomingSoundCatalog_Resolve_FallsBackToFirstOption_ForUnknownId`), Wiedergabe selbst nicht |

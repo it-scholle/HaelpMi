@@ -176,9 +176,12 @@ Vorlage: `docs/WORKFLOW.md`.
 
 ## Tests
 - Aktive automatisierte Suite: `tests/HaelpMi.Core.Tests` (xUnit, läuft bei jedem `dotnet test`,
-  keine Systemänderung) und `tests/HaelpMi.Installer.Tests` (xUnit, **verändert das ausführende
+  keine Systemänderung), `tests/HaelpMi.Installer.Tests` (xUnit, **verändert das ausführende
   System** — Program Files, ProgramData, Dienste, Registry, Firewall-Regeln, läuft nicht
-  automatisch mit). `TEST-STRATEGY.md` ist die Quelle der Wahrheit für Umfang und Gates,
+  automatisch mit) und `tests/HaelpMi.Audio.Tests` (xUnit, **spielt hörbar den echten Alarmton
+  auf jedem aktiven Wiedergabegerät ab** — seit 13.08.2026 aus `HaelpMi.Core.Tests` ausgelagert,
+  nachdem genau das unregelmäßig und ungefragt auf einer Session-VM piepte; läuft ebenfalls
+  nicht automatisch mit). `TEST-STRATEGY.md` ist die Quelle der Wahrheit für Umfang und Gates,
   `ALPHA-TESTPLAN.md` deckt das (noch) nicht Automatisierte manuell ab.
 - Jedes neue Feature bekommt mindestens formulierte Testfälle, im besten Fall geschriebene und
   ausgeführte automatisierte Tests.
