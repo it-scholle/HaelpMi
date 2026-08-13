@@ -250,6 +250,19 @@ public partial class MainWindow : Window
 
     // --- Vaultwarden / Update-Signatur (Nutzerwunsch 13.08.2026, "Update-Ei") ---------------
 
+    // Server-URL/E-Mail bleiben eingeklappt, bis man sie braucht (Nutzerwunsch 13.08.2026,
+    // zweite Runde: Panel sitzt neben dem Protokoll statt in der Vaultwarden-Karte selbst) -
+    // reines Ein-/Ausblenden, kein eigener Zustand nötig, die Textboxen selbst behalten ihren
+    // Inhalt unabhängig von der Sichtbarkeit. Die "*"-Protokoll-Spalte schrumpft dabei von
+    // selbst (siehe Grid.ColumnDefinitions in MainWindow.xaml), ohne dass hier eine Breite
+    // gesetzt werden muss.
+    private void VaultwardenCredentialsToggle_Click(object sender, RoutedEventArgs e)
+    {
+        var show = VaultwardenCredentialsPanel.Visibility != Visibility.Visible;
+        VaultwardenCredentialsPanel.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
+        VaultwardenCredentialsToggle.Content = show ? "Konto schließen" : "Konto";
+    }
+
     private async void VaultwardenUnlockButton_Click(object sender, RoutedEventArgs e)
     {
         var serverUrl = VaultwardenServerBox.Text.Trim();
