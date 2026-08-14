@@ -51,16 +51,23 @@
                 <Border Background="{StaticResource CardBackgroundBrush}" BorderBrush="{StaticResource HairlineBrush}"
                         BorderThickness="1" CornerRadius="12" Padding="16">
                     <StackPanel>
-                        <CheckBox x:Name="TestInstallerCheckBox" IsChecked="True" Margin="0,0,0,16"
-                                  Content="Test-Installer (kein Passwort nötig - für internes Testen, niemals an einen Kunden ausliefern)" />
+                        <!-- Nutzerwunsch 15.08.2026: Klammer-Erklärungen raus, die selbsterklärend
+                             sind (was "Test-Installer"/"Update-Ei" tun, steht bei Bedarf nur noch
+                             im Tooltip, nicht mehr fest im sichtbaren Text) - dafür beide Häkchen
+                             nebeneinander statt untereinander, kompakter. -->
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                            <CheckBox x:Name="TestInstallerCheckBox" IsChecked="True" Margin="0,0,24,0"
+                                      Content="Test-Installer"
+                                      ToolTip="Kein Passwort nötig - für internes Testen, niemals an einen Kunden ausliefern." />
 
-                        <!-- "Update-Ei" (Nutzerwunsch 13.08.2026): ersetzt den bisherigen manuellen
-                             Schritt 1b aus BUILD-UND-INSTALLATION.md. Deaktiviert, solange kein
-                             Schlüssel geladen ist (siehe "Vaultwarden"-Reiter rechts) - Hover-Text
-                             exakt wie vorgegeben, unverändert auch im deaktivierten Zustand. -->
-                        <CheckBox x:Name="UpdateEggCheckBox" Margin="0,0,0,4" IsEnabled="False"
-                                  Content="Update-Ei"
-                                  ToolTip="Wenn angehakt wird die Update Datei für den automatischen Rollout im Installer angefügt." />
+                            <!-- "Update-Ei" (Nutzerwunsch 13.08.2026): ersetzt den bisherigen manuellen
+                                 Schritt 1b aus BUILD-UND-INSTALLATION.md. Deaktiviert, solange kein
+                                 Schlüssel geladen ist (siehe "Vaultwarden"-Reiter rechts) - Hover-Text
+                                 exakt wie vorgegeben, unverändert auch im deaktivierten Zustand. -->
+                            <CheckBox x:Name="UpdateEggCheckBox" IsEnabled="False"
+                                      Content="Update-Ei"
+                                      ToolTip="Wenn angehakt wird die Update Datei für den automatischen Rollout im Installer angefügt." />
+                        </StackPanel>
                         <TextBlock x:Name="UpdateEggHintText" Foreground="{StaticResource TextSecondaryBrush}" FontSize="11"
                                    TextWrapping="Wrap" Margin="0,0,0,16"
                                    Text="Braucht einen geladenen Update-Schlüssel (siehe &quot;Vaultwarden&quot;-Reiter rechts)." />
