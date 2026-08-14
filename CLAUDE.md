@@ -190,7 +190,18 @@ mehr vorkommen.
 auf `main` wie bisher — dort bist du selbst schon die Freigabe in Echtzeit, ein Branch+Rebase-Umweg
 wäre Prozess ohne Gegenwert für diesen Fall.
 
-Bezieht sich ausschließlich auf lokale Git-Operationen: `git push` in ein Remote gibt es nicht.
+**Remote (seit 14.08.2026):** Es gibt jetzt ein GitHub-Remote (`origin` →
+https://github.com/it-scholle/HaelpMi, HTTPS-Auth über Windows Credential Manager/PAT). Der
+Satz weiter oben in dieser Datei bezog sich noch auf den remote-losen Vorzustand — überholt, siehe
+Hinweis am Dateianfang zu veralteten Architektur-Annahmen. Gültige Regel ab jetzt: **jeder Commit
+auf `main`** — ob interaktiv direkt gesetzt oder von einer Background-/Worktree-Session per
+Rebase + `merge --ff-only` nachgezogen — **wird im Anschluss automatisch auch nach `origin/main`
+gepusht**, ohne Rückfrage. Gleiche Freigabe-Logik wie beim lokalen Merge oben: das grüne
+Testergebnis, das den Merge auf `main` erlaubt, erlaubt auch den Push. Ausnahmen wie dort
+(Tests bleiben rot, Konflikt nicht regelbasiert lösbar) gelten sinngemäß auch fürs Pushen, plus
+zusätzlich: schlägt der Push selbst fehl (z. B. Auth, `rejected`/nicht fast-forward, weil
+`origin/main` inzwischen abweicht), wird nicht automatisch force-gepusht — dann nachfragen statt
+zu raten, aus demselben Grund wie bei Rebase-Konflikten.
 
 ## Status-Updates
 Bei aktiver Branch-/Versions-/Git-Arbeit wird der Stand als Pipe/Dash-Tabelle zusammengefasst

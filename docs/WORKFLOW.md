@@ -85,12 +85,17 @@ Selbstkorrektur-Versuchen rot (siehe unten), oder ein Rebase-Konflikt lässt sic
 Regel unter "Versionsnummer-Kollisionen" auflösen. Außerhalb dieser zwei Fälle gilt die Freigabe
 uneingeschränkt.
 
-Diese automatische Freigabe deckt ausschließlich die lokale Integration ab: `git rebase`,
-`git merge --ff-only`, Versions-Bump + Git-Tag - alles innerhalb dieses lokalen Repos, auf
-diesem Rechner. `git push` in ein Remote gibt es nicht.
+Diese automatische Freigabe deckte ursprünglich ausschließlich die lokale Integration ab:
+`git rebase`, `git merge --ff-only`, Versions-Bump + Git-Tag - alles innerhalb dieses lokalen
+Repos, auf diesem Rechner. **Seit 14.08.2026 gibt es ein Remote** (`origin`, siehe CLAUDE.md
+Abschnitt "Versionierung") und die Freigabe schließt den Push mit ein: jeder so integrierte
+Commit auf `main` wird im Anschluss automatisch nach `origin/main` gepusht, ohne Rückfrage.
 
 Schlagen die Tests fehl, gilt die normale Eskalation: bis zu drei Selbstkorrektur-Versuche,
-danach Rückfrage statt automatischer Integration eines rot laufenden Standes.
+danach Rückfrage statt automatischer Integration eines rot laufenden Standes. Schlägt stattdessen
+der Push selbst fehl (Auth-Fehler, oder `origin/main` ist inzwischen nicht mehr fast-forward),
+wird nicht automatisch force-gepusht, sondern nachgefragt - lokal ist der Stand dann trotzdem
+schon integriert, es geht nur um den Push selbst.
 
 ## Ablauf pro Aufgabe/Feature
 
