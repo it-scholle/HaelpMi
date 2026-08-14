@@ -28,6 +28,12 @@ public partial class MainWindow : Window
     private byte[]? _updatePrivateKeyBytes;
     private readonly string _productVersion;
 
+    // Fensterbreite folgt dem Reiter-Zustand (Nutzerkorrektur 15.08.2026, sechste Runde): nicht
+    // nur der Inhalt, das ganze Fenster ist eingeklappt schmal - siehe
+    // UpdateWindowWidthForTabState und den Kommentar am Fensteranfang in MainWindow.xaml.
+    private const double CollapsedWindowWidth = 540;
+    private const double ExpandedWindowWidth = 1000;
+
     public MainWindow()
     {
         InitializeComponent();
@@ -254,6 +260,7 @@ public partial class MainWindow : Window
         var show = VaultwardenPanel.Visibility != Visibility.Visible;
         VaultwardenPanel.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
         LogPanel.Visibility = Visibility.Collapsed;
+        UpdateWindowWidthForTabState();
 
         // Fokus nur, wenn diese Sitzung noch nicht entsperrt hat (Nutzerkorrektur 15.08.2026,
         // fünfte Runde) - VaultwardenLockedPanel/VaultwardenUnlockedPanel behalten ihren
@@ -263,6 +270,23 @@ public partial class MainWindow : Window
         {
             VaultwardenPasswordBox.Focus();
         }
+    }
+
+    // Nicht nur der Inhalt, das ganze Fenster klappt mit ein (Nutzerkorrektur 15.08.2026, sechste
+    // Runde) - siehe Kommentar am Fensteranfang in MainWindow.xaml. Left wird um die halbe
+    // Breitendifferenz verschoben, damit das Fenster beim Wachsen/Schrumpfen horizontal zentriert
+    // bleibt statt nur nach rechts zu wandern.
+    private void UpdateWindowWidthForTabState()
+    {
+        var anyPanelOpen = VaultwardenPanel.Visibility == Visibility.Visible || LogPanel.Visibility == Visibility.Visible;
+        var targetWidth = anyPanelOpen ? ExpandedWindowWidth : CollapsedWindowWidth;
+        if (targetWidth == Width)
+        {
+            return;
+        }
+
+        Left -= (targetWidth - Width) / 2;
+        Width = targetWidth;
     }
 
     // Grundeinstellungen (Server-URL/E-Mail) hinter dem Zahnrad - reines Ein-/Ausblenden,
@@ -279,6 +303,7 @@ public partial class MainWindow : Window
         var show = LogPanel.Visibility != Visibility.Visible;
         LogPanel.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
         VaultwardenPanel.Visibility = Visibility.Collapsed;
+        UpdateWindowWidthForTabState();
     }
 
     private async void VaultwardenUnlockButton_Click(object sender, RoutedEventArgs e)
