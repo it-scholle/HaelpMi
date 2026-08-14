@@ -5,16 +5,16 @@
         Width="1000" Height="640"
         ResizeMode="NoResize"
         WindowStartupLocation="CenterScreen">
-    <!-- Zurück zur ursprünglichen 0.20-Aufteilung (Nutzerkorrektur 13.08.2026, dritte Runde):
-         die Vaultwarden-Karte steht nicht mehr permanent in der linken Spalte - sie war dort
-         Hauptgrund für Scroll-/Spalten-Umbauten der letzten beiden Versionen. Jetzt ist sie
-         komplett versteckt, ein kleiner Schlüssel-Icon-Knopf oben rechts (VaultwardenToggleButton)
-         blendet VaultwardenPanel ein/aus. Das Panel liegt dabei NICHT neben, sondern ÜBER dem
-         Protokoll, im selben rechten Bereich - horizontal geteilt wie bei einem Tiling-
-         Fenstermanager (ein Feld oben, eins unten), nicht nebeneinander wie in der vorherigen
-         Fassung. Dadurch braucht die linke Spalte (nur noch Build-Einstellungen + Buttons) auch
-         ohne ScrollViewer keine Höhe mehr zu sparen - Fenstermaße deshalb wieder wie im
-         ursprünglichen 0.20-Stand (1000x640). -->
+    <!-- Rechter Reiter-Streifen nach Vorbild tomedo (Nutzerwunsch 14.08.2026, vierte Runde;
+         Referenz-Screenshot Z:\Bildschirmfoto 2026-08-14 um 12.10.59.JPG - dort ein einzelner,
+         um 90° gedrehter "Forum"-Reiter am rechten Fensterrand): Vaultwarden-Karte UND Protokoll
+         sind jetzt beide einklappbar und teilen sich denselben Inhaltsbereich - es ist immer nur
+         eins von beiden sichtbar, nie beide gleichzeitig. Zwei ebenfalls gedrehte Reiter
+         (VaultwardenTabButton oben, LogsTabButton darunter) im schmalen Streifen ganz rechts
+         schalten um; erneutes Klicken auf den gerade aktiven Reiter klappt ihn wieder ein (dann
+         ist der Inhaltsbereich leer, genau wie im tomedo-Referenzbild). Die reguläre Vaultwarden-
+         Kartenansicht selbst ist unverändert vom vorherigen Stand übernommen - deren inhaltliche
+         Überarbeitung ist bewusst ausgeklammert (folgt separat). -->
     <Window.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
@@ -29,33 +29,14 @@
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <Grid Grid.Row="0">
-            <StackPanel Orientation="Horizontal">
-                <Image Source="Assets/haelpmi_icon.ico" Width="36" Height="36" Margin="0,0,12,0" />
-                <StackPanel VerticalAlignment="Center">
-                    <TextBlock Text="HälpMi Install-Creator" FontSize="19" FontWeight="Bold" />
-                    <TextBlock Foreground="{StaticResource TextSecondaryBrush}" FontSize="11"
-                               Text="Entwickler-Werkzeug - nicht Teil der Kunden-Auslieferung" />
-                </StackPanel>
+        <StackPanel Grid.Row="0" Orientation="Horizontal">
+            <Image Source="Assets/haelpmi_icon.ico" Width="36" Height="36" Margin="0,0,12,0" />
+            <StackPanel VerticalAlignment="Center">
+                <TextBlock Text="HälpMi Install-Creator" FontSize="19" FontWeight="Bold" />
+                <TextBlock Foreground="{StaticResource TextSecondaryBrush}" FontSize="11"
+                           Text="Entwickler-Werkzeug - nicht Teil der Kunden-Auslieferung" />
             </StackPanel>
-
-            <!-- Schlüssel-Icon statt Textknopf (Nutzerwunsch 13.08.2026, dritte Runde; siehe
-                 auch haelpmi-icon-button-preference-Notiz): Bart (kurze Linie mit zwei Zähnen)
-                 an einem runden Griff (Ellipse) - einziger Einstiegspunkt zur kompletten
-                 Vaultwarden-Karte, die sonst nirgends mehr sichtbar ist. -->
-            <Button x:Name="VaultwardenToggleButton" HorizontalAlignment="Right" VerticalAlignment="Top"
-                    Width="32" Height="32" Padding="0"
-                    ToolTip="Update-Signatur (Vaultwarden) öffnen/schließen"
-                    Click="VaultwardenToggleButton_Click">
-                <Grid Width="16" Height="16">
-                    <Ellipse Width="7" Height="7" Stroke="{StaticResource TextPrimaryBrush}" StrokeThickness="1.4"
-                             HorizontalAlignment="Left" VerticalAlignment="Center" />
-                    <Line X1="6" Y1="8" X2="15" Y2="8" Stroke="{StaticResource TextPrimaryBrush}" StrokeThickness="1.4" />
-                    <Line X1="11" Y1="8" X2="11" Y2="12" Stroke="{StaticResource TextPrimaryBrush}" StrokeThickness="1.4" />
-                    <Line X1="14" Y1="8" X2="14" Y2="11" Stroke="{StaticResource TextPrimaryBrush}" StrokeThickness="1.4" />
-                </Grid>
-            </Button>
-        </Grid>
+        </StackPanel>
 
         <Grid Grid.Row="2">
             <Grid.ColumnDefinitions>
@@ -75,14 +56,14 @@
 
                         <!-- "Update-Ei" (Nutzerwunsch 13.08.2026): ersetzt den bisherigen manuellen
                              Schritt 1b aus BUILD-UND-INSTALLATION.md. Deaktiviert, solange kein
-                             Schlüssel geladen ist (siehe Schlüssel-Icon oben rechts) - Hover-Text
+                             Schlüssel geladen ist (siehe "Vaultwarden"-Reiter rechts) - Hover-Text
                              exakt wie vorgegeben, unverändert auch im deaktivierten Zustand. -->
                         <CheckBox x:Name="UpdateEggCheckBox" Margin="0,0,0,4" IsEnabled="False"
                                   Content="Update-Ei"
                                   ToolTip="Wenn angehakt wird die Update Datei für den automatischen Rollout im Installer angefügt." />
                         <TextBlock x:Name="UpdateEggHintText" Foreground="{StaticResource TextSecondaryBrush}" FontSize="11"
                                    TextWrapping="Wrap" Margin="0,0,0,16"
-                                   Text="Braucht einen geladenen Update-Schlüssel (siehe Schlüssel-Icon oben rechts)." />
+                                   Text="Braucht einen geladenen Update-Schlüssel (siehe &quot;Vaultwarden&quot;-Reiter rechts)." />
 
                         <TextBlock Text="Kundenname (Pflicht bei Produktiv-Installer; bei Test-Installer optionale Bezeichnung z. B. &quot;Testgruppe 3&quot;)"
                                    FontWeight="SemiBold" TextWrapping="Wrap" FontSize="12" />
@@ -217,25 +198,22 @@
                 </Border>
             </StackPanel>
 
-            <!-- Spalte 2: Protokoll, darüber bei Bedarf das Vaultwarden-Panel - horizontal
-                 geteilt (Nutzerwunsch 13.08.2026, dritte Runde), nicht nebeneinander. Row 0 ist
-                 "Auto" und nimmt bei Visibility="Collapsed" keinen Platz ein - das Protokoll
-                 darunter (Row 1, "*") füllt dann automatisch wieder die volle Höhe, ganz genau
-                 wie bei den Auto-Spalten-Tricks in den vorherigen Fassungen dieser Datei. -->
+            <!-- Spalte 2: Inhaltsbereich (Vaultwarden ODER Protokoll, nie beide) plus rechter
+                 Reiter-Streifen zum Umschalten - siehe Kommentar oben am Fensteranfang. -->
             <Grid Grid.Column="2">
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="*" />
-                </Grid.RowDefinitions>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="8" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
 
                 <!-- Update-Signatur/Vaultwarden (Nutzerwunsch 13.08.2026): der private
                      Update-Signaturschlüssel liegt in Vaultwarden statt als Klartextdatei auf
-                     dieser Maschine. Komplett versteckt bis zum Klick auf das Schlüssel-Icon
-                     oben rechts im Fenster (dritte Runde) - kein automatisches Anbieten "beim
-                     Boot" mehr, dafür bewusst ein Klick. -->
-                <Border Grid.Row="0" x:Name="VaultwardenPanel" Visibility="Collapsed" Margin="0,0,0,16"
+                     dieser Maschine. Komplett eingeklappt, bis der "Vaultwarden"-Reiter rechts
+                     angeklickt wird - kein automatisches Anbieten "beim Boot" mehr. -->
+                <Border Grid.Column="0" x:Name="VaultwardenPanel" Visibility="Collapsed"
                         Background="{StaticResource CardBackgroundBrush}" BorderBrush="{StaticResource HairlineBrush}"
-                        BorderThickness="1" CornerRadius="12" Padding="16">
+                        BorderThickness="1" CornerRadius="12" Padding="16" VerticalAlignment="Top">
                     <StackPanel>
                         <TextBlock Text="Update-Signatur (Vaultwarden)" FontWeight="Bold" FontSize="14" Margin="0,0,0,4" />
                         <TextBlock TextWrapping="Wrap" Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" Margin="0,0,0,12"
@@ -264,14 +242,40 @@
                     </StackPanel>
                 </Border>
 
-                <DockPanel Grid.Row="1">
+                <!-- Protokoll: standardmäßig eingeblendet (bisheriges Verhalten), über den
+                     "Logs"-Reiter genauso einklappbar wie Vaultwarden - beide teilen sich diese
+                     Zelle, es ist immer höchstens eins der beiden sichtbar. -->
+                <DockPanel Grid.Column="0" x:Name="LogPanel" Visibility="Visible">
                     <TextBlock DockPanel.Dock="Top" Text="Protokoll" FontWeight="SemiBold" Margin="0,0,0,6" />
                     <TextBox x:Name="LogBox" IsReadOnly="True" TextWrapping="Wrap"
                              VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto"
                              FontFamily="Consolas" FontSize="11" Background="#F4F6F6" />
                 </DockPanel>
 
-                <TextBlock x:Name="VersionText" Grid.Row="1" Style="{StaticResource VersionWatermarkStyle}" />
+                <TextBlock x:Name="VersionText" Grid.Column="0" Style="{StaticResource VersionWatermarkStyle}" />
+
+                <!-- Reiter-Streifen ganz rechts, nach tomedo-Vorbild (siehe Kommentar oben):
+                     dünne Trennlinie links, zwei um 90° gedrehte Text-Reiter übereinander. -->
+                <Border Grid.Column="2" BorderBrush="{StaticResource HairlineBrush}" BorderThickness="1,0,0,0">
+                    <StackPanel Orientation="Vertical" Margin="4,0,0,0">
+                        <Button x:Name="VaultwardenTabButton" Width="28" Padding="4,10"
+                                ToolTip="Vaultwarden-Konfiguration ein-/ausklappen" Click="VaultwardenTabButton_Click">
+                            <TextBlock Text="Vaultwarden" FontSize="12">
+                                <TextBlock.LayoutTransform>
+                                    <RotateTransform Angle="90" />
+                                </TextBlock.LayoutTransform>
+                            </TextBlock>
+                        </Button>
+                        <Button x:Name="LogsTabButton" Width="28" Padding="4,10" Margin="0,8,0,0"
+                                ToolTip="Protokoll ein-/ausklappen" Click="LogsTabButton_Click">
+                            <TextBlock Text="Logs" FontSize="12">
+                                <TextBlock.LayoutTransform>
+                                    <RotateTransform Angle="90" />
+                                </TextBlock.LayoutTransform>
+                            </TextBlock>
+                        </Button>
+                    </StackPanel>
+                </Border>
             </Grid>
         </Grid>
     </Grid>

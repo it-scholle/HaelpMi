@@ -243,20 +243,28 @@ public partial class MainWindow : Window
 
     // --- Vaultwarden / Update-Signatur (Nutzerwunsch 13.08.2026, "Update-Ei") ---------------
 
-    // Die komplette Karte bleibt versteckt, bis man sie braucht (Nutzerkorrektur 13.08.2026,
-    // dritte Runde) - nur noch ein Schlüssel-Icon oben rechts im Fenster schaltet sie um. Die
-    // "*"-Protokoll-Zeile darunter schrumpft dabei von selbst (siehe Grid.RowDefinitions in
-    // MainWindow.xaml), ohne dass hier eine Höhe gesetzt werden muss. Fokus aufs Master-
-    // Passwort-Feld passiert jetzt beim Öffnen statt beim Fensterstart, weil die Karte vorher
-    // gar nicht sichtbar ist.
-    private void VaultwardenToggleButton_Click(object sender, RoutedEventArgs e)
+    // Reiter-Umschaltung nach tomedo-Vorbild (Nutzerwunsch 14.08.2026, vierte Runde):
+    // Vaultwarden-Karte und Protokoll teilen sich eine Zelle, es ist immer höchstens eins von
+    // beiden sichtbar - Öffnen des einen klappt das andere automatisch ein. Erneutes Klicken auf
+    // den gerade aktiven Reiter klappt ihn wieder ein (dann ist der Inhaltsbereich leer, genau
+    // wie im tomedo-Referenzbild). Fokus aufs Master-Passwort-Feld passiert beim Öffnen der
+    // Vaultwarden-Karte, weil sie vorher gar nicht sichtbar ist.
+    private void VaultwardenTabButton_Click(object sender, RoutedEventArgs e)
     {
         var show = VaultwardenPanel.Visibility != Visibility.Visible;
         VaultwardenPanel.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
+        LogPanel.Visibility = Visibility.Collapsed;
         if (show)
         {
             VaultwardenPasswordBox.Focus();
         }
+    }
+
+    private void LogsTabButton_Click(object sender, RoutedEventArgs e)
+    {
+        var show = LogPanel.Visibility != Visibility.Visible;
+        LogPanel.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
+        VaultwardenPanel.Visibility = Visibility.Collapsed;
     }
 
     private async void VaultwardenUnlockButton_Click(object sender, RoutedEventArgs e)
