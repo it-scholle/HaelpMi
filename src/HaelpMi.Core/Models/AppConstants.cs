@@ -44,6 +44,18 @@ public static class AppConstants
     /// <summary>TCP port for pulling a signed update package (payload + Manifest) from a peer with a newer <see cref="LiveIdentity.ProgramVersion"/> (Teil 2, Abschnitt 11).</summary>
     public const int UpdatePackageTcpPort = 51506;
 
+    /// <summary>TCP port for pushing not-yet-acknowledged <see cref="AuditLogEntry"/> batches to a reachable admin device (Nutzerwunsch 14.08.2026: revisionssicheres Audit-Log ohne zentrale Instanz, siehe AuditSyncService).</summary>
+    public const int AuditSyncTcpPort = 51507;
+
+    /// <summary>TCP port for the Admin&lt;-&gt;Admin Digest-/Mesh-Abgleich (Nutzerwunsch 15.08.2026: "bleeding edge" unter mehreren gleichzeitig erreichbaren Admins, siehe AuditSyncService.ReconcileWithAdminPeerAsync). Bewusst ein eigener Port statt Multiplexing über AuditSyncTcpPort - ein Port pro Nachrichtenzweck, wie überall sonst in diesem Projekt (Discovery/ConfigSync/EditLock/Update).</summary>
+    public const int AuditMeshTcpPort = 51508;
+
+    /// <summary>Max. <see cref="AuditLogEntry"/>-Einträge pro Push-/Mesh-Batch - analog <see cref="Storage.ConfigHistoryStore.MaxEntriesPerScope"/>: verhindert ein einzelnes überdimensioniertes Paket bei großem Rückstand, der wird dann über mehrere Trigger-Ereignisse verteilt nachgeliefert.</summary>
+    public const int AuditSyncBatchCap = 200;
+
+    /// <summary>Timeout pro Ziel-Peer für einen einzelnen AuditSync-Push/-Digest-Call (analog EditLockService.RequestTimeout, etwas großzügiger wegen der potenziell größeren Nutzlast).</summary>
+    public static readonly TimeSpan AuditSyncRequestTimeout = TimeSpan.FromSeconds(5);
+
     /// <summary>Folder under the machine-wide %ProgramData% where all local device state lives (Teil 2, FR-34 - siehe AppPaths.cs).</summary>
     public const string AppDataFolderName = "HaelpMi";
 

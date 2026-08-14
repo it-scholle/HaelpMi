@@ -2,7 +2,13 @@ using HaelpMi.Core.Models;
 
 namespace HaelpMi.Core.Storage;
 
-/// <summary>The subset of a boot-call/announce that gets written into a <see cref="DeviceEntry"/> on upsert.</summary>
+/// <summary>
+/// The subset of a boot-call/announce that gets written into a <see cref="DeviceEntry"/> on
+/// upsert. <see cref="ReportedLastSeenUtc"/> (Nutzerwunsch 15.08.2026): nur bei einem
+/// gossip-gelernten Eintrag gesetzt (der Zeitpunkt, zu dem der Informant es zuletzt selbst
+/// gesehen hat) - bei direktem Kontakt bleibt es null, dort ist "jetzt" (der seenAtUtc-
+/// Parameter von Upsert) weiterhin die genaueste verfügbare Angabe.
+/// </summary>
 public sealed record DeviceUpsertInfo(
     string ComputerName,
     string User,
@@ -11,7 +17,8 @@ public sealed record DeviceUpsertInfo(
     Role Role,
     bool IsRemoteSession,
     string IpAddress,
-    int TcpPort);
+    int TcpPort,
+    DateTimeOffset? ReportedLastSeenUtc = null);
 
 /// <summary>Loads/saves the locally known list of other devices (FR-18, 5.4).</summary>
 public sealed class DeviceStore
@@ -30,6 +37,8 @@ public sealed class DeviceStore
     public static List<DeviceEntry> Upsert(List<DeviceEntry> devices, Guid deviceId, DeviceUpsertInfo info, DateTimeOffset seenAtUtc)
     {
         var existing = devices.FirstOrDefault(d => d.DeviceId == deviceId);
+        var lastSeenUtc = ResolveLastSeenUtc(existing?.LastSeenUtc, info, seenAtUtc);
+
         if (existing is null)
         {
             devices.Add(new DeviceEntry
@@ -43,7 +52,7 @@ public sealed class DeviceStore
                 IsRemoteSession = info.IsRemoteSession,
                 IpAddress = info.IpAddress,
                 TcpPort = info.TcpPort,
-                LastSeenUtc = seenAtUtc,
+                LastSeenUtc = lastSeenUtc,
                 IsNew = true,
             });
         }
@@ -57,11 +66,25 @@ public sealed class DeviceStore
             existing.IsRemoteSession = info.IsRemoteSession;
             existing.IpAddress = info.IpAddress;
             existing.TcpPort = info.TcpPort;
-            existing.LastSeenUtc = seenAtUtc;
+            existing.LastSeenUtc = lastSeenUtc;
             // Favorite/Notified/Note/IsNew are local decisions and are deliberately left untouched.
         }
 
         return devices;
+    }
+
+    /// <summary>
+    /// Direkter Kontakt (<see cref="DeviceUpsertInfo.ReportedLastSeenUtc"/> == null): "jetzt"
+    /// ist die genaueste verfügbare Angabe, wie bisher. Gossip-Weitergabe (Nutzerwunsch
+    /// 15.08.2026): der Zeitpunkt, zu dem der Informant das Gerät zuletzt SELBST gesehen hat,
+    /// ist genauer als "jetzt" (wann WIR vom Gossip gehört haben) - aber nie rückwärts
+    /// überschreiben, falls wir das Gerät zwischenzeitlich über einen anderen Weg schon
+    /// aktueller gesehen haben.
+    /// </summary>
+    private static DateTimeOffset ResolveLastSeenUtc(DateTimeOffset? existingLastSeenUtc, DeviceUpsertInfo info, DateTimeOffset seenAtUtc)
+    {
+        var candidate = info.ReportedLastSeenUtc ?? seenAtUtc;
+        return existingLastSeenUtc is { } existing && existing > candidate ? existing : candidate;
     }
 
     /// <summary>

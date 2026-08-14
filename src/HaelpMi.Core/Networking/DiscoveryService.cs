@@ -20,6 +20,12 @@ public sealed class PeerConfigVersionInfo
     public required int ConfigVersion { get; init; }
 }
 
+/// <summary>Siehe <see cref="DiscoveryService.AdminPeerContactObserved"/>.</summary>
+public sealed class AdminPeerContactInfo
+{
+    public required DeviceEntry Peer { get; init; }
+}
+
 /// <summary>
 /// UDP boot-call discovery (Phase 1 5.5/FR-21/22/23, Teil 2 Abschnitt 9): one socket
 /// bound to <see cref="AppConstants.DiscoveryUdpPort"/> both sends the once-per-startup
@@ -74,6 +80,17 @@ public sealed class DiscoveryService : IAsyncDisposable
     /// vom jeweils anderen, unabhängig davon, wer den Boot-Call initiiert hat.
     /// </summary>
     public event EventHandler<PeerConfigVersionInfo>? PeerConfigVersionObserved;
+
+    /// <summary>
+    /// Raised whenever a boot-call directly (nicht per Gossip gelernt) einen Peer offenbart,
+    /// der wie wir selbst Role.Admin ist (Nutzerwunsch 15.08.2026: Admin&lt;-&gt;Admin-Mesh-
+    /// Abgleich fürs Audit-Log, siehe AuditSyncService.ReconcileWithAdminPeerAsync) - kein
+    /// neuer Kanal, nur ein weiterer Hook auf den ohnehin stattfindenden Boot-Call-Kontakt.
+    /// Feuert bewusst nur für den direkt kontaktierten Peer, nicht für gossip-gelernte
+    /// Geräte - deren IP-Adresse kann veraltet/unerreichbar sein, und das Event feuert
+    /// ohnehin erneut, sobald dieses Gerät selbst direkten Kontakt aufnimmt.
+    /// </summary>
+    public event EventHandler<AdminPeerContactInfo>? AdminPeerContactObserved;
 
     /// <param name="discoveryPort">Overridable only for tests - production always uses <see cref="AppConstants.DiscoveryUdpPort"/> so every device agrees on one port.</param>
     /// <param name="bridgeSeedAddressProvider">
@@ -302,7 +319,7 @@ public sealed class DiscoveryService : IAsyncDisposable
 
                     var knownInfo = new DeviceUpsertInfo(
                         known.ComputerName, known.User, known.RoomName, known.RoomNumber,
-                        known.Role, false, known.IpAddress, known.TcpPort);
+                        known.Role, false, known.IpAddress, known.TcpPort, known.LastSeenUtc);
                     DeviceStore.Upsert(devices, known.DeviceId, knownInfo, DateTimeOffset.UtcNow);
                 }
             }
@@ -345,6 +362,11 @@ public sealed class DiscoveryService : IAsyncDisposable
                 DeviceId = message.DeviceId,
                 ConfigVersion = message.ConfigVersion,
             });
+        }
+
+        if (message.Role == Role.Admin && ownIdentity.Role == Role.Admin)
+        {
+            AdminPeerContactObserved?.Invoke(this, new AdminPeerContactInfo { Peer = updated });
         }
 
         if (message.Kind == MessageKind.Announce)
@@ -417,7 +439,7 @@ public sealed class DiscoveryService : IAsyncDisposable
 
         return devices
             .Where(d => d.DeviceId != excludeDeviceId)
-            .Select(d => new KnownDeviceSummary(d.DeviceId, d.ComputerName, d.User, d.RoomName, d.RoomNumber, d.Role, d.IpAddress, d.TcpPort))
+            .Select(d => new KnownDeviceSummary(d.DeviceId, d.ComputerName, d.User, d.RoomName, d.RoomNumber, d.Role, d.IpAddress, d.TcpPort, d.LastSeenUtc))
             .ToList();
     }
 

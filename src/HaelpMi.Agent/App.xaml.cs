@@ -55,7 +55,13 @@ public partial class App : System.Windows.Application
     private readonly SettingsStore _settingsStore = new();
     private readonly SharedConfigStore _sharedConfigStore = new();
     private readonly DeviceStore _deviceStore = new();
-    private readonly AuditLog _auditLog = new();
+    // Nicht readonly, gleiches Muster wie _settings/_deployment unten (null! + Zuweisung in
+    // OnStartup): braucht BuildIdentity(), also _settings/_deployment, die erst dort geladen
+    // werden - kann daher kein Feld-Initialisierer sein. Lazy Device-Id-Provider (wie bei
+    // DiscoveryService/ConfigSyncService) statt eines fixen Werts, siehe AuditLog-Klassendoku.
+    private AuditLog _auditLog = null!;
+
+    private AuditSyncService? _auditSyncService;
 
     private Mutex? _singleInstanceMutex;
     private bool _ownsSingleInstanceMutex;
@@ -133,6 +139,11 @@ public partial class App : System.Windows.Application
         {
             _deployment = DeploymentInfoStore.Load();
             _settings = _settingsStore.Load();
+            // Erst jetzt sinnvoll konstruierbar (BuildIdentity() braucht _settings/_deployment,
+            // siehe Feld-Kommentar oben) - die Lambda wird ohnehin erst beim ersten
+            // tatsächlichen Append()-Aufruf ausgewertet, aber das Feld selbst muss vorher
+            // zugewiesen sein (readonly).
+            _auditLog = new AuditLog(() => BuildIdentity().DeviceId);
         }
         catch (Exception ex) when (ex is InvalidOperationException or System.Text.Json.JsonException or IOException)
         {
@@ -284,10 +295,24 @@ public partial class App : System.Windows.Application
             }
         }
 
+        // Nutzerwunsch 14./15.08.2026 (revisionssicheres Audit-Log): Sendeseite läuft auf
+        // JEDEM Gerät unabhängig von der Rolle (jedes Gerät hat ein eigenes AuditLog),
+        // Empfangsseite (StartListening) dagegen nur, wenn dieses Gerät selbst Role.Admin
+        // ist - gleiches Rollen-Gating wie beim Dashboard-Tray-Menüpunkt weiter unten
+        // (InitializeTrayIcon), nur hier für den 24/7-Agent-Prozess statt das kurzlebige
+        // Config.exe. Bewusst NICHT wie ConfigSyncService/EditLockService nur im
+        // Config.exe-Dashboard-Prozess gestartet: ein Admin-Gerät soll Pushes auch
+        // annehmen können, wenn das Dashboard-Fenster gerade gar nicht offen ist.
+        _auditSyncService = new AuditSyncService(BuildIdentity, _auditLog, _auditLog.Append);
+        if (_deployment.Role == Role.Admin)
+        {
+            _auditSyncService.StartListening();
+        }
+
         _feedbackChannel = new AlarmFeedbackChannel(BuildIdentity, _auditLog.Append);
         _feedbackChannel.Start();
 
-        _coordinator = new AlarmFlowCoordinator(BuildIdentity, () => _settings, _sharedConfigStore.LoadOrCreate, _feedbackChannel);
+        _coordinator = new AlarmFlowCoordinator(BuildIdentity, () => _settings, _sharedConfigStore.LoadOrCreate, _feedbackChannel, _auditLog, _auditSyncService);
 
         // Multi-VLAN-Bridge-Seed (Nutzerwunsch 13.08.2026): SharedConfig gewinnt, weil sie
         // hot-reload-editierbar ist (IP kann per DHCP wandern, kein neuer Installer nötig) -
@@ -301,6 +326,20 @@ public partial class App : System.Windows.Application
         });
         _discovery.StartListening();
         _ = _discovery.AnnounceAsync();
+
+        // Nutzerwunsch 15.08.2026: Admin<->Admin-Mesh-Abgleich hängt am ohnehin
+        // stattfindenden Boot-Call-Kontakt (siehe DiscoveryService.AdminPeerContactObserved-
+        // Klassendoku) - das Event feuert dort ohnehin nur, wenn BEIDE Seiten Role.Admin
+        // sind, ein Anhängen auf einem User-Gerät ist also harmlos (Handler wird nie
+        // aufgerufen), keine zusätzliche Rollenprüfung hier nötig.
+        _discovery.AdminPeerContactObserved += _auditSyncService.OnAdminPeerContactObserved;
+
+        // Eigener Boot-Push (Nutzerwunsch 14.08.2026): mit dem beim letzten Beenden
+        // gespeicherten Geräte-/Zustellstand, ohne auf die (fire-and-forget) Antworten des
+        // gerade abgesetzten Announce oben zu warten - der nächste eigene Trigger (nächster
+        // Alarm oder nächster Boot) holt jeden inzwischen neu erreichbaren Admin ab, kein
+        // zusätzlicher Aufwand nötig, um exakt diesen einen Moment zu treffen.
+        _ = _auditSyncService.PushPendingAsync(_deviceStore.Load());
 
         _listener = new AlarmTcpListener(BuildIdentity, _auditLog.Append);
         _listener.AlarmReceived += (_, args) => _coordinator.HandleIncomingAlarmRequest(args);
@@ -518,6 +557,7 @@ public partial class App : System.Windows.Application
         _ = _feedbackChannel?.DisposeAsync();
         _ = _configSync?.DisposeAsync();
         _ = _updateDistribution?.DisposeAsync();
+        _ = _auditSyncService?.DisposeAsync();
         _ = _discovery?.DisposeAsync();
         _ = _ipcServer?.DisposeAsync();
 

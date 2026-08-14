@@ -239,7 +239,7 @@ public class NetworkingTests
         var reply = new BootCallMessage(
             MessageKind.Reply, customerGroupId, replierDeviceId, "PC-Antwortend", "Frau Antwort", "Büro", "5",
             Role.User, false, 51999, "9.9.9", 0, DateTimeOffset.UtcNow,
-            new List<KnownDeviceSummary> { new(gossipedDeviceId, "PC-Weitweg", "Herr Fern", "Lager", "99", Role.User, "192.168.1.77", 51501) });
+            new List<KnownDeviceSummary> { new(gossipedDeviceId, "PC-Weitweg", "Herr Fern", "Lager", "99", Role.User, "192.168.1.77", 51501, DateTimeOffset.UtcNow) });
         var replyBytes = JsonSerializer.SerializeToUtf8Bytes(reply, WireOptions);
 
         await replierSocket.SendAsync(replyBytes, replyBytes.Length, new IPEndPoint(IPAddress.Loopback, discoveryPort));
@@ -328,7 +328,7 @@ public class NetworkingTests
         var reply = new BootCallMessage(
             MessageKind.Reply, customerGroupId, replierDeviceId, "PC-Antwortend", "Frau Antwort", "Büro", "5",
             Role.User, false, 51999, "9.9.9", 0, DateTimeOffset.UtcNow,
-            new List<KnownDeviceSummary> { new(gossipedDeviceId, "PC-Weitweg", "Herr Fern", "Lager", "99", Role.User, "192.168.1.77", 51501) });
+            new List<KnownDeviceSummary> { new(gossipedDeviceId, "PC-Weitweg", "Herr Fern", "Lager", "99", Role.User, "192.168.1.77", 51501, DateTimeOffset.UtcNow) });
         var replyBytes = JsonSerializer.SerializeToUtf8Bytes(reply, WireOptions);
         await replierSocket.SendAsync(replyBytes, replyBytes.Length, new IPEndPoint(IPAddress.Loopback, discoveryPort));
 

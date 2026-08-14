@@ -62,6 +62,8 @@ konfigurierbar** — eine Änderung würde ein Lockstep-Update aller Geräte erf
 | 51504 | TCP | Exklusiv-Edit-Lock ("will editieren") |
 | 51505 | TCP | Alarm-Feedback ("bin unterwegs", Status-Relay) |
 | 51506 | TCP | Signiertes Update-Paket P2P abholen |
+| 51507 | TCP | Audit-Log-Push: nicht bestätigte Einträge an ein erreichbares Admin-Gerät (siehe AuditSyncService) |
+| 51508 | TCP | Admin↔Admin-Digest-/Mesh-Abgleich fürs Audit-Log |
 | Named Pipe `HaelpMi.Agent.Ipc` | lokal | Config/Dashboard ↔ Agent |
 | Named Pipe `HaelpMi.UpdateService.Ipc` | lokal, ACL für "Authenticated Users" | Agent ↔ privilegierter Update-Dienst |
 
@@ -101,7 +103,10 @@ hängt am physischen Gerät, nicht am Windows-Konto). Keine SQLite/XML.
 | `devices.json` | entdeckte Peer-Geräte (Boot-Call-Cache) |
 | `shared-config.json` | synchronisierte Konfiguration (Gruppen, Alarm-Profile, Update-Rollout) |
 | `config-history.json` | Änderungshistorie inkl. Undo-Snapshots |
-| `audit.log` | Klartext-Ereignislog (Timestamp, Ereignis), nie Alarmtext |
+| `audit.jsonl` | Hash-verkettetes Ereignislog (Seq/PrevHash/EntryHash/Timestamp/Ereignis), nie Alarmtext (seit 14.08.2026, vorher `audit.log` als reine Tab-Zeile) |
+| `audit.chain-state.json` | letzter Chain-Stand (Seq/Hash) von `audit.jsonl`, für den Neustart |
+| `audit-sync-state.json` | pro Admin-Gerät der zuletzt bestätigte Seq (Sendeseite von AuditSyncService) |
+| `audit-ingest\{OriginDeviceId}.jsonl` (+ `.gaps.jsonl`) | nur auf Admin-Geräten: additiv empfangene Audit-Log-Kopien anderer Geräte samt erkannter Lücken |
 | `{app}\deployment.json` | Installer-fixe Werte (CustomerGroupId, Role, IsTestInstaller) |
 | `crash.log` | unbehandelte Ausnahmen, keine Alarmdaten |
 
@@ -210,6 +215,37 @@ nach lokalem Erfolg **und** mindestens einer Peer-Bestätigung wird die neue Ver
 geschaltet (alte Version nach `_previous`, neue Version übernimmt) und die Altversion entfernt.
 Nur signierte Pakete (Ed25519, separater Update-Schlüssel) werden überhaupt angenommen.
 
+### Ablauf: Revisionssicheres Audit-Log (seit 14./15.08.2026)
+
+Jedes Gerät schreibt sein eigenes `AuditLog` weiterhin nur lokal, jetzt aber als
+Hash-Chain (`entryHash = SHA256(prevHash‖Seq‖Timestamp‖Content)`) statt schlichter
+Text-Zeile — eine nachträgliche Änderung an einer Zeile bricht die Kette ab dieser Stelle
+erkennbar. Der eigentliche Manipulationsschutz kommt aber erst durch **externe
+Zeugenschaft**: bei eigenem Boot-Call und bei Alarm-Ende (nach dem 1-Minuten-Nachlauf)
+pusht jedes Gerät (`AuditSyncService`, Port 51507) die seit dem letzten Mal für genau
+diesen Admin noch nicht bestätigten eigenen Einträge an alle gerade erreichbaren
+Admin-Geräte — kein Heartbeat, nur Huckepack auf ohnehin stattfindende Ereignisse, analog
+zum Update-Rollout. Jeder Admin hält pro Ursprungsgerät einen eigenen Zustellstand (nicht
+ein globaler "irgendein Admin hat's schon"-Zähler), damit auch ein selten erreichbarer
+zweiter Admin über die Zeit die komplette Historie bekommt, nicht nur den aktuellen Rand.
+
+Admin-seitig landen empfangene Kopien additiv in `AuditIngestStore` (das Ursprungsgerät
+kann sie dort nicht mehr überschreiben/löschen — das ist der eigentliche
+Tamper-Evidence-Baustein, nicht die Hash-Chain allein). Eine erkannte Lücke (Seq oder
+Hash passt nicht lückenlos an) wird als `GapNotice` vermerkt statt stillschweigend
+akzeptiert oder das Paket verworfen.
+
+Begegnen sich zwei Admin-Geräte per Boot-Call (`DiscoveryService.AdminPeerContactObserved`),
+tauschen sie zusätzlich einen kleinen Digest (höchste bekannte Seq je Ursprungsgerät, Port
+51508) und gleichen sich in beide Richtungen ab — so konvergiert der Stand unter mehreren
+gleichzeitig erreichbaren Admins so schnell wie möglich, unabhängig davon, wann das
+jeweilige Ursprungsgerät selbst zuletzt gepusht hat.
+
+Bewusst kein viertes kryptografisches Schlüsselpaar: `Role.Admin` bleibt wie bei
+EditLockService/ConfigSyncService eine unauthentifizierte Selbstauskunft des Peers — ein
+bekannter, für später vorgemerkter Punkt (siehe `Dokumente/infos-und-fragen.md`), keine
+Regression durch diese Änderung.
+
 ### Datenschutz in der Praxis
 
 UI zeigt immer Raum/Raumnummer groß, Benutzername klein. Die RDP-Erkennung
@@ -230,3 +266,9 @@ reagiert hat. Crash-Log und Audit-Log enthalten keine Alarmtexte, nur Ereignis-M
   Dateien gelaufen, nur strukturell verifiziert.
 - Änderungshistorie/Antwort-Log enthalten Klarnamen — das ist mit dem Auftraggeber bezüglich
   Personalrat noch abzustimmen, nicht eigenmächtig zu erweitern.
+- Audit-Sync-Empfangsseite (`AuditSyncService.StartListening`/Admin-Rollen-Filter) vertraut
+  weiterhin der unauthentifizierten `Role`-Selbstauskunft eines Peers — ein viertes
+  (asymmetrisches) Schlüsselpaar für eine echte Admin-Rollen-Verifizierung ist als
+  eigener Folge-Task vorgemerkt, nicht Teil der aktuellen Umsetzung.
+- Keine Admin-Dashboard-Anzeige der über `AuditIngestStore` gesammelten Logs — bewusst nur
+  Speicherung in dieser Ausbaustufe, Anzeige als separater Folge-Task vorgemerkt.

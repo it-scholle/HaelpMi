@@ -275,6 +275,33 @@ signieren - hier bewusst nicht automatisiert (echter Vaultwarden-Zugriff nötig)
 - [ ] "Überspringen" klicken, ohne vorher etwas einzutragen - Test-Installer ohne Update-Ei
       muss weiterhin klaglos bauen (Rückwärtskompatibilität zum bisherigen Ablauf)
 
+## Test 9c: Revisionssicheres Audit-Log — Push-Sync an Admin-Geräte (Nutzerwunsch 14./15.08.2026)
+
+Deckt die Verteilung ab, die coded Tests (Loopback, ein Prozess) nicht zeigen können: echte
+zwei Geräte, echte Netzwerktrennung.
+
+- [ ] Ein Admin-Gerät und ein User-Gerät derselben Kunden-Gruppe installiert und beide
+      einmal gebootet (Discovery-Kontakt hergestellt, siehe Test 2-4)
+- [ ] Auf dem User-Gerät einen Alarm auslösen und vollständig auslaufen lassen (Zeitablauf
+      oder Schwellwert, inkl. der 1-Minute-Nachlauf danach)
+- [ ] Auf dem Admin-Gerät prüfen: unter
+      `C:\ProgramData\HaelpMi\audit-ingest\{DeviceId-des-User-Geräts}.jsonl` sind die
+      Einträge zu diesem Alarm angekommen (Seq beginnt bei 1, PrevHash/EntryHash sehen wie
+      Hex-Strings aus, keine `*.gaps.jsonl`-Datei danaben)
+- [ ] Admin-Gerät kurz vom Netz trennen (WLAN aus/Kabel ziehen), auf dem User-Gerät einen
+      weiteren Alarm auslösen und auslaufen lassen, Admin-Gerät wieder verbinden, einmal neu
+      booten (oder "Erneut suchen" im Tray) - die zwischenzeitlich entstandenen Einträge
+      müssen nachträglich in derselben `.jsonl`-Datei auftauchen, fortlaufend an die
+      vorherige Seq anschließend
+- [ ] Falls ein zweites Admin-Gerät verfügbar ist: beide Admin-Geräte einmal gleichzeitig
+      booten (oder eines neu starten, während das andere schon läuft) - beide sollten
+      danach dieselben `audit-ingest\*.jsonl`-Dateien mit demselben Stand haben
+      (Admin↔Admin-Mesh-Abgleich)
+
+**Wenn das fehlschlägt:** welcher Schritt genau, Inhalt der betroffenen `.jsonl`-Datei
+(ohne Klarnamen sollte da ohnehin nichts drinstehen) sowie ob eine `*.gaps.jsonl`-Datei
+entstanden ist, mitschicken.
+
 ---
 
 ## Was mir beim Zurückmelden am meisten hilft

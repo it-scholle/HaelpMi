@@ -19,8 +19,30 @@ namespace HaelpMi.Core.Diagnostics;
 /// </summary>
 internal static class SharedLogPaths
 {
+    private static bool _forceLocalFallbackForTests;
+
+    /// <summary>
+    /// Test-only hook (14.08.2026, eingeführt für AuditLog/AuditSyncService-Tests): überspringt
+    /// den Z:\-Versuch komplett. Ohne das würden hermetische Tests, die viele Append()-Aufrufe
+    /// machen, auf einer Maschine mit real gemountetem Z:\HaelpMi-Logs (dieselbe physische
+    /// Maschine wie die Alpha-Testrechner, siehe Klassenkommentar) echte Test-Dateien dort
+    /// hinterlassen - AppPaths.UseRootForTests allein deckt nur den Fallback-Pfad ab, nicht
+    /// den vorrangigen Z:\-Versuch.
+    /// </summary>
+    public static IDisposable ForceLocalFallbackForTests()
+    {
+        _forceLocalFallbackForTests = true;
+        return new RestoreOnDispose(() => _forceLocalFallbackForTests = false);
+    }
+
     public static string ResolveDirectory(string localFallbackDir)
     {
+        if (_forceLocalFallbackForTests)
+        {
+            Directory.CreateDirectory(localFallbackDir);
+            return localFallbackDir;
+        }
+
         var sharedDir = Path.Combine(@"Z:\", "HaelpMi-Logs", Environment.MachineName);
         try
         {
@@ -32,5 +54,10 @@ internal static class SharedLogPaths
             Directory.CreateDirectory(localFallbackDir);
             return localFallbackDir;
         }
+    }
+
+    private sealed class RestoreOnDispose(Action onDispose) : IDisposable
+    {
+        public void Dispose() => onDispose();
     }
 }

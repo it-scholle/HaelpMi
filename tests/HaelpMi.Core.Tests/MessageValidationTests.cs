@@ -31,7 +31,7 @@ public class MessageValidationTests
         DateTimeOffset.UtcNow);
 
     private static KnownDeviceSummary ValidKnownDevice() => new(
-        Guid.NewGuid(), "PC-218", "Frau Muster", "Zimmer", "109", Role.User, "192.168.1.51", AppConstants.AlarmTcpPort);
+        Guid.NewGuid(), "PC-218", "Frau Muster", "Zimmer", "109", Role.User, "192.168.1.51", AppConstants.AlarmTcpPort, DateTimeOffset.UtcNow);
 
     [Fact]
     public void BootCallMessage_ValidBaseline_IsPlausible() =>

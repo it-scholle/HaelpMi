@@ -27,7 +27,8 @@ public sealed class AlarmFlowCoordinator
     private readonly Func<OwnSettings> _settingsProvider;
     private readonly Func<SharedConfig> _sharedConfigProvider;
     private readonly AlarmFeedbackChannel _feedbackChannel;
-    private readonly AuditLog _auditLog = new();
+    private readonly AuditLog _auditLog;
+    private readonly AuditSyncService _auditSync;
     private readonly AlarmSender _sender;
     private readonly DeviceStore _deviceStore = new();
     private readonly MultiDeviceAlarmPlayer _audioPlayer;
@@ -40,12 +41,20 @@ public sealed class AlarmFlowCoordinator
         Func<LiveIdentity> identityProvider,
         Func<OwnSettings> settingsProvider,
         Func<SharedConfig> sharedConfigProvider,
-        AlarmFeedbackChannel feedbackChannel)
+        AlarmFeedbackChannel feedbackChannel,
+        AuditLog auditLog,
+        AuditSyncService auditSync)
     {
         _identityProvider = identityProvider;
         _settingsProvider = settingsProvider;
         _sharedConfigProvider = sharedConfigProvider;
         _feedbackChannel = feedbackChannel;
+        // Dieselbe AuditLog-Instanz wie der Rest des Agent-Prozesses (siehe App.xaml.cs) -
+        // NICHT hier neu anlegen: zwei unabhängige Instanzen würden mit je eigenem
+        // In-Memory-Chain-Stand (_lastSeq/_lastHash) gegen dieselbe Datei schreiben und
+        // sich die Hash-Chain gegenseitig kaputtmachen (Race auf zwei verschiedenen Locks).
+        _auditLog = auditLog;
+        _auditSync = auditSync;
         _sender = new AlarmSender(_auditLog.Append);
         _audioPlayer = new MultiDeviceAlarmPlayer(_auditLog.Append);
         _feedbackChannel.StatusRelayReceived += (_, relay) => HandleStatusRelay(relay);
@@ -154,7 +163,7 @@ public sealed class AlarmFlowCoordinator
     /// <summary>Für die Konfigurator-Countdown-Anzeige ("TestModeStatus"-IPC) - null, falls gerade nicht scharf.</summary>
     public TimeSpan? TestModeRemaining => _testModeArmState.Remaining(DateTimeOffset.UtcNow);
 
-    private static async Task RunSessionAsync(RepeatingAlarmSession session)
+    private async Task RunSessionAsync(RepeatingAlarmSession session)
     {
         try
         {
@@ -163,6 +172,22 @@ public sealed class AlarmFlowCoordinator
         finally
         {
             session.Dispose();
+        }
+
+        // Nutzerwunsch 14./15.08.2026 (revisionssicheres Audit-Log): Push erst NACH dem
+        // vollständigen Abschluss inkl. 1-Minuten-Nachlauf (RunAsync kehrt erst danach
+        // zurück, siehe RepeatingAlarmSession-Klassenkommentar "Nachlauf-Fenster") - so
+        // sind auch späte "bin unterwegs"-Antworten schon im Log, bevor gepusht wird.
+        // Best-effort, blockiert nie den Alarm-Ablauf selbst (der ist an dieser Stelle
+        // ohnehin schon fertig) - ein Fehlschlag hier bleibt "pending" für den nächsten
+        // eigenen Trigger (nächster Alarm oder nächster Boot).
+        try
+        {
+            await _auditSync.PushPendingAsync(_deviceStore.Load());
+        }
+        catch (Exception)
+        {
+            // best-effort, siehe Kommentar oben
         }
     }
 
