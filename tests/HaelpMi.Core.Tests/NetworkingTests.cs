@@ -272,7 +272,7 @@ public class NetworkingTests
         const string seedAddress = "127.0.0.2";
         using var seedSocket = new UdpClient(new IPEndPoint(IPAddress.Parse(seedAddress), discoveryPort));
 
-        await using var discovery = new DiscoveryService(() => ownIdentity, discoveryPort: discoveryPort, bridgeSeedAddressProvider: () => seedAddress);
+        await using var discovery = new DiscoveryService(() => ownIdentity, discoveryPort: discoveryPort, bridgeSeedAddressProvider: () => new[] { seedAddress });
         discovery.StartListening();
 
         var seedReceiveTask = seedSocket.ReceiveAsync();
@@ -284,6 +284,53 @@ public class NetworkingTests
         Assert.Equal(MessageKind.Announce, received!.Kind);
         Assert.Equal(ownDeviceId, received.DeviceId);
         Assert.Equal(customerGroupId, received.CustomerGroupId);
+    }
+
+    [Fact]
+    public async Task DiscoveryService_AnnounceAsync_UnicastsToAllConfiguredBridgeSeedAddresses()
+    {
+        // Nutzerwunsch 15.08.2026: mehrere Bridge-Geräte statt einem - jede konfigurierte
+        // Adresse muss den Announce erhalten, nicht nur die erste.
+        var discoveryPort = GetFreeUdpPort();
+        var ownIdentity = MakeIdentity(Guid.NewGuid(), Guid.NewGuid());
+
+        const string firstSeedAddress = "127.0.0.3";
+        const string secondSeedAddress = "127.0.0.4";
+        using var firstSeedSocket = new UdpClient(new IPEndPoint(IPAddress.Parse(firstSeedAddress), discoveryPort));
+        using var secondSeedSocket = new UdpClient(new IPEndPoint(IPAddress.Parse(secondSeedAddress), discoveryPort));
+
+        await using var discovery = new DiscoveryService(() => ownIdentity, discoveryPort: discoveryPort,
+            bridgeSeedAddressProvider: () => new[] { firstSeedAddress, secondSeedAddress });
+        discovery.StartListening();
+
+        var firstReceiveTask = firstSeedSocket.ReceiveAsync();
+        var secondReceiveTask = secondSeedSocket.ReceiveAsync();
+        await discovery.AnnounceAsync();
+
+        await firstReceiveTask.WaitAsync(TimeSpan.FromSeconds(5));
+        await secondReceiveTask.WaitAsync(TimeSpan.FromSeconds(5));
+    }
+
+    [Fact]
+    public async Task DiscoveryService_AnnounceAsync_BadSeedAddressDoesNotBlockOtherSeedAddresses()
+    {
+        // Ein einzelner kaputter/nicht auflösbarer Eintrag in der Liste darf weder die
+        // übrigen konfigurierten Bridge-Seeds noch AnnounceAsync selbst blockieren.
+        var discoveryPort = GetFreeUdpPort();
+        var ownIdentity = MakeIdentity(Guid.NewGuid(), Guid.NewGuid());
+
+        const string workingSeedAddress = "127.0.0.5";
+        using var workingSeedSocket = new UdpClient(new IPEndPoint(IPAddress.Parse(workingSeedAddress), discoveryPort));
+
+        await using var discovery = new DiscoveryService(() => ownIdentity, discoveryPort: discoveryPort,
+            bridgeSeedAddressProvider: () => new[] { "not-a-real-host.invalid", workingSeedAddress });
+        discovery.StartListening();
+
+        var workingReceiveTask = workingSeedSocket.ReceiveAsync();
+        var exception = await Record.ExceptionAsync(() => discovery.AnnounceAsync());
+        Assert.Null(exception);
+
+        await workingReceiveTask.WaitAsync(TimeSpan.FromSeconds(5));
     }
 
     [Fact]
@@ -319,7 +366,7 @@ public class NetworkingTests
         using var seedSocket = new UdpClient(new IPEndPoint(IPAddress.Parse(seedAddress), discoveryPort));
         var seedReceiveTask = seedSocket.ReceiveAsync();
 
-        await using var discovery = new DiscoveryService(() => ownIdentity, discoveryPort: discoveryPort, bridgeSeedAddressProvider: () => seedAddress);
+        await using var discovery = new DiscoveryService(() => ownIdentity, discoveryPort: discoveryPort, bridgeSeedAddressProvider: () => new[] { seedAddress });
         discovery.StartListening();
 
         using var replierSocket = new UdpClient(0) { EnableBroadcast = true };
@@ -355,7 +402,7 @@ public class NetworkingTests
         const string seedAddress = "127.0.0.4";
         using var seedSocket = new UdpClient(new IPEndPoint(IPAddress.Parse(seedAddress), discoveryPort));
 
-        await using var discovery = new DiscoveryService(() => ownIdentity, discoveryPort: discoveryPort, bridgeSeedAddressProvider: () => seedAddress);
+        await using var discovery = new DiscoveryService(() => ownIdentity, discoveryPort: discoveryPort, bridgeSeedAddressProvider: () => new[] { seedAddress });
         discovery.StartListening();
 
         using var peerSocket = new UdpClient(0) { EnableBroadcast = true };

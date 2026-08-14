@@ -22,11 +22,12 @@ public enum EditScopeKind
     UpdateRollout,
 
     /// <summary>
-    /// Nutzerwunsch 13.08.2026 (Multi-VLAN-Bridge-Seed): <see cref="SharedConfig.BridgeSeedAddress"/>
+    /// Nutzerwunsch 13.08.2026 (Multi-VLAN-Bridge-Seed): <see cref="SharedConfig.BridgeSeedAddresses"/>
     /// bekommt denselben Lock-Mechanismus wie UpdateRollout, aus demselben Grund - genau
-    /// ein Datensatz kundengruppenweit (<see cref="AppConstants.NetworkBridgeScopeId"/>),
-    /// eigener EditScopeKind statt Wiederverwendung von UpdateRollout, damit ein Admin an
-    /// beidem gleichzeitig arbeiten könnte, ohne sich selbst zu blockieren.
+    /// ein Datensatz kundengruppenweit (<see cref="AppConstants.NetworkBridgeScopeId"/>) für
+    /// die ganze Liste, nicht pro Adresse (Nutzerwunsch 15.08.2026: mehrere Bridge-Geräte
+    /// möglich), eigener EditScopeKind statt Wiederverwendung von UpdateRollout, damit ein
+    /// Admin an beidem gleichzeitig arbeiten könnte, ohne sich selbst zu blockieren.
     /// </summary>
     NetworkBridge,
 }

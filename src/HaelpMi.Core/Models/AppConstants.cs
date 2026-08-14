@@ -130,7 +130,7 @@ public static class AppConstants
     /// <summary>
     /// Fest verdrahtete ScopeId für <see cref="EditScopeKind.NetworkBridge"/> - gleiches
     /// Prinzip wie <see cref="UpdateRolloutScopeId"/>: genau ein Bridge-Seed-Datensatz
-    /// kundengruppenweit (Multi-VLAN-Bootstrap, siehe <see cref="SharedConfig.BridgeSeedAddress"/>).
+    /// kundengruppenweit (Multi-VLAN-Bootstrap, siehe <see cref="SharedConfig.BridgeSeedAddresses"/>).
     /// </summary>
     public static readonly Guid NetworkBridgeScopeId = new("d3f1a000-a11d-4000-9000-000000000003");
 }

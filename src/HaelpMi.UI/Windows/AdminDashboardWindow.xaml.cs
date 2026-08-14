@@ -1489,15 +1489,22 @@ public partial class AdminDashboardWindow : Window
     // ------------------------------------------------------------------- Netzwerk ---
     // Nutzerwunsch 13.08.2026 (Multi-VLAN-Bridge-Seed): "Admin als so eine Art erster
     // Peer" für Discovery über geroutete, aber nicht per Broadcast erreichbare Subnetze/
-    // VLANs hinweg (siehe DiscoveryService-Klassenkommentar). Save-on-Blur wie jedes
-    // andere Config-Feld, gleiches Reserviert-pro-Tab-Prinzip wie beim Updates-Tab.
+    // VLANs hinweg (siehe DiscoveryService-Klassenkommentar). Seit 15.08.2026 eine Liste
+    // statt eines Einzelwerts (mehrere Bridge-Geräte möglich) plus "Automatisch erkennen"
+    // für die lokalen IPv4-Adressen dieses Geräts (Vorschlag + 1-Klick-Übernahme, kein
+    // stillschweigendes Vorausfüllen - siehe LocalNetworkAddressDetector). Speichern bei
+    // explizitem Hinzufügen/Entfernen statt Save-on-Blur, gleiches Reserviert-pro-Tab-
+    // Prinzip wie beim Updates-Tab.
 
     private void LoadNetworkTab()
     {
         _isLoadingDetail = true;
         try
         {
-            NetworkBridgeAddressBox.Text = _config.BridgeSeedAddress ?? string.Empty;
+            NetworkBridgeAddressesList.ItemsSource = null;
+            NetworkBridgeAddressesList.ItemsSource = _config.BridgeSeedAddresses;
+            NetworkBridgeNewAddressBox.Clear();
+            DetectedAddressCandidatesPanel.Items.Clear();
         }
         finally
         {
@@ -1505,25 +1512,89 @@ public partial class AdminDashboardWindow : Window
         }
     }
 
-    private async void NetworkBridgeAddressBox_LostFocus(object sender, RoutedEventArgs e)
+    private async void AddNetworkBridgeAddressButton_Click(object sender, RoutedEventArgs e) =>
+        await AddNetworkBridgeAddressAsync(NetworkBridgeNewAddressBox.Text);
+
+    private async void NetworkBridgeNewAddressBox_KeyDown(object sender, KeyEventArgs e)
     {
-        if (_isLoadingDetail)
+        if (e.Key == Key.Enter)
         {
+            await AddNetworkBridgeAddressAsync(NetworkBridgeNewAddressBox.Text);
+        }
+    }
+
+    private async Task AddNetworkBridgeAddressAsync(string rawValue)
+    {
+        var trimmed = rawValue.Trim();
+        if (string.IsNullOrEmpty(trimmed) || _config.BridgeSeedAddresses.Contains(trimmed))
+        {
+            return; // leer oder schon vorhanden - Duplikate beim manuellen wie beim per-Klick-Hinzufügen stillschweigend überspringen
+        }
+
+        var updated = _config.BridgeSeedAddresses.Append(trimmed).ToList();
+        await SaveNetworkBridgeAddressesAsync(updated);
+    }
+
+    private async void RemoveNetworkBridgeAddressButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (NetworkBridgeAddressesList.SelectedItem is not string selected)
+        {
+            NetworkStatusText.Text = "Bitte zuerst eine Adresse in der Liste auswählen.";
             return;
         }
 
-        var oldValue = _config.BridgeSeedAddress;
-        var trimmed = NetworkBridgeAddressBox.Text.Trim();
-        var newValue = string.IsNullOrEmpty(trimmed) ? null : trimmed;
-        if (newValue == oldValue)
+        var updated = _config.BridgeSeedAddresses.Where(a => a != selected).ToList();
+        await SaveNetworkBridgeAddressesAsync(updated);
+    }
+
+    // Nutzerwunsch 15.08.2026: nur Vorschlag, keine Silent-Auto-Übernahme - bei mehreren
+    // NICs/VPN-Adaptern könnte sonst unbemerkt die falsche Adresse übernommen werden.
+    private void DetectLocalAddressesButton_Click(object sender, RoutedEventArgs e)
+    {
+        DetectedAddressCandidatesPanel.Items.Clear();
+        IReadOnlyList<string> candidates;
+        try
         {
+            candidates = LocalNetworkAddressDetector.GetCandidateAddresses();
+        }
+        catch (Exception ex)
+        {
+            NetworkStatusText.Text = "Erkennung fehlgeschlagen - siehe Fehlermeldung.";
+            ActionErrorHandler.Show(this, "Lokale Adressen erkennen", ex);
             return;
         }
+
+        if (candidates.Count == 0)
+        {
+            NetworkStatusText.Text = "Keine passende lokale Netzwerkadresse gefunden.";
+            return;
+        }
+
+        foreach (var candidate in candidates)
+        {
+            var alreadyAdded = _config.BridgeSeedAddresses.Contains(candidate);
+            var button = new Button
+            {
+                Content = alreadyAdded ? $"{candidate} (bereits in der Liste)" : $"+ {candidate}",
+                Margin = new Thickness(0, 0, 0, 4),
+                Padding = new Thickness(10, 4, 10, 4),
+                HorizontalAlignment = HorizontalAlignment.Left,
+                IsEnabled = !alreadyAdded,
+            };
+            button.Click += async (_, _) => await AddNetworkBridgeAddressAsync(candidate);
+            DetectedAddressCandidatesPanel.Items.Add(button);
+        }
+    }
+
+    private async Task SaveNetworkBridgeAddressesAsync(List<string> updated)
+    {
+        var oldDisplay = _config.BridgeSeedAddresses.Count > 0 ? string.Join(", ", _config.BridgeSeedAddresses) : "(keine)";
+        var newDisplay = updated.Count > 0 ? string.Join(", ", updated) : "(keine)";
 
         try
         {
-            await PublishAsync(cfg => { cfg.BridgeSeedAddress = newValue; return cfg; },
-                EditScopeKind.NetworkBridge, AppConstants.NetworkBridgeScopeId, "Bridge-Seed-Adresse", oldValue, newValue);
+            await PublishAsync(cfg => { cfg.BridgeSeedAddresses = updated; return cfg; },
+                EditScopeKind.NetworkBridge, AppConstants.NetworkBridgeScopeId, "Bridge-Seed-Adressen", oldDisplay, newDisplay);
             ReloadAll();
             LoadNetworkTab();
             NetworkStatusText.Text = "Gespeichert und an alle Geräte verteilt.";
@@ -1531,7 +1602,7 @@ public partial class AdminDashboardWindow : Window
         catch (Exception ex)
         {
             NetworkStatusText.Text = "Fehlgeschlagen - siehe Fehlermeldung.";
-            ActionErrorHandler.Show(this, "Bridge-Seed-Adresse speichern", ex);
+            ActionErrorHandler.Show(this, "Bridge-Seed-Adressen speichern", ex);
         }
     }
 }

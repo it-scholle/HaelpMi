@@ -13,7 +13,7 @@
 #define MyAppName "HälpMi"
 ; Alpha: 0.x until release, per city/product decision - Version 1.0.0 is reserved for
 ; the actual release. Bump the third number for ordinary fixes, second for a feature.
-#define MyAppVersion "0.27.0"
+#define MyAppVersion "0.28.0"
 #define MyAppPublisher "HälpMi contributors"
 #define MyAgentExeName "HaelpMi.Agent.exe"
 #define MyConfigExeName "HaelpMi.Config.exe"
@@ -44,9 +44,10 @@
 ; optionaler Startwert für DeploymentInfo.BridgeSeedAddress - IP/Hostname eines Geräts in
 ; einem anderen, nur gerouteten Subnetz/VLAN. Vom Install-Creator per
 ; "/DBridgeSeedAddress=..." gesetzt, wenn im Bau-Dialog ausgefüllt; leer = kein Multi-VLAN-
-; Bootstrap (Normalfall). Rein installer-seitiger Startwert - der Admin kann/soll den
-; tatsächlich verwendeten Wert später im Dashboard (Netzwerk-Tab) hot-reload pflegen, siehe
-; SharedConfig.BridgeSeedAddress-Kommentar, warum der dort Vorrang hat.
+; Bootstrap (Normalfall). Rein installer-seitiger Startwert (bewusst weiterhin nur eine
+; einzelne Adresse, siehe DeploymentInfo.cs-Kommentar) - der Admin kann/soll die tatsächlich
+; verwendete(n) Adresse(n) später im Dashboard (Netzwerk-Tab, mehrere möglich) hot-reload
+; pflegen, siehe SharedConfig.BridgeSeedAddresses-Kommentar, warum der dort Vorrang hat.
 #ifndef BridgeSeedAddress
   #define BridgeSeedAddress ""
 #endif

@@ -39,14 +39,14 @@ public sealed class AdminPeerContactInfo
 ///
 /// A plain limited broadcast (255.255.255.255) only reaches the default-route subnet,
 /// matching the spec's accepted "same subnet/VLAN only" constraint. Multi-VLAN-Bridge-Seed
-/// (Nutzerwunsch 13.08.2026): if <see cref="_bridgeSeedAddressProvider"/> resolves to a
-/// non-empty address (typically an Admin-Gerät in a routed-but-not-broadcast-reachable
-/// segment), <see cref="AnnounceAsync"/> additionally unicasts the same boot-call there -
-/// the receiving <see cref="HandleDatagramAsync"/> doesn't distinguish unicast from
-/// broadcast origin, so this "just works" as a bootstrap contact. Once that first contact
-/// stands, the existing gossip (<c>KnownDeviceSummary</c> in a Reply) carries the rest of
-/// the device list across the bridge on its own - the seed device itself needn't stay up
-/// afterwards.
+/// (Nutzerwunsch 13.08.2026, erweitert 15.08.2026 auf mehrere Adressen): if
+/// <see cref="_bridgeSeedAddressProvider"/> resolves to one or more addresses (typically
+/// Admin-Geräte in routed-but-not-broadcast-reachable segments), <see cref="AnnounceAsync"/>
+/// additionally unicasts the same boot-call to each of them - the receiving
+/// <see cref="HandleDatagramAsync"/> doesn't distinguish unicast from broadcast origin, so
+/// this "just works" as a bootstrap contact. Once that first contact stands, the existing
+/// gossip (<c>KnownDeviceSummary</c> in a Reply) carries the rest of the device list across
+/// the bridge on its own - none of the seed devices themselves need to stay up afterwards.
 /// </summary>
 public sealed class DiscoveryService : IAsyncDisposable
 {
@@ -55,7 +55,7 @@ public sealed class DiscoveryService : IAsyncDisposable
     private readonly DeviceStore _deviceStore = new();
     private readonly SemaphoreSlim _storeLock = new(1, 1);
     private readonly Action<string>? _audit;
-    private readonly Func<string?>? _bridgeSeedAddressProvider;
+    private readonly Func<IReadOnlyCollection<string>>? _bridgeSeedAddressProvider;
     private UdpClient? _socket;
     private CancellationTokenSource? _cts;
     private Task? _receiveLoop;
@@ -95,15 +95,15 @@ public sealed class DiscoveryService : IAsyncDisposable
     /// <param name="discoveryPort">Overridable only for tests - production always uses <see cref="AppConstants.DiscoveryUdpPort"/> so every device agrees on one port.</param>
     /// <param name="bridgeSeedAddressProvider">
     /// Multi-VLAN-Bridge-Seed (siehe Klassenkommentar): liefert bei jedem Announce-Aufruf
-    /// die aktuell konfigurierte Bootstrap-Adresse (leer/null = keine, Normalfall). Ein
-    /// Func statt eines festen Werts, weil der Aufrufer (HaelpMi.Agent) sie hot-reload-fähig
-    /// aus SharedConfig lesen soll, nicht einmalig beim Konstruieren einfrieren darf.
+    /// die aktuell konfigurierten Bootstrap-Adressen (leer = keine, Normalfall). Ein Func
+    /// statt eines festen Werts, weil der Aufrufer (HaelpMi.Agent) sie hot-reload-fähig aus
+    /// SharedConfig lesen soll, nicht einmalig beim Konstruieren einfrieren darf.
     /// </param>
     public DiscoveryService(
         Func<LiveIdentity> identityProvider,
         Action<string>? audit = null,
         int? discoveryPort = null,
-        Func<string?>? bridgeSeedAddressProvider = null)
+        Func<IReadOnlyCollection<string>>? bridgeSeedAddressProvider = null)
     {
         _identityProvider = identityProvider;
         _audit = audit;
@@ -143,46 +143,56 @@ public sealed class DiscoveryService : IAsyncDisposable
         var broadcastEndpoint = new IPEndPoint(IPAddress.Broadcast, _discoveryPort);
         await _socket.SendAsync(payload, payload.Length, broadcastEndpoint).WaitAsync(ct);
 
-        await SendToBridgeSeedAsync(payload, ct);
+        await SendToBridgeSeedsAsync(payload, ct);
     }
 
     /// <summary>
     /// Multi-VLAN-Bridge-Seed (Klassenkommentar): zusätzlicher Unicast desselben Announce-
-    /// Payloads an eine konfigurierte Bootstrap-Adresse jenseits des eigenen Broadcast-
+    /// Payloads an jede konfigurierte Bootstrap-Adresse jenseits des eigenen Broadcast-
     /// Bereichs. Bewusst best-effort und komplett getrennt vom obigen Broadcast-Send in
-    /// AnnounceAsync - eine falsche/nicht (mehr) erreichbare Adresse (DNS-Fehler, Timeout,
-    /// falsch getippt) darf niemals die normale lokale Discovery beeinträchtigen, die zu
-    /// diesem Zeitpunkt bereits erfolgreich rausgegangen ist.
+    /// AnnounceAsync, und pro Adresse einzeln isoliert - eine falsche/nicht (mehr)
+    /// erreichbare Adresse (DNS-Fehler, Timeout, falsch getippt) darf weder die normale
+    /// lokale Discovery beeinträchtigen noch die übrigen konfigurierten Bridge-Seeds
+    /// blockieren.
     /// </summary>
-    private async Task SendToBridgeSeedAsync(byte[] payload, CancellationToken ct)
+    private async Task SendToBridgeSeedsAsync(byte[] payload, CancellationToken ct)
     {
-        var seedAddress = _bridgeSeedAddressProvider?.Invoke();
-        if (string.IsNullOrWhiteSpace(seedAddress) || _socket is null)
+        var seedAddresses = _bridgeSeedAddressProvider?.Invoke();
+        if (seedAddresses is null || seedAddresses.Count == 0 || _socket is null)
         {
             return;
         }
 
-        try
+        foreach (var seedAddress in seedAddresses)
         {
-            // IP direkt (Normalfall bei einer festen Standort-zu-Standort-Route) oder
-            // Hostname (falls das Kundennetz DNS über die VPN-Verbindung anbietet) - beides
-            // erlaubt, ohne dass der Admin im Dashboard zwischen beiden unterscheiden muss.
-            var resolved = IPAddress.TryParse(seedAddress, out var parsed)
-                ? parsed
-                : (await Dns.GetHostAddressesAsync(seedAddress, ct)).FirstOrDefault();
-            if (resolved is null)
+            if (string.IsNullOrWhiteSpace(seedAddress))
             {
-                return;
+                continue;
             }
 
-            var seedEndpoint = new IPEndPoint(resolved, _discoveryPort);
-            await _socket.SendAsync(payload, payload.Length, seedEndpoint).WaitAsync(ct);
-        }
-        catch (Exception)
-        {
-            // best-effort - siehe Methodenkommentar; kein Audit-Log-Eintrag nötig, das würde
-            // bei einer dauerhaft falsch konfigurierten Adresse nur bei jedem Announce erneut
-            // spammen, ohne dass der Admin etwas Neues erfährt.
+            try
+            {
+                // IP direkt (Normalfall bei einer festen Standort-zu-Standort-Route) oder
+                // Hostname (falls das Kundennetz DNS über die VPN-Verbindung anbietet) -
+                // beides erlaubt, ohne dass der Admin im Dashboard zwischen beiden
+                // unterscheiden muss.
+                var resolved = IPAddress.TryParse(seedAddress, out var parsed)
+                    ? parsed
+                    : (await Dns.GetHostAddressesAsync(seedAddress, ct)).FirstOrDefault();
+                if (resolved is null)
+                {
+                    continue;
+                }
+
+                var seedEndpoint = new IPEndPoint(resolved, _discoveryPort);
+                await _socket.SendAsync(payload, payload.Length, seedEndpoint).WaitAsync(ct);
+            }
+            catch (Exception)
+            {
+                // best-effort pro Adresse - siehe Methodenkommentar; kein Audit-Log-Eintrag
+                // nötig, das würde bei einer dauerhaft falsch konfigurierten Adresse nur bei
+                // jedem Announce erneut spammen, ohne dass der Admin etwas Neues erfährt.
+            }
         }
     }
 

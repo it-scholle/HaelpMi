@@ -26,23 +26,35 @@ public sealed class SharedConfig
     public UpdateRolloutState UpdateRollout { get; set; } = new();
 
     /// <summary>
-    /// Multi-VLAN-Bootstrap-Seed (Nutzerwunsch 13.08.2026, Admin-Gerät "als so eine Art
-    /// erster Peer"): IP-Adresse oder Hostname eines Geräts in einem anderen, nur
-    /// gerouteten (nicht per Broadcast erreichbaren) Subnetz/VLAN. <see cref="DiscoveryService"/>
-    /// unicastet seinen Boot-Call zusätzlich zum lokalen Broadcast an diese Adresse - sobald
-    /// der erste Kontakt über die Brücke steht, übernimmt das bestehende Gossip
-    /// (<c>KnownDeviceSummary</c> in den Discovery-Replies) die restliche Verteilung, die
-    /// Brücke selbst muss danach nicht mehr bestehen bleiben (Ausfalltoleranz).
+    /// Multi-VLAN-Bootstrap-Seeds (Nutzerwunsch 13.08.2026, Admin-Gerät "als so eine Art
+    /// erster Peer"; erweitert 15.08.2026 von einer einzelnen Adresse auf beliebig viele -
+    /// Nutzerwunsch: es kann mehrere Bridge-Geräte geben, die der Admin einzeln pflegen
+    /// will): IP-Adressen oder Hostnamen von Geräten in anderen, nur gerouteten (nicht per
+    /// Broadcast erreichbaren) Subnetzen/VLANs. <see cref="DiscoveryService"/> unicastet
+    /// seinen Boot-Call zusätzlich zum lokalen Broadcast an jede dieser Adressen - sobald
+    /// der erste Kontakt über eine der Brücken steht, übernimmt das bestehende Gossip
+    /// (<c>KnownDeviceSummary</c> in den Discovery-Replies) die restliche Verteilung, keine
+    /// der Brücken muss danach weiter bestehen bleiben (Ausfalltoleranz).
     ///
-    /// Optional, leer = kein Multi-VLAN-Bootstrap konfiguriert (Normalfall: alle Geräte im
-    /// selben Subnetz/VLAN, Broadcast reicht). Editierbar im Admin-Dashboard (Netzwerk-Tab,
-    /// <see cref="EditScopeKind.NetworkBridge"/>) und hot-reload-verteilt wie jedes andere
-    /// Feld hier - ein per Install-Creator vorbelegter Startwert (siehe
-    /// <see cref="DeploymentInfo.BridgeSeedAddress"/>) dient nur als Fallback, solange noch
-    /// nie ein Config-Sync stattgefunden hat (frisch installiertes Gerät an einer Außenstelle,
-    /// das seine erste Config erst über genau diese Brücke ziehen kann).
+    /// Nie null (leere Liste statt), damit Aufrufer nicht jedes Mal auf null prüfen müssen.
+    /// Leer = kein Multi-VLAN-Bootstrap konfiguriert (Normalfall: alle Geräte im selben
+    /// Subnetz/VLAN, Broadcast reicht). Editierbar im Admin-Dashboard (Netzwerk-Tab,
+    /// <see cref="EditScopeKind.NetworkBridge"/> - ein Sperr-Datensatz für die ganze Liste,
+    /// nicht pro Adresse) und hot-reload-verteilt wie jedes andere Feld hier - ein per
+    /// Install-Creator vorbelegter Startwert (siehe <see cref="DeploymentInfo.BridgeSeedAddress"/>,
+    /// bewusst weiterhin nur eine einzelne Adresse, siehe dortiger Kommentar) dient nur als
+    /// Fallback, solange noch nie ein Config-Sync stattgefunden hat (frisch installiertes
+    /// Gerät an einer Außenstelle, das seine erste Config erst über genau diese Brücke
+    /// ziehen kann).
+    ///
+    /// Formatänderung 15.08.2026: war zuvor <c>string? BridgeSeedAddress</c>. Kein
+    /// Migrationsschritt für alte <c>sharedconfig.json</c>-Dateien - System.Text.Json
+    /// ignoriert das alte, jetzt unbekannte Feld beim Deserialisieren stillschweigend und
+    /// lässt diese Liste leer, bis der jeweilige Admin einmal neu speichert. Bewusst kein
+    /// Kompatibilitäts-Shim (CLAUDE.md, kein Over-Engineering) - vertretbar für ein Feature
+    /// vor 1.0 mit kurzem Rollout-Fenster.
     /// </summary>
-    public string? BridgeSeedAddress { get; set; }
+    public List<string> BridgeSeedAddresses { get; set; } = new();
 }
 
 /// <summary>
