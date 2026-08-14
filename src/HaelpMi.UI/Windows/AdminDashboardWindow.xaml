@@ -351,6 +351,27 @@
                     <TextBlock x:Name="UpdatesStatusText" Margin="0,8,0,0" Foreground="Gray" TextWrapping="Wrap" />
                 </StackPanel>
             </TabItem>
+
+            <!-- Netzwerk (Nutzerwunsch 13.08.2026, Multi-VLAN-Bridge-Seed): Ordnungsamt/
+                 Rathaus/Landratsamt in getrennten, nur gerouteten VLANs finden sich per
+                 Broadcast nicht - diese Adresse lässt das Admin-Gerät (oder ein anderes
+                 dauerhaft erreichbares Gerät) als Bootstrap-Kontakt jenseits der eigenen
+                 Broadcast-Domäne dienen. Sobald darüber einmal Kontakt besteht, übernimmt
+                 das normale Gossip die restliche Geräteliste - siehe DiscoveryService. -->
+            <TabItem x:Name="NetworkTabItem" Header="Netzwerk">
+                <StackPanel Margin="10" x:Name="NetworkPanel" IsEnabled="False">
+                    <TextBlock Text="Multi-VLAN-Bootstrap" FontSize="16" FontWeight="Bold" Margin="0,0,0,4" />
+                    <TextBlock TextWrapping="Wrap" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,0,14"
+                               Text="Nur nötig, wenn Geräte in getrennten, gerouteten Subnetzen/VLANs stehen (z. B. Außenstelle über VPN) - im Normalfall (alle Geräte im selben Subnetz) leer lassen, Broadcast reicht dann aus." />
+
+                    <TextBlock Text="Bridge-Seed-Adresse (IP oder Hostname, optional)" FontWeight="SemiBold" TextWrapping="Wrap" />
+                    <TextBox x:Name="NetworkBridgeAddressBox" Margin="0,6,0,4" LostFocus="NetworkBridgeAddressBox_LostFocus" />
+                    <TextBlock TextWrapping="Wrap" Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" Margin="0,0,0,14"
+                               Text="Ein Gerät jenseits der eigenen Broadcast-Domäne (typischerweise dieses Admin-Gerät, von der Außenstelle aus gesehen). Wird zusätzlich zum lokalen Broadcast direkt kontaktiert - danach reicht die normale Geräte-Erkennung von selbst weiter." />
+
+                    <TextBlock x:Name="NetworkStatusText" Margin="0,8,0,0" Foreground="Gray" TextWrapping="Wrap" />
+                </StackPanel>
+            </TabItem>
         </TabControl>
 
         <DockPanel Grid.Row="2" Margin="0,8,0,0">

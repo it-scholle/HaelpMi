@@ -85,6 +85,9 @@ Ausführungs-Hinweis (verändert das System, läuft NICHT automatisch in jedem `
 | B8 | Alarm-Feedback-Kanal ("bin unterwegs") Roundtrip | ❌ **Lücke** — nur Port-belegt-Fall getestet |
 | B9 🔹 | Alle 4 TCP-Dienste degradieren bei belegtem Port ohne Absturz | ✅ (dieser Sitzung's Regressions-Tests) |
 | B10 🔹 | Repeating-Alarm-Session stoppt bei Erreichen des PRO PROFIL konfigurierten Schwellwerts (nicht eines festen Default) | ✅ (07.08.2026, Regressionstest für live gemeldeten Bug - siehe SendingTests.cs) |
+| B11 | Multi-VLAN-Bridge-Seed: AnnounceAsync unicastet zusätzlich zum lokalen Broadcast an eine konfigurierte Bridge-Seed-Adresse | ✅ (13.08.2026, siehe NetworkingTests.cs) |
+| B12 | Multi-VLAN-Bridge-Seed: ein über die Brücke neu gelerntes Gerät löst einen sofortigen lokalen Re-Announce aus (statt erst beim nächsten eigenen Boot) | ✅ (13.08.2026, Regressionsschutz - gleiche Fehlerklasse wie der PeerConfigVersionObserved-Fix vom 11.08.2026) |
+| B13 | Multi-VLAN-Bridge-Seed: ein reiner Refresh eines bereits bekannten Geräts löst KEINEN zusätzlichen Re-Announce aus | ✅ (13.08.2026, Gegenprobe zu B12) |
 
 ## C. Konfigurationslogik
 

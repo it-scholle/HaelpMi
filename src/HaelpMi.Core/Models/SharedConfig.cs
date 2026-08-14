@@ -24,6 +24,25 @@ public sealed class SharedConfig
 
     /// <summary>Admin-gesteuerte Freigabe für Programm-Updates (Abschnitt 11).</summary>
     public UpdateRolloutState UpdateRollout { get; set; } = new();
+
+    /// <summary>
+    /// Multi-VLAN-Bootstrap-Seed (Nutzerwunsch 13.08.2026, Admin-Gerät "als so eine Art
+    /// erster Peer"): IP-Adresse oder Hostname eines Geräts in einem anderen, nur
+    /// gerouteten (nicht per Broadcast erreichbaren) Subnetz/VLAN. <see cref="DiscoveryService"/>
+    /// unicastet seinen Boot-Call zusätzlich zum lokalen Broadcast an diese Adresse - sobald
+    /// der erste Kontakt über die Brücke steht, übernimmt das bestehende Gossip
+    /// (<c>KnownDeviceSummary</c> in den Discovery-Replies) die restliche Verteilung, die
+    /// Brücke selbst muss danach nicht mehr bestehen bleiben (Ausfalltoleranz).
+    ///
+    /// Optional, leer = kein Multi-VLAN-Bootstrap konfiguriert (Normalfall: alle Geräte im
+    /// selben Subnetz/VLAN, Broadcast reicht). Editierbar im Admin-Dashboard (Netzwerk-Tab,
+    /// <see cref="EditScopeKind.NetworkBridge"/>) und hot-reload-verteilt wie jedes andere
+    /// Feld hier - ein per Install-Creator vorbelegter Startwert (siehe
+    /// <see cref="DeploymentInfo.BridgeSeedAddress"/>) dient nur als Fallback, solange noch
+    /// nie ein Config-Sync stattgefunden hat (frisch installiertes Gerät an einer Außenstelle,
+    /// das seine erste Config erst über genau diese Brücke ziehen kann).
+    /// </summary>
+    public string? BridgeSeedAddress { get; set; }
 }
 
 /// <summary>

@@ -31,9 +31,16 @@ public sealed class PeerConfigVersionInfo
 /// different id than ours is dropped in <see cref="HandleDatagramAsync"/> before it
 /// touches the device list at all (Teil 2, Abschnitt 6 - customer/group isolation).
 ///
-/// Known limitation carried over from 5.5: a plain limited broadcast (255.255.255.255)
-/// only reaches the default-route subnet, matching the spec's accepted "same
-/// subnet/VLAN only" constraint - segmented networks fall back to manual entries.
+/// A plain limited broadcast (255.255.255.255) only reaches the default-route subnet,
+/// matching the spec's accepted "same subnet/VLAN only" constraint. Multi-VLAN-Bridge-Seed
+/// (Nutzerwunsch 13.08.2026): if <see cref="_bridgeSeedAddressProvider"/> resolves to a
+/// non-empty address (typically an Admin-Gerät in a routed-but-not-broadcast-reachable
+/// segment), <see cref="AnnounceAsync"/> additionally unicasts the same boot-call there -
+/// the receiving <see cref="HandleDatagramAsync"/> doesn't distinguish unicast from
+/// broadcast origin, so this "just works" as a bootstrap contact. Once that first contact
+/// stands, the existing gossip (<c>KnownDeviceSummary</c> in a Reply) carries the rest of
+/// the device list across the bridge on its own - the seed device itself needn't stay up
+/// afterwards.
 /// </summary>
 public sealed class DiscoveryService : IAsyncDisposable
 {
@@ -42,6 +49,7 @@ public sealed class DiscoveryService : IAsyncDisposable
     private readonly DeviceStore _deviceStore = new();
     private readonly SemaphoreSlim _storeLock = new(1, 1);
     private readonly Action<string>? _audit;
+    private readonly Func<string?>? _bridgeSeedAddressProvider;
     private UdpClient? _socket;
     private CancellationTokenSource? _cts;
     private Task? _receiveLoop;
@@ -68,11 +76,22 @@ public sealed class DiscoveryService : IAsyncDisposable
     public event EventHandler<PeerConfigVersionInfo>? PeerConfigVersionObserved;
 
     /// <param name="discoveryPort">Overridable only for tests - production always uses <see cref="AppConstants.DiscoveryUdpPort"/> so every device agrees on one port.</param>
-    public DiscoveryService(Func<LiveIdentity> identityProvider, Action<string>? audit = null, int? discoveryPort = null)
+    /// <param name="bridgeSeedAddressProvider">
+    /// Multi-VLAN-Bridge-Seed (siehe Klassenkommentar): liefert bei jedem Announce-Aufruf
+    /// die aktuell konfigurierte Bootstrap-Adresse (leer/null = keine, Normalfall). Ein
+    /// Func statt eines festen Werts, weil der Aufrufer (HaelpMi.Agent) sie hot-reload-fähig
+    /// aus SharedConfig lesen soll, nicht einmalig beim Konstruieren einfrieren darf.
+    /// </param>
+    public DiscoveryService(
+        Func<LiveIdentity> identityProvider,
+        Action<string>? audit = null,
+        int? discoveryPort = null,
+        Func<string?>? bridgeSeedAddressProvider = null)
     {
         _identityProvider = identityProvider;
         _audit = audit;
         _discoveryPort = discoveryPort ?? AppConstants.DiscoveryUdpPort;
+        _bridgeSeedAddressProvider = bridgeSeedAddressProvider;
     }
 
     /// <summary>Binds the socket and starts the background receive loop. Call once at Agent startup.</summary>
@@ -106,6 +125,48 @@ public sealed class DiscoveryService : IAsyncDisposable
         var payload = NetworkSerializer.ToUtf8Json(message);
         var broadcastEndpoint = new IPEndPoint(IPAddress.Broadcast, _discoveryPort);
         await _socket.SendAsync(payload, payload.Length, broadcastEndpoint).WaitAsync(ct);
+
+        await SendToBridgeSeedAsync(payload, ct);
+    }
+
+    /// <summary>
+    /// Multi-VLAN-Bridge-Seed (Klassenkommentar): zusätzlicher Unicast desselben Announce-
+    /// Payloads an eine konfigurierte Bootstrap-Adresse jenseits des eigenen Broadcast-
+    /// Bereichs. Bewusst best-effort und komplett getrennt vom obigen Broadcast-Send in
+    /// AnnounceAsync - eine falsche/nicht (mehr) erreichbare Adresse (DNS-Fehler, Timeout,
+    /// falsch getippt) darf niemals die normale lokale Discovery beeinträchtigen, die zu
+    /// diesem Zeitpunkt bereits erfolgreich rausgegangen ist.
+    /// </summary>
+    private async Task SendToBridgeSeedAsync(byte[] payload, CancellationToken ct)
+    {
+        var seedAddress = _bridgeSeedAddressProvider?.Invoke();
+        if (string.IsNullOrWhiteSpace(seedAddress) || _socket is null)
+        {
+            return;
+        }
+
+        try
+        {
+            // IP direkt (Normalfall bei einer festen Standort-zu-Standort-Route) oder
+            // Hostname (falls das Kundennetz DNS über die VPN-Verbindung anbietet) - beides
+            // erlaubt, ohne dass der Admin im Dashboard zwischen beiden unterscheiden muss.
+            var resolved = IPAddress.TryParse(seedAddress, out var parsed)
+                ? parsed
+                : (await Dns.GetHostAddressesAsync(seedAddress, ct)).FirstOrDefault();
+            if (resolved is null)
+            {
+                return;
+            }
+
+            var seedEndpoint = new IPEndPoint(resolved, _discoveryPort);
+            await _socket.SendAsync(payload, payload.Length, seedEndpoint).WaitAsync(ct);
+        }
+        catch (Exception)
+        {
+            // best-effort - siehe Methodenkommentar; kein Audit-Log-Eintrag nötig, das würde
+            // bei einer dauerhaft falsch konfigurierten Adresse nur bei jedem Announce erneut
+            // spammen, ohne dass der Admin etwas Neues erfährt.
+        }
     }
 
     private BootCallMessage BuildMessage(MessageKind kind, IReadOnlyList<KnownDeviceSummary>? knownDevices = null)
@@ -207,16 +268,19 @@ public sealed class DiscoveryService : IAsyncDisposable
 
         var remoteIp = result.RemoteEndPoint.Address.ToString();
         DeviceEntry updated;
+        var learnedNewDevice = false;
 
         await _storeLock.WaitAsync(ct);
         try
         {
             var devices = _deviceStore.Load();
+            var isNewPrimaryDevice = devices.All(d => d.DeviceId != message.DeviceId);
             var info = new DeviceUpsertInfo(
                 message.ComputerName, message.User, message.RoomName, message.RoomNumber,
                 message.Role, message.IsRemoteSession, remoteIp, message.TcpPort);
             DeviceStore.Upsert(devices, message.DeviceId, info, DateTimeOffset.UtcNow);
             updated = devices.First(d => d.DeviceId == message.DeviceId);
+            learnedNewDevice = isNewPrimaryDevice;
 
             // Gossip (Nutzerwunsch 05.08.2026): eine Reply kann die komplette Geräteliste
             // des Antwortenden mitbringen - so lernen wir auch von Geräten, die gerade
@@ -229,6 +293,11 @@ public sealed class DiscoveryService : IAsyncDisposable
                     if (known.DeviceId == ownIdentity.DeviceId || known.DeviceId == message.DeviceId)
                     {
                         continue;
+                    }
+
+                    if (devices.All(d => d.DeviceId != known.DeviceId))
+                    {
+                        learnedNewDevice = true;
                     }
 
                     var knownInfo = new DeviceUpsertInfo(
@@ -247,6 +316,17 @@ public sealed class DiscoveryService : IAsyncDisposable
 
         _audit?.Invoke($"discovery {message.Kind} deviceId={message.DeviceId}");
         DeviceUpdated?.Invoke(this, updated);
+
+        if (learnedNewDevice)
+        {
+            // Multi-VLAN-Bridge-Seed-Folgefix (Nutzerwunsch 13.08.2026): ohne das hier
+            // erführen bereits laufende lokale Peers von einem neu über die Brücke gelernten
+            // Fremdsubnetz-Gerät erst bei ihrem eigenen nächsten Boot (kein Heartbeat) oder
+            // einem manuellen "Erneut suchen" - dieselbe Fehlerklasse wie der
+            // PeerConfigVersionObserved-Fix vom 11.08.2026. Best-effort, eigener Re-Announce
+            // löst wieder ganz normal Replies+Gossip bei den lokalen Nachbarn aus.
+            _ = ReAnnounceBestEffortAsync(ct);
+        }
 
         if (message.ProgramVersion != ownIdentity.ProgramVersion)
         {
@@ -270,6 +350,20 @@ public sealed class DiscoveryService : IAsyncDisposable
         if (message.Kind == MessageKind.Announce)
         {
             await ReplyDirectlyAsync(result.RemoteEndPoint, message.DeviceId, ct);
+        }
+    }
+
+    private async Task ReAnnounceBestEffortAsync(CancellationToken ct)
+    {
+        try
+        {
+            await AnnounceAsync(ct);
+        }
+        catch (Exception)
+        {
+            // best-effort, wie ReceiveLoopAsync's Toleranz für einen einzelnen fehlgeschlagenen
+            // Schritt - der nächste eigene Boot bzw. ein manuelles "Erneut suchen" bleibt der
+            // Fallback, falls ausgerechnet dieser eine Re-Announce scheitert.
         }
     }
 

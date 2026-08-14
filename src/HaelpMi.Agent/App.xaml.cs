@@ -289,7 +289,16 @@ public partial class App : System.Windows.Application
 
         _coordinator = new AlarmFlowCoordinator(BuildIdentity, () => _settings, _sharedConfigStore.LoadOrCreate, _feedbackChannel);
 
-        _discovery = new DiscoveryService(BuildIdentity, _auditLog.Append);
+        // Multi-VLAN-Bridge-Seed (Nutzerwunsch 13.08.2026): SharedConfig gewinnt, weil sie
+        // hot-reload-editierbar ist (IP kann per DHCP wandern, kein neuer Installer nötig) -
+        // deployment.json (Install-Creator-Startwert) ist nur der Fallback für den
+        // allerersten Start, solange noch nie ein Config-Sync stattgefunden hat (frisch
+        // installiertes Gerät an einer Außenstelle).
+        _discovery = new DiscoveryService(BuildIdentity, _auditLog.Append, bridgeSeedAddressProvider: () =>
+        {
+            var fromConfig = _sharedConfigStore.LoadOrCreate().BridgeSeedAddress;
+            return string.IsNullOrWhiteSpace(fromConfig) ? _deployment.BridgeSeedAddress : fromConfig;
+        });
         _discovery.StartListening();
         _ = _discovery.AnnounceAsync();
 

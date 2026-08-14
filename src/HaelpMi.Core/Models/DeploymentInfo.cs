@@ -25,4 +25,16 @@ public sealed class DeploymentInfo
     /// branches on it at runtime beyond that.
     /// </summary>
     public bool IsTestInstaller { get; set; }
+
+    /// <summary>
+    /// Multi-VLAN-Bootstrap-Seed, optional im Install-Creator vorbelegt (Nutzerwunsch
+    /// 13.08.2026) - IP/Hostname eines Geräts in einem anderen, nur gerouteten Subnetz/VLAN,
+    /// das dieses Gerät beim Discovery-Boot-Call zusätzlich zum lokalen Broadcast unicastet
+    /// (siehe <see cref="DiscoveryService"/>). Reiner Fallback für den allerersten Start,
+    /// solange <see cref="SharedConfig.BridgeSeedAddress"/> noch leer ist (frisch
+    /// installiertes Gerät hat noch nie einen Config-Sync erhalten) - danach gewinnt der
+    /// Admin-Dashboard-Wert, weil der sich hot-reload aktualisieren lässt, ohne einen neuen
+    /// Installer bauen zu müssen (IP kann sich per DHCP ändern).
+    /// </summary>
+    public string? BridgeSeedAddress { get; set; }
 }

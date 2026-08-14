@@ -253,6 +253,138 @@ public class NetworkingTests
         Assert.Equal("Lager", gossiped.RoomName);
     }
 
+    // --- Multi-VLAN-Bridge-Seed (Nutzerwunsch 13.08.2026): "Admin als so eine Art erster
+    // Peer" für geroutete, aber nicht per Broadcast erreichbare Subnetze/VLANs hinweg. Alle
+    // drei Tests zielen auf 127.0.0.x-Adressen statt 127.0.0.1: explizit auf eine konkrete
+    // Loopback-Adresse gebundene Sockets empfangen deterministisch nur, was genau dorthin
+    // adressiert ist - der DiscoveryService selbst bindet parallel IPAddress.Any auf
+    // demselben Port, ein Test über 127.0.0.1 könnte sonst nicht zuverlässig unterscheiden,
+    // ob ein empfangenes Paket vom eigenen Socket oder vom simulierten Bridge-Seed-Ziel kam. ---
+
+    [Fact]
+    public async Task DiscoveryService_AnnounceAsync_AlsoUnicastsToConfiguredBridgeSeedAddress()
+    {
+        var discoveryPort = GetFreeUdpPort();
+        var customerGroupId = Guid.NewGuid();
+        var ownDeviceId = Guid.NewGuid();
+        var ownIdentity = MakeIdentity(customerGroupId, ownDeviceId);
+
+        const string seedAddress = "127.0.0.2";
+        using var seedSocket = new UdpClient(new IPEndPoint(IPAddress.Parse(seedAddress), discoveryPort));
+
+        await using var discovery = new DiscoveryService(() => ownIdentity, discoveryPort: discoveryPort, bridgeSeedAddressProvider: () => seedAddress);
+        discovery.StartListening();
+
+        var seedReceiveTask = seedSocket.ReceiveAsync();
+        await discovery.AnnounceAsync();
+
+        var result = await seedReceiveTask.WaitAsync(TimeSpan.FromSeconds(5));
+        var received = JsonSerializer.Deserialize<BootCallMessage>(result.Buffer, WireOptions);
+        Assert.NotNull(received);
+        Assert.Equal(MessageKind.Announce, received!.Kind);
+        Assert.Equal(ownDeviceId, received.DeviceId);
+        Assert.Equal(customerGroupId, received.CustomerGroupId);
+    }
+
+    [Fact]
+    public async Task DiscoveryService_AnnounceAsync_WithoutConfiguredBridgeSeedAddress_DoesNotThrow()
+    {
+        // Normalfall (kein Multi-VLAN-Bootstrap konfiguriert, kein bridgeSeedAddressProvider
+        // übergeben) - AnnounceAsync darf dadurch nicht fehlschlagen, siehe alle anderen
+        // Tests dieser Datei, die den Parameter ebenfalls weglassen.
+        var discoveryPort = GetFreeUdpPort();
+        var ownIdentity = MakeIdentity(Guid.NewGuid(), Guid.NewGuid());
+
+        await using var discovery = new DiscoveryService(() => ownIdentity, discoveryPort: discoveryPort);
+        discovery.StartListening();
+
+        var exception = await Record.ExceptionAsync(() => discovery.AnnounceAsync());
+        Assert.Null(exception);
+    }
+
+    [Fact]
+    public async Task DiscoveryService_LearningNewGossipedDevice_TriggersImmediateReAnnounce()
+    {
+        // Regressionsschutz 13.08.2026, gleiche Fehlerklasse wie PeerConfigVersionObserved
+        // (11.08.2026): ohne diesen sofortigen Re-Announce würden bereits laufende lokale
+        // Peers von einem neu über die Brücke gelernten Fremdsubnetz-Gerät erst bei ihrem
+        // eigenen nächsten Boot erfahren, statt sofort.
+        using var scope = new TestAppDataScope();
+        var discoveryPort = GetFreeUdpPort();
+        var customerGroupId = Guid.NewGuid();
+        var ownDeviceId = Guid.NewGuid();
+        var ownIdentity = MakeIdentity(customerGroupId, ownDeviceId, "Neu-PC", "Herr Neu", "Empfang", "1");
+
+        const string seedAddress = "127.0.0.3";
+        using var seedSocket = new UdpClient(new IPEndPoint(IPAddress.Parse(seedAddress), discoveryPort));
+        var seedReceiveTask = seedSocket.ReceiveAsync();
+
+        await using var discovery = new DiscoveryService(() => ownIdentity, discoveryPort: discoveryPort, bridgeSeedAddressProvider: () => seedAddress);
+        discovery.StartListening();
+
+        using var replierSocket = new UdpClient(0) { EnableBroadcast = true };
+        var replierDeviceId = Guid.NewGuid();
+        var gossipedDeviceId = Guid.NewGuid(); // bislang komplett unbekannt
+        var reply = new BootCallMessage(
+            MessageKind.Reply, customerGroupId, replierDeviceId, "PC-Antwortend", "Frau Antwort", "Büro", "5",
+            Role.User, false, 51999, "9.9.9", 0, DateTimeOffset.UtcNow,
+            new List<KnownDeviceSummary> { new(gossipedDeviceId, "PC-Weitweg", "Herr Fern", "Lager", "99", Role.User, "192.168.1.77", 51501) });
+        var replyBytes = JsonSerializer.SerializeToUtf8Bytes(reply, WireOptions);
+        await replierSocket.SendAsync(replyBytes, replyBytes.Length, new IPEndPoint(IPAddress.Loopback, discoveryPort));
+
+        // Nachweis über den Bridge-Seed-Unicast statt über den realen Broadcast selbst -
+        // deterministisch, ohne auf Broadcast-über-Loopback-Zustellung angewiesen zu sein.
+        var seedResult = await seedReceiveTask.WaitAsync(TimeSpan.FromSeconds(5));
+        var seedReceived = JsonSerializer.Deserialize<BootCallMessage>(seedResult.Buffer, WireOptions);
+        Assert.NotNull(seedReceived);
+        Assert.Equal(MessageKind.Announce, seedReceived!.Kind);
+        Assert.Equal(ownDeviceId, seedReceived.DeviceId);
+    }
+
+    [Fact]
+    public async Task DiscoveryService_RefreshingAlreadyKnownDevice_DoesNotTriggerReAnnounce()
+    {
+        // Gegenprobe zum Test oben: ein reiner Refresh (z. B. "Erneut suchen" trifft auf ein
+        // bereits bekanntes Gerät) darf keinen weiteren Re-Announce auslösen - sonst würde
+        // jede normale Discovery-Aktivität unnötigen zusätzlichen Netzverkehr erzeugen.
+        using var scope = new TestAppDataScope();
+        var discoveryPort = GetFreeUdpPort();
+        var customerGroupId = Guid.NewGuid();
+        var ownIdentity = MakeIdentity(customerGroupId, Guid.NewGuid());
+
+        const string seedAddress = "127.0.0.4";
+        using var seedSocket = new UdpClient(new IPEndPoint(IPAddress.Parse(seedAddress), discoveryPort));
+
+        await using var discovery = new DiscoveryService(() => ownIdentity, discoveryPort: discoveryPort, bridgeSeedAddressProvider: () => seedAddress);
+        discovery.StartListening();
+
+        using var peerSocket = new UdpClient(0) { EnableBroadcast = true };
+        var peerDeviceId = Guid.NewGuid();
+        var announce = new BootCallMessage(
+            MessageKind.Announce, customerGroupId, peerDeviceId, "PC-Bekannt", "Herr Bekannt", "Büro", "3",
+            Role.User, false, 51999, "9.9.9", 0, DateTimeOffset.UtcNow);
+        var announceBytes = JsonSerializer.SerializeToUtf8Bytes(announce, WireOptions);
+
+        // Erstkontakt: das Gerät ist neu, löst also legitim selbst einen Re-Announce an den
+        // Bridge-Seed aus (siehe Test oben) - hier bewusst abwarten/konsumieren, damit er
+        // unten nicht mit dem eigentlich zu prüfenden zweiten Durchlauf verwechselt wird.
+        var firstReplyTask = peerSocket.ReceiveAsync();
+        var firstSeedReceiveTask = seedSocket.ReceiveAsync();
+        await peerSocket.SendAsync(announceBytes, announceBytes.Length, new IPEndPoint(IPAddress.Loopback, discoveryPort));
+        await firstReplyTask.WaitAsync(TimeSpan.FromSeconds(5));
+        await firstSeedReceiveTask.WaitAsync(TimeSpan.FromSeconds(5));
+
+        // Zweiter Announce DESSELBEN, jetzt schon bekannten Geräts - reiner Refresh, kein
+        // neues Gerät, darf keinen weiteren Re-Announce auslösen.
+        var secondReplyTask = peerSocket.ReceiveAsync();
+        var secondSeedReceiveTask = seedSocket.ReceiveAsync();
+        await peerSocket.SendAsync(announceBytes, announceBytes.Length, new IPEndPoint(IPAddress.Loopback, discoveryPort));
+        await secondReplyTask.WaitAsync(TimeSpan.FromSeconds(5));
+
+        var completed = await Task.WhenAny(secondSeedReceiveTask, Task.Delay(TimeSpan.FromMilliseconds(500)));
+        Assert.NotSame(secondSeedReceiveTask, completed);
+    }
+
     // --- Regressionsschutz 11.08.2026: drei frisch installierte Geräte blieben ohne
     // Config, obwohl der Admin sie längst über S/E "alle" eingerichtet hatte - erst ein
     // erneuter Config-Sync-Broadcast (Empfänger entfernt/wieder hinzugefügt) hat sie

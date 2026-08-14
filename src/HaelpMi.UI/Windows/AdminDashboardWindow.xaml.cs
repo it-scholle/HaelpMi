@@ -81,6 +81,10 @@ public partial class AdminDashboardWindow : Window
     // deshalb reicht hier ein bool statt eines Guid?, ob der Lock gerade gehalten wird.
     private bool _heldUpdateRolloutLock;
 
+    // Netzwerk-Tab (Nutzerwunsch 13.08.2026, Multi-VLAN-Bridge-Seed): gleiches Prinzip wie
+    // beim Updates-Tab oben - genau ein Datensatz (AppConstants.NetworkBridgeScopeId).
+    private bool _heldNetworkBridgeLock;
+
     // Unterdrückt die Auto-Speichern-Handler unten, während LoadGroupDetail/
     // LoadProfileDetail selbst Felder befüllen (z. B. GroupNameBox.Text setzen löst sonst
     // GroupNameBox_LostFocus aus, obwohl der Nutzer nichts geändert hat). GroupDevicesList
@@ -271,6 +275,12 @@ public partial class AdminDashboardWindow : Window
         {
             _context.ReleaseLock(EditScopeKind.UpdateRollout, AppConstants.UpdateRolloutScopeId);
             _heldUpdateRolloutLock = false;
+        }
+
+        if (_heldNetworkBridgeLock)
+        {
+            _context.ReleaseLock(EditScopeKind.NetworkBridge, AppConstants.NetworkBridgeScopeId);
+            _heldNetworkBridgeLock = false;
         }
     }
 
@@ -1324,11 +1334,29 @@ public partial class AdminDashboardWindow : Window
             _heldUpdateRolloutLock = false;
         }
 
-        if (!isUpdatesTabNow)
+        // Netzwerk-Tab (Nutzerwunsch 13.08.2026, Multi-VLAN-Bridge-Seed): exakt dasselbe
+        // Reserviert-pro-Tab-Prinzip wie beim Updates-Tab direkt darüber - siehe dortigen
+        // Klassenkommentar/EditScope.cs, weshalb ein eigener EditScopeKind statt Wiederver-
+        // wendung von UpdateRollout.
+        var isNetworkTabNow = ReferenceEquals(MainTabControl.SelectedItem, NetworkTabItem);
+        if (_heldNetworkBridgeLock && !isNetworkTabNow)
         {
-            return;
+            _context.ReleaseLock(EditScopeKind.NetworkBridge, AppConstants.NetworkBridgeScopeId);
+            _heldNetworkBridgeLock = false;
         }
 
+        if (isUpdatesTabNow)
+        {
+            await AcquireUpdatesTabLockAsync();
+        }
+        else if (isNetworkTabNow)
+        {
+            await AcquireNetworkTabLockAsync();
+        }
+    }
+
+    private async Task AcquireUpdatesTabLockAsync()
+    {
         UpdatesPanel.IsEnabled = false;
         UpdatesStatusText.Text = "Wird zur Bearbeitung reserviert...";
         try
@@ -1363,6 +1391,43 @@ public partial class AdminDashboardWindow : Window
         {
             UpdatesStatusText.Text = "Reservierung fehlgeschlagen - siehe Fehlermeldung.";
             ActionErrorHandler.Show(this, "Updates-Tab zur Bearbeitung reservieren", ex);
+        }
+    }
+
+    private async Task AcquireNetworkTabLockAsync()
+    {
+        NetworkPanel.IsEnabled = false;
+        NetworkStatusText.Text = "Wird zur Bearbeitung reserviert...";
+        try
+        {
+            var result = await _context.AcquireLock(EditScopeKind.NetworkBridge, AppConstants.NetworkBridgeScopeId);
+            if (!ReferenceEquals(MainTabControl.SelectedItem, NetworkTabItem))
+            {
+                if (result.Outcome == EditLockAcquireOutcome.Granted)
+                {
+                    _context.ReleaseLock(EditScopeKind.NetworkBridge, AppConstants.NetworkBridgeScopeId);
+                }
+                return;
+            }
+
+            if (result.Outcome != EditLockAcquireOutcome.Granted)
+            {
+                NetworkStatusText.Text = result.Outcome == EditLockAcquireOutcome.DeniedByHolder
+                    ? $"Wird gerade von {result.HolderComputerName} ({result.HolderUser}) bearbeitet - nur Ansicht."
+                    : "Konnte nicht exklusiv reserviert werden - bitte Tab erneut wählen.";
+                LoadNetworkTab();
+                return;
+            }
+
+            _heldNetworkBridgeLock = true;
+            NetworkStatusText.Text = string.Empty;
+            LoadNetworkTab();
+            NetworkPanel.IsEnabled = true;
+        }
+        catch (Exception ex)
+        {
+            NetworkStatusText.Text = "Reservierung fehlgeschlagen - siehe Fehlermeldung.";
+            ActionErrorHandler.Show(this, "Netzwerk-Tab zur Bearbeitung reservieren", ex);
         }
     }
 
@@ -1421,4 +1486,52 @@ public partial class AdminDashboardWindow : Window
         }
     }
 
+    // ------------------------------------------------------------------- Netzwerk ---
+    // Nutzerwunsch 13.08.2026 (Multi-VLAN-Bridge-Seed): "Admin als so eine Art erster
+    // Peer" für Discovery über geroutete, aber nicht per Broadcast erreichbare Subnetze/
+    // VLANs hinweg (siehe DiscoveryService-Klassenkommentar). Save-on-Blur wie jedes
+    // andere Config-Feld, gleiches Reserviert-pro-Tab-Prinzip wie beim Updates-Tab.
+
+    private void LoadNetworkTab()
+    {
+        _isLoadingDetail = true;
+        try
+        {
+            NetworkBridgeAddressBox.Text = _config.BridgeSeedAddress ?? string.Empty;
+        }
+        finally
+        {
+            _isLoadingDetail = false;
+        }
+    }
+
+    private async void NetworkBridgeAddressBox_LostFocus(object sender, RoutedEventArgs e)
+    {
+        if (_isLoadingDetail)
+        {
+            return;
+        }
+
+        var oldValue = _config.BridgeSeedAddress;
+        var trimmed = NetworkBridgeAddressBox.Text.Trim();
+        var newValue = string.IsNullOrEmpty(trimmed) ? null : trimmed;
+        if (newValue == oldValue)
+        {
+            return;
+        }
+
+        try
+        {
+            await PublishAsync(cfg => { cfg.BridgeSeedAddress = newValue; return cfg; },
+                EditScopeKind.NetworkBridge, AppConstants.NetworkBridgeScopeId, "Bridge-Seed-Adresse", oldValue, newValue);
+            ReloadAll();
+            LoadNetworkTab();
+            NetworkStatusText.Text = "Gespeichert und an alle Geräte verteilt.";
+        }
+        catch (Exception ex)
+        {
+            NetworkStatusText.Text = "Fehlgeschlagen - siehe Fehlermeldung.";
+            ActionErrorHandler.Show(this, "Bridge-Seed-Adresse speichern", ex);
+        }
+    }
 }
