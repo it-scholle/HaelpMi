@@ -254,10 +254,24 @@ public partial class MainWindow : Window
         var show = VaultwardenPanel.Visibility != Visibility.Visible;
         VaultwardenPanel.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
         LogPanel.Visibility = Visibility.Collapsed;
-        if (show)
+
+        // Fokus nur, wenn diese Sitzung noch nicht entsperrt hat (Nutzerkorrektur 15.08.2026,
+        // fünfte Runde) - VaultwardenLockedPanel/VaultwardenUnlockedPanel behalten ihren
+        // Zustand automatisch übers Ein-/Ausklappen des Reiters hinweg, ein Fokusversuch auf
+        // das dann versteckte Passwortfeld wäre unnötig (harmloses No-op, aber unsauber).
+        if (show && VaultwardenLockedPanel.Visibility == Visibility.Visible)
         {
             VaultwardenPasswordBox.Focus();
         }
+    }
+
+    // Grundeinstellungen (Server-URL/E-Mail) hinter dem Zahnrad - reines Ein-/Ausblenden,
+    // unabhängig vom gesperrt/entsperrt-Zustand darunter (Nutzerwunsch 15.08.2026, fünfte Runde).
+    private void VaultwardenSettingsToggle_Click(object sender, RoutedEventArgs e)
+    {
+        VaultwardenBasicSettingsPanel.Visibility = VaultwardenBasicSettingsPanel.Visibility == Visibility.Visible
+            ? Visibility.Collapsed
+            : Visibility.Visible;
     }
 
     private void LogsTabButton_Click(object sender, RoutedEventArgs e)
@@ -275,20 +289,21 @@ public partial class MainWindow : Window
 
         if (serverUrl.Length == 0 || email.Length == 0 || password.Length == 0)
         {
-            VaultwardenStatusText.Text = "Server-URL, E-Mail und Master-Passwort ausfüllen.";
+            VaultwardenLockedStatusText.Text = "Server-URL, E-Mail und Master-Passwort ausfüllen.";
             return;
         }
 
         _vaultwardenClient ??= VaultwardenClient.TryCreate();
         if (_vaultwardenClient is null)
         {
-            VaultwardenStatusText.Text = "bw.exe (Bitwarden-CLI) nicht im PATH gefunden - Update-Signierung ohne sie nicht möglich.";
+            VaultwardenLockedStatusText.Text = "bw.exe (Bitwarden-CLI) nicht im PATH gefunden - Update-Signierung ohne sie nicht möglich.";
             Log("Fehler: bw.exe nicht gefunden.");
             return;
         }
 
         VaultwardenUnlockButton.IsEnabled = false;
-        VaultwardenStatusText.Text = "Verbinde mit Vaultwarden...";
+        var originalButtonText = VaultwardenUnlockButton.Content;
+        VaultwardenUnlockButton.Content = "Verbindet...";
         try
         {
             var unlock = await _vaultwardenClient.UnlockAsync(serverUrl, email, password);
@@ -297,7 +312,7 @@ public partial class MainWindow : Window
 
             if (!unlock.Ok)
             {
-                VaultwardenStatusText.Text = $"Fehlgeschlagen: {unlock.Error}";
+                VaultwardenLockedStatusText.Text = $"Fehlgeschlagen: {unlock.Error}";
                 Log($"Vaultwarden-Entsperren fehlgeschlagen: {unlock.Error}");
                 return;
             }
@@ -306,16 +321,25 @@ public partial class MainWindow : Window
             new InstallCreatorSettings { VaultwardenServerUrl = serverUrl, VaultwardenEmail = email }.Save();
             Log("Vaultwarden entsperrt.");
 
+            // Ab hier "entsperrt" (Nutzerwunsch 15.08.2026, fünfte Runde) - unabhängig davon,
+            // ob schon ein Schlüssel existiert; das Status-Icon unten zeigt das getrennt an.
+            VaultwardenLockedPanel.Visibility = Visibility.Collapsed;
+            VaultwardenUnlockedPanel.Visibility = Visibility.Visible;
+
             var existingKey = await _vaultwardenClient.TryGetUpdatePrivateKeyAsync(_vaultSessionKey!);
             if (existingKey is not null)
             {
                 _updatePrivateKeyBytes = Convert.FromBase64String(existingKey);
+                KeyPresentIcon.Visibility = Visibility.Visible;
+                KeyMissingIcon.Visibility = Visibility.Collapsed;
                 VaultwardenStatusText.Text = "Schlüssel geladen (aus Vaultwarden).";
                 Log("Update-Signaturschlüssel aus Vaultwarden geladen.");
             }
             else
             {
-                VaultwardenStatusText.Text = "Vaultwarden entsperrt, aber noch kein Schlüssel vorhanden - \"Neuen Schlüssel erzeugen\" nutzen.";
+                KeyPresentIcon.Visibility = Visibility.Collapsed;
+                KeyMissingIcon.Visibility = Visibility.Visible;
+                VaultwardenStatusText.Text = "Noch kein Schlüssel vorhanden - \"Neuen Schlüssel erzeugen\" nutzen.";
             }
 
             GenerateUpdateKeyButton.IsEnabled = true;
@@ -327,18 +351,19 @@ public partial class MainWindow : Window
         {
             Log($"Unerwarteter Fehler beim Vaultwarden-Zugriff: {ex.Message}");
             CrashLogger.Log("VaultwardenUnlockButton_Click", ex);
-            VaultwardenStatusText.Text = "Unerwarteter Fehler - siehe Protokoll.";
+            VaultwardenLockedStatusText.Text = "Unerwarteter Fehler - siehe Protokoll.";
         }
         finally
         {
             VaultwardenUnlockButton.IsEnabled = true;
+            VaultwardenUnlockButton.Content = originalButtonText;
         }
     }
 
     private void VaultwardenSkipButton_Click(object sender, RoutedEventArgs e)
     {
         VaultwardenPasswordBox.Password = string.Empty;
-        VaultwardenStatusText.Text = "Übersprungen - dieser Build läuft ohne Update-Signierung (Update-Ei bleibt deaktiviert).";
+        VaultwardenLockedStatusText.Text = "Übersprungen - dieser Build läuft ohne Update-Signierung (Update-Ei bleibt deaktiviert).";
         Log("Vaultwarden-Anmeldung übersprungen.");
     }
 
@@ -352,9 +377,12 @@ public partial class MainWindow : Window
         if (_updatePrivateKeyBytes is not null)
         {
             var confirm = System.Windows.MessageBox.Show(
-                "Es liegt bereits ein Schlüssel in Vaultwarden. Ein neuer Schlüssel macht alle bisher " +
-                "ausgelieferten öffentlichen Schlüssel ungültig - Geräte, die den alten eingebettet haben, " +
-                "können künftige Updates dann nicht mehr verifizieren, bis sie den neuen erhalten. Wirklich ersetzen?",
+                "Es liegt bereits ein Schlüssel in Vaultwarden. Der alte Schlüssel wird nicht gelöscht, " +
+                "sondern unter einem neuen Namen (\"...-deprecated-<Zeitstempel>\") archiviert - die Notiz " +
+                "selbst bleibt vollständig erhalten und lässt sich in Vaultwarden jederzeit nachlesen. " +
+                "Trotzdem macht ein neuer Schlüssel alle bisher ausgelieferten öffentlichen Schlüssel " +
+                "ungültig - Geräte, die den alten eingebettet haben, können künftige Updates dann nicht " +
+                "mehr verifizieren, bis sie den neuen (manuell) erhalten. Wirklich einen neuen Schlüssel erzeugen?",
                 "HälpMi Install-Creator", MessageBoxButton.YesNo, MessageBoxImage.Warning);
             if (confirm != MessageBoxResult.Yes)
             {
@@ -365,11 +393,35 @@ public partial class MainWindow : Window
         GenerateUpdateKeyButton.IsEnabled = false;
         try
         {
+            // Unbedingt archivieren, nicht ans lokale _updatePrivateKeyBytes-Flag gekoppelt
+            // (Nutzerwunsch 15.08.2026, fünfte Runde) - falls seit dem Entsperren dieser
+            // Sitzung schon anderswo ein Schlüssel unter dem Standardnamen angelegt wurde, den
+            // diese Sitzung lokal noch nicht kennt, verhindert das eine zweite Notiz mit
+            // demselben Namen. Kein bestehender Schlüssel = no-op (Ok=true, DeprecatedName=null).
+            var archive = await _vaultwardenClient.ArchiveExistingKeyIfPresentAsync(_vaultSessionKey);
+            if (!archive.Ok)
+            {
+                Log("Fehler: alter Schlüssel konnte nicht archiviert werden - neuer Schlüssel wird NICHT erzeugt.");
+                VaultwardenStatusText.Text = "Archivierung fehlgeschlagen - siehe Protokoll. Alter Schlüssel bleibt unverändert.";
+                return;
+            }
+            if (archive.DeprecatedName is not null)
+            {
+                Log($"Alter Schlüssel archiviert unter \"{archive.DeprecatedName}\".");
+            }
+
             var keyPair = UpdateSigningOperations.GenerateKeyPair();
             var pushed = await _vaultwardenClient.CreateUpdatePrivateKeyNoteAsync(_vaultSessionKey, Convert.ToBase64String(keyPair.PrivateKey));
             if (!pushed)
             {
                 Log("Fehler: Neuer Schlüssel konnte nicht in Vaultwarden gespeichert werden.");
+                if (archive.DeprecatedName is not null)
+                {
+                    var restored = await _vaultwardenClient.RestoreArchivedKeyAsync(_vaultSessionKey, archive.DeprecatedName);
+                    Log(restored
+                        ? "Rollback erfolgreich - alter Schlüssel liegt wieder unter dem Standardnamen."
+                        : $"Rollback fehlgeschlagen - alter Schlüssel liegt weiterhin unter \"{archive.DeprecatedName}\", bitte manuell in Vaultwarden zurückbenennen.");
+                }
                 VaultwardenStatusText.Text = "Schlüsselerzeugung fehlgeschlagen - siehe Protokoll.";
                 return;
             }
@@ -381,6 +433,8 @@ public partial class MainWindow : Window
             Log($"OEFFENTLICHER Schlüssel (in HaelpMi.Core/Updates/UpdateSignaturePublicKey.cs eintragen): {publicKeyBase64}");
             TryCopyToClipboard(publicKeyBase64);
 
+            KeyPresentIcon.Visibility = Visibility.Visible;
+            KeyMissingIcon.Visibility = Visibility.Collapsed;
             VaultwardenStatusText.Text = "Neuer Schlüssel gespeichert. Öffentlicher Schlüssel wurde kopiert - bitte manuell in UpdateSignaturePublicKey.cs eintragen.";
             UpdateEggCheckBox.IsEnabled = true;
             UpdateEggHintText.Visibility = Visibility.Collapsed;

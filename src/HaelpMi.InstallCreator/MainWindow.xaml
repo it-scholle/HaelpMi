@@ -8,13 +8,26 @@
     <!-- Rechter Reiter-Streifen nach Vorbild tomedo (Nutzerwunsch 14.08.2026, vierte Runde;
          Referenz-Screenshot Z:\Bildschirmfoto 2026-08-14 um 12.10.59.JPG - dort ein einzelner,
          um 90° gedrehter "Forum"-Reiter am rechten Fensterrand): Vaultwarden-Karte UND Protokoll
-         sind jetzt beide einklappbar und teilen sich denselben Inhaltsbereich - es ist immer nur
-         eins von beiden sichtbar, nie beide gleichzeitig. Zwei ebenfalls gedrehte Reiter
+         teilen sich denselben Inhaltsbereich - es ist immer nur eins von beiden sichtbar, nie
+         beide gleichzeitig, UND (Nutzerkorrektur 15.08.2026, fünfte Runde) auch standardmäßig
+         KEINS von beiden - die Startansicht zeigt nur die Einstellungen-Spalte + den leeren
+         Reiter-Streifen, exakt wie im tomedo-Referenzbild. Zwei gedrehte Reiter
          (VaultwardenTabButton oben, LogsTabButton darunter) im schmalen Streifen ganz rechts
-         schalten um; erneutes Klicken auf den gerade aktiven Reiter klappt ihn wieder ein (dann
-         ist der Inhaltsbereich leer, genau wie im tomedo-Referenzbild). Die reguläre Vaultwarden-
-         Kartenansicht selbst ist unverändert vom vorherigen Stand übernommen - deren inhaltliche
-         Überarbeitung ist bewusst ausgeklammert (folgt separat). -->
+         schalten um; erneutes Klicken auf den gerade aktiven Reiter klappt ihn wieder ein. Die
+         inhaltliche Neugestaltung der Vaultwarden-Karte selbst (Grundeinstellungen hinter einem
+         Zahnrad, gesperrt/entsperrt-Zustände, Schlüssel-Status-Icon statt Klartext-Anzeige,
+         Archivieren statt Überschreiben beim Rotieren) ist Teil dieser fünften Runde, siehe
+         Kommentare weiter unten bei VaultwardenPanel. -->
+    <!-- Fünfte Runde, Kontext zur Vaultwarden-Neugestaltung: die Update-Signatur ist
+         architektonisch strikt ein einziger globaler Schlüssel (ein Vaultwarden-Notizname, eine
+         Public-Key-Konstante im Client, siehe HaelpMi.Core/Updates/UpdateSignaturePublicKey.cs) -
+         eine echte Mehrschlüssel-Vertrauensliste wäre ein eigener, sicherheitsrelevanter Task
+         und bewusst NICHT Teil dieser Änderung. Stattdessen: kein Schlüsselwert wird je
+         angezeigt (Schutz gegen Mitlesen), nur ein farbiges Status-Icon; beim Erzeugen eines
+         neuen Schlüssels wird der alte nicht überschrieben, sondern in Vaultwarden unter einem
+         "-deprecated-<Zeitstempel>"-Namen archiviert (revisionssicher nachvollziehbar, ohne dass
+         Install-Creator selbst einen Schlüssel-Browser bauen muss - siehe VaultwardenClient für
+         den genauen bw-CLI-Ablauf). -->
     <Window.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
@@ -222,37 +235,102 @@
                         Background="{StaticResource CardBackgroundBrush}" BorderBrush="{StaticResource HairlineBrush}"
                         BorderThickness="1" CornerRadius="12" Padding="16" VerticalAlignment="Top">
                     <StackPanel>
-                        <TextBlock Text="Update-Signatur (Vaultwarden)" FontWeight="Bold" FontSize="14" Margin="0,0,0,4" />
+                        <!-- Kopfzeile: Titel links, Zahnrad rechts (Nutzerwunsch 15.08.2026,
+                             fünfte Runde) - blendet VaultwardenBasicSettingsPanel (Server-URL/
+                             E-Mail) ein/aus. Kein "Namensschema"-Feld dort (vom Nutzer bewusst
+                             verworfen - redundant, es gibt ohnehin nur den einen Schlüssel). -->
+                        <Grid Margin="0,0,0,4">
+                            <TextBlock Text="Update-Signatur (Vaultwarden)" FontWeight="Bold" FontSize="14" VerticalAlignment="Center" />
+                            <Button x:Name="VaultwardenSettingsToggle" HorizontalAlignment="Right" VerticalAlignment="Top"
+                                    Width="32" Height="32" Padding="0"
+                                    ToolTip="Grundeinstellungen (Vaultwarden-Server-URL/Konto-E-Mail) ein-/ausblenden"
+                                    Click="VaultwardenSettingsToggle_Click">
+                                <!-- Zahnrad: Ring + Nabe + vier radiale Striche - einfache
+                                     Näherung im selben Abstraktionsgrad wie das Würfel-Icon
+                                     oben links (GeneratePasswordButton), kein Vollbild-Zahnrad. -->
+                                <Grid Width="16" Height="16">
+                                    <Ellipse Width="10" Height="10" Stroke="{StaticResource TextPrimaryBrush}" StrokeThickness="1.4" />
+                                    <Ellipse Width="3" Height="3" Fill="{StaticResource TextPrimaryBrush}" />
+                                    <Line X1="8" Y1="0" X2="8" Y2="2.5" Stroke="{StaticResource TextPrimaryBrush}" StrokeThickness="1.4" />
+                                    <Line X1="8" Y1="13.5" X2="8" Y2="16" Stroke="{StaticResource TextPrimaryBrush}" StrokeThickness="1.4" />
+                                    <Line X1="0" Y1="8" X2="2.5" Y2="8" Stroke="{StaticResource TextPrimaryBrush}" StrokeThickness="1.4" />
+                                    <Line X1="13.5" Y1="8" X2="16" Y2="8" Stroke="{StaticResource TextPrimaryBrush}" StrokeThickness="1.4" />
+                                </Grid>
+                            </Button>
+                        </Grid>
                         <TextBlock TextWrapping="Wrap" Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" Margin="0,0,0,12"
                                    Text="Der private Schlüssel liegt verschlüsselt in Vaultwarden (Notiz &quot;HälpMi-Update-PrivateKey&quot;) und wird nur für diesen Programmlauf in den Speicher geladen - nie als Datei auf dieser Maschine." />
 
-                        <TextBlock Text="Vaultwarden-Server-URL" FontWeight="SemiBold" FontSize="12" />
-                        <TextBox x:Name="VaultwardenServerBox" Margin="0,6,0,12" />
+                        <StackPanel x:Name="VaultwardenBasicSettingsPanel" Visibility="Collapsed">
+                            <TextBlock Text="Vaultwarden-Server-URL" FontWeight="SemiBold" FontSize="12" />
+                            <TextBox x:Name="VaultwardenServerBox" Margin="0,6,0,12" />
 
-                        <TextBlock Text="Konto-E-Mail" FontWeight="SemiBold" FontSize="12" />
-                        <TextBox x:Name="VaultwardenEmailBox" Margin="0,6,0,12" />
-
-                        <TextBlock Text="Master-Passwort" FontWeight="SemiBold" FontSize="12" />
-                        <PasswordBox x:Name="VaultwardenPasswordBox" Margin="0,6,0,12" />
-
-                        <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
-                            <Button x:Name="VaultwardenUnlockButton" Content="Schlüssel laden" Style="{StaticResource AccentButtonStyle}"
-                                    Padding="14,7" Margin="0,0,8,0" Click="VaultwardenUnlockButton_Click" />
-                            <Button x:Name="VaultwardenSkipButton" Content="Überspringen" Padding="14,7" Click="VaultwardenSkipButton_Click" />
+                            <TextBlock Text="Konto-E-Mail" FontWeight="SemiBold" FontSize="12" />
+                            <TextBox x:Name="VaultwardenEmailBox" Margin="0,6,0,12" />
                         </StackPanel>
 
-                        <TextBlock x:Name="VaultwardenStatusText" TextWrapping="Wrap" FontSize="12" Margin="0,0,0,10"
-                                   Text="Kein Schlüssel geladen." />
+                        <!-- Gesperrter Zustand (Default beim Öffnen des Reiters, außer diese
+                             Sitzung hat schon einmal erfolgreich entsperrt - siehe
+                             VaultwardenTabButton_Click). Eigenes Statusfeld
+                             (VaultwardenLockedStatusText) statt des weiter unten liegenden
+                             VaultwardenStatusText, weil letzteres erst im entsperrten Panel
+                             lebt und hier noch unsichtbar wäre - Fehlermeldungen (falsches
+                             Passwort, bw.exe fehlt, ...) müssen aber genau in diesem Zustand
+                             sichtbar sein. -->
+                        <StackPanel x:Name="VaultwardenLockedPanel">
+                            <TextBlock Text="Master-Passwort" FontWeight="SemiBold" FontSize="12" />
+                            <PasswordBox x:Name="VaultwardenPasswordBox" Margin="0,6,0,12" />
 
-                        <Button x:Name="GenerateUpdateKeyButton" Content="Neuen Schlüssel erzeugen" HorizontalAlignment="Left"
-                                Padding="14,7" IsEnabled="False" Click="GenerateUpdateKeyButton_Click" />
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+                                <Button x:Name="VaultwardenUnlockButton" Content="Vault entsperren und Schlüssel laden" Style="{StaticResource AccentButtonStyle}"
+                                        Padding="14,7" Margin="0,0,8,0" Click="VaultwardenUnlockButton_Click" />
+                                <Button x:Name="VaultwardenSkipButton" Content="Überspringen" Padding="14,7" Click="VaultwardenSkipButton_Click" />
+                            </StackPanel>
+
+                            <TextBlock x:Name="VaultwardenLockedStatusText" TextWrapping="Wrap" FontSize="12" />
+                        </StackPanel>
+
+                        <!-- Entsperrter Zustand: kein Schlüsselwert wird je angezeigt (Schutz
+                             gegen Mitlesen, Nutzerwunsch 15.08.2026) - nur ein farbiges Status-
+                             Icon (grün = vorhanden, rot = nicht vorhanden), gleiches
+                             Überlappungs-/Visibility-Muster wie EyeOpenIcon/EyeClosedIcon oben. -->
+                        <StackPanel x:Name="VaultwardenUnlockedPanel" Visibility="Collapsed">
+                            <Grid Margin="0,0,0,10">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <Grid Grid.Column="0" Width="18" Height="18" Margin="0,0,8,0" VerticalAlignment="Top">
+                                    <Grid x:Name="KeyPresentIcon" Visibility="Collapsed">
+                                        <Ellipse Width="7" Height="7" Stroke="{StaticResource SuccessBrush}" StrokeThickness="1.6"
+                                                 HorizontalAlignment="Left" VerticalAlignment="Center" />
+                                        <Line X1="6" Y1="8" X2="15" Y2="8" Stroke="{StaticResource SuccessBrush}" StrokeThickness="1.6" />
+                                        <Line X1="11" Y1="8" X2="11" Y2="12" Stroke="{StaticResource SuccessBrush}" StrokeThickness="1.6" />
+                                        <Line X1="14" Y1="8" X2="14" Y2="11" Stroke="{StaticResource SuccessBrush}" StrokeThickness="1.6" />
+                                    </Grid>
+                                    <Grid x:Name="KeyMissingIcon" Visibility="Collapsed">
+                                        <Ellipse Width="7" Height="7" Stroke="{StaticResource DangerBrush}" StrokeThickness="1.6"
+                                                 HorizontalAlignment="Left" VerticalAlignment="Center" />
+                                        <Line X1="6" Y1="8" X2="15" Y2="8" Stroke="{StaticResource DangerBrush}" StrokeThickness="1.6" />
+                                        <Line X1="11" Y1="8" X2="11" Y2="12" Stroke="{StaticResource DangerBrush}" StrokeThickness="1.6" />
+                                        <Line X1="14" Y1="8" X2="14" Y2="11" Stroke="{StaticResource DangerBrush}" StrokeThickness="1.6" />
+                                    </Grid>
+                                </Grid>
+                                <TextBlock Grid.Column="1" x:Name="VaultwardenStatusText" TextWrapping="Wrap" FontSize="12"
+                                           Text="Kein Schlüssel geladen." />
+                            </Grid>
+
+                            <Button x:Name="GenerateUpdateKeyButton" Content="Neuen Schlüssel erzeugen" HorizontalAlignment="Left"
+                                    Padding="14,7" IsEnabled="False" Click="GenerateUpdateKeyButton_Click" />
+                        </StackPanel>
                     </StackPanel>
                 </Border>
 
-                <!-- Protokoll: standardmäßig eingeblendet (bisheriges Verhalten), über den
-                     "Logs"-Reiter genauso einklappbar wie Vaultwarden - beide teilen sich diese
-                     Zelle, es ist immer höchstens eins der beiden sichtbar. -->
-                <DockPanel Grid.Column="0" x:Name="LogPanel" Visibility="Visible">
+                <!-- Protokoll: wie Vaultwarden standardmäßig eingeklappt (Nutzerkorrektur
+                     15.08.2026, fünfte Runde - vorher war Visibility hier "Visible"), über den
+                     "Logs"-Reiter einklappbar - beide teilen sich diese Zelle, es ist immer
+                     höchstens eins der beiden sichtbar, anfangs keins. -->
+                <DockPanel Grid.Column="0" x:Name="LogPanel" Visibility="Collapsed">
                     <TextBlock DockPanel.Dock="Top" Text="Protokoll" FontWeight="SemiBold" Margin="0,0,0,6" />
                     <TextBox x:Name="LogBox" IsReadOnly="True" TextWrapping="Wrap"
                              VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto"

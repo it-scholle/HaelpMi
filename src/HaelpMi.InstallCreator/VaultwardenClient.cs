@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.IO;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 
 namespace HaelpMi.InstallCreator;
 
@@ -13,7 +14,10 @@ namespace HaelpMi.InstallCreator;
 /// Notizname ist bewusst fest verdrahtet statt einer gespeicherten Einstellung (Nutzerkorrektur
 /// 13.08.2026): anders als z. B. ein Installer-Passwort pro Kunde ist der Update-
 /// Signaturschlüssel ein einziger, globaler Schlüssel - Schema "HälpMi-&lt;Schlüsseltyp&gt;-&lt;Name&gt;",
-/// hier ohne variablen Namensteil, weil es nur diesen einen gibt.
+/// hier ohne variablen Namensteil, weil es nur diesen einen AKTUELLEN gibt. Beim Rotieren
+/// (siehe ArchiveExistingKeyIfPresentAsync, Nutzerwunsch 15.08.2026) wandert die alte Notiz
+/// unter einen abgeleiteten "-deprecated-&lt;Zeitstempel&gt;"-Namen statt gelöscht/überschrieben
+/// zu werden - weiterhin gibt es aber nur einen aktiven Schlüssel unter dem Standardnamen.
 ///
 /// Passwort/Session-Key laufen ausschließlich über ProcessStartInfo.EnvironmentVariables des
 /// jeweils einen bw-Kindprozesses - nie eine dauerhafte Umgebungsvariable, nie geloggt, nie als
@@ -155,6 +159,81 @@ public sealed class VaultwardenClient
         return createResult.ExitCode == 0;
     }
 
+    /// <summary>Benennt eine evtl. bestehende Update-Schlüssel-Notiz auf einen
+    /// "-deprecated-&lt;Zeitstempel&gt;"-Namen um, statt sie beim nächsten
+    /// CreateUpdatePrivateKeyNoteAsync-Aufruf überschreiben zu lassen (Nutzerwunsch
+    /// 15.08.2026: "ich möchte nicht, dass beim Neuerstellen der alte überschrieben wird" -
+    /// revisionssicher in Vaultwarden nachvollziehbar, ohne dass Install-Creator selbst einen
+    /// Schlüssel-Browser bauen muss). Existiert keine Notiz unter dem Standardnamen, ist das
+    /// kein Fehler (Ok=true, DeprecatedName=null) - dann gibt es schlicht nichts zu archivieren.</summary>
+    public async Task<ArchiveResult> ArchiveExistingKeyIfPresentAsync(string sessionKey)
+    {
+        var deprecatedName = $"{UpdatePrivateKeyItemName}-deprecated-{DateTime.UtcNow:yyyy-MM-dd'T'HH-mm-ss'Z'}";
+        var outcome = await RenameItemIfPresentAsync(sessionKey, UpdatePrivateKeyItemName, deprecatedName);
+        if (!outcome.Found)
+        {
+            return new ArchiveResult(true, null);
+        }
+        return new ArchiveResult(outcome.Ok, outcome.Ok ? deprecatedName : null);
+    }
+
+    /// <summary>Best-effort-Rollback für den Fall, dass nach erfolgreichem Archivieren das
+    /// Anlegen des neuen Schlüssels fehlschlägt - benennt die archivierte Notiz zurück auf den
+    /// Standardnamen, damit nicht am Ende gar kein gültiger Schlüssel mehr unter dem
+    /// Standardnamen liegt.</summary>
+    public async Task<bool> RestoreArchivedKeyAsync(string sessionKey, string deprecatedName)
+    {
+        var outcome = await RenameItemIfPresentAsync(sessionKey, deprecatedName, UpdatePrivateKeyItemName);
+        return outcome.Found && outcome.Ok;
+    }
+
+    /// <summary>Benennt ein Vaultwarden-Item per "bw get item" (volles JSON, nicht "bw get
+    /// notes" - die Item-Id steckt nur dort drin) -> "name"-Feld mutieren -> "bw encode" ->
+    /// "bw edit item". Wichtig: "bw edit item" ersetzt das komplette Objekt (kein Patch), daher
+    /// hier bewusst JsonNode statt eines frisch gebauten Objekts wie in
+    /// CreateUpdatePrivateKeyNoteAsync - alle anderen Felder (allen voran "notes" mit dem
+    /// eigentlichen Schlüssel, aber auch z. B. "secureNote"/"revisionDate") bleiben dadurch
+    /// unangetastet erhalten.</summary>
+    private async Task<RenameOutcome> RenameItemIfPresentAsync(string sessionKey, string currentName, string newName)
+    {
+        var env = new Dictionary<string, string> { ["BW_SESSION"] = sessionKey };
+        await RunAsync(new[] { "sync" }, env); // best-effort, gleiches Muster wie TryGetUpdatePrivateKeyAsync
+
+        var getResult = await RunAsync(new[] { "get", "item", currentName }, env);
+        if (getResult.ExitCode != 0)
+        {
+            return new RenameOutcome(Found: false, Ok: true); // nichts zum Umbenennen da - kein Fehler
+        }
+
+        JsonNode? itemNode;
+        try
+        {
+            itemNode = JsonNode.Parse(getResult.StdOut);
+        }
+        catch (JsonException)
+        {
+            return new RenameOutcome(true, false);
+        }
+
+        if (itemNode?["id"] is not JsonValue idNode || !idNode.TryGetValue<string>(out var itemId))
+        {
+            return new RenameOutcome(true, false);
+        }
+
+        itemNode["name"] = newName;
+
+        var encodeResult = await RunAsync(new[] { "encode" }, env, stdin: itemNode.ToJsonString());
+        if (encodeResult.ExitCode != 0)
+        {
+            return new RenameOutcome(true, false);
+        }
+
+        var editResult = await RunAsync(new[] { "edit", "item", itemId, encodeResult.StdOut.Trim() }, env);
+        return new RenameOutcome(true, editResult.ExitCode == 0);
+    }
+
+    private readonly record struct RenameOutcome(bool Found, bool Ok);
+
     private async Task<ProcessResult> RunAsync(IReadOnlyList<string> arguments, IReadOnlyDictionary<string, string>? env, string? stdin = null)
     {
         var startInfo = new ProcessStartInfo(_bwPath)
@@ -201,3 +280,8 @@ public sealed record VaultwardenUnlockResult(bool Ok, string? SessionKey, string
     public static VaultwardenUnlockResult Success(string sessionKey) => new(true, sessionKey, null);
     public static VaultwardenUnlockResult Failure(string error) => new(false, null, error);
 }
+
+/// <summary>Ergebnis von ArchiveExistingKeyIfPresentAsync - DeprecatedName ist nur bei
+/// tatsächlich archiviertem (umbenanntem) Item gesetzt, sonst null (nichts zu archivieren
+/// oder Fehlschlag).</summary>
+public readonly record struct ArchiveResult(bool Ok, string? DeprecatedName);
