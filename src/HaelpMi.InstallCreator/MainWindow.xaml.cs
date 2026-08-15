@@ -613,6 +613,15 @@ public partial class MainWindow : Window
     {
         Log("--- Installer werden erstellt ---");
         Log($"Kunden-Gruppen-ID: {customerGroupId}");
+
+        // Admin-Rollen-Signatur (Nutzerwunsch 15.08.2026, viertes Schlüsselpaar, CLAUDE.md
+        // "Lizenz & Secrets" Punkt 4) - pro Kunden-Gruppe neu, direkt neben der
+        // CustomerGroupId, nicht global wie der Update-Schlüssel. Nur der öffentliche
+        // Teil landet im Protokoll - der private Teil wird nie geloggt, nie zwischengelagert
+        // (Vaultwarden ist hierfür bewusst NICHT nötig, siehe AdminRoleKeyGenerator-Klassendoku).
+        var adminRoleKeyPair = AdminRoleKeyGenerator.GenerateKeyPair();
+        Log($"Admin-Rollen-Schlüssel erzeugt (öffentlicher Teil: {adminRoleKeyPair.PublicKeyBase64}).");
+
         Log($"Test-Installer: {(isTestInstaller ? "ja" : "nein")}");
         if (isTestInstaller && customerNameOrTestLabel.Length > 0)
         {
@@ -684,6 +693,10 @@ public partial class MainWindow : Window
         {
             args.Add($"/DCustomerGroupId={customerGroupId}");
             args.Add($"/DIsTestInstaller={(isTestInstaller ? "true" : "false")}");
+            // Öffentlicher Admin-Rollen-Schlüssel geht in BEIDE Installer-Varianten - jedes
+            // Gerät, Admin wie User, muss Admin-Behauptungen anderer Geräte prüfen können.
+            // Der private Teil geht bewusst NICHT hierher (nur unten, Admin-Installer).
+            args.Add($"/DAdminRolePublicKeyBase64={adminRoleKeyPair.PublicKeyBase64}");
             if (!string.IsNullOrEmpty(bridgeSeedAddress))
             {
                 args.Add($"/DBridgeSeedAddress={bridgeSeedAddress}");
@@ -707,6 +720,10 @@ public partial class MainWindow : Window
         {
             args.Add($"/DCustomerGroupId={customerGroupId}");
             args.Add($"/DIsTestInstaller={(isTestInstaller ? "true" : "false")}");
+            args.Add($"/DAdminRolePublicKeyBase64={adminRoleKeyPair.PublicKeyBase64}");
+            // Privater Teil NUR hier - gleiches Muster wie InstallerPassword unten (nur der
+            // Admin-Installer bekommt ihn übergeben, nie der User-Installer-Aufruf oben).
+            args.Add($"/DAdminRolePrivateKeyBase64={adminRoleKeyPair.PrivateKeyBase64}");
             if (!string.IsNullOrEmpty(bridgeSeedAddress))
             {
                 args.Add($"/DBridgeSeedAddress={bridgeSeedAddress}");

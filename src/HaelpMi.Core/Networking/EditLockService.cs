@@ -53,16 +53,32 @@ public sealed class EditLockService : IAsyncDisposable
 
     private readonly Func<LiveIdentity> _identityProvider;
     private readonly Action<string>? _audit;
+    private readonly Func<List<DeviceEntry>>? _deviceListProvider;
     private readonly ConcurrentDictionary<(EditScopeKind Kind, Guid Id), ScopeLockState> _states = new();
     private readonly Random _random = Random.Shared;
     private TcpListener? _listener;
     private CancellationTokenSource? _cts;
     private Task? _acceptLoop;
 
-    public EditLockService(Func<LiveIdentity> identityProvider, Action<string>? audit = null)
+    /// <param name="deviceListProvider">
+    /// Admin-Rollen-Authentifizierung (Nutzerwunsch 15.08.2026, im selben Aufwasch wie
+    /// AuditSyncService.HandleIncomingDigestAsync mitgenommen, hier aber nur Verteidigung
+    /// in der Tiefe statt einer eigenständig wirksamen Lücke: da eine ausbleibende Antwort
+    /// laut Abschnitt 5 ohnehin als "Zugriff gewährt" gilt und ein von einem Fremdgerät
+    /// erhaltenes "Granted" nirgends den lokalen Zustand eines echten Admins beeinflusst,
+    /// könnte ein nicht verifiziertes Gerät auch OHNE diese Prüfung keinem echten Admin
+    /// tatsächlich das Bearbeiten blockieren): wenn gesetzt, antwortet
+    /// <see cref="HandleIncomingRequestAsync"/> einem nicht als
+    /// <see cref="DeviceEntry.AdminVerified"/> bekannten Requester gar nicht erst, statt
+    /// ihm fälschlich "Granted" zu bestätigen. Bewusst optional/null-tolerant (alte
+    /// Semantik ohne Prüfung), nicht Pflicht wie bei AuditSyncService, weil hier kein
+    /// eigenständiger Sicherheitsgewinn dranhängt.
+    /// </param>
+    public EditLockService(Func<LiveIdentity> identityProvider, Action<string>? audit = null, Func<List<DeviceEntry>>? deviceListProvider = null)
     {
         _identityProvider = identityProvider;
         _audit = audit;
+        _deviceListProvider = deviceListProvider;
     }
 
     public void Start(int port = AppConstants.EditLockTcpPort)
@@ -271,6 +287,20 @@ public sealed class EditLockService : IAsyncDisposable
             if (!CustomerGroupFilter.Matches(request.CustomerGroupId, identity.CustomerGroupId))
             {
                 return; // Teil 2, Abschnitt 6
+            }
+
+            // Admin-Rollen-Authentifizierung (Nutzerwunsch 15.08.2026) - siehe
+            // Konstruktor-Kommentar zu deviceListProvider für den Hintergrund/die
+            // eingeschränkte Tragweite dieser Prüfung. Nur aktiv, wenn ein Provider gesetzt
+            // ist (Produktivpfad); ohne Provider unverändertes altes Verhalten.
+            if (_deviceListProvider is not null)
+            {
+                var requesterIsVerifiedAdmin = _deviceListProvider()
+                    .Any(d => d.DeviceId == request.RequesterDeviceId && d.Role == Role.Admin && d.AdminVerified);
+                if (!requesterIsVerifiedAdmin)
+                {
+                    return;
+                }
             }
 
             var response = BuildResponse(request, identity);

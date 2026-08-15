@@ -28,6 +28,13 @@ public enum MessageKind
 /// Antwortende hängt seine eigene Geräteliste an, damit der neu startende Announcer auch
 /// von Geräten erfährt, die gerade offline sind. Optional/nullable, damit alte Announces
 /// (die dieses Feld nie setzen) unverändert kompatibel bleiben.
+///
+/// AdminRoleSignatureBase64 (Nutzerwunsch 15.08.2026, Admin-Rollen-Authentifizierung): nur
+/// gesetzt, wenn der Absender ein Admin-Gerät MIT eingebettetem privaten Schlüssel ist
+/// (siehe AdminRoleSigner.TrySign) - signiert (CustomerGroupId, DeviceId, SentAtUtc)
+/// dieser Nachricht. Optional/nullable wie KnownDevices, alte Announces ohne Signatur
+/// bleiben kompatibel (gelten dann einfach als nicht verifiziert, siehe
+/// DeviceEntry.AdminVerified).
 /// </summary>
 public sealed record BootCallMessage(
     MessageKind Kind,
@@ -43,4 +50,5 @@ public sealed record BootCallMessage(
     string ProgramVersion,
     int ConfigVersion,
     DateTimeOffset SentAtUtc,
-    IReadOnlyList<KnownDeviceSummary>? KnownDevices = null);
+    IReadOnlyList<KnownDeviceSummary>? KnownDevices = null,
+    string? AdminRoleSignatureBase64 = null);

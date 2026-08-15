@@ -8,6 +8,12 @@ namespace HaelpMi.Core.Storage;
 /// gossip-gelernten Eintrag gesetzt (der Zeitpunkt, zu dem der Informant es zuletzt selbst
 /// gesehen hat) - bei direktem Kontakt bleibt es null, dort ist "jetzt" (der seenAtUtc-
 /// Parameter von Upsert) weiterhin die genaueste verfügbare Angabe.
+///
+/// <see cref="AdminVerified"/> (Nutzerwunsch 15.08.2026, Admin-Rollen-Authentifizierung):
+/// <c>null</c> = "nicht anfassen" (Gossip-Pfad - eine gossip-gelernte Admin-Behauptung
+/// wird nie selbst als verifiziert übernommen). Direkter Kontakt liefert immer explizit
+/// <c>true</c> oder <c>false</c> (Ergebnis der Signaturprüfung), auch bei <c>Role !=
+/// Admin</c>.
 /// </summary>
 public sealed record DeviceUpsertInfo(
     string ComputerName,
@@ -18,7 +24,8 @@ public sealed record DeviceUpsertInfo(
     bool IsRemoteSession,
     string IpAddress,
     int TcpPort,
-    DateTimeOffset? ReportedLastSeenUtc = null);
+    DateTimeOffset? ReportedLastSeenUtc = null,
+    bool? AdminVerified = null);
 
 /// <summary>Loads/saves the locally known list of other devices (FR-18, 5.4).</summary>
 public sealed class DeviceStore
@@ -38,6 +45,7 @@ public sealed class DeviceStore
     {
         var existing = devices.FirstOrDefault(d => d.DeviceId == deviceId);
         var lastSeenUtc = ResolveLastSeenUtc(existing?.LastSeenUtc, info, seenAtUtc);
+        var adminVerified = info.AdminVerified ?? existing?.AdminVerified ?? false;
 
         if (existing is null)
         {
@@ -53,6 +61,7 @@ public sealed class DeviceStore
                 IpAddress = info.IpAddress,
                 TcpPort = info.TcpPort,
                 LastSeenUtc = lastSeenUtc,
+                AdminVerified = adminVerified,
                 IsNew = true,
             });
         }
@@ -67,6 +76,7 @@ public sealed class DeviceStore
             existing.IpAddress = info.IpAddress;
             existing.TcpPort = info.TcpPort;
             existing.LastSeenUtc = lastSeenUtc;
+            existing.AdminVerified = adminVerified;
             // Favorite/Notified/Note/IsNew are local decisions and are deliberately left untouched.
         }
 

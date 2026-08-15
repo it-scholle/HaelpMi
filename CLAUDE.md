@@ -47,11 +47,23 @@ stillschweigend zu ignorieren.
   `pflichtenheft-HälpMi.md` selbst wird nicht rückwirkend editiert (historische FR-Quelle), diese
   CLAUDE.md-Notiz gewinnt bei Widersprüchen wie in den Referenzdokumenten oben beschrieben.
 - `.gitignore` gegen Secret-Dateimuster von Anfang an.
-- Drei getrennte kryptografische Schlüsselpaare, niemals verwechseln oder zusammenlegen:
+- Vier getrennte kryptografische Schlüsselpaare, niemals verwechseln oder zusammenlegen:
   1. Kunden-Lizenzsignatur (Ed25519) — Soft-Expiry, kein Hard-Lock.
   2. Update-Signatur (Ed25519, **separater** Schlüssel) — nur signierte Programm-Updates werden
      von einem Client angenommen und weiterverteilt.
   3. Optional pro Kunde: Installer-Passwort (kein Schlüsselpaar, siehe Install-Creator).
+  4. **Admin-Rollen-Signatur (Ed25519, seit 15.08.2026)** — **pro Kunden-Gruppe**, nicht global
+     (bewusster Unterschied zu Schlüssel 2): Install-Creator erzeugt sie bei jedem
+     Admin-Installer-Build neu, direkt neben der `CustomerGroupId`. Öffentlicher Schlüssel in
+     beiden Installer-Varianten, privater nur im Admin-Installer. Macht `Role.Admin` in
+     Boot-Call-Nachrichten kryptografisch nachprüfbar (`AdminRoleSigner`/`AdminRoleVerifier` in
+     `HaelpMi.Core/Security`, `DeviceEntry.AdminVerified`) statt einer reinen unauthentifizierten
+     Selbstauskunft — Grundlage für `EditLockService`-Peer-Auswahl, `AuditSyncService`-Push-Ziele
+     und den Admin-Mesh-Trigger. Lebt **nie** in Vaultwarden (anders als Schlüssel 2): wandert
+     direkt in den einen Installer-Build, kein dev-seitiges Wiederfinden nötig. Privater Schlüssel
+     liegt Klartext-Base64 in `deployment.json`, wie `CustomerGroupId` — DPAPI-Verschlüsselung
+     wurde geprüft und verworfen (an die verschlüsselnde Maschine gebunden, funktioniert nicht
+     Build-Maschine → Kundenrechner).
 - Nur die jeweiligen **öffentlichen** Schlüssel werden ins Repository/die Binary eingebettet.
   Private Schlüssel gehören nie ins Repo, nie ins Log, nie in eine Fehlermeldung.
 - **Aufbewahrung des privaten Update-Signaturschlüssels (seit 13.08.2026):** liegt verschlüsselt

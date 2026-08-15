@@ -26,5 +26,6 @@ public static class LiveIdentityFactory
         deployment.Role,
         RemoteSessionDetector.IsCurrentSessionRemote(),
         CurrentProgramVersion,
-        settings.AppliedConfigVersion);
+        settings.AppliedConfigVersion,
+        deployment.AdminRolePublicKeyBase64);
 }

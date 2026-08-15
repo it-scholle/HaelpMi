@@ -56,4 +56,15 @@ public sealed class DeviceEntry
     public bool IsNew { get; set; } = true;
 
     public DateTimeOffset LastSeenUtc { get; set; }
+
+    /// <summary>
+    /// Nur <c>true</c>, wenn der letzte DIREKTE Boot-Call-Kontakt mit diesem Gerät eine
+    /// gültig signierte Admin-Rollen-Behauptung trug (siehe AdminRoleVerifier,
+    /// Nutzerwunsch 15.08.2026) - anders als <see cref="Role"/> selbst (unauthentifizierte
+    /// Selbstauskunft) ist das die tatsächliche Vertrauensgrundlage für
+    /// Netzwerk-Entscheidungen (EditLock-Peer-Auswahl, AuditSync-Push-Ziele,
+    /// Admin-Mesh-Trigger). Wird nie über Gossip gesetzt/zurückgesetzt - nur direkter
+    /// Kontakt darf diesen Wert ändern (siehe DeviceStore.Upsert).
+    /// </summary>
+    public bool AdminVerified { get; set; }
 }

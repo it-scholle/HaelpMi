@@ -41,4 +41,22 @@ public sealed class DeploymentInfo
     /// Mehrwert gegenüber einem einzelnen, vom Entwickler bewusst eingetragenen Startwert.
     /// </summary>
     public string? BridgeSeedAddress { get; set; }
+
+    /// <summary>
+    /// Viertes kryptografisches Schlüsselpaar (Ed25519, CLAUDE.md "Lizenz &amp; Secrets"
+    /// Punkt 4, Nutzerwunsch 15.08.2026) - **pro Kunden-Gruppe**, nicht global: Install-
+    /// Creator erzeugt es bei jedem Admin-Installer-Build neu, direkt neben der
+    /// <see cref="CustomerGroupId"/>. Der öffentliche Schlüssel steckt in **beiden**
+    /// Installer-Varianten (jedes Gerät muss Admin-Behauptungen prüfen können).
+    /// </summary>
+    public string? AdminRolePublicKeyBase64 { get; set; }
+
+    /// <summary>
+    /// Nur im Admin-Installer gesetzt, bleibt <c>null</c> im User-Installer - ein
+    /// User-Gerät kann damit selbst nie eine gültige Admin-Behauptung erzeugen. Klartext-
+    /// Base64, wie <see cref="CustomerGroupId"/> - siehe Planungsnotiz zur verworfenen
+    /// DPAPI-Idee (an die verschlüsselnde Maschine gebunden, funktioniert nicht über
+    /// Build-Maschine → Kundenrechner hinweg).
+    /// </summary>
+    public string? AdminRolePrivateKeyBase64 { get; set; }
 }

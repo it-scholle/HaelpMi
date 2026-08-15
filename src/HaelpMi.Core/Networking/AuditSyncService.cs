@@ -20,12 +20,12 @@ namespace HaelpMi.Core.Networking;
 /// ein Admin eine Kopie hat (siehe AuditIngestStore), kann das Ursprungsgerät seine
 /// Historie nicht mehr unbemerkt umschreiben.
 ///
-/// Bewusst vertagter Punkt: <see cref="DeviceEntry.Role"/> ist weiterhin eine
-/// unauthentifizierte Selbstauskunft des Peers, genau wie bei EditLockService/
-/// ConfigSyncService - keine Regression durch diese Klasse, aber ein Gerät könnte sich im
-/// Boot-Call als Role.Admin ausgeben und würde hier als legitimes Push-Ziel akzeptiert.
-/// Sauber lösbar nur mit einem vierten (asymmetrischen) Schlüsselpaar, bewusst als eigener
-/// Folge-Task vorgemerkt (siehe Dokumente/infos-und-fragen.md), nicht Teil dieser Klasse.
+/// Admin-Rollen-Authentifizierung (Nutzerwunsch 15.08.2026, viertes Schlüsselpaar - siehe
+/// CLAUDE.md "Lizenz &amp; Secrets"): <see cref="DeviceEntry.Role"/> allein war früher eine
+/// unauthentifizierte Selbstauskunft des Peers - <see cref="PushPendingAsync"/> und
+/// <see cref="HandleIncomingDigestAsync"/> vertrauen seitdem zusätzlich
+/// <see cref="DeviceEntry.AdminVerified"/> (nur von DiscoveryService bei direktem,
+/// signaturgeprüftem Boot-Call-Kontakt gesetzt, siehe AdminRoleVerifier).
 ///
 /// Empfangsseite (<see cref="StartListening"/>) darf nur gestartet werden, wenn das eigene
 /// Gerät Role.Admin ist - Gating liegt beim Aufrufer (HaelpMi.Agent/App.xaml.cs), nicht hier.
@@ -44,6 +44,7 @@ public sealed class AuditSyncService : IAsyncDisposable
     private readonly AuditLog _auditLog;
     private readonly AuditIngestStore _ingestStore = new();
     private readonly AuditSyncStateStore _stateStore = new();
+    private readonly Func<List<DeviceEntry>>? _deviceListProvider;
     private readonly Action<string>? _audit;
 
     private TcpListener? _pushListener;
@@ -52,11 +53,21 @@ public sealed class AuditSyncService : IAsyncDisposable
     private Task? _pushAcceptLoop;
     private Task? _meshAcceptLoop;
 
-    public AuditSyncService(Func<LiveIdentity> identityProvider, AuditLog auditLog, Action<string>? audit = null)
+    /// <param name="deviceListProvider">
+    /// Admin-Rollen-Authentifizierung (Nutzerwunsch 15.08.2026): gleiches Muster wie
+    /// ConfigSyncService - für <see cref="HandleIncomingDigestAsync"/>, das vor jeder
+    /// Antwort prüft, ob der Requester in der eigenen Geräteliste als
+    /// <see cref="DeviceEntry.AdminVerified"/> bekannt ist (schließt sonst eine
+    /// Vertraulichkeitslücke: ohne diese Prüfung beantwortet der Mesh-Abgleich jede
+    /// Anfrage, egal von wem). Optional/null nur, damit bestehende Tests ohne Geräteliste
+    /// weiterlaufen - im Produktivpfad immer gesetzt.
+    /// </param>
+    public AuditSyncService(Func<LiveIdentity> identityProvider, AuditLog auditLog, Action<string>? audit = null, Func<List<DeviceEntry>>? deviceListProvider = null)
     {
         _identityProvider = identityProvider;
         _auditLog = auditLog;
         _audit = audit;
+        _deviceListProvider = deviceListProvider;
     }
 
     /// <summary>Nur aufrufen, wenn das eigene Gerät Role.Admin ist (siehe Klassendoku) - Push-Sendeseite läuft unabhängig davon auf jedem Gerät.</summary>
@@ -104,7 +115,7 @@ public sealed class AuditSyncService : IAsyncDisposable
     public async Task PushPendingAsync(IReadOnlyList<DeviceEntry> devices, CancellationToken ct = default, int? pushPort = null)
     {
         var identity = _identityProvider();
-        var adminPeers = devices.Where(d => d.Role == Role.Admin && d.DeviceId != identity.DeviceId).ToList();
+        var adminPeers = devices.Where(d => d.Role == Role.Admin && d.AdminVerified && d.DeviceId != identity.DeviceId).ToList();
         if (adminPeers.Count == 0)
         {
             return;
@@ -351,6 +362,19 @@ public sealed class AuditSyncService : IAsyncDisposable
 
             var identity = _identityProvider();
             if (!CustomerGroupFilter.Matches(request.CustomerGroupId, identity.CustomerGroupId))
+            {
+                return;
+            }
+
+            // Nutzerwunsch 15.08.2026 (Admin-Rollen-Authentifizierung): ohne diese Prüfung
+            // würde JEDES Gerät, das sich die Mühe macht, direkt auf diesen Port zu
+            // verbinden, die gesamten gesammelten Audit-Daten abgreifen können - eine
+            // Vertraulichkeitslücke, die über die reine Koordinationsfrage hinausgeht.
+            // Wiederverwendet dieselbe AdminVerified-Grundlage wie PushPendingAsync, keine
+            // eigene Signaturprüfung auf dieser Nachricht nötig.
+            var requesterIsVerifiedAdmin = _deviceListProvider?.Invoke()
+                .Any(d => d.DeviceId == request.RequesterDeviceId && d.Role == Role.Admin && d.AdminVerified) ?? false;
+            if (!requesterIsVerifiedAdmin)
             {
                 return;
             }

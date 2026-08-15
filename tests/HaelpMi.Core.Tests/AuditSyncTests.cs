@@ -325,17 +325,18 @@ public class AuditSyncTests
         log.Append("test-ereignis");
         var service = new AuditSyncService(() => MakeIdentity(customerGroupId, ownDeviceId), log);
 
-        var adminPeer = new DeviceEntry { DeviceId = Guid.NewGuid(), Role = Role.Admin, IpAddress = "127.0.0.1", TcpPort = port };
-        var userPeer = new DeviceEntry { DeviceId = Guid.NewGuid(), Role = Role.User, IpAddress = "127.0.0.1", TcpPort = port };
+        var adminPeer = new DeviceEntry { DeviceId = Guid.NewGuid(), Role = Role.Admin, AdminVerified = true, IpAddress = "127.0.0.1", TcpPort = port };
+        var unverifiedAdminPeer = new DeviceEntry { DeviceId = Guid.NewGuid(), Role = Role.Admin, AdminVerified = false, IpAddress = "127.0.0.1", TcpPort = port };
+        var userPeer = new DeviceEntry { DeviceId = Guid.NewGuid(), Role = Role.User, AdminVerified = true /* egal - Role entscheidet zuerst */, IpAddress = "127.0.0.1", TcpPort = port };
 
-        await service.PushPendingAsync(new[] { adminPeer, userPeer }, pushPort: port);
-        await Task.Delay(300); // Zeit für eine eventuelle (fälschliche) zweite Verbindung vom User-Peer
+        await service.PushPendingAsync(new[] { adminPeer, unverifiedAdminPeer, userPeer }, pushPort: port);
+        await Task.Delay(300); // Zeit für eine eventuelle (fälschliche) zweite/dritte Verbindung
 
         acceptLoopCts.Cancel();
         rawListener.Stop();
         try { await acceptLoop; } catch { /* erwartet nach Cancel/Stop */ }
 
-        Assert.Equal(1, acceptedConnections); // nur der Admin-Peer wurde kontaktiert
+        Assert.Equal(1, acceptedConnections); // nur der verifizierte Admin-Peer wurde kontaktiert
     }
 
     [Fact]
@@ -359,7 +360,7 @@ public class AuditSyncTests
             senderLog.Append("alarm beendet");
             var senderService = new AuditSyncService(() => MakeIdentity(customerGroupId, senderDeviceId), senderLog);
 
-            var adminPeer = new DeviceEntry { DeviceId = adminDeviceId, Role = Role.Admin, IpAddress = "127.0.0.1", TcpPort = pushPort };
+            var adminPeer = new DeviceEntry { DeviceId = adminDeviceId, Role = Role.Admin, AdminVerified = true, IpAddress = "127.0.0.1", TcpPort = pushPort };
 
             await senderService.PushPendingAsync(new[] { adminPeer }, pushPort: pushPort);
 
@@ -435,7 +436,9 @@ public class AuditSyncTests
 
         new AuditIngestStore().Append(originDeviceId, MakeChain(originDeviceId, 5));
 
-        var service = new AuditSyncService(() => MakeIdentity(customerGroupId, responderDeviceId), new AuditLog(() => responderDeviceId));
+        var requesterDeviceId = Guid.NewGuid();
+        var knownDevices = new List<DeviceEntry> { new() { DeviceId = requesterDeviceId, Role = Role.Admin, AdminVerified = true } };
+        var service = new AuditSyncService(() => MakeIdentity(customerGroupId, responderDeviceId), new AuditLog(() => responderDeviceId), deviceListProvider: () => knownDevices);
         service.StartListening(pushPort, meshPort);
 
         try
@@ -444,7 +447,7 @@ public class AuditSyncTests
             await client.ConnectAsync(IPAddress.Loopback, meshPort);
             await using var stream = client.GetStream();
 
-            var request = new AuditDigestRequestMessage(customerGroupId, Guid.NewGuid(), new Dictionary<Guid, long> { [originDeviceId] = 2 });
+            var request = new AuditDigestRequestMessage(customerGroupId, requesterDeviceId, new Dictionary<Guid, long> { [originDeviceId] = 2 });
             var bytes = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(request, WireOptions) + "\n");
             await stream.WriteAsync(bytes);
             await stream.FlushAsync();

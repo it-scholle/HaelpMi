@@ -15,6 +15,13 @@ internal static class MessageValidation
     private const int MaxAlarmTextLength = 500;
     private const int MaxVersionStringLength = 40;
 
+    // Ed25519-Signatur ist immer 64 Byte -> 88 Zeichen Base64 (inkl. Padding). Großzügig
+    // aufgerundet statt exakt 88 verlangt, damit ein künftiger Wechsel der Kodierung nicht
+    // sofort hier bricht - der eigentliche Schutz ist ohnehin die kryptografische Prüfung
+    // in AdminRoleVerifier, das hier ist nur die übliche Plausibilitätsgrenze gegen
+    // absurd lange Strings.
+    private const int MaxSignatureLength = 200;
+
     // Nutzerwunsch 05.08.2026 (Gossip-Anhang): eine sehr großzügige, aber endliche Grenze -
     // der eigentliche Schutz gegen ein überdimensioniertes Datagramm ist schon
     // DiscoveryService.MaxDatagramBytes (das Paket würde vorher verworfen); das hier ist nur
@@ -32,7 +39,8 @@ internal static class MessageValidation
         message.ProgramVersion.Length <= MaxVersionStringLength &&
         Enum.IsDefined(message.Role) &&
         Enum.IsDefined(message.Kind) &&
-        (message.KnownDevices is null || IsPlausible(message.KnownDevices));
+        (message.KnownDevices is null || IsPlausible(message.KnownDevices)) &&
+        (message.AdminRoleSignatureBase64 is null || message.AdminRoleSignatureBase64.Length <= MaxSignatureLength);
 
     private static bool IsPlausible(IReadOnlyList<KnownDeviceSummary> knownDevices) =>
         knownDevices.Count <= MaxKnownDevicesCount &&

@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Sockets;
 using HaelpMi.Core.Models;
 using HaelpMi.Core.Networking.Protocol;
+using HaelpMi.Core.Security;
 using HaelpMi.Core.Storage;
 
 namespace HaelpMi.Core.Networking;
@@ -56,6 +57,7 @@ public sealed class DiscoveryService : IAsyncDisposable
     private readonly SemaphoreSlim _storeLock = new(1, 1);
     private readonly Action<string>? _audit;
     private readonly Func<IReadOnlyCollection<string>>? _bridgeSeedAddressProvider;
+    private readonly Func<string?>? _adminRolePrivateKeyProvider;
     private UdpClient? _socket;
     private CancellationTokenSource? _cts;
     private Task? _receiveLoop;
@@ -89,6 +91,11 @@ public sealed class DiscoveryService : IAsyncDisposable
     /// Feuert bewusst nur für den direkt kontaktierten Peer, nicht für gossip-gelernte
     /// Geräte - deren IP-Adresse kann veraltet/unerreichbar sein, und das Event feuert
     /// ohnehin erneut, sobald dieses Gerät selbst direkten Kontakt aufnimmt.
+    ///
+    /// Erweiterung 15.08.2026 (Admin-Rollen-Authentifizierung): feuert seitdem nicht mehr
+    /// schon bei bloßer <c>Role.Admin</c>-Selbstauskunft, sondern erst, wenn die
+    /// Boot-Call-Signatur des Peers gegen den eigenen bekannten öffentlichen Schlüssel
+    /// tatsächlich geprüft wurde (siehe AdminRoleVerifier, DeviceEntry.AdminVerified).
     /// </summary>
     public event EventHandler<AdminPeerContactInfo>? AdminPeerContactObserved;
 
@@ -99,16 +106,25 @@ public sealed class DiscoveryService : IAsyncDisposable
     /// statt eines festen Werts, weil der Aufrufer (HaelpMi.Agent) sie hot-reload-fähig aus
     /// SharedConfig lesen soll, nicht einmalig beim Konstruieren einfrieren darf.
     /// </param>
+    /// <param name="adminRolePrivateKeyProvider">
+    /// Admin-Rollen-Authentifizierung (Nutzerwunsch 15.08.2026): liefert den eigenen
+    /// privaten Schlüssel (nur vorhanden auf einem Admin-Gerät mit entsprechend gebautem
+    /// Installer), mit dem <see cref="BuildMessage"/> jeden ausgehenden Boot-Call signiert
+    /// - null/nicht gesetzt = kein Admin-Gerät bzw. keine Signierfähigkeit, Announces
+    /// bleiben dann unsigniert (kompatibel, siehe BootCallMessage-Klassendoku).
+    /// </param>
     public DiscoveryService(
         Func<LiveIdentity> identityProvider,
         Action<string>? audit = null,
         int? discoveryPort = null,
-        Func<IReadOnlyCollection<string>>? bridgeSeedAddressProvider = null)
+        Func<IReadOnlyCollection<string>>? bridgeSeedAddressProvider = null,
+        Func<string?>? adminRolePrivateKeyProvider = null)
     {
         _identityProvider = identityProvider;
         _audit = audit;
         _discoveryPort = discoveryPort ?? AppConstants.DiscoveryUdpPort;
         _bridgeSeedAddressProvider = bridgeSeedAddressProvider;
+        _adminRolePrivateKeyProvider = adminRolePrivateKeyProvider;
     }
 
     /// <summary>Binds the socket and starts the background receive loop. Call once at Agent startup.</summary>
@@ -199,6 +215,10 @@ public sealed class DiscoveryService : IAsyncDisposable
     private BootCallMessage BuildMessage(MessageKind kind, IReadOnlyList<KnownDeviceSummary>? knownDevices = null)
     {
         var identity = _identityProvider();
+        var sentAtUtc = DateTimeOffset.UtcNow;
+        var signature = AdminRoleSigner.TrySign(
+            identity.Role, identity.CustomerGroupId, _adminRolePrivateKeyProvider?.Invoke(), identity.DeviceId, sentAtUtc);
+
         return new BootCallMessage(
             kind,
             identity.CustomerGroupId,
@@ -212,8 +232,9 @@ public sealed class DiscoveryService : IAsyncDisposable
             AppConstants.AlarmTcpPort,
             identity.ProgramVersion,
             identity.ConfigVersion,
-            DateTimeOffset.UtcNow,
-            knownDevices);
+            sentAtUtc,
+            knownDevices,
+            signature);
     }
 
     private async Task ReceiveLoopAsync(UdpClient socket, CancellationToken ct)
@@ -297,6 +318,16 @@ public sealed class DiscoveryService : IAsyncDisposable
         DeviceEntry updated;
         var learnedNewDevice = false;
 
+        // Admin-Rollen-Authentifizierung (Nutzerwunsch 15.08.2026): nur bei DIREKTEM
+        // Kontakt geprüft, nie im Gossip-Loop unten (siehe DeviceUpsertInfo.AdminVerified-
+        // Klassendoku und AdminPeerContactObserved-Klassendoku für den Hintergrund). Auch
+        // bei Role != Admin explizit false, damit ein Downgrade (früher Admin, jetzt nicht
+        // mehr) den zuvor gesetzten Zustand tatsächlich zurücksetzt statt ihn stehen zu
+        // lassen (siehe DeviceStore.Upsert - null würde den alten Wert unverändert lassen).
+        var adminVerified = message.Role == Role.Admin && AdminRoleVerifier.Verify(
+            ownIdentity.AdminRolePublicKeyBase64, message.CustomerGroupId, message.DeviceId,
+            message.SentAtUtc, message.AdminRoleSignatureBase64, DateTimeOffset.UtcNow);
+
         await _storeLock.WaitAsync(ct);
         try
         {
@@ -304,7 +335,8 @@ public sealed class DiscoveryService : IAsyncDisposable
             var isNewPrimaryDevice = devices.All(d => d.DeviceId != message.DeviceId);
             var info = new DeviceUpsertInfo(
                 message.ComputerName, message.User, message.RoomName, message.RoomNumber,
-                message.Role, message.IsRemoteSession, remoteIp, message.TcpPort);
+                message.Role, message.IsRemoteSession, remoteIp, message.TcpPort,
+                AdminVerified: adminVerified);
             DeviceStore.Upsert(devices, message.DeviceId, info, DateTimeOffset.UtcNow);
             updated = devices.First(d => d.DeviceId == message.DeviceId);
             learnedNewDevice = isNewPrimaryDevice;
@@ -374,8 +406,12 @@ public sealed class DiscoveryService : IAsyncDisposable
             });
         }
 
-        if (message.Role == Role.Admin && ownIdentity.Role == Role.Admin)
+        if (adminVerified && ownIdentity.Role == Role.Admin)
         {
+            // Nutzerwunsch 15.08.2026: früher reichte die unauthentifizierte Role-
+            // Selbstauskunft des Peers - jetzt löst nur noch eine tatsächlich geprüfte
+            // Signatur den Mesh-Trigger aus (schließt die Lücke direkt an der Quelle,
+            // statt sie erst bei jedem einzelnen Aufrufer separat abzufangen).
             AdminPeerContactObserved?.Invoke(this, new AdminPeerContactInfo { Peer = updated });
         }
 

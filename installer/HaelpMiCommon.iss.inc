@@ -61,6 +61,19 @@
   #define InstallerPassword ""
 #endif
 
+; Viertes kryptografisches Schlüsselpaar (Ed25519, Admin-Rollen-Signatur, CLAUDE.md
+; Lizenz & Secrets Punkt 4, Nutzerwunsch 15.08.2026) - anders als CustomerGroupId/
+; InstallerPassword PRO KUNDEN-GRUPPE erzeugt, nicht global. Der öffentliche Schlüssel
+; geht in BEIDE Installer-Varianten (siehe WriteDeploymentJson unten), der private nur in
+; den Admin-Installer-ISCC-Aufruf - genau wie InstallerPassword oben nie zentral
+; gespeichert, nur transient für diesen einen Build.
+#ifndef AdminRolePublicKeyBase64
+  #define AdminRolePublicKeyBase64 ""
+#endif
+#ifndef AdminRolePrivateKeyBase64
+  #define AdminRolePrivateKeyBase64 ""
+#endif
+
 [Languages]
 Name: "german"; MessagesFile: "compiler:Languages\German.isl"
 
@@ -418,6 +431,20 @@ begin
 #endif
 end;
 
+// Admin-Rollen-Signatur, privater Teil (Nutzerwunsch 15.08.2026): nur der Admin-Installer-
+// ISCC-Aufruf bekommt {#AdminRolePrivateKeyBase64} überhaupt gesetzt (siehe MainWindow.
+// xaml.cs) - ein Verweis auf das Makro im User-Installer-Zweig würde ISPP schon beim
+// Kompilieren mit einem Fehler abbrechen, deshalb dieselbe #ifdef-Verzweigung wie bei
+// GetRoleValue statt eines Laufzeit-Checks.
+function GetAdminRolePrivateKeyJsonValue(): String;
+begin
+#ifdef HaelpMiAdminInstall
+  Result := '"' + JsonEscape('{#AdminRolePrivateKeyBase64}') + '"';
+#else
+  Result := 'null';
+#endif
+end;
+
 procedure WriteSettingsJson();
 var
   DeviceId, ComputerName, RoomName, RoomNumber, Json, SettingsDir: String;
@@ -461,7 +488,9 @@ begin
     '  "CustomerGroupId": "{#CustomerGroupId}",' + #13#10 +
     '  "Role": ' + GetRoleValue() + ',' + #13#10 +
     '  "IsTestInstaller": {#IsTestInstaller},' + #13#10 +
-    '  "BridgeSeedAddress": "' + JsonEscape('{#BridgeSeedAddress}') + '"' + #13#10 +
+    '  "BridgeSeedAddress": "' + JsonEscape('{#BridgeSeedAddress}') + '",' + #13#10 +
+    '  "AdminRolePublicKeyBase64": "' + JsonEscape('{#AdminRolePublicKeyBase64}') + '",' + #13#10 +
+    '  "AdminRolePrivateKeyBase64": ' + GetAdminRolePrivateKeyJsonValue() + #13#10 +
     '}';
 
   // Aktuell nur ASCII-Inhalte (GUID/Zahlen), aber aus Konsistenz mit WriteSettingsJson

@@ -377,7 +377,7 @@ public partial class App : System.Windows.Application
 
         _configSync ??= new ConfigSyncService(IdentityProvider, deviceStore.Load);
         _configSync.Start();
-        _editLock ??= new EditLockService(IdentityProvider);
+        _editLock ??= new EditLockService(IdentityProvider, deviceListProvider: deviceStore.Load);
         _editLock.Start();
 
         var context = new AdminDashboardContext
@@ -408,7 +408,7 @@ public partial class App : System.Windows.Application
             {
                 var identity = IdentityProvider();
                 var peers = deviceStore.Load()
-                    .Where(d => d.Role == Role.Admin && d.DeviceId != identity.DeviceId)
+                    .Where(d => d.Role == Role.Admin && d.AdminVerified && d.DeviceId != identity.DeviceId)
                     .ToList();
                 return _editLock.TryAcquireAsync(scopeKind, scopeId, peers);
             },

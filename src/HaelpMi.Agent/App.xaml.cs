@@ -303,7 +303,7 @@ public partial class App : System.Windows.Application
         // Config.exe. Bewusst NICHT wie ConfigSyncService/EditLockService nur im
         // Config.exe-Dashboard-Prozess gestartet: ein Admin-Gerät soll Pushes auch
         // annehmen können, wenn das Dashboard-Fenster gerade gar nicht offen ist.
-        _auditSyncService = new AuditSyncService(BuildIdentity, _auditLog, _auditLog.Append);
+        _auditSyncService = new AuditSyncService(BuildIdentity, _auditLog, _auditLog.Append, deviceListProvider: _deviceStore.Load);
         if (_deployment.Role == Role.Admin)
         {
             _auditSyncService.StartListening();
@@ -331,7 +331,7 @@ public partial class App : System.Windows.Application
             return string.IsNullOrWhiteSpace(_deployment.BridgeSeedAddress)
                 ? Array.Empty<string>()
                 : new[] { _deployment.BridgeSeedAddress! };
-        });
+        }, adminRolePrivateKeyProvider: () => _deployment.AdminRolePrivateKeyBase64);
         _discovery.StartListening();
         _ = _discovery.AnnounceAsync();
 
