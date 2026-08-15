@@ -8,6 +8,7 @@ using HaelpMi.Core.Autostart;
 using HaelpMi.Core.Diagnostics;
 using HaelpMi.Core.Interop;
 using HaelpMi.Core.Ipc;
+using HaelpMi.Core.Licensing;
 using HaelpMi.Core.Models;
 using HaelpMi.Core.Networking;
 using HaelpMi.Core.Runtime;
@@ -80,6 +81,9 @@ public partial class App : System.Windows.Application
     private System.Windows.Forms.NotifyIcon? _trayIcon;
     private bool _autostartRegistered = true; // true = kein Registrierungsversuch nötig (unerwarteter leerer executablePath) oder erfolgreich
     private string? _autostartError;
+
+    private LicenseChecker? _licenseChecker;
+    private System.Threading.Timer? _licenseCheckTimer;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -402,6 +406,35 @@ public partial class App : System.Windows.Application
                 "HälpMi startet nach einem Geräteneustart NICHT automatisch (Task-Planer-Registrierung fehlgeschlagen, vermutlich durch eine Richtlinie blockiert). Bitte den Systemadministrator informieren - Details im lokalen Protokoll.",
                 System.Windows.Forms.ToolTipIcon.Warning);
         }
+
+        // Lizenz-Prüfung (Soft-Expiry, CLAUDE.md "Lizenz & Secrets"): rein lokal, kein
+        // Netzwerkverkehr (das Heartbeat-/Polling-Verbot betrifft nur Netzwerkverkehr),
+        // deshalb unabhängig von allem oben. Nur der Agent führt sie aus (siehe
+        // LicenseChecker-Klassendoku: einziger AuditLog-Schreiber pro Gerät) und nur für
+        // Admin-Rollen - ein User-Gerät instanziiert LicenseChecker gar nicht erst.
+        if (_deployment.Role == Role.Admin)
+        {
+            _licenseChecker = new LicenseChecker(_settingsStore, _auditLog.Append);
+            RunLicenseCheck();
+            _licenseCheckTimer = new System.Threading.Timer(_ => RunLicenseCheck(), null, AppConstants.LicenseCheckInterval, AppConstants.LicenseCheckInterval);
+        }
+    }
+
+    // Läuft beim Timer-Tick auf einem ThreadPool-Thread, nicht dem UI-Thread, der
+    // _trayIcon besitzt - deshalb Dispatcher.BeginInvoke für die eigentliche Anzeige.
+    // Komplett fire-and-forget: nie awaited, nie mit dem Alarm-Pfad sequenziert (siehe
+    // LicenseChecker/LicenseFileLoader - beide fangen jede Ausnahme selbst ab).
+    private void RunLicenseCheck()
+    {
+        var (result, shouldNotify) = _licenseChecker!.CheckOnce(DateOnly.FromDateTime(DateTime.UtcNow));
+        if (!shouldNotify)
+        {
+            return;
+        }
+
+        var (title, body, severe) = LicenseMessages.BuildAdminNotice(result);
+        Dispatcher.BeginInvoke(() => _trayIcon?.ShowBalloonTip(
+            10000, title, body, severe ? System.Windows.Forms.ToolTipIcon.Error : System.Windows.Forms.ToolTipIcon.Warning));
     }
 
     // Nutzerwunsch 05.08.2026: Tray-Icon zum Öffnen von Konfiguration/Dashboard - siehe
@@ -560,6 +593,7 @@ public partial class App : System.Windows.Application
             _trayIcon.Dispose();
         }
 
+        _licenseCheckTimer?.Dispose();
         _hotkey?.Dispose();
         _ = _listener?.DisposeAsync();
         _ = _feedbackChannel?.DisposeAsync();

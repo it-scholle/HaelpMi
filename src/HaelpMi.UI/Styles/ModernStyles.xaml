@@ -15,6 +15,10 @@
     <SolidColorBrush x:Key="AccentPressedBrush" Color="#005BBF" />
     <SolidColorBrush x:Key="DangerBrush" Color="#FF3B30" />
     <SolidColorBrush x:Key="SuccessBrush" Color="#34C759" />
+    <!-- Lizenz-Vorwarnung (vor Ablauf, noch nicht dringend): eigener Warnton statt
+         DangerBrush - "läuft bald ab" ist weniger dringlich als "abgelaufen"/"ungültig",
+         siehe LicenseWarningToastWindow. -->
+    <SolidColorBrush x:Key="WarningBrush" Color="#FF9500" />
     <!-- Nutzerwunsch 04.08.2026: "leicht grün hinterlegt" für aktiv/zugeordnete Einträge
          in Toggle-Listen (Empfänger-/Gruppen-Zuordnung) - blasser als SuccessBrush, da es
          eine ganze Zeile füllt statt eines kleinen Icons/Buttons. -->

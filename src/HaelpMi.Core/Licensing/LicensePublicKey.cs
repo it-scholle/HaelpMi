@@ -1,19 +1,23 @@
 namespace HaelpMi.Core.Licensing;
 
 /// <summary>
-/// Public half of the Ed25519 keypair used by the separate customer-licensing
-/// mechanism (FR-32, Pflichtenheft 1./3.9/5.10) - that mechanism itself (license file
-/// format, signed fields, verification flow) is out of scope for this Pflichtenheft and
-/// "wird separat spezifiziert". Nothing else in this codebase reads this constant yet.
+/// Öffentlicher Ed25519-Schlüssel zur Prüfung von Kunden-Lizenzdateien (FR-32, CLAUDE.md
+/// "Lizenz &amp; Secrets": Schlüsselpaar #1, getrennt vom Update-Signaturschlüssel in
+/// HaelpMi.Core/Updates/UpdateSignaturePublicKey.cs, niemals verwechseln/zusammenlegen).
+/// Nur der öffentliche Teil ist eingebettet - der private Schlüssel entsteht/lebt
+/// ausschließlich außerhalb dieses Repos, erzeugt mit
+/// <c>HaelpMi.LicenseSigner genkey</c>, benutzt mit <c>HaelpMi.LicenseSigner sign</c>.
 ///
-/// PLACEHOLDER: this is not a real production key. It must be replaced with the actual
-/// public key once the customer-licensing mechanism is specified and a real Ed25519
-/// keypair has been generated *outside* of this repository. The matching private key
-/// must never be committed here (see .gitignore) or anywhere else in this repo.
+/// WICHTIG: Der unten eingebettete Wert ist ein Wegwerf-Entwicklungsschlüssel, nur zum
+/// Verdrahten/Testen der Verify-Logik - vor jedem echten Release MUSS ein neues Paar
+/// erzeugt und hier der neue öffentliche Schlüssel eingetragen werden. Wird dieser
+/// Platzhalter jemals in einer echten Kunden-Auslieferung verwendet, akzeptiert das
+/// Verify jede mit dem (nur Claude bekannten, nicht mehr sicher aufbewahrten) Dev-
+/// Schlüssel signierte Lizenz - kein Sicherheitsgewinn gegenüber "gar keine Signatur".
 /// </summary>
 public static class LicensePublicKey
 {
-    /// <summary>32-byte Ed25519 public key, hex-encoded. Placeholder value - see class remarks.</summary>
-    public const string PlaceholderHex =
-        "0000000000000000000000000000000000000000000000000000000000000000";
+    private const string Base64 = "V8OBBijOuML0yIuUPsFaIeqiWM5evFSqlWS47ZPkOh4=";
+
+    public static byte[] Bytes { get; } = Convert.FromBase64String(Base64);
 }

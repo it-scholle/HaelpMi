@@ -133,4 +133,12 @@ public static class AppConstants
     /// kundengruppenweit (Multi-VLAN-Bootstrap, siehe <see cref="SharedConfig.BridgeSeedAddresses"/>).
     /// </summary>
     public static readonly Guid NetworkBridgeScopeId = new("d3f1a000-a11d-4000-9000-000000000003");
+
+    /// <summary>
+    /// Intervall der lokalen Lizenz-Neuprüfung im Agent (rein lokaler Dateizugriff, kein
+    /// Netzwerkverkehr - das Heartbeat-/Polling-Verbot in CLAUDE.md bezieht sich nur auf
+    /// Netzwerkverkehr und gilt hier nicht). Tagesgranularität der Eskalationsstufen (siehe
+    /// Licensing.LicenseEvaluator) macht ein enges Intervall unnötig.
+    /// </summary>
+    public static readonly TimeSpan LicenseCheckInterval = TimeSpan.FromHours(6);
 }

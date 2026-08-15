@@ -45,4 +45,12 @@ public sealed class OwnSettings
 
     /// <summary>False only until the Ersteinrichtung wizard has been completed once (Admin-role) or the first Config-Sync has been applied (User-role).</summary>
     public bool FirstRunCompleted { get; set; }
+
+    /// <summary>
+    /// Höchste Lizenz-Eskalationsstufe (siehe Licensing.LicenseEvaluator.StageIndex), für
+    /// die dieses Gerät bereits eine Warnung gezeigt hat - drosselt wiederholte Meldungen
+    /// bei unverändertem Zustand. Nur vom Agent geschrieben (siehe Licensing.LicenseChecker
+    /// Klassendoku: einziger AuditLog-Schreiber pro Gerät).
+    /// </summary>
+    public int LicenseLastNotifiedStage { get; set; }
 }

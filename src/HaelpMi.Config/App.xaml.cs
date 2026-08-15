@@ -5,6 +5,7 @@ using System.Windows;
 using HaelpMi.Core.Diagnostics;
 using HaelpMi.Core.Interop;
 using HaelpMi.Core.Ipc;
+using HaelpMi.Core.Licensing;
 using HaelpMi.Core.Models;
 using HaelpMi.Core.Networking;
 using HaelpMi.Core.Runtime;
@@ -150,6 +151,30 @@ public partial class App : System.Windows.Application
         _deployment = deployment;
         _deviceStore = new DeviceStore();
 
+        // Lizenz-Prüfung (Soft-Expiry, CLAUDE.md "Lizenz & Secrets"): leichte, nicht
+        // gedrosselte, nicht audit-loggende Variante (Config läuft ohnehin nur on-demand,
+        // "einmal pro Prozessstart" ist damit schon von Natur aus selten). Nur Admin-Rollen
+        // sehen überhaupt etwas - reines try/catch statt LicenseChecker, weil hier weder
+        // AuditLog-Zugriff noch Drosselungs-Persistenz gebraucht wird (siehe
+        // LicenseChecker-Klassendoku: der Agent ist der einzige AuditLog-Schreiber).
+        LicenseWarningToastWindow? licenseToast = null;
+        if (settings.Role == Role.Admin)
+        {
+            try
+            {
+                var result = LicenseEvaluator.Evaluate(LicenseFileLoader.LoadAndVerify(), DateOnly.FromDateTime(DateTime.UtcNow));
+                if (result.Standing != LicenseStanding.Good)
+                {
+                    var (title, body, severe) = LicenseMessages.BuildAdminNotice(result);
+                    licenseToast = new LicenseWarningToastWindow(title, body, severe);
+                }
+            }
+            catch (Exception)
+            {
+                // fail open - kein Toast statt Absturz des Konfigurationsprogramms
+            }
+        }
+
         await EnsureAgentIsRunningAsync();
 
         // "HälpMi Dashboard"-Startmenüeintrag des Admin-Installers ruft mit diesem Flag auf
@@ -180,6 +205,7 @@ public partial class App : System.Windows.Application
 
             if (opened)
             {
+                licenseToast?.Show();
                 return;
             }
         }
@@ -188,6 +214,7 @@ public partial class App : System.Windows.Application
         var configWindow = new ConfigWindow(context);
         MainWindow = configWindow;
         configWindow.Show();
+        licenseToast?.Show();
     }
 
     // Läuft auf einem eigenen Hintergrund-Thread für die gesamte Prozesslaufzeit (kein

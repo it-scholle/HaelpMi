@@ -22,6 +22,9 @@
          macht die bestehenden Verify-Tests nebenbei zu Round-Trip-Tests des echten
          Signierpfads (siehe HaelpMi.InstallCreator/HaelpMi.UpdateSigner). -->
     <ProjectReference Include="..\..\src\HaelpMi.UpdateSigner\HaelpMi.UpdateSigner.csproj" />
+    <!-- Analog zur UpdateSigner-Referenz oben: LicenseTests.cs signiert über die echte
+         LicenseSigningOperations-Klasse statt eine eigene BouncyCastle-Kopie zu pflegen. -->
+    <ProjectReference Include="..\..\src\HaelpMi.LicenseSigner\HaelpMi.LicenseSigner.csproj" />
   </ItemGroup>
 
   <ItemGroup>

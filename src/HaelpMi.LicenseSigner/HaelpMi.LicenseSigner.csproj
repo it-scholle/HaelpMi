@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>HaelpMi.LicenseSigner</RootNamespace>
+    <AssemblyName>HaelpMi.LicenseSigner</AssemblyName>
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+
+  <!-- Reines Release-/Ausstellungs-Werkzeug (CLI, kein WPF-GUI), Struktur-Klon von
+       HaelpMi.UpdateSigner: wer eine Kundenlizenz signiert, tut das über die
+       Kommandozeile, nicht interaktiv. Läuft nie beim Kunden, ist kein Teil der
+       ausgelieferten Payload - hält den privaten Lizenzschlüssel komplett von
+       HaelpMi.Core (das nur die Verify-Seite mit dem öffentlichen Schlüssel enthält)
+       getrennt. Bewusst KEINE ProjectReference auf HaelpMi.Core (wie bei
+       HaelpMi.UpdateSigner) - dupliziert LicenseFileData lokal statt eine Abhängigkeit
+       auf das große Core-Projekt für ein einzelnes Record einzugehen. -->
+  <ItemGroup>
+    <PackageReference Include="BouncyCastle.Cryptography" Version="2.4.0" />
+  </ItemGroup>
+
+</Project>

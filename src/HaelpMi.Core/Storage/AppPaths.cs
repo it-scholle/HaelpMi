@@ -37,6 +37,13 @@ public static class AppPaths
     public static string ConfigHistoryFilePath => Path.Combine(RootFolder, "config-history.json");
 
     /// <summary>
+    /// Anders als deployment.json bewusst unter RootFolder statt AppContext.BaseDirectory:
+    /// eine Lizenz muss bei Verlängerung ohne Neuinstallation ersetzbar sein - ein Admin
+    /// legt einfach eine neue license.json hierher, statt neu zu installieren.
+    /// </summary>
+    public static string LicenseFilePath => Path.Combine(RootFolder, "license.json");
+
+    /// <summary>
     /// Written by the installer (from the Install-Creator's payload) into the install
     /// directory, not %AppData% - it describes the build, not this user's runtime state,
     /// and must survive independently of any %AppData% cleanup (Teil 2, Abschnitt 1/6).
