@@ -307,13 +307,13 @@ public partial class App : System.Windows.Application
         // Config.exe. Bewusst NICHT wie ConfigSyncService/EditLockService nur im
         // Config.exe-Dashboard-Prozess gestartet: ein Admin-Gerät soll Pushes auch
         // annehmen können, wenn das Dashboard-Fenster gerade gar nicht offen ist.
-        _auditSyncService = new AuditSyncService(BuildIdentity, _auditLog, _auditLog.Append);
+        _auditSyncService = new AuditSyncService(BuildIdentity, _auditLog, _auditLog.Append, groupKeyProvider: () => _deployment.GroupKeyBase64);
         if (_deployment.Role == Role.Admin)
         {
             _auditSyncService.StartListening();
         }
 
-        _feedbackChannel = new AlarmFeedbackChannel(BuildIdentity, _auditLog.Append);
+        _feedbackChannel = new AlarmFeedbackChannel(BuildIdentity, _auditLog.Append, groupKeyProvider: () => _deployment.GroupKeyBase64);
         _feedbackChannel.Start();
 
         _coordinator = new AlarmFlowCoordinator(BuildIdentity, () => _settings, _sharedConfigStore.LoadOrCreate, _feedbackChannel, _auditLog, _auditSyncService, groupKeyProvider: () => _deployment.GroupKeyBase64);
@@ -346,7 +346,7 @@ public partial class App : System.Windows.Application
         _listener.AlarmReceived += (_, args) => _coordinator.HandleIncomingAlarmRequest(args);
         _listener.Start();
 
-        _configSync = new ConfigSyncService(BuildIdentity, _deviceStore.Load, _auditLog.Append);
+        _configSync = new ConfigSyncService(BuildIdentity, _deviceStore.Load, _auditLog.Append, groupKeyProvider: () => _deployment.GroupKeyBase64);
         _configSync.ConfigApplied += (_, _) => RegisterHotkeysFromConfig();
         _configSync.Start();
 

@@ -402,7 +402,7 @@ public partial class App : System.Windows.Application
         var sharedConfigStore = new SharedConfigStore();
         LiveIdentity IdentityProvider() => LiveIdentityFactory.Create(settingsStore.Load(), deployment);
 
-        _configSync ??= new ConfigSyncService(IdentityProvider, deviceStore.Load);
+        _configSync ??= new ConfigSyncService(IdentityProvider, deviceStore.Load, groupKeyProvider: () => deployment.GroupKeyBase64);
         _configSync.Start();
         _editLock ??= new EditLockService(IdentityProvider);
         _editLock.Start();

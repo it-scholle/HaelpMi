@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Sockets;
 using HaelpMi.Core.Models;
 using HaelpMi.Core.Networking.Protocol;
+using HaelpMi.Core.Security;
 using HaelpMi.Core.Storage;
 
 namespace HaelpMi.Core.Networking;
@@ -24,6 +25,7 @@ public sealed class ConfigSyncService : IAsyncDisposable
     private readonly ConfigHistoryStore _historyStore = new();
     private readonly SettingsStore _settingsStore = new();
     private readonly Action<string>? _audit;
+    private readonly Func<string?>? _groupKeyProvider;
     private readonly SemaphoreSlim _applyLock = new(1, 1);
 
     private UdpClient? _udpSocket;
@@ -35,11 +37,19 @@ public sealed class ConfigSyncService : IAsyncDisposable
     /// <summary>Raised after a newer config has been pulled and applied - callers should re-register hotkeys, refresh UI, etc.</summary>
     public event EventHandler<SharedConfig>? ConfigApplied;
 
-    public ConfigSyncService(Func<LiveIdentity> identityProvider, Func<List<DeviceEntry>> deviceListProvider, Action<string>? audit = null)
+    /// <param name="groupKeyProvider">
+    /// LAN-Verschlüsselung (CLAUDE.md "Lizenz &amp; Secrets"): siehe AlarmSender-
+    /// Konstruktor. Gilt hier NUR für den TCP-Pull (Request+Response, trägt den
+    /// eigentlichen Konfigurationsinhalt) - der UDP-Announce bleibt bewusst unverändert
+    /// im Klartext, er trägt nur "Config-Version X geändert", keinen Inhalt (siehe Plan-
+    /// Dokument).
+    /// </param>
+    public ConfigSyncService(Func<LiveIdentity> identityProvider, Func<List<DeviceEntry>> deviceListProvider, Action<string>? audit = null, Func<string?>? groupKeyProvider = null)
     {
         _identityProvider = identityProvider;
         _deviceListProvider = deviceListProvider;
         _audit = audit;
+        _groupKeyProvider = groupKeyProvider;
     }
 
     // tcpPort-Override (06.08.2026) nur für Tests gedacht - ein Fixport ohne Override
@@ -297,7 +307,7 @@ public sealed class ConfigSyncService : IAsyncDisposable
         }
     }
 
-    private static async Task<SharedConfig?> PullFromAsync(DeviceEntry originDevice, LiveIdentity identity, CancellationToken ct)
+    private async Task<SharedConfig?> PullFromAsync(DeviceEntry originDevice, LiveIdentity identity, CancellationToken ct)
     {
         try
         {
@@ -314,7 +324,30 @@ public sealed class ConfigSyncService : IAsyncDisposable
             await using var stream = client.GetStream();
 
             var request = new ConfigSyncPullRequestMessage(identity.CustomerGroupId, identity.DeviceId);
-            var payload = NetworkSerializer.Encoding.GetBytes(NetworkSerializer.ToJsonLine(request));
+
+            // LAN-Verschlüsselung (CLAUDE.md "Lizenz & Secrets"): gleiche Fallback-Logik
+            // wie AlarmSender - nur wenn wir einen Gruppenschlüssel haben UND das Ziel als
+            // verschlüsselungsfähig+gepinnt bekannt ist. Kein Zustellzwang wie beim Alarm-
+            // Kanal nötig: schlägt der Pull fehl, wird er beim nächsten Announce/Boot-Call
+            // ohnehin erneut versucht (EvaluateAndPullAsync-Klassendoku).
+            var groupKeyBase64 = _groupKeyProvider?.Invoke();
+            var canEncrypt = groupKeyBase64 is not null
+                && originDevice.ProtocolVersion is >= AppConstants.CurrentProtocolVersion
+                && !string.IsNullOrEmpty(originDevice.PinnedDeviceIdentityPublicKeyBase64);
+
+            string requestLine;
+            if (canEncrypt)
+            {
+                var devicePrivateKeyBase64 = DeviceIdentityStore.LoadOrCreate().PrivateKeyBase64;
+                var envelope = SecureEnvelopeCodec.Seal(request, request.CustomerGroupId, request.RequesterDeviceId, groupKeyBase64, devicePrivateKeyBase64, DateTimeOffset.UtcNow);
+                requestLine = envelope is not null ? NetworkSerializer.ToJsonLine(envelope) : NetworkSerializer.ToJsonLine(request);
+            }
+            else
+            {
+                requestLine = NetworkSerializer.ToJsonLine(request);
+            }
+
+            var payload = NetworkSerializer.Encoding.GetBytes(requestLine);
             await stream.WriteAsync(payload, timeoutCts.Token);
             await stream.FlushAsync(timeoutCts.Token);
 
@@ -324,8 +357,18 @@ public sealed class ConfigSyncService : IAsyncDisposable
                 return null;
             }
 
-            var response = NetworkSerializer.FromJsonLine<ConfigSyncPullResponseMessage>(line);
-            return response?.Config;
+            // Antwortformat spiegelt das Anfrageformat (siehe AlarmTcpListener-Klassendoku
+            // für dasselbe Prinzip).
+            if (SecureEnvelopeCodec.TryParse(line, out var responseEnvelope) && responseEnvelope is not null)
+            {
+                var response = SecureEnvelopeCodec.TryOpen<ConfigSyncPullResponseMessage>(responseEnvelope, groupKeyBase64, originDevice.PinnedDeviceIdentityPublicKeyBase64, DateTimeOffset.UtcNow);
+                return response?.Config;
+            }
+            else
+            {
+                var response = NetworkSerializer.FromJsonLine<ConfigSyncPullResponseMessage>(line);
+                return response?.Config;
+            }
         }
         catch (Exception)
         {
@@ -367,21 +410,60 @@ public sealed class ConfigSyncService : IAsyncDisposable
                 return;
             }
 
-            var request = NetworkSerializer.FromJsonLine<ConfigSyncPullRequestMessage>(line);
-            if (request is null || request.RequesterDeviceId == Guid.Empty)
-            {
-                return;
-            }
-
             var identity = _identityProvider();
-            if (!CustomerGroupFilter.Matches(request.CustomerGroupId, identity.CustomerGroupId))
+
+            ConfigSyncPullRequestMessage? request;
+            var wasEncrypted = false;
+            string? requesterPinnedKey = null;
+
+            if (SecureEnvelopeCodec.TryParse(line, out var envelope) && envelope is not null)
             {
-                return;
+                if (!CustomerGroupFilter.Matches(envelope.CustomerGroupId, identity.CustomerGroupId) || !envelope.IsPlausible())
+                {
+                    return;
+                }
+
+                requesterPinnedKey = _deviceListProvider().FirstOrDefault(d => d.DeviceId == envelope.DeviceId)?.PinnedDeviceIdentityPublicKeyBase64;
+                var groupKeyBase64 = _groupKeyProvider?.Invoke();
+                request = SecureEnvelopeCodec.TryOpen<ConfigSyncPullRequestMessage>(envelope, groupKeyBase64, requesterPinnedKey, DateTimeOffset.UtcNow);
+                if (request is null)
+                {
+                    return; // falscher Gruppenschlüssel/manipuliert/falscher Absender-Schlüssel - stiller Drop
+                }
+
+                wasEncrypted = true;
+            }
+            else
+            {
+                request = NetworkSerializer.FromJsonLine<ConfigSyncPullRequestMessage>(line);
+                if (request is null || request.RequesterDeviceId == Guid.Empty)
+                {
+                    return;
+                }
+
+                if (!CustomerGroupFilter.Matches(request.CustomerGroupId, identity.CustomerGroupId))
+                {
+                    return;
+                }
             }
 
             var config = _configStore.LoadOrCreate();
             var response = new ConfigSyncPullResponseMessage(identity.CustomerGroupId, config);
-            var responseBytes = NetworkSerializer.Encoding.GetBytes(NetworkSerializer.ToJsonLine(response));
+
+            string responseLine;
+            if (wasEncrypted)
+            {
+                var groupKeyBase64 = _groupKeyProvider?.Invoke();
+                var devicePrivateKeyBase64 = DeviceIdentityStore.LoadOrCreate().PrivateKeyBase64;
+                var responseEnvelope = SecureEnvelopeCodec.Seal(response, response.CustomerGroupId, identity.DeviceId, groupKeyBase64, devicePrivateKeyBase64, DateTimeOffset.UtcNow);
+                responseLine = responseEnvelope is not null ? NetworkSerializer.ToJsonLine(responseEnvelope) : NetworkSerializer.ToJsonLine(response);
+            }
+            else
+            {
+                responseLine = NetworkSerializer.ToJsonLine(response);
+            }
+
+            var responseBytes = NetworkSerializer.Encoding.GetBytes(responseLine);
             await stream.WriteAsync(responseBytes, ct);
             await stream.FlushAsync(ct);
         }

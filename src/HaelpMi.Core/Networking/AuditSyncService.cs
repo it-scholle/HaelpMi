@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Sockets;
 using HaelpMi.Core.Models;
 using HaelpMi.Core.Networking.Protocol;
+using HaelpMi.Core.Security;
 using HaelpMi.Core.Storage;
 
 namespace HaelpMi.Core.Networking;
@@ -45,6 +46,8 @@ public sealed class AuditSyncService : IAsyncDisposable
     private readonly AuditIngestStore _ingestStore = new();
     private readonly AuditSyncStateStore _stateStore = new();
     private readonly Action<string>? _audit;
+    private readonly Func<string?>? _groupKeyProvider;
+    private readonly DeviceStore _deviceStore = new();
 
     private TcpListener? _pushListener;
     private TcpListener? _meshListener;
@@ -52,11 +55,13 @@ public sealed class AuditSyncService : IAsyncDisposable
     private Task? _pushAcceptLoop;
     private Task? _meshAcceptLoop;
 
-    public AuditSyncService(Func<LiveIdentity> identityProvider, AuditLog auditLog, Action<string>? audit = null)
+    /// <param name="groupKeyProvider">Siehe AlarmSender-Konstruktor - gleiche Bedeutung, LAN-Verschlüsselung von Push und Mesh-Digest.</param>
+    public AuditSyncService(Func<LiveIdentity> identityProvider, AuditLog auditLog, Action<string>? audit = null, Func<string?>? groupKeyProvider = null)
     {
         _identityProvider = identityProvider;
         _auditLog = auditLog;
         _audit = audit;
+        _groupKeyProvider = groupKeyProvider;
     }
 
     /// <summary>Nur aufrufen, wenn das eigene Gerät Role.Admin ist (siehe Klassendoku) - Push-Sendeseite läuft unabhängig davon auf jedem Gerät.</summary>
@@ -135,7 +140,7 @@ public sealed class AuditSyncService : IAsyncDisposable
         // Kein Ack (unerreichbar/Timeout): state bleibt unverändert, nächster Trigger versucht es erneut.
     }
 
-    private static async Task<AuditPushAckMessage?> SendPushAsync(DeviceEntry peer, int port, AuditPushMessage request, CancellationToken ct)
+    private async Task<AuditPushAckMessage?> SendPushAsync(DeviceEntry peer, int port, AuditPushMessage request, CancellationToken ct)
     {
         try
         {
@@ -151,12 +156,42 @@ public sealed class AuditSyncService : IAsyncDisposable
             await client.ConnectAsync(address, port, timeoutCts.Token);
             await using var stream = client.GetStream();
 
-            var payload = NetworkSerializer.Encoding.GetBytes(NetworkSerializer.ToJsonLine(request));
+            // LAN-Verschlüsselung (CLAUDE.md "Lizenz & Secrets"): gleiche Fallback-Logik
+            // wie AlarmSender/ConfigSyncService - nur wenn wir einen Gruppenschlüssel haben
+            // UND der Peer als verschlüsselungsfähig+gepinnt bekannt ist.
+            var groupKeyBase64 = _groupKeyProvider?.Invoke();
+            var canEncrypt = groupKeyBase64 is not null
+                && peer.ProtocolVersion is >= AppConstants.CurrentProtocolVersion
+                && !string.IsNullOrEmpty(peer.PinnedDeviceIdentityPublicKeyBase64);
+
+            string requestLine;
+            if (canEncrypt)
+            {
+                var devicePrivateKeyBase64 = DeviceIdentityStore.LoadOrCreate().PrivateKeyBase64;
+                var envelope = SecureEnvelopeCodec.Seal(request, request.CustomerGroupId, request.SenderDeviceId, groupKeyBase64, devicePrivateKeyBase64, DateTimeOffset.UtcNow);
+                requestLine = envelope is not null ? NetworkSerializer.ToJsonLine(envelope) : NetworkSerializer.ToJsonLine(request);
+            }
+            else
+            {
+                requestLine = NetworkSerializer.ToJsonLine(request);
+            }
+
+            var payload = NetworkSerializer.Encoding.GetBytes(requestLine);
             await stream.WriteAsync(payload, timeoutCts.Token);
             await stream.FlushAsync(timeoutCts.Token);
 
             var line = await BoundedLineReader.ReadLineAsync(stream, timeoutCts.Token);
-            return line is null ? null : NetworkSerializer.FromJsonLine<AuditPushAckMessage>(line);
+            if (line is null)
+            {
+                return null;
+            }
+
+            if (SecureEnvelopeCodec.TryParse(line, out var ackEnvelope) && ackEnvelope is not null)
+            {
+                return SecureEnvelopeCodec.TryOpen<AuditPushAckMessage>(ackEnvelope, groupKeyBase64, peer.PinnedDeviceIdentityPublicKeyBase64, DateTimeOffset.UtcNow);
+            }
+
+            return NetworkSerializer.FromJsonLine<AuditPushAckMessage>(line);
         }
         catch (Exception)
         {
@@ -185,25 +220,48 @@ public sealed class AuditSyncService : IAsyncDisposable
                 return;
             }
 
-            AuditPushMessage? request;
-            try
-            {
-                request = NetworkSerializer.FromJsonLine<AuditPushMessage>(line);
-            }
-            catch (Exception)
-            {
-                return;
-            }
-
-            if (request is null || request.SenderDeviceId == Guid.Empty || request.Entries.Count == 0)
-            {
-                return;
-            }
-
             var identity = _identityProvider();
-            if (!CustomerGroupFilter.Matches(request.CustomerGroupId, identity.CustomerGroupId))
+
+            AuditPushMessage? request;
+            var wasEncrypted = false;
+
+            if (SecureEnvelopeCodec.TryParse(line, out var envelope) && envelope is not null)
             {
-                return; // Teil 2, Abschnitt 6
+                if (!CustomerGroupFilter.Matches(envelope.CustomerGroupId, identity.CustomerGroupId) || !envelope.IsPlausible())
+                {
+                    return;
+                }
+
+                var senderPinnedKey = _deviceStore.Load().FirstOrDefault(d => d.DeviceId == envelope.DeviceId)?.PinnedDeviceIdentityPublicKeyBase64;
+                var groupKeyBase64 = _groupKeyProvider?.Invoke();
+                request = SecureEnvelopeCodec.TryOpen<AuditPushMessage>(envelope, groupKeyBase64, senderPinnedKey, DateTimeOffset.UtcNow);
+                if (request is null)
+                {
+                    return; // falscher Gruppenschlüssel/manipuliert/falscher Absender-Schlüssel - stiller Drop
+                }
+
+                wasEncrypted = true;
+            }
+            else
+            {
+                try
+                {
+                    request = NetworkSerializer.FromJsonLine<AuditPushMessage>(line);
+                }
+                catch (Exception)
+                {
+                    return;
+                }
+
+                if (request is null || !CustomerGroupFilter.Matches(request.CustomerGroupId, identity.CustomerGroupId))
+                {
+                    return; // Teil 2, Abschnitt 6
+                }
+            }
+
+            if (request.SenderDeviceId == Guid.Empty || request.Entries.Count == 0)
+            {
+                return;
             }
 
             // Nach Ursprungsgerät gruppieren - ein Push (direkt vom Ursprungsgerät ODER von
@@ -224,7 +282,21 @@ public sealed class AuditSyncService : IAsyncDisposable
             _audit?.Invoke($"auditsync received from device={request.SenderDeviceId} entries={request.Entries.Count} gap={gapDetected}");
 
             var response = new AuditPushAckMessage(identity.CustomerGroupId, true, acceptedUpToSeq, gapDetected);
-            var responseBytes = NetworkSerializer.Encoding.GetBytes(NetworkSerializer.ToJsonLine(response));
+
+            string responseLine;
+            if (wasEncrypted)
+            {
+                var groupKeyBase64 = _groupKeyProvider?.Invoke();
+                var devicePrivateKeyBase64 = DeviceIdentityStore.LoadOrCreate().PrivateKeyBase64;
+                var responseEnvelope = SecureEnvelopeCodec.Seal(response, response.CustomerGroupId, identity.DeviceId, groupKeyBase64, devicePrivateKeyBase64, DateTimeOffset.UtcNow);
+                responseLine = responseEnvelope is not null ? NetworkSerializer.ToJsonLine(responseEnvelope) : NetworkSerializer.ToJsonLine(response);
+            }
+            else
+            {
+                responseLine = NetworkSerializer.ToJsonLine(response);
+            }
+
+            var responseBytes = NetworkSerializer.Encoding.GetBytes(responseLine);
             await stream.WriteAsync(responseBytes, ct);
             await stream.FlushAsync(ct);
         }
@@ -265,7 +337,26 @@ public sealed class AuditSyncService : IAsyncDisposable
             await client.ConnectAsync(address, meshPort ?? AppConstants.AuditMeshTcpPort, timeoutCts.Token);
             await using var stream = client.GetStream();
 
-            var payload = NetworkSerializer.Encoding.GetBytes(NetworkSerializer.ToJsonLine(request));
+            // LAN-Verschlüsselung (CLAUDE.md "Lizenz & Secrets"): gleiche Fallback-Logik wie
+            // überall sonst in diesem Kanal.
+            var groupKeyBase64 = _groupKeyProvider?.Invoke();
+            var canEncrypt = groupKeyBase64 is not null
+                && adminPeer.ProtocolVersion is >= AppConstants.CurrentProtocolVersion
+                && !string.IsNullOrEmpty(adminPeer.PinnedDeviceIdentityPublicKeyBase64);
+
+            string requestLine;
+            if (canEncrypt)
+            {
+                var devicePrivateKeyBase64 = DeviceIdentityStore.LoadOrCreate().PrivateKeyBase64;
+                var requestEnvelope = SecureEnvelopeCodec.Seal(request, request.CustomerGroupId, request.RequesterDeviceId, groupKeyBase64, devicePrivateKeyBase64, DateTimeOffset.UtcNow);
+                requestLine = requestEnvelope is not null ? NetworkSerializer.ToJsonLine(requestEnvelope) : NetworkSerializer.ToJsonLine(request);
+            }
+            else
+            {
+                requestLine = NetworkSerializer.ToJsonLine(request);
+            }
+
+            var payload = NetworkSerializer.Encoding.GetBytes(requestLine);
             await stream.WriteAsync(payload, timeoutCts.Token);
             await stream.FlushAsync(timeoutCts.Token);
 
@@ -275,7 +366,16 @@ public sealed class AuditSyncService : IAsyncDisposable
                 return;
             }
 
-            var response = NetworkSerializer.FromJsonLine<AuditDigestResponseMessage>(line);
+            AuditDigestResponseMessage? response;
+            if (SecureEnvelopeCodec.TryParse(line, out var responseEnvelope) && responseEnvelope is not null)
+            {
+                response = SecureEnvelopeCodec.TryOpen<AuditDigestResponseMessage>(responseEnvelope, groupKeyBase64, adminPeer.PinnedDeviceIdentityPublicKeyBase64, DateTimeOffset.UtcNow);
+            }
+            else
+            {
+                response = NetworkSerializer.FromJsonLine<AuditDigestResponseMessage>(line);
+            }
+
             if (response is null)
             {
                 return;
@@ -334,23 +434,46 @@ public sealed class AuditSyncService : IAsyncDisposable
                 return;
             }
 
-            AuditDigestRequestMessage? request;
-            try
-            {
-                request = NetworkSerializer.FromJsonLine<AuditDigestRequestMessage>(line);
-            }
-            catch (Exception)
-            {
-                return;
-            }
-
-            if (request is null || request.RequesterDeviceId == Guid.Empty)
-            {
-                return;
-            }
-
             var identity = _identityProvider();
-            if (!CustomerGroupFilter.Matches(request.CustomerGroupId, identity.CustomerGroupId))
+
+            AuditDigestRequestMessage? request;
+            var wasEncrypted = false;
+
+            if (SecureEnvelopeCodec.TryParse(line, out var envelope) && envelope is not null)
+            {
+                if (!CustomerGroupFilter.Matches(envelope.CustomerGroupId, identity.CustomerGroupId) || !envelope.IsPlausible())
+                {
+                    return;
+                }
+
+                var requesterPinnedKey = _deviceStore.Load().FirstOrDefault(d => d.DeviceId == envelope.DeviceId)?.PinnedDeviceIdentityPublicKeyBase64;
+                var groupKeyBase64 = _groupKeyProvider?.Invoke();
+                request = SecureEnvelopeCodec.TryOpen<AuditDigestRequestMessage>(envelope, groupKeyBase64, requesterPinnedKey, DateTimeOffset.UtcNow);
+                if (request is null)
+                {
+                    return; // falscher Gruppenschlüssel/manipuliert/falscher Absender-Schlüssel - stiller Drop
+                }
+
+                wasEncrypted = true;
+            }
+            else
+            {
+                try
+                {
+                    request = NetworkSerializer.FromJsonLine<AuditDigestRequestMessage>(line);
+                }
+                catch (Exception)
+                {
+                    return;
+                }
+
+                if (request is null || !CustomerGroupFilter.Matches(request.CustomerGroupId, identity.CustomerGroupId))
+                {
+                    return;
+                }
+            }
+
+            if (request.RequesterDeviceId == Guid.Empty)
             {
                 return;
             }
@@ -367,7 +490,21 @@ public sealed class AuditSyncService : IAsyncDisposable
             }
 
             var response = new AuditDigestResponseMessage(identity.CustomerGroupId, myMarks, entriesForRequester);
-            var responseBytes = NetworkSerializer.Encoding.GetBytes(NetworkSerializer.ToJsonLine(response));
+
+            string responseLine;
+            if (wasEncrypted)
+            {
+                var groupKeyBase64 = _groupKeyProvider?.Invoke();
+                var devicePrivateKeyBase64 = DeviceIdentityStore.LoadOrCreate().PrivateKeyBase64;
+                var responseEnvelope = SecureEnvelopeCodec.Seal(response, response.CustomerGroupId, identity.DeviceId, groupKeyBase64, devicePrivateKeyBase64, DateTimeOffset.UtcNow);
+                responseLine = responseEnvelope is not null ? NetworkSerializer.ToJsonLine(responseEnvelope) : NetworkSerializer.ToJsonLine(response);
+            }
+            else
+            {
+                responseLine = NetworkSerializer.ToJsonLine(response);
+            }
+
+            var responseBytes = NetworkSerializer.Encoding.GetBytes(responseLine);
             await stream.WriteAsync(responseBytes, ct);
             await stream.FlushAsync(ct);
         }

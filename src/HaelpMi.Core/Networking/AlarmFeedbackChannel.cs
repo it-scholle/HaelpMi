@@ -2,6 +2,8 @@ using System.Net;
 using System.Net.Sockets;
 using HaelpMi.Core.Models;
 using HaelpMi.Core.Networking.Protocol;
+using HaelpMi.Core.Security;
+using HaelpMi.Core.Storage;
 
 namespace HaelpMi.Core.Networking;
 
@@ -16,6 +18,8 @@ public sealed class AlarmFeedbackChannel : IAsyncDisposable
 {
     private readonly Func<LiveIdentity> _identityProvider;
     private readonly Action<string>? _audit;
+    private readonly Func<string?>? _groupKeyProvider;
+    private readonly DeviceStore _deviceStore = new();
     private TcpListener? _listener;
     private CancellationTokenSource? _cts;
     private Task? _acceptLoop;
@@ -23,10 +27,12 @@ public sealed class AlarmFeedbackChannel : IAsyncDisposable
     public event EventHandler<AlarmOnMyWayMessage>? OnMyWayReceived;
     public event EventHandler<AlarmStatusRelayMessage>? StatusRelayReceived;
 
-    public AlarmFeedbackChannel(Func<LiveIdentity> identityProvider, Action<string>? audit = null)
+    /// <param name="groupKeyProvider">Siehe AlarmSender-Konstruktor - gleiche Bedeutung, LAN-Verschlüsselung des Antwort-Kanals.</param>
+    public AlarmFeedbackChannel(Func<LiveIdentity> identityProvider, Action<string>? audit = null, Func<string?>? groupKeyProvider = null)
     {
         _identityProvider = identityProvider;
         _audit = audit;
+        _groupKeyProvider = groupKeyProvider;
     }
 
     public void Start(int port = AppConstants.AlarmFeedbackTcpPort)
@@ -69,7 +75,7 @@ public sealed class AlarmFeedbackChannel : IAsyncDisposable
         await Task.WhenAll(recipients.Select(r => SendEnvelopeAsync(r, AlarmFeedbackMessageType.StatusRelay, payload, ct)));
     }
 
-    private static async Task SendEnvelopeAsync(DeviceEntry target, AlarmFeedbackMessageType type, string payloadJson, CancellationToken ct)
+    private async Task SendEnvelopeAsync(DeviceEntry target, AlarmFeedbackMessageType type, string payloadJson, CancellationToken ct)
     {
         try
         {
@@ -85,8 +91,31 @@ public sealed class AlarmFeedbackChannel : IAsyncDisposable
             await client.ConnectAsync(address, AppConstants.AlarmFeedbackTcpPort, timeoutCts.Token);
             await using var stream = client.GetStream();
 
-            var envelope = new AlarmFeedbackEnvelope(type, payloadJson);
-            var bytes = NetworkSerializer.Encoding.GetBytes(NetworkSerializer.ToJsonLine(envelope));
+            var innerEnvelope = new AlarmFeedbackEnvelope(type, payloadJson);
+
+            // LAN-Verschlüsselung (CLAUDE.md "Lizenz & Secrets"): gleiche Fallback-Logik
+            // wie AlarmSender - AlarmFeedbackEnvelope wird als Ganzes in ein SecureEnvelope
+            // gepackt, wenn wir einen Gruppenschlüssel haben und das Zielgerät als
+            // verschlüsselungsfähig+gepinnt bekannt ist, sonst unverändertes Klartextformat.
+            var groupKeyBase64 = _groupKeyProvider?.Invoke();
+            var canEncrypt = groupKeyBase64 is not null
+                && target.ProtocolVersion is >= AppConstants.CurrentProtocolVersion
+                && !string.IsNullOrEmpty(target.PinnedDeviceIdentityPublicKeyBase64);
+
+            string line;
+            if (canEncrypt)
+            {
+                var identity = _identityProvider();
+                var devicePrivateKeyBase64 = DeviceIdentityStore.LoadOrCreate().PrivateKeyBase64;
+                var secureEnvelope = SecureEnvelopeCodec.Seal(innerEnvelope, identity.CustomerGroupId, identity.DeviceId, groupKeyBase64, devicePrivateKeyBase64, DateTimeOffset.UtcNow);
+                line = secureEnvelope is not null ? NetworkSerializer.ToJsonLine(secureEnvelope) : NetworkSerializer.ToJsonLine(innerEnvelope);
+            }
+            else
+            {
+                line = NetworkSerializer.ToJsonLine(innerEnvelope);
+            }
+
+            var bytes = NetworkSerializer.Encoding.GetBytes(line);
             await stream.WriteAsync(bytes, timeoutCts.Token);
             await stream.FlushAsync(timeoutCts.Token);
         }
@@ -130,22 +159,40 @@ public sealed class AlarmFeedbackChannel : IAsyncDisposable
                 return;
             }
 
-            AlarmFeedbackEnvelope? envelope;
-            try
-            {
-                envelope = NetworkSerializer.FromJsonLine<AlarmFeedbackEnvelope>(line);
-            }
-            catch (Exception)
-            {
-                return;
-            }
-
-            if (envelope is null)
-            {
-                return;
-            }
-
             var identity = _identityProvider();
+
+            AlarmFeedbackEnvelope? envelope;
+            if (SecureEnvelopeCodec.TryParse(line, out var secureEnvelope) && secureEnvelope is not null)
+            {
+                if (!CustomerGroupFilter.Matches(secureEnvelope.CustomerGroupId, identity.CustomerGroupId) || !secureEnvelope.IsPlausible())
+                {
+                    return;
+                }
+
+                var senderPinnedKey = _deviceStore.Load().FirstOrDefault(d => d.DeviceId == secureEnvelope.DeviceId)?.PinnedDeviceIdentityPublicKeyBase64;
+                var groupKeyBase64 = _groupKeyProvider?.Invoke();
+                envelope = SecureEnvelopeCodec.TryOpen<AlarmFeedbackEnvelope>(secureEnvelope, groupKeyBase64, senderPinnedKey, DateTimeOffset.UtcNow);
+                if (envelope is null)
+                {
+                    return; // falscher Gruppenschlüssel/manipuliert/falscher Absender-Schlüssel - stiller Drop
+                }
+            }
+            else
+            {
+                try
+                {
+                    envelope = NetworkSerializer.FromJsonLine<AlarmFeedbackEnvelope>(line);
+                }
+                catch (Exception)
+                {
+                    return;
+                }
+
+                if (envelope is null)
+                {
+                    return;
+                }
+            }
 
             switch (envelope.Type)
             {

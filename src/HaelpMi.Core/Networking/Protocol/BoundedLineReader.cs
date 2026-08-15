@@ -8,7 +8,16 @@ namespace HaelpMi.Core.Networking.Protocol;
 /// </summary>
 internal static class BoundedLineReader
 {
-    public const int MaxLineBytes = 8 * 1024; // generous for our small JSON messages
+    // War 8 KB ("generous for our small JSON messages") - LAN-Verschlüsselung (CLAUDE.md
+    // "Lizenz & Secrets"): der SecureEnvelope-Overhead (Base64 + JSON-Hülle, siehe
+    // SecureEnvelopeCodec) auf eine ohnehin schon nur knapp bemessene ConfigSyncPull-
+    // Response (trägt den kompletten SharedConfig - Räume, Alarm-Profile, Zuordnungen)
+    // ließ diese Grenze bei größerem Raum-/Profil-Bestand realistisch werden, unabhängig
+    // von der Verschlüsselung selbst latent vorbestehend. Gleiches Prinzip wie
+    // DiscoveryService.MaxDatagramBytes (dort 4 KB -> 32 KB aus demselben Grund) -
+    // großzügiger, aber weiterhin endlich (siehe Klassendoku: Schutz gegen unbegrenztes
+    // Puffern bleibt bestehen).
+    public const int MaxLineBytes = 64 * 1024;
 
     public static async Task<string?> ReadLineAsync(Stream stream, CancellationToken ct)
     {

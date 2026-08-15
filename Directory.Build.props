@@ -13,6 +13,6 @@
          Toolchain des Installers - beide Werte müssen bei jedem Versionssprung von Hand
          synchron gehalten werden (gleiches Prinzip wie bei den Port-Konstanten, siehe
          Kommentar dort in HaelpMiCommon.iss.inc). -->
-    <Version>0.31.0</Version>
+    <Version>0.32.0</Version>
   </PropertyGroup>
 </Project>

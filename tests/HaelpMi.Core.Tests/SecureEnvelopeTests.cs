@@ -138,6 +138,36 @@ public class SecureEnvelopeTests
         Assert.NotEqual(first!.NonceBase64, second!.NonceBase64);
     }
 
+    [Fact]
+    public void SealAndTryOpen_RoundTrips_AlarmFeedbackEnvelope()
+    {
+        // Antwort-Kanal (AlarmFeedbackChannel): AlarmFeedbackEnvelope wird als Ganzes in
+        // ein SecureEnvelope gepackt (siehe AlarmFeedbackChannel.SendEnvelopeAsync) - dieser
+        // Test prüft genau diesen konkreten Nachrichtentyp, ohne echte Sockets zu brauchen
+        // (der Kanal verbindet fest gegen AppConstants.AlarmFeedbackTcpPort, ein echter
+        // TCP-Test würde mit einer laufenden Produktiv-Instanz kollidieren, siehe
+        // SendingTests.cs-Kommentar zum selben Thema).
+        var groupKey = NewGroupKeyBase64();
+        var device = DeviceIdentitySigner.GenerateKeyPair();
+        var customerGroupId = Guid.NewGuid();
+        var deviceId = Guid.NewGuid();
+        var onMyWay = new AlarmOnMyWayMessage(customerGroupId, Guid.NewGuid(), Guid.NewGuid(), deviceId, "PC", "Herr Novak", "Raum 1", DateTimeOffset.UtcNow);
+        // Gleiche camelCase-Optionen wie NetworkSerializer (nicht die .NET-Default-
+        // PascalCase-Serialisierung) - AlarmFeedbackChannel baut PayloadJson genauso.
+        var wireOptions = new System.Text.Json.JsonSerializerOptions { PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase };
+        var body = new AlarmFeedbackEnvelope(AlarmFeedbackMessageType.OnMyWay, System.Text.Json.JsonSerializer.Serialize(onMyWay, wireOptions));
+
+        var envelope = SecureEnvelopeCodec.Seal(body, customerGroupId, deviceId, groupKey, device.PrivateKeyBase64, DateTimeOffset.UtcNow);
+        Assert.NotNull(envelope);
+
+        var opened = SecureEnvelopeCodec.TryOpen<AlarmFeedbackEnvelope>(envelope!, groupKey, device.PublicKeyBase64, DateTimeOffset.UtcNow);
+
+        Assert.NotNull(opened);
+        Assert.Equal(AlarmFeedbackMessageType.OnMyWay, opened!.Type);
+        var reopened = System.Text.Json.JsonSerializer.Deserialize<AlarmOnMyWayMessage>(opened.PayloadJson, wireOptions);
+        Assert.Equal(onMyWay, reopened);
+    }
+
     private static string FlipLastByte(string base64)
     {
         var bytes = Convert.FromBase64String(base64);

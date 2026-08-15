@@ -6,6 +6,7 @@ using HaelpMi.Core.Diagnostics;
 using HaelpMi.Core.Models;
 using HaelpMi.Core.Networking;
 using HaelpMi.Core.Networking.Protocol;
+using HaelpMi.Core.Security;
 using HaelpMi.Core.Storage;
 using Xunit;
 
@@ -517,5 +518,69 @@ public class AuditSyncTests
         Assert.Equal(3, marks[aheadOriginDeviceId]); // unverändert, unser eigener Stand
         Assert.Equal(2, marks[newFromPeerOriginDeviceId]); // neu aus der Digest-Antwort übernommen
         Assert.Equal(1, pushBackConnections); // Gegenrichtung wurde angestoßen, weil wir bei aheadOriginDeviceId voraus waren
+    }
+
+    [Fact]
+    public async Task AuditSyncService_PushPendingAsync_FullRoundTrip_ThroughSecureEnvelope_WhenAdminPeerIsCapable()
+    {
+        // LAN-Verschlüsselung (CLAUDE.md "Lizenz & Secrets"): gleicher Testaufbau wie
+        // AuditSyncService_PushPendingAsync_FullRoundTrip_IngestsAndUpdatesPerAdminState,
+        // nur mit Gruppenschlüssel + als verschlüsselungsfähig+gepinnt markiertem
+        // Admin-Peer - beide Dienste laufen im selben Testprozess und teilen sich daher
+        // denselben (prozessweit gecachten) DeviceIdentityStore-Schlüssel; das reicht, um
+        // den Sende-/Empfangs-/Dispatch-Pfad über SecureEnvelope zu beweisen (die
+        // eigentliche Kryptologik mit zwei UNTERSCHIEDLICHEN Geräte-Schlüsseln ist bereits
+        // in SecureEnvelopeTests/AlarmChannelEncryptionTests abgedeckt).
+        using var appData = new TestAppDataScope();
+        using var sharedLog = SharedLogPaths.ForceLocalFallbackForTests();
+        DeviceIdentityStore.ResetCacheForTests();
+        var pushPort = GetFreeTcpPort();
+        var meshPort = GetFreeTcpPort();
+        var customerGroupId = Guid.NewGuid();
+        var adminDeviceId = Guid.NewGuid();
+        var groupKeyBase64 = Convert.ToBase64String(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32));
+        var sharedPublicKey = DeviceIdentityStore.LoadOrCreate().PublicKeyBase64;
+        var senderDeviceId = Guid.NewGuid();
+
+        // Simuliert vorherigen direkten Boot-Call-Kontakt (TOFU-Pinning, siehe
+        // DiscoveryService) - ohne diesen Eintrag könnte die Admin-Empfangsseite die
+        // Signatur des Senders nicht verifizieren (kein gepinnter Schlüssel bekannt).
+        new DeviceStore().Save(new List<DeviceEntry>
+        {
+            new() { DeviceId = senderDeviceId, PinnedDeviceIdentityPublicKeyBase64 = sharedPublicKey },
+        });
+
+        var adminService = new AuditSyncService(() => MakeIdentity(customerGroupId, adminDeviceId), new AuditLog(() => adminDeviceId), groupKeyProvider: () => groupKeyBase64);
+        adminService.StartListening(pushPort, meshPort);
+
+        try
+        {
+            var senderLog = new AuditLog(() => senderDeviceId);
+            senderLog.Append("alarm gesendet");
+            senderLog.Append("alarm beendet");
+            var senderService = new AuditSyncService(() => MakeIdentity(customerGroupId, senderDeviceId), senderLog, groupKeyProvider: () => groupKeyBase64);
+
+            var adminPeer = new DeviceEntry
+            {
+                DeviceId = adminDeviceId,
+                Role = Role.Admin,
+                IpAddress = "127.0.0.1",
+                TcpPort = pushPort,
+                ProtocolVersion = AppConstants.CurrentProtocolVersion,
+                PinnedDeviceIdentityPublicKeyBase64 = sharedPublicKey,
+            };
+
+            await senderService.PushPendingAsync(new[] { adminPeer }, pushPort: pushPort);
+
+            Assert.Equal(2, new AuditIngestStore().GetHighWaterMarks()[senderDeviceId]);
+            var stateAfterPush = new AuditSyncStateStore().Load();
+            Assert.Equal(2, stateAfterPush.LastAckedSeqByAdmin[adminDeviceId]); // Ack kam korrekt entschlüsselt zurück
+
+            await senderService.DisposeAsync();
+        }
+        finally
+        {
+            await adminService.DisposeAsync();
+        }
     }
 }

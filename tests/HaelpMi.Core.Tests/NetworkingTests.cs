@@ -4,6 +4,7 @@ using System.Text.Json;
 using HaelpMi.Core.Models;
 using HaelpMi.Core.Networking;
 using HaelpMi.Core.Networking.Protocol;
+using HaelpMi.Core.Security;
 using HaelpMi.Core.Storage;
 using Xunit;
 
@@ -525,6 +526,76 @@ public class NetworkingTests
 
         // Simuliert exakt das, was DiscoveryService.PeerConfigVersionObserved beim
         // Boot-Call auslösen würde.
+        configSync.OnPeerConfigVersionObserved(null, new PeerConfigVersionInfo { DeviceId = peerDeviceId, ConfigVersion = 5 });
+
+        var applied = await appliedSignal.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.Equal(5, applied.ConfigVersion);
+
+        Assert.Equal(5, new SettingsStore().Load().AppliedConfigVersion);
+        await peerTask.WaitAsync(TimeSpan.FromSeconds(5));
+    }
+
+    [Fact]
+    public async Task ConfigSyncService_PullsAndAppliesNewerConfig_ThroughSecureEnvelope_WhenPeerIsCapable()
+    {
+        // LAN-Verschlüsselung (CLAUDE.md "Lizenz & Secrets"): gleicher Testaufbau wie
+        // ConfigSyncService_PullsAndAppliesNewerConfig_WhenPeerConfigVersionObserved, aber
+        // mit Gruppenschlüssel + als verschlüsselungsfähig+gepinnt markiertem Peer - der
+        // simulierte Rohsocket-Peer verschlüsselt/entschlüsselt manuell über
+        // SecureEnvelopeCodec, mit demselben (prozessweit gecachten) DeviceIdentityStore-
+        // Schlüssel wie ConfigSyncService selbst (siehe AuditSyncService-Pendant-Test für
+        // dieselbe bewusste Vereinfachung).
+        using var scope = new TestAppDataScope();
+        DeviceIdentityStore.ResetCacheForTests();
+        var customerGroupId = Guid.NewGuid();
+        var ownDeviceId = Guid.NewGuid();
+        var groupKeyBase64 = Convert.ToBase64String(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32));
+        var sharedKeyPair = DeviceIdentityStore.LoadOrCreate();
+
+        new SettingsStore().Save(new OwnSettings
+        {
+            DeviceId = ownDeviceId,
+            CustomerGroupId = customerGroupId,
+            AppliedConfigVersion = 0,
+        });
+        var ownIdentity = MakeIdentity(customerGroupId, ownDeviceId);
+
+        var peerDeviceId = Guid.NewGuid();
+        using var peerListener = new TcpListener(IPAddress.Loopback, AppConstants.ConfigSyncTcpPort);
+        peerListener.Start();
+        var peerTask = Task.Run(async () =>
+        {
+            using var client = await peerListener.AcceptTcpClientAsync();
+            await using var stream = client.GetStream();
+            var line = await BoundedLineReader.ReadLineAsync(stream, CancellationToken.None);
+            Assert.NotNull(line);
+            Assert.True(SecureEnvelopeCodec.TryParse(line!, out var requestEnvelope));
+            var request = SecureEnvelopeCodec.TryOpen<ConfigSyncPullRequestMessage>(requestEnvelope!, groupKeyBase64, sharedKeyPair.PublicKeyBase64, DateTimeOffset.UtcNow);
+            Assert.NotNull(request);
+            Assert.Equal(ownDeviceId, request!.RequesterDeviceId);
+
+            var response = new ConfigSyncPullResponseMessage(customerGroupId, new SharedConfig { ConfigVersion = 5 });
+            var responseEnvelope = SecureEnvelopeCodec.Seal(response, customerGroupId, peerDeviceId, groupKeyBase64, sharedKeyPair.PrivateKeyBase64, DateTimeOffset.UtcNow);
+            Assert.NotNull(responseEnvelope);
+            var responseBytes = NetworkSerializer.Encoding.GetBytes(JsonSerializer.Serialize(responseEnvelope, WireOptions) + "\n");
+            await stream.WriteAsync(responseBytes);
+        });
+
+        var deviceList = new List<DeviceEntry>
+        {
+            new()
+            {
+                DeviceId = peerDeviceId,
+                IpAddress = "127.0.0.1",
+                ProtocolVersion = AppConstants.CurrentProtocolVersion,
+                PinnedDeviceIdentityPublicKeyBase64 = sharedKeyPair.PublicKeyBase64,
+            },
+        };
+
+        var appliedSignal = new TaskCompletionSource<SharedConfig>(TaskCreationOptions.RunContinuationsAsynchronously);
+        await using var configSync = new ConfigSyncService(() => ownIdentity, () => deviceList, groupKeyProvider: () => groupKeyBase64);
+        configSync.ConfigApplied += (_, config) => appliedSignal.TrySetResult(config);
+
         configSync.OnPeerConfigVersionObserved(null, new PeerConfigVersionInfo { DeviceId = peerDeviceId, ConfigVersion = 5 });
 
         var applied = await appliedSignal.Task.WaitAsync(TimeSpan.FromSeconds(5));

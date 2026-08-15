@@ -18,7 +18,7 @@ internal static class MessageValidation
     // LAN-Verschlüsselung (siehe SecureEnvelopeCodec): Ed25519-Public-Keys sind fix 32
     // Byte -> 44 Zeichen Base64, hier großzügig aufgerundet. Nonce ist fix 12 Byte ->
     // 16 Zeichen Base64. Ciphertext-Obergrenze orientiert sich an
-    // BoundedLineReader.MaxLineBytes (8 KB TCP-Zeilenlimit) abzüglich JSON-Hülle/
+    // BoundedLineReader.MaxLineBytes (64 KB TCP-Zeilenlimit) abzüglich JSON-Hülle/
     // Base64-Overhead - großzügig, aber endlich, wie MaxKnownDevicesCount unten. Die
     // enthaltene Signatur wird hier NICHT separat geprüft - sie liegt innerhalb des
     // verschlüsselten Klartexts und ist vor dem Entschlüsseln unsichtbar, die eigentliche
@@ -26,7 +26,7 @@ internal static class MessageValidation
     // Plausibilitätsschranken (siehe Klassendoku oben).
     private const int MaxPublicKeyBase64Length = 64;
     private const int MaxNonceBase64Length = 24;
-    private const int MaxCiphertextBase64Length = 16 * 1024;
+    private const int MaxCiphertextBase64Length = 48 * 1024;
 
     // Nutzerwunsch 05.08.2026 (Gossip-Anhang): eine sehr großzügige, aber endliche Grenze -
     // der eigentliche Schutz gegen ein überdimensioniertes Datagramm ist schon
