@@ -8,6 +8,14 @@ namespace HaelpMi.Core.Storage;
 /// gossip-gelernten Eintrag gesetzt (der Zeitpunkt, zu dem der Informant es zuletzt selbst
 /// gesehen hat) - bei direktem Kontakt bleibt es null, dort ist "jetzt" (der seenAtUtc-
 /// Parameter von Upsert) weiterhin die genaueste verfügbare Angabe.
+///
+/// <see cref="ObservedProtocolVersion"/>/<see cref="PinnedDeviceIdentityPublicKeyBase64"/>
+/// (LAN-Verschlüsselung, siehe CLAUDE.md "Lizenz &amp; Secrets"): <c>null</c> = "nicht
+/// anfassen" - beide werden ausschließlich bei direktem Boot-Call-Kontakt explizit gesetzt
+/// (siehe DiscoveryService.HandleDatagramAsync), nie aus dem Gossip-Pfad übernommen,
+/// gleiches Prinzip wie beim Admin-Rollen-Nachweis. Ein gossip-gelernter Eintrag bleibt
+/// deshalb bis zum ersten eigenen direkten Kontakt konsequent "nicht verschlüsselungsfähig"
+/// (sicherer Standardfall, siehe PeerCryptoCapability).
 /// </summary>
 public sealed record DeviceUpsertInfo(
     string ComputerName,
@@ -18,7 +26,9 @@ public sealed record DeviceUpsertInfo(
     bool IsRemoteSession,
     string IpAddress,
     int TcpPort,
-    DateTimeOffset? ReportedLastSeenUtc = null);
+    DateTimeOffset? ReportedLastSeenUtc = null,
+    int? ObservedProtocolVersion = null,
+    string? PinnedDeviceIdentityPublicKeyBase64 = null);
 
 /// <summary>Loads/saves the locally known list of other devices (FR-18, 5.4).</summary>
 public sealed class DeviceStore
@@ -38,6 +48,8 @@ public sealed class DeviceStore
     {
         var existing = devices.FirstOrDefault(d => d.DeviceId == deviceId);
         var lastSeenUtc = ResolveLastSeenUtc(existing?.LastSeenUtc, info, seenAtUtc);
+        var protocolVersion = info.ObservedProtocolVersion ?? existing?.ProtocolVersion;
+        var pinnedKey = info.PinnedDeviceIdentityPublicKeyBase64 ?? existing?.PinnedDeviceIdentityPublicKeyBase64;
 
         if (existing is null)
         {
@@ -54,6 +66,8 @@ public sealed class DeviceStore
                 TcpPort = info.TcpPort,
                 LastSeenUtc = lastSeenUtc,
                 IsNew = true,
+                ProtocolVersion = protocolVersion,
+                PinnedDeviceIdentityPublicKeyBase64 = pinnedKey,
             });
         }
         else
@@ -67,6 +81,8 @@ public sealed class DeviceStore
             existing.IpAddress = info.IpAddress;
             existing.TcpPort = info.TcpPort;
             existing.LastSeenUtc = lastSeenUtc;
+            existing.ProtocolVersion = protocolVersion;
+            existing.PinnedDeviceIdentityPublicKeyBase64 = pinnedKey;
             // Favorite/Notified/Note/IsNew are local decisions and are deliberately left untouched.
         }
 

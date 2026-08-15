@@ -316,7 +316,7 @@ public partial class App : System.Windows.Application
         _feedbackChannel = new AlarmFeedbackChannel(BuildIdentity, _auditLog.Append);
         _feedbackChannel.Start();
 
-        _coordinator = new AlarmFlowCoordinator(BuildIdentity, () => _settings, _sharedConfigStore.LoadOrCreate, _feedbackChannel, _auditLog, _auditSyncService);
+        _coordinator = new AlarmFlowCoordinator(BuildIdentity, () => _settings, _sharedConfigStore.LoadOrCreate, _feedbackChannel, _auditLog, _auditSyncService, groupKeyProvider: () => _deployment.GroupKeyBase64);
 
         // Multi-VLAN-Bridge-Seed (Nutzerwunsch 13.08.2026, Liste seit 15.08.2026): kommt
         // ausschließlich aus SharedConfig, hot-reload-editierbar im Admin-Dashboard
@@ -342,7 +342,7 @@ public partial class App : System.Windows.Application
         // zusätzlicher Aufwand nötig, um exakt diesen einen Moment zu treffen.
         _ = _auditSyncService.PushPendingAsync(_deviceStore.Load());
 
-        _listener = new AlarmTcpListener(BuildIdentity, _auditLog.Append);
+        _listener = new AlarmTcpListener(BuildIdentity, _auditLog.Append, groupKeyProvider: () => _deployment.GroupKeyBase64);
         _listener.AlarmReceived += (_, args) => _coordinator.HandleIncomingAlarmRequest(args);
         _listener.Start();
 

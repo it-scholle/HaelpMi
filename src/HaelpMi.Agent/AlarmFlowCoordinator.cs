@@ -43,7 +43,8 @@ public sealed class AlarmFlowCoordinator
         Func<SharedConfig> sharedConfigProvider,
         AlarmFeedbackChannel feedbackChannel,
         AuditLog auditLog,
-        AuditSyncService auditSync)
+        AuditSyncService auditSync,
+        Func<string?>? groupKeyProvider = null)
     {
         _identityProvider = identityProvider;
         _settingsProvider = settingsProvider;
@@ -55,7 +56,7 @@ public sealed class AlarmFlowCoordinator
         // sich die Hash-Chain gegenseitig kaputtmachen (Race auf zwei verschiedenen Locks).
         _auditLog = auditLog;
         _auditSync = auditSync;
-        _sender = new AlarmSender(_auditLog.Append);
+        _sender = new AlarmSender(_auditLog.Append, groupKeyProvider);
         _audioPlayer = new MultiDeviceAlarmPlayer(_auditLog.Append);
         _feedbackChannel.StatusRelayReceived += (_, relay) => HandleStatusRelay(relay);
     }

@@ -50,6 +50,35 @@ internal static class SecureEnvelopeCodec
     private sealed record InnerEnvelope(string BodyJsonBase64, DateTimeOffset SentAtUtc, string SignatureBase64);
 
     /// <summary>
+    /// Erkennt anhand des Feldnamens "ciphertextBase64", ob eine empfangene JSON-Zeile ein
+    /// SecureEnvelope ist oder das alte Klartextformat des jeweiligen Kanals - beide Formen
+    /// koexistieren während der Rollout-Übergangsphase (alte/neue Version gemischt im
+    /// selben Netz). Ein eigenes Discriminator-Feld wäre Overkill für zwei nie
+    /// verwechselbare Formen (die Klartext-Nachrichtentypen haben dieses Feld nie). Wirft
+    /// nie - eine kaputte/leere Zeile gilt einfach als "kein Envelope", der Aufrufer
+    /// versucht dann das alte Format.
+    /// </summary>
+    public static bool TryParse(string line, out SecureEnvelope? envelope)
+    {
+        envelope = null;
+        try
+        {
+            using var document = JsonDocument.Parse(line);
+            if (!document.RootElement.TryGetProperty("ciphertextBase64", out _))
+            {
+                return false;
+            }
+
+            envelope = JsonSerializer.Deserialize<SecureEnvelope>(line, Options);
+            return envelope is not null;
+        }
+        catch (Exception)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
     /// Verschlüsselt+signiert <paramref name="body"/>. Gibt <c>null</c> zurück, wenn
     /// lokal nicht signiert werden kann (kaputter Geräte-Schlüssel, siehe
     /// DeviceIdentitySigner) oder kein Gruppenschlüssel vorliegt (alter Installer-Stand

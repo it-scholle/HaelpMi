@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Sockets;
 using HaelpMi.Core.Models;
 using HaelpMi.Core.Networking.Protocol;
+using HaelpMi.Core.Security;
 using HaelpMi.Core.Storage;
 
 namespace HaelpMi.Core.Networking;
@@ -199,6 +200,12 @@ public sealed class DiscoveryService : IAsyncDisposable
     private BootCallMessage BuildMessage(MessageKind kind, IReadOnlyList<KnownDeviceSummary>? knownDevices = null)
     {
         var identity = _identityProvider();
+        // LAN-Verschlüsselung (CLAUDE.md "Lizenz & Secrets"): jeder eigene Boot-Call meldet
+        // die eigene Protokollversion + den öffentlichen Geräte-Identitätsschlüssel - reine
+        // Selbstauskunft, die der Empfänger nur bei diesem direkten Kontakt pint (siehe
+        // HandleDatagramAsync), nie über Gossip weitergegeben (KnownDeviceSummary trägt
+        // dieses Feld bewusst nicht).
+        var deviceIdentity = DeviceIdentityStore.LoadOrCreate();
         return new BootCallMessage(
             kind,
             identity.CustomerGroupId,
@@ -213,7 +220,9 @@ public sealed class DiscoveryService : IAsyncDisposable
             identity.ProgramVersion,
             identity.ConfigVersion,
             DateTimeOffset.UtcNow,
-            knownDevices);
+            knownDevices,
+            ProtocolVersion: AppConstants.CurrentProtocolVersion,
+            DeviceIdentityPublicKeyBase64: deviceIdentity.PublicKeyBase64);
     }
 
     private async Task ReceiveLoopAsync(UdpClient socket, CancellationToken ct)
@@ -302,9 +311,34 @@ public sealed class DiscoveryService : IAsyncDisposable
         {
             var devices = _deviceStore.Load();
             var isNewPrimaryDevice = devices.All(d => d.DeviceId != message.DeviceId);
+
+            // LAN-Verschlüsselung (CLAUDE.md "Lizenz & Secrets"): Trust-on-First-Use, nur
+            // bei DIESEM direkten Kontakt geprüft/gepinnt, nie im Gossip-Loop unten (siehe
+            // DeviceUpsertInfo-Klassendoku). Meldet dieselbe DeviceId einen ANDEREN Schlüssel
+            // als beim letzten direkten Kontakt gepinnt, wird der neue NICHT übernommen -
+            // möglicher Klon-/Kompromittierungshinweis, landet im Audit-Log statt still
+            // akzeptiert zu werden.
+            var existingBeforeUpsert = devices.FirstOrDefault(d => d.DeviceId == message.DeviceId);
+            var reportedKey = message.DeviceIdentityPublicKeyBase64;
+            string? pinnedKeyToApply = null;
+            if (!string.IsNullOrEmpty(reportedKey))
+            {
+                var existingPinnedKey = existingBeforeUpsert?.PinnedDeviceIdentityPublicKeyBase64;
+                if (existingPinnedKey is null || existingPinnedKey == reportedKey)
+                {
+                    pinnedKeyToApply = reportedKey;
+                }
+                else
+                {
+                    _audit?.Invoke($"device-identity-key-changed deviceId={message.DeviceId} - alter Pin beibehalten, neuer Schluessel abgelehnt");
+                }
+            }
+
             var info = new DeviceUpsertInfo(
                 message.ComputerName, message.User, message.RoomName, message.RoomNumber,
-                message.Role, message.IsRemoteSession, remoteIp, message.TcpPort);
+                message.Role, message.IsRemoteSession, remoteIp, message.TcpPort,
+                ObservedProtocolVersion: message.ProtocolVersion,
+                PinnedDeviceIdentityPublicKeyBase64: pinnedKeyToApply);
             DeviceStore.Upsert(devices, message.DeviceId, info, DateTimeOffset.UtcNow);
             updated = devices.First(d => d.DeviceId == message.DeviceId);
             learnedNewDevice = isNewPrimaryDevice;

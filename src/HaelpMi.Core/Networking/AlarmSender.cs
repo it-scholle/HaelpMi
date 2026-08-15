@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Sockets;
 using HaelpMi.Core.Models;
 using HaelpMi.Core.Networking.Protocol;
+using HaelpMi.Core.Security;
 using HaelpMi.Core.Sending;
 
 namespace HaelpMi.Core.Networking;
@@ -34,10 +35,20 @@ public sealed class AlarmSendResult
 public sealed class AlarmSender
 {
     private readonly Action<string>? _audit;
+    private readonly Func<string?>? _groupKeyProvider;
 
-    public AlarmSender(Action<string>? audit = null)
+    /// <param name="groupKeyProvider">
+    /// LAN-Verschlüsselung (CLAUDE.md "Lizenz &amp; Secrets"): liefert den eigenen
+    /// gruppenweiten symmetrischen Schlüssel (aus DeploymentInfo.GroupKeyBase64), mit dem
+    /// pro Zielgerät entschieden wird, ob verschlüsselt gesendet werden kann - null/nicht
+    /// gesetzt = alter Installer-Stand ohne diesen Schlüssel, jeder Alarm geht dann
+    /// unverschlüsselt raus wie bisher (Alarmzustellung wird nie der Vertraulichkeit
+    /// geopfert, siehe SendToOneAsync).
+    /// </param>
+    public AlarmSender(Action<string>? audit = null, Func<string?>? groupKeyProvider = null)
     {
         _audit = audit;
+        _groupKeyProvider = groupKeyProvider;
     }
 
     public async Task<AlarmSendResult> SendAsync(
@@ -63,10 +74,12 @@ public sealed class AlarmSender
             ownIdentity.IsRemoteSession, profile.Text, profile.ResponseThreshold, DateTimeOffset.UtcNow, IsTest: isTest);
         _audit?.Invoke($"alarm sent alarmProfileId={profile.Id} sessionId={alarmSessionId} targetCount={targets.Count} isTest={isTest}");
 
+        var groupKeyBase64 = _groupKeyProvider?.Invoke();
+
         var ackedCount = 0;
         var sendTasks = targets.Select(async target =>
         {
-            var acked = await SendToOneAsync(request, target, ct);
+            var acked = await SendToOneAsync(request, target, groupKeyBase64, ct);
             if (acked)
             {
                 Interlocked.Increment(ref ackedCount);
@@ -79,7 +92,7 @@ public sealed class AlarmSender
         return new AlarmSendResult { TargetCount = targets.Count, AckedCount = ackedCount };
     }
 
-    private static async Task<bool> SendToOneAsync(AlarmRequestMessage request, DeviceEntry target, CancellationToken ct)
+    private static async Task<bool> SendToOneAsync(AlarmRequestMessage request, DeviceEntry target, string? groupKeyBase64, CancellationToken ct)
     {
         try
         {
@@ -95,7 +108,30 @@ public sealed class AlarmSender
             await client.ConnectAsync(address, target.TcpPort, timeoutCts.Token);
             await using var stream = client.GetStream();
 
-            var payload = NetworkSerializer.Encoding.GetBytes(NetworkSerializer.ToJsonLine(request));
+            // LAN-Verschlüsselung (CLAUDE.md "Lizenz & Secrets"): nur wenn WIR einen
+            // Gruppenschlüssel haben UND dieses Zielgerät bei einem direkten Boot-Call-
+            // Kontakt schon als verschlüsselungsfähig + mit gepinntem Schlüssel bekannt
+            // ist - sonst unverändertes Klartextformat. Alarmzustellung geht während der
+            // Rollout-Übergangsphase (alte/neue Version gemischt) IMMER vor Vertraulichkeit,
+            // siehe Plan-Dokument - ein unbekanntes/altes Zielgerät bekommt den Alarm lieber
+            // lesbar als gar nicht.
+            var canEncrypt = groupKeyBase64 is not null
+                && target.ProtocolVersion is >= AppConstants.CurrentProtocolVersion
+                && !string.IsNullOrEmpty(target.PinnedDeviceIdentityPublicKeyBase64);
+
+            string requestLine;
+            if (canEncrypt)
+            {
+                var devicePrivateKeyBase64 = DeviceIdentityStore.LoadOrCreate().PrivateKeyBase64;
+                var envelope = SecureEnvelopeCodec.Seal(request, request.CustomerGroupId, request.SenderDeviceId, groupKeyBase64, devicePrivateKeyBase64, DateTimeOffset.UtcNow);
+                requestLine = envelope is not null ? NetworkSerializer.ToJsonLine(envelope) : NetworkSerializer.ToJsonLine(request);
+            }
+            else
+            {
+                requestLine = NetworkSerializer.ToJsonLine(request);
+            }
+
+            var payload = NetworkSerializer.Encoding.GetBytes(requestLine);
             await stream.WriteAsync(payload, timeoutCts.Token);
             await stream.FlushAsync(timeoutCts.Token);
 
@@ -106,7 +142,20 @@ public sealed class AlarmSender
                 return false;
             }
 
-            var ack = NetworkSerializer.FromJsonLine<AlarmAckMessage>(line);
+            // Antwortformat spiegelt das Anfrageformat: ein Zielgerät, das eine
+            // SecureEnvelope-Anfrage öffnen konnte, antwortet ebenfalls verschlüsselt (siehe
+            // AlarmTcpListener.HandleClientAsync) - hier robust beides versuchen, statt sich
+            // auf die eigene canEncrypt-Einschätzung zu verlassen (die kann veraltet sein).
+            AlarmAckMessage? ack;
+            if (SecureEnvelopeCodec.TryParse(line, out var ackEnvelope) && ackEnvelope is not null)
+            {
+                ack = SecureEnvelopeCodec.TryOpen<AlarmAckMessage>(ackEnvelope, groupKeyBase64, target.PinnedDeviceIdentityPublicKeyBase64, DateTimeOffset.UtcNow);
+            }
+            else
+            {
+                ack = NetworkSerializer.FromJsonLine<AlarmAckMessage>(line);
+            }
+
             return ack is not null && ack.AlarmProfileId == request.AlarmProfileId && ack.AlarmSessionId == request.AlarmSessionId;
         }
         catch (Exception)

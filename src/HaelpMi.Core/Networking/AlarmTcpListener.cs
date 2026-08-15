@@ -2,6 +2,8 @@ using System.Net;
 using System.Net.Sockets;
 using HaelpMi.Core.Models;
 using HaelpMi.Core.Networking.Protocol;
+using HaelpMi.Core.Security;
+using HaelpMi.Core.Storage;
 
 namespace HaelpMi.Core.Networking;
 
@@ -27,16 +29,20 @@ public sealed class AlarmTcpListener : IAsyncDisposable
 {
     private readonly Func<LiveIdentity> _identityProvider;
     private readonly Action<string>? _audit;
+    private readonly Func<string?>? _groupKeyProvider;
+    private readonly DeviceStore _deviceStore = new();
     private TcpListener? _listener;
     private CancellationTokenSource? _cts;
     private Task? _acceptLoop;
 
     public event EventHandler<AlarmReceivedEventArgs>? AlarmReceived;
 
-    public AlarmTcpListener(Func<LiveIdentity> identityProvider, Action<string>? audit = null)
+    /// <param name="groupKeyProvider">Siehe AlarmSender-Konstruktor - gleiche Bedeutung, nur für den Empfangs-/Antwortpfad.</param>
+    public AlarmTcpListener(Func<LiveIdentity> identityProvider, Action<string>? audit = null, Func<string?>? groupKeyProvider = null)
     {
         _identityProvider = identityProvider;
         _audit = audit;
+        _groupKeyProvider = groupKeyProvider;
     }
 
     public void Start(int port = Models.AppConstants.AlarmTcpPort)
@@ -119,14 +125,43 @@ public sealed class AlarmTcpListener : IAsyncDisposable
                 return;
             }
 
+            var identity = _identityProvider();
+
+            // LAN-Verschlüsselung (CLAUDE.md "Lizenz & Secrets"): eine Zeile ist entweder
+            // ein SecureEnvelope (neuer, verschlüsselungsfähiger Absender) oder das alte
+            // Klartextformat - beide koexistieren während der Rollout-Übergangsphase, siehe
+            // SecureEnvelopeCodec.TryParse-Klassendoku. Die Antwort spiegelt bewusst das
+            // Anfrageformat (siehe unten).
             AlarmRequestMessage? request;
-            try
+            var wasEncrypted = false;
+
+            if (SecureEnvelopeCodec.TryParse(line, out var envelope) && envelope is not null)
             {
-                request = NetworkSerializer.FromJsonLine<AlarmRequestMessage>(line);
+                if (!CustomerGroupFilter.Matches(envelope.CustomerGroupId, identity.CustomerGroupId) || !envelope.IsPlausible())
+                {
+                    return; // different deployment, oder offensichtlich unplausibel - vor jeder teuren Krypto-Operation verwerfen
+                }
+
+                var senderPinnedKey = _deviceStore.Load().FirstOrDefault(d => d.DeviceId == envelope.DeviceId)?.PinnedDeviceIdentityPublicKeyBase64;
+                var groupKeyBase64 = _groupKeyProvider?.Invoke();
+                request = SecureEnvelopeCodec.TryOpen<AlarmRequestMessage>(envelope, groupKeyBase64, senderPinnedKey, DateTimeOffset.UtcNow);
+                if (request is null)
+                {
+                    return; // falscher Gruppenschlüssel, manipuliert, ungepinnter/falscher Absender-Schlüssel o. ä. - stiller Drop wie bei jedem anderen Verifikationsfehlschlag
+                }
+
+                wasEncrypted = true;
             }
-            catch (Exception)
+            else
             {
-                return; // malformed request - no trust assumptions in an admin-less network (NFR-6)
+                try
+                {
+                    request = NetworkSerializer.FromJsonLine<AlarmRequestMessage>(line);
+                }
+                catch (Exception)
+                {
+                    return; // malformed request - no trust assumptions in an admin-less network (NFR-6)
+                }
             }
 
             if (request is null || !request.IsPlausible())
@@ -134,7 +169,6 @@ public sealed class AlarmTcpListener : IAsyncDisposable
                 return;
             }
 
-            var identity = _identityProvider();
             if (!CustomerGroupFilter.Matches(request.CustomerGroupId, identity.CustomerGroupId))
             {
                 return; // different deployment sharing the same physical network (Teil 2, Abschnitt 6)
@@ -144,7 +178,20 @@ public sealed class AlarmTcpListener : IAsyncDisposable
             AlarmReceived?.Invoke(this, new AlarmReceivedEventArgs { Request = request, SenderAddress = senderAddress });
 
             var ack = new AlarmAckMessage(request.CustomerGroupId, request.AlarmProfileId, request.AlarmSessionId, identity.DeviceId, DateTimeOffset.UtcNow);
-            var ackLine = NetworkSerializer.ToJsonLine(ack);
+
+            string ackLine;
+            if (wasEncrypted)
+            {
+                var groupKeyBase64 = _groupKeyProvider?.Invoke();
+                var devicePrivateKeyBase64 = DeviceIdentityStore.LoadOrCreate().PrivateKeyBase64;
+                var ackEnvelope = SecureEnvelopeCodec.Seal(ack, ack.CustomerGroupId, identity.DeviceId, groupKeyBase64, devicePrivateKeyBase64, DateTimeOffset.UtcNow);
+                ackLine = ackEnvelope is not null ? NetworkSerializer.ToJsonLine(ackEnvelope) : NetworkSerializer.ToJsonLine(ack);
+            }
+            else
+            {
+                ackLine = NetworkSerializer.ToJsonLine(ack);
+            }
+
             var ackBytes = NetworkSerializer.Encoding.GetBytes(ackLine);
             await stream.WriteAsync(ackBytes, ct);
             await stream.FlushAsync(ct);

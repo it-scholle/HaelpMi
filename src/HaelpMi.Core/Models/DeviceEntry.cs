@@ -56,4 +56,23 @@ public sealed class DeviceEntry
     public bool IsNew { get; set; } = true;
 
     public DateTimeOffset LastSeenUtc { get; set; }
+
+    /// <summary>
+    /// LAN-Verschlüsselung (siehe CLAUDE.md "Lizenz &amp; Secrets", SecureEnvelopeCodec):
+    /// höchste Boot-Call-Protokollversion, die dieses Gerät bei DIREKTEM Kontakt gemeldet
+    /// hat (nie aus Gossip übernommen - siehe DiscoveryService.HandleDatagramAsync, gleiches
+    /// Prinzip wie AdminVerified). <c>null</c> = noch nie direkter Kontakt, oder ein alter,
+    /// vor-verschlüsselungsfähiger Stand - beides führt zum selben Klartext-Fallback beim
+    /// Senden (siehe PeerCryptoCapability).
+    /// </summary>
+    public int? ProtocolVersion { get; set; }
+
+    /// <summary>
+    /// Trust-on-First-Use-gepinnter Ed25519-Geräte-Identitätsschlüssel dieses Geräts,
+    /// ausschließlich bei direktem Boot-Call-Kontakt gesetzt (siehe DiscoveryService).
+    /// Meldet ein späterer direkter Kontakt für dieselbe DeviceId einen ANDEREN Schlüssel,
+    /// wird der neue NICHT übernommen (mögliches Klon-/Kompromittierungs-Signal) - der Pin
+    /// bleibt beim zuerst gesehenen Wert, der Vorfall landet im Audit-Log.
+    /// </summary>
+    public string? PinnedDeviceIdentityPublicKeyBase64 { get; set; }
 }
