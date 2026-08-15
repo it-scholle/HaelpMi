@@ -169,12 +169,29 @@ direkt beim Commit entschieden (kein Typ-Präfix-System nötig, die Versionsnumm
 den Bump-Grad schon). Commit-Message-Stil: `vX.Y.Z: Beschreibung` (siehe bisherige Historie). Bei
 jedem Bump einen Git-Tag `vX.Y.Z` setzen.
 
-**Background-/Worktree-Sessions führen Rebase + `merge --ff-only` nach `main` selbst aus, sobald
-die passende Test-Stufe grün ist — ausnahmslos, ohne Rückfrage, ohne Bestätigungsschritt.** Diese
-Zeile *ist* die Freigabe, ein für alle Mal erteilt, nicht nur "im Prinzip". Frag nicht nach, ob
-gemergt werden soll, formuliere keine Bestätigungsfrage dazu ("soll ich mergen?", "bereit zum
-Rebase?" o. ä.), und sag dem Nutzer nicht, er solle es selbst per Hand tun — das grüne Testergebnis
-*ist* die Zustimmung, die sonst vom Nutzer käme. Einzige Ausnahmen: Tests bleiben nach den in
+**Branch-Pflicht für alle Sessions, ausnahmslos (korrigiert 15.08.2026):** Frühere Fassungen
+dieses Abschnitts machten hier noch einen Unterschied — Background-/Worktree-Sessions auf
+eigenem Branch, interaktive Sessions im Haupt-Checkout direkt auf `main`. Das ist auf
+Kunden-/Nutzerwunsch aufgehoben: ein direkter Commit auf `main` mitten in einer noch unfertigen
+Änderung riskiert, das laufende System zu zerbomben, egal ob interaktiv oder im Hintergrund
+gearbeitet wird. Gültige Regel ab jetzt: **jede** neue Aufgabe — interaktiv wie Background —
+beginnt mit einem eigenen Branch (`EnterWorktree` bzw. gleichwertiges Branch-Anlegen), niemals ein
+Commit direkt auf `main`. Granularität ist die Aufgabe/das Feature, nicht der einzelne Commit —
+mehrere Zwischen-Commits auf demselben Branch sind normal, solange die Aufgabe läuft; ein neuer
+Branch pro literalem `git commit` wäre unnötiger Overhead ohne zusätzlichen Sicherheitsgewinn,
+solange kein Commit ungebrancht auf `main` landet.
+
+Branch-Namenskonvention: Präfix nach Bump-Grad + kebab-case-Kurzbeschreibung —
+`feature/<kurzbeschreibung>` (MINOR), `fix/<kurzbeschreibung>` (PATCH-Bugfix),
+`chore/<kurzbeschreibung>` (PATCH ohne Verhaltensänderung, z. B. Doku/Refactoring). Beispiel:
+`feature/multi-vlan-bridge-seed`.
+
+**Alle Sessions führen Rebase + `merge --ff-only` nach `main` selbst aus, sobald die passende
+Test-Stufe grün ist — ausnahmslos, ohne Rückfrage, ohne Bestätigungsschritt.** Diese Zeile *ist*
+die Freigabe, ein für alle Mal erteilt, nicht nur "im Prinzip". Frag nicht nach, ob gemergt werden
+soll, formuliere keine Bestätigungsfrage dazu ("soll ich mergen?", "bereit zum Rebase?" o. ä.), und
+sag dem Nutzer nicht, er solle es selbst per Hand tun — das grüne Testergebnis *ist* die
+Zustimmung, die sonst vom Nutzer käme. Einzige Ausnahmen: Tests bleiben nach den in
 `docs/WORKFLOW.md` vorgesehenen Selbstkorrektur-Versuchen rot, oder ein Rebase-Konflikt lässt sich
 nicht regelbasiert auflösen (siehe Versionsnummer-Kollisionen in `docs/WORKFLOW.md`) — dann und nur
 dann nachfragen. Danach reicht ein knapper Abschluss-Hinweis (was gemergt wurde: Branch, Commit,
@@ -186,22 +203,22 @@ Zusätzlicher, wiederholt aufgetretener Fehler: Sessions haben trotz dieser Rege
 oder gebeten, selbst zu mergen/rebasen — das widerspricht der hier erteilten Freigabe und soll nicht
 mehr vorkommen.
 
-**Interaktive Sessions im Haupt-Checkout** (du bist live im Chat dabei) committen weiterhin direkt
-auf `main` wie bisher — dort bist du selbst schon die Freigabe in Echtzeit, ein Branch+Rebase-Umweg
-wäre Prozess ohne Gegenwert für diesen Fall.
-
-**Remote (seit 14.08.2026):** Es gibt jetzt ein GitHub-Remote (`origin` →
-https://github.com/it-scholle/HaelpMi, HTTPS-Auth über Windows Credential Manager/PAT). Der
-Satz weiter oben in dieser Datei bezog sich noch auf den remote-losen Vorzustand — überholt, siehe
-Hinweis am Dateianfang zu veralteten Architektur-Annahmen. Gültige Regel ab jetzt: **jeder Commit
-auf `main`** — ob interaktiv direkt gesetzt oder von einer Background-/Worktree-Session per
-Rebase + `merge --ff-only` nachgezogen — **wird im Anschluss automatisch auch nach `origin/main`
+**Remote (seit 14.08.2026):** Es gibt ein GitHub-Remote (`origin` →
+https://github.com/it-scholle/HaelpMi, HTTPS-Auth über Windows Credential Manager/PAT). Gültige
+Regel: **jeder Commit auf `main`** — ausnahmslos per Rebase + `merge --ff-only` aus einem
+Feature-Branch nachgezogen, siehe oben — **wird im Anschluss automatisch auch nach `origin/main`
 gepusht**, ohne Rückfrage. Gleiche Freigabe-Logik wie beim lokalen Merge oben: das grüne
 Testergebnis, das den Merge auf `main` erlaubt, erlaubt auch den Push. Ausnahmen wie dort
 (Tests bleiben rot, Konflikt nicht regelbasiert lösbar) gelten sinngemäß auch fürs Pushen, plus
 zusätzlich: schlägt der Push selbst fehl (z. B. Auth, `rejected`/nicht fast-forward, weil
 `origin/main` inzwischen abweicht), wird nicht automatisch force-gepusht — dann nachfragen statt
 zu raten, aus demselben Grund wie bei Rebase-Konflikten.
+
+Zusätzlich seit 15.08.2026: der Feature-Branch selbst wird während der Arbeit nach `origin`
+gepusht (nicht erst beim fertigen Merge) — Sichtbarkeit/Backup auf GitHub schon während der
+Umsetzung, nicht erst am Ende. Nach erfolgreichem FF-Merge auf `main` wird der Branch lokal
+**und** remote gelöscht (`git branch -d` + `git push origin --delete <branch>`), damit auf
+GitHub keine bereits gemergten Branches liegen bleiben.
 
 ## Status-Updates
 Bei aktiver Branch-/Versions-/Git-Arbeit wird der Stand als Pipe/Dash-Tabelle zusammengefasst

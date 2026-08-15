@@ -16,14 +16,25 @@ Commit-Titel codiert das schon, siehe `vX.Y.Z: Beschreibung`-Stil in der bisheri
 
 ## Branches nach main bringen: rebase, nicht merge
 
-**Gilt für Background-/Worktree-Sessions.** Interaktive Sessions im Haupt-Checkout committen
-weiterhin direkt auf `main` (siehe CLAUDE.md, Abschnitt "Versionierung") — dort ist ein Mensch
-live im Chat ohnehin die Freigabe, ein Branch+Rebase-Umweg wäre Prozess ohne Gegenwert.
+**Gilt für jede Session, ausnahmslos (korrigiert 15.08.2026).** Frühere Fassungen dieser Datei
+machten hier noch einen Unterschied zwischen Background-/Worktree-Sessions (Branch-Pflicht) und
+interaktiven Sessions im Haupt-Checkout (Direkt-Commit auf `main`) — das ist auf
+Kunden-/Nutzerwunsch aufgehoben: ein direkter Commit auf `main` mitten in einer noch unfertigen
+Änderung riskiert, das laufende System zu zerbomben, unabhängig davon, ob ein Mensch live im Chat
+zuschaut. Jede neue Aufgabe beginnt mit `EnterWorktree` (bzw. gleichwertigem Branch-Anlegen) und
+läuft bis zum fertigen, getesteten Merge auf einem eigenen Branch.
 
-**Warum das für Background-Jobs nötig ist:** `EnterWorktree` erzeugt automatisch einen eigenen
-Branch + isoliertes Arbeitsverzeichnis, aber ohne die Regel hier endet so ein fertiger Branch oft
-einfach liegen, statt zurück nach `main` zu wandern — parallel dazu arbeitet eine andere Session
-vom selben Vorgänger-Stand aus weiter, und der fertige Fix fehlt am Ende auf `main`. Genau das ist
+**Branch-Granularität ist die Aufgabe/das Feature, nicht der einzelne Commit.** Mehrere
+Zwischen-Commits auf demselben Branch sind normal, solange die Aufgabe läuft — die Garantie
+("kein Commit landet ungebrancht und ungetestet auf `main`") ist damit vollständig erfüllt, ohne
+dass ein neuer Branch samt vollem Rebase-/Test-/Merge-/Push-Zyklus für jeden einzelnen Commit
+nötig wäre. Ein neuer Branch beginnt erst, wenn tatsächlich eine neue, unabhängige Aufgabe startet
+— nicht bei jedem Zwischen-Commit innerhalb derselben laufenden Aufgabe.
+
+**Warum das nötig ist:** `EnterWorktree` erzeugt automatisch einen eigenen Branch + isoliertes
+Arbeitsverzeichnis, aber ohne die Regel hier endet so ein fertiger Branch oft einfach liegen,
+statt zurück nach `main` zu wandern — parallel dazu arbeitet eine andere Session vom selben
+Vorgänger-Stand aus weiter, und der fertige Fix fehlt am Ende auf `main`. Genau das ist
 am 09.08.2026 passiert: der Fix für v0.7.6 wurde in einem Worktree fertiggestellt, aber nie
 zurückintegriert; `main` sprang stattdessen direkt von v0.7.5 zu einem anderen, parallelen Fix.
 
@@ -35,22 +46,26 @@ sich, ohne Merge-Rauschen.
 1. `EnterWorktree` - legt automatisch einen neuen Branch + isoliertes Arbeitsverzeichnis an.
 2. Arbeiten, committen, testen (die für den Bump-Grad passende Stufe aus `TEST-STRATEGY.md` -
    mindestens das 🔹-Smoke-Set) - alles innerhalb des Worktrees, gegen den eigenen Branch.
-3. `git rebase main` - funktioniert direkt aus dem Worktree heraus, **ohne** Umweg über
+3. Branch nach jedem Commit (mindestens aber einmal je Aufgabe) mit `git push -u origin <branch>`
+   nach GitHub spiegeln - Sichtbarkeit/Backup der laufenden Arbeit, nicht erst beim fertigen Merge.
+4. `git rebase main` - funktioniert direkt aus dem Worktree heraus, **ohne** Umweg über
    `git fetch`/`-C`: alle Worktrees eines Repos teilen sich dieselben Refs, der Befehl liest
    `main`s aktuellen Stand einfach mit. Kein `git checkout main` nötig und in einem fremden
    Worktree auch gar nicht möglich (git verweigert das Auschecken eines Branches, der bereits in
    einem anderen Worktree ausgecheckt ist - hier: der Haupt-Checkout). Konflikte (inkl.
    Versionsnummer-Kollisionen, siehe unten) hier auflösen.
-4. Nach dem Rebase **erneut testen** - ein sauberer Rebase ohne Textkonflikt ist keine Garantie,
+5. Nach dem Rebase **erneut testen** - ein sauberer Rebase ohne Textkonflikt ist keine Garantie,
    dass zwei für sich funktionierende Änderungen auch in Kombination funktionieren.
-5. Erst wenn das grün ist: `ExitWorktree({action: "keep"})` - bringt die Session zurück in den
+6. Erst wenn das grün ist: `ExitWorktree({action: "keep"})` - bringt die Session zurück in den
    Haupt-Checkout, wo `main` tatsächlich ausgecheckt ist. Kurz `git log --oneline -1`
-   gegenchecken, ob `main` sich seit dem Rebase in Schritt 3 nochmal bewegt hat (parallele
-   Sessions!) - falls ja, zurück zu Schritt 3 (erneut rebasen + testen).
-6. `git merge --ff-only <branch>` - da der Branch gerade erst auf `main`s aktuellen Stand
+   gegenchecken, ob `main` sich seit dem Rebase in Schritt 4 nochmal bewegt hat (parallele
+   Sessions!) - falls ja, zurück zu Schritt 4 (erneut rebasen + testen).
+7. `git merge --ff-only <branch>` - da der Branch gerade erst auf `main`s aktuellen Stand
    rebased wurde, ist das ein reiner Zeiger-Vorschub, es gibt nichts mehr aufzulösen.
-7. Versions-Tag setzen (`vX.Y.Z`).
-8. Aufräumen: `git worktree remove <pfad>`, `git branch -d <branch>`.
+8. Versions-Tag setzen (`vX.Y.Z`).
+9. Aufräumen: `git worktree remove <pfad>`, `git branch -d <branch>`, sowie den Feature-Branch
+   auch auf GitHub löschen (`git push origin --delete <branch>`) - er wurde in Schritt 3 dorthin
+   gespiegelt und bleibt sonst als bereits gemergter Branch liegen.
 
 ### Versionsnummer-Kollisionen
 
@@ -67,9 +82,10 @@ jetzt, nicht rückwirkend für Arbeit, die schon mitten im Konflikt-Auflösen st
 
 ### Automatisch, sobald die Tests grün sind — keine Rückfrage, kein "mach du das selbst"
 
-Sobald die für den Bump-Grad passende Test-Stufe (siehe `TEST-STRATEGY.md`) für eine
-Background-/Worktree-Änderung grün ist, wird automatisch auf `main` gerebased und per
-Fast-Forward integriert. Diese Datei (zusammen mit CLAUDE.md, Abschnitt "Versionierung") ist die
+Sobald die für den Bump-Grad passende Test-Stufe (siehe `TEST-STRATEGY.md`) für eine Änderung
+grün ist - unabhängig davon, ob interaktiv oder als Background-Job entstanden -, wird automatisch
+auf `main` gerebased und per Fast-Forward integriert. Diese Datei (zusammen mit CLAUDE.md,
+Abschnitt "Versionierung") ist die
 vorab erteilte Erlaubnis dafür — nicht als Hinweis, sondern als bereits erteilte, gültige
 Freigabe. Konkret heißt das:
 
