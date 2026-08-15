@@ -549,6 +549,11 @@ public partial class MainWindow : Window
         }
 
         var customerGroupId = Guid.NewGuid(); // FR-49: fest für dieses Admin-Installer-Paket und jeden späteren daraus exportierten User-Installer
+        // LAN-Verschlüsselung (siehe CLAUDE.md "Lizenz & Secrets", SecureEnvelopeCodec):
+        // gruppenweiter symmetrischer Schlüssel, an derselben Stelle wie customerGroupId
+        // erzeugt und über denselben Weg (deployment.json in beiden Installer-Varianten)
+        // eingebettet - nie über das Netzwerk übertragen, nie hier geloggt.
+        var groupKeyBase64 = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
         var password = PasswordBox.Password;
         var isTestInstaller = TestInstallerCheckBox.IsChecked == true;
         var customerNameOrTestLabel = CustomerNameBox.Text.Trim();
@@ -556,7 +561,7 @@ public partial class MainWindow : Window
         SetBusy(true);
         try
         {
-            await BuildAdminInstallerAsync(customerGroupId, isTestInstaller, password, customerNameOrTestLabel);
+            await BuildAdminInstallerAsync(customerGroupId, groupKeyBase64, isTestInstaller, password, customerNameOrTestLabel);
         }
         catch (Exception ex)
         {
@@ -608,10 +613,11 @@ public partial class MainWindow : Window
         PublishUpdatePackageButton.IsEnabled = !busy && _updatePrivateKeyBytes is not null;
     }
 
-    private async Task BuildAdminInstallerAsync(Guid customerGroupId, bool isTestInstaller, string password, string customerNameOrTestLabel)
+    private async Task BuildAdminInstallerAsync(Guid customerGroupId, string groupKeyBase64, bool isTestInstaller, string password, string customerNameOrTestLabel)
     {
         Log("--- Installer werden erstellt ---");
         Log($"Kunden-Gruppen-ID: {customerGroupId}");
+        Log("Gruppenschlüssel (LAN-Verschlüsselung) wurde erzeugt."); // Wert selbst landet nie im Log, siehe Kommentar bei der Erzeugung
         Log($"Test-Installer: {(isTestInstaller ? "ja" : "nein")}");
         if (isTestInstaller && customerNameOrTestLabel.Length > 0)
         {
@@ -682,6 +688,7 @@ public partial class MainWindow : Window
         var userExitCode = await RunIsccAsync(isccPath, installerDir, userScriptPath, args =>
         {
             args.Add($"/DCustomerGroupId={customerGroupId}");
+            args.Add($"/DGroupKeyBase64={groupKeyBase64}");
             args.Add($"/DIsTestInstaller={(isTestInstaller ? "true" : "false")}");
             args.Add($"/O{userPayloadDir}");
             args.Add("/FHaelpMi-User-Setup");
@@ -701,6 +708,7 @@ public partial class MainWindow : Window
         var adminExitCode = await RunIsccAsync(isccPath, installerDir, adminScriptPath, args =>
         {
             args.Add($"/DCustomerGroupId={customerGroupId}");
+            args.Add($"/DGroupKeyBase64={groupKeyBase64}");
             args.Add($"/DIsTestInstaller={(isTestInstaller ? "true" : "false")}");
             if (!string.IsNullOrEmpty(password))
             {

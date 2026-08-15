@@ -13,7 +13,7 @@
 #define MyAppName "HälpMi"
 ; Alpha: 0.x until release, per city/product decision - Version 1.0.0 is reserved for
 ; the actual release. Bump the third number for ordinary fixes, second for a feature.
-#define MyAppVersion "0.29.3"
+#define MyAppVersion "0.30.0"
 #define MyAppPublisher "HälpMi contributors"
 #define MyAgentExeName "HaelpMi.Agent.exe"
 #define MyConfigExeName "HaelpMi.Config.exe"
@@ -38,6 +38,17 @@
 #endif
 #ifndef IsTestInstaller
   #define IsTestInstaller "true"
+#endif
+
+; LAN-Verschlüsselung (siehe CLAUDE.md "Lizenz & Secrets", HaelpMi.Core/Networking/
+; Protocol/SecureEnvelopeCodec.cs): gruppenweiter symmetrischer Schlüssel (256 Bit,
+; Base64), vom Install-Creator an derselben Stelle wie CustomerGroupId erzeugt und per
+; "/DGroupKeyBase64=..." gesetzt. Ohne diese Angabe (z. B. manuelles Kompilieren zu
+; Entwicklungszwecken) bleibt er leer - ein damit gebautes Gerät gilt für alle Peers als
+; nicht verschlüsselungsfähig (SecureEnvelopeCodec behandelt einen leeren/fehlenden
+; Gruppenschlüssel wie einen alten, vor-verschlüsselungsfähigen Installer-Stand).
+#ifndef GroupKeyBase64
+  #define GroupKeyBase64 ""
 #endif
 
 ; Optionales Installer-Passwort (kein Schlüsselpaar - siehe CLAUDE.md Lizenz & Secrets,
@@ -448,7 +459,8 @@ begin
     '{' + #13#10 +
     '  "CustomerGroupId": "{#CustomerGroupId}",' + #13#10 +
     '  "Role": ' + GetRoleValue() + ',' + #13#10 +
-    '  "IsTestInstaller": {#IsTestInstaller}' + #13#10 +
+    '  "IsTestInstaller": {#IsTestInstaller},' + #13#10 +
+    '  "GroupKeyBase64": "' + JsonEscape('{#GroupKeyBase64}') + '"' + #13#10 +
     '}';
 
   // Aktuell nur ASCII-Inhalte (GUID/Zahlen), aber aus Konsistenz mit WriteSettingsJson

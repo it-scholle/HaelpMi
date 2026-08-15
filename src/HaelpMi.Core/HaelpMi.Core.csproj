@@ -20,6 +20,12 @@
          öffentlichen Schlüssel; BouncyCastle ist die gängige, aktiv gepflegte Wahl dafür
          statt einer riskanten Eigenimplementierung von Signaturprüfung. -->
     <PackageReference Include="BouncyCastle.Cryptography" Version="2.4.0" />
+    <!-- .NET (Core/5+) hat ProtectedData (DPAPI) aus der BCL in dieses offizielle
+         Microsoft-Paket ausgelagert (nur .NET Framework hatte es eingebaut) - gebraucht,
+         um den privaten Geräte-Identitätsschlüssel LocalMachine-DPAPI-geschützt lokal
+         abzulegen (siehe Security/DeviceIdentityStore.cs). Windows-only, passend zum
+         ohnehin auf net8.0-windows festgelegten Target dieses Projekts. -->
+    <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="8.0.0" />
   </ItemGroup>
 
 </Project>

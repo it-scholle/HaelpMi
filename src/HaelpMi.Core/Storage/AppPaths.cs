@@ -32,6 +32,15 @@ public static class AppPaths
 
     public static string DevicesFilePath => Path.Combine(RootFolder, "devices.json");
 
+    /// <summary>
+    /// Geräte-Identitätsschlüsselpaar (Ed25519, siehe Security.DeviceIdentityStore) - der
+    /// private Schlüssel darin ist DPAPI-LocalMachine-geschützt, nicht CurrentUser (siehe
+    /// dortige Klassendoku). Bewusst unter RootFolder wie settings.json/devices.json, nicht
+    /// AppContext.BaseDirectory wie deployment.json: das ist Geräte-Laufzeitzustand, kein
+    /// vom Installer verbindlich vorgegebener Wert.
+    /// </summary>
+    public static string DeviceIdentityFilePath => Path.Combine(RootFolder, "device-identity.json");
+
     public static string SharedConfigFilePath => Path.Combine(RootFolder, "shared-config.json");
 
     public static string ConfigHistoryFilePath => Path.Combine(RootFolder, "config-history.json");

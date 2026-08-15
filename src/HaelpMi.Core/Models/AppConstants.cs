@@ -10,6 +10,18 @@ public static class AppConstants
     public const int DiscoveryUdpPort = 51500;
 
     /// <summary>
+    /// Aktuelle Boot-Call-Protokollversion (LAN-Verschlüsselung, siehe CLAUDE.md
+    /// "Lizenz &amp; Secrets" und SecureEnvelopeCodec) - ein Gerät, das dies in seinem
+    /// eigenen <c>BootCallMessage.ProtocolVersion</c> meldet, versteht SecureEnvelope
+    /// (Ed25519-Geräte-Identität + gruppenweiter ChaCha20-Poly1305-Schlüssel). 1 war
+    /// implizit jede Version vor Einführung dieses Felds (kein Envelope-Support, reines
+    /// Klartextformat) - beginnt bewusst bei 2, nicht 1, damit "Feld fehlt" (alter Peer,
+    /// deserialisiert als <c>null</c>) nie mit einer echten Versionsnummer verwechselt
+    /// werden kann.
+    /// </summary>
+    public const int CurrentProtocolVersion = 2;
+
+    /// <summary>
     /// Fest verdrahtete ID der eingebauten "Alle"-Gruppe (Nutzerwunsch 09.08.2026: "Default-
     /// Gruppe, die auch funktioniert, wenn der Admin gerade nicht online ist"). Jedes Gerät
     /// kennt diese ID unabhängig und ganz ohne Config-Sync (siehe <c>SharedConfigStore</c>) -

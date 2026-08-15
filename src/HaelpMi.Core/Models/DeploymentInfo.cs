@@ -33,4 +33,16 @@ public sealed class DeploymentInfo
     // Bridge-Adressen jetzt vollständig im Dashboard, kein Installer-Neubau nötig). Alte
     // deployment.json-Dateien mit dem jetzt unbekannten Feld werden beim Deserialisieren
     // einfach ignoriert (System.Text.Json), kein Migrationsschritt nötig.
+
+    /// <summary>
+    /// Gruppenweiter symmetrischer Schlüssel (256 Bit, Base64) für SecureEnvelope
+    /// (LAN-Verschlüsselung, siehe CLAUDE.md "Lizenz &amp; Secrets" und
+    /// SecureEnvelopeCodec) - vom Install-Creator an derselben Stelle wie
+    /// CustomerGroupId erzeugt und über denselben Verteilweg (deployment.json in beiden
+    /// Installer-Varianten) eingebettet, nie über das Netzwerk übertragen. Nullable/leer
+    /// bei alten Installer-Ständen aus der Zeit vor diesem Feld - wird dann exakt wie
+    /// "Peer/wir selbst nicht verschlüsselungsfähig" behandelt (siehe
+    /// SecureEnvelopeCodec.Seal/TryOpen), kein Fehler.
+    /// </summary>
+    public string? GroupKeyBase64 { get; set; }
 }

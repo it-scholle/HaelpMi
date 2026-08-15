@@ -698,6 +698,44 @@ public class NetworkingTests
         Assert.Equal(original, roundTripped);
     }
 
+    [Fact]
+    public void BootCallMessage_RoundTrips_WithProtocolVersionAndDeviceIdentityKey()
+    {
+        // LAN-Verschlüsselung (SecureEnvelopeCodec): beide Felder werden nur bei direktem
+        // Boot-Call-Kontakt gepinnt/ausgewertet, müssen aber schon auf Wire-Ebene
+        // verlustfrei durchgereicht werden.
+        var original = new BootCallMessage(
+            MessageKind.Reply, Guid.NewGuid(), Guid.NewGuid(), "PC-217", "Herr Novak", "Zimmer 108", "108",
+            Role.Admin, true, 51501, "0.30.0", 3, DateTimeOffset.UtcNow,
+            ProtocolVersion: AppConstants.CurrentProtocolVersion,
+            DeviceIdentityPublicKeyBase64: Convert.ToBase64String(new byte[32]));
+
+        var json = JsonSerializer.Serialize(original, WireOptions);
+        var roundTripped = JsonSerializer.Deserialize<BootCallMessage>(json, WireOptions);
+
+        Assert.Equal(original, roundTripped);
+    }
+
+    [Fact]
+    public void BootCallMessage_Deserializes_WithMissingProtocolFields_AsNull()
+    {
+        // Simuliert einen alten, vor-verschlüsselungsfähigen Sender (Rollout-Übergang) -
+        // "Feld fehlt" muss von "Feld ist gesetzt" unterscheidbar bleiben, deshalb
+        // ProtocolVersion bewusst int? statt eines defaultenden int (siehe Klassendoku).
+        // kind/role als Zahl, nicht als String: WireOptions setzt nur PropertyNamingPolicy,
+        // kein JsonStringEnumConverter - Enums serialisieren hier wie überall im Projekt
+        // als Zahl (Announce=0, User=0).
+        var jsonWithoutNewFields = """
+            {"kind":0,"customerGroupId":"11111111-1111-1111-1111-111111111111","deviceId":"22222222-2222-2222-2222-222222222222","computerName":"PC","user":"User","roomName":"Raum","roomNumber":"1","role":0,"isRemoteSession":false,"tcpPort":51501,"programVersion":"0.29.1","configVersion":0,"sentAtUtc":"2026-08-13T12:00:00Z"}
+            """;
+
+        var result = JsonSerializer.Deserialize<BootCallMessage>(jsonWithoutNewFields, WireOptions);
+
+        Assert.NotNull(result);
+        Assert.Null(result!.ProtocolVersion);
+        Assert.Null(result.DeviceIdentityPublicKeyBase64);
+    }
+
     private static int GetFreeTcpPort()
     {
         var listener = new TcpListener(IPAddress.Loopback, 0);
