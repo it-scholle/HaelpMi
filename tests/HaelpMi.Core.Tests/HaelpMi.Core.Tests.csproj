@@ -25,6 +25,10 @@
     <!-- Analog zur UpdateSigner-Referenz oben: LicenseTests.cs signiert über die echte
          LicenseSigningOperations-Klasse statt eine eigene BouncyCastle-Kopie zu pflegen. -->
     <ProjectReference Include="..\..\src\HaelpMi.LicenseSigner\HaelpMi.LicenseSigner.csproj" />
+    <!-- Prio 0.2 (15.08.2026): AlarmFlowCoordinatorTests.cs braucht den echten Coordinator
+         aus HaelpMi.Agent (zieht HaelpMi.UI transitiv mit) - vorher komplett ungetestet,
+         nicht mal transitiv. -->
+    <ProjectReference Include="..\..\src\HaelpMi.Agent\HaelpMi.Agent.csproj" />
   </ItemGroup>
 
   <ItemGroup>

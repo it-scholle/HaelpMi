@@ -47,12 +47,15 @@ public sealed class SharedConfig
     /// Gerät an einer Außenstelle, das seine erste Config erst über genau diese Brücke
     /// ziehen kann).
     ///
-    /// Formatänderung 15.08.2026: war zuvor <c>string? BridgeSeedAddress</c>. Kein
-    /// Migrationsschritt für alte <c>sharedconfig.json</c>-Dateien - System.Text.Json
-    /// ignoriert das alte, jetzt unbekannte Feld beim Deserialisieren stillschweigend und
-    /// lässt diese Liste leer, bis der jeweilige Admin einmal neu speichert. Bewusst kein
-    /// Kompatibilitäts-Shim (CLAUDE.md, kein Over-Engineering) - vertretbar für ein Feature
-    /// vor 1.0 mit kurzem Rollout-Fenster.
+    /// Formatänderung 15.08.2026: war zuvor <c>string? BridgeSeedAddress</c>. Korrektur
+    /// desselben Tages (Prio 0.1, vor dem Verschlüsselungs-Task): der ursprünglich hier
+    /// dokumentierte Verzicht auf einen Migrationsschritt führte zu stillem Datenverlust für
+    /// jedes Gerät, das zwischen v0.23.0 und v0.27.0 eine Bridge-Adresse gesetzt hatte, ohne
+    /// dass der Admin das je sehen konnte. <see cref="SharedConfigStore"/>.
+    /// <c>MigrateLegacyBridgeSeedAddress</c> holt den alten Wert beim ersten Laden nach dem
+    /// Update jetzt automatisch in diese Liste, solange die Datei seither noch nicht neu
+    /// gespeichert wurde (danach ist der alte Schlüssel unwiederbringlich weg - kein
+    /// nachträglicher Rettungsweg, nur Vermeidung ab jetzt).
     /// </summary>
     public List<string> BridgeSeedAddresses { get; set; } = new();
 }

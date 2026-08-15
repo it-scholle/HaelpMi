@@ -210,4 +210,47 @@ public class StorageTests
 
         Assert.Single(config.DeviceGroups);
     }
+
+    [Fact]
+    public void SharedConfigStore_LoadOrCreate_MigratesLegacySingleBridgeSeedAddress_IntoNewList()
+    {
+        // Prio 0.1 (15.08.2026): altes Format vor v0.28.0 (cf6b252) von Hand geschrieben, da
+        // SharedConfig das Feld "BridgeSeedAddress" (Singular) nicht mehr kennt und es daher
+        // nicht mehr über store.Save() erzeugt werden kann.
+        using var scope = new TestAppDataScope();
+        Directory.CreateDirectory(Path.GetDirectoryName(AppPaths.SharedConfigFilePath)!);
+        File.WriteAllText(AppPaths.SharedConfigFilePath, """{"ConfigVersion":1,"BridgeSeedAddress":"10.0.5.3"}""");
+        var store = new SharedConfigStore();
+
+        var config = store.LoadOrCreate();
+
+        Assert.Equal(new[] { "10.0.5.3" }, config.BridgeSeedAddresses);
+    }
+
+    [Fact]
+    public void SharedConfigStore_LoadOrCreate_DoesNotOverwriteBridgeSeedAddresses_WhenAlreadyPopulated()
+    {
+        // Der Admin hat seit dem Update auf v0.28.0 schon einmal im neuen Format gespeichert -
+        // ein zufällig noch in der Datei stehender alter Schlüssel darf die neue Liste dann
+        // nicht mehr anfassen.
+        using var scope = new TestAppDataScope();
+        Directory.CreateDirectory(Path.GetDirectoryName(AppPaths.SharedConfigFilePath)!);
+        File.WriteAllText(AppPaths.SharedConfigFilePath, """{"ConfigVersion":2,"BridgeSeedAddress":"10.0.5.3","BridgeSeedAddresses":["10.0.9.9"]}""");
+        var store = new SharedConfigStore();
+
+        var config = store.LoadOrCreate();
+
+        Assert.Equal(new[] { "10.0.9.9" }, config.BridgeSeedAddresses);
+    }
+
+    [Fact]
+    public void SharedConfigStore_LoadOrCreate_LeavesBridgeSeedAddressesEmpty_WhenNoLegacyKeyPresent()
+    {
+        using var scope = new TestAppDataScope();
+        var store = new SharedConfigStore();
+
+        var config = store.LoadOrCreate();
+
+        Assert.Empty(config.BridgeSeedAddresses);
+    }
 }
