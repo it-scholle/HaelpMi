@@ -1,3 +1,4 @@
+using HaelpMi.Core.Models;
 using HaelpMi.Core.Updates;
 using HaelpMi.UpdateSigner;
 using Xunit;
@@ -94,11 +95,86 @@ public class UpdatesTests
         Assert.Equal(expectedNewer, UpdateOrchestrator.IsNewer(candidate, current));
     }
 
-    // --- UpdateOrchestrator.IsMyTurn: entfernt am 13.08.2026 -------------------------------
-    // Testete das frühere gestaffelte Freigabekontingent (ApprovedDeviceQuota, "die ersten N
-    // Geräte in stabiler ID-Sortierung"). Nach der CLAUDE.md-Korrektur "Rollout-Freigabe"
-    // (11.08.2026) entfällt die Staffelung ersatzlos: der Admin gibt eine Version genau
-    // einmal frei, danach darf JEDES Gerät sie sofort ziehen (kein Kontingent-Gate mehr) -
-    // IsMyTurn und ApprovedDeviceQuota existieren im Code nicht mehr, damit sind auch diese
-    // Tests hinfällig.
+    // --- UpdateOrchestrator.IsMyTurn: entfernt am 13.08.2026, wieder eingeführt am
+    // 16.08.2026 (Wellen-Rollout) ------------------------------------------------------
+    // Zwischen den beiden Daten testete dieser Abschnitt das frühere gestaffelte
+    // Freigabekontingent (ApprovedDeviceQuota, admin-gesetzt, "die ersten N Geräte in
+    // stabiler ID-Sortierung") und wurde nach dessen ersatzloser Entfernung (CLAUDE.md-
+    // Korrektur "Rollout-Freigabe", 11.08.2026) hinfällig. Die 16.08.2026-Korrektur ergänzt
+    // das wieder - jetzt mit automatisch aus dem eigenen Geräte-Cache abgeleitetem n statt
+    // eines admin-gesetzten Felds, siehe UpdateOrchestrator.IsMyTurn-Klassenkommentar.
+
+    private static LiveIdentity TestIdentity(string deviceId) =>
+        new(Guid.NewGuid(), Guid.Parse(deviceId), "PC", "User", "Raum", "1", Role.User, false, "1.0.0", 1);
+
+    private static DeviceEntry TestDevice(string deviceId, string lastKnownProgramVersion) =>
+        new() { DeviceId = Guid.Parse(deviceId), LastKnownProgramVersion = lastKnownProgramVersion };
+
+    private static SharedConfig ApprovedConfig(string? approvedVersion) =>
+        new() { UpdateRollout = new UpdateRolloutState { ApprovedVersion = approvedVersion } };
+
+    [Fact]
+    public void IsMyTurn_ReturnsFalse_WhenNoVersionIsApproved()
+    {
+        var identity = TestIdentity("00000000-0000-0000-0000-000000000001");
+        var devices = new List<DeviceEntry>();
+
+        Assert.False(UpdateOrchestrator.IsMyTurn(identity, ApprovedConfig(null), devices));
+    }
+
+    [Fact]
+    public void IsMyTurn_ReturnsFalse_WhenNoKnownPeerHasTheApprovedVersionYet()
+    {
+        // n = 0 (noch kein einziger bekannter Peer auf der freigegebenen Version) blockiert
+        // bewusst jeden Versuch - genau die Lücke, die HaelpMi.UpdateBootstrapper füllt.
+        var identity = TestIdentity("00000000-0000-0000-0000-000000000001");
+        var devices = new List<DeviceEntry> { TestDevice("00000000-0000-0000-0000-000000000002", "1.0.0") };
+
+        Assert.False(UpdateOrchestrator.IsMyTurn(identity, ApprovedConfig("2.0.0"), devices));
+    }
+
+    [Fact]
+    public void IsMyTurn_ReturnsTrue_ForFirstDeviceInLine_OnceOnePeerHasAlreadyUpdated()
+    {
+        var identity = TestIdentity("00000000-0000-0000-0000-000000000001"); // niedrigste ID -> zuerst dran
+        var devices = new List<DeviceEntry>
+        {
+            TestDevice("00000000-0000-0000-0000-000000000002", "1.0.0"), // wartet noch
+            TestDevice("00000000-0000-0000-0000-000000000003", "2.0.0"), // schon aktualisiert -> n=1
+        };
+
+        Assert.True(UpdateOrchestrator.IsMyTurn(identity, ApprovedConfig("2.0.0"), devices));
+    }
+
+    [Fact]
+    public void IsMyTurn_ReturnsFalse_ForSecondDeviceInLine_WhenOnlyOneSlotIsOpen()
+    {
+        var identity = TestIdentity("00000000-0000-0000-0000-000000000002"); // zweite Stelle in der Reihenfolge
+        var devices = new List<DeviceEntry>
+        {
+            TestDevice("00000000-0000-0000-0000-000000000001", "1.0.0"), // wartet auch noch, aber vor uns
+            TestDevice("00000000-0000-0000-0000-000000000003", "2.0.0"), // schon aktualisiert -> n=1
+        };
+
+        Assert.False(UpdateOrchestrator.IsMyTurn(identity, ApprovedConfig("2.0.0"), devices));
+    }
+
+    [Fact]
+    public void IsMyTurn_WaveWidensAutomatically_AsMorePeersUpdate_NoAdminActionNeeded()
+    {
+        var identity = TestIdentity("00000000-0000-0000-0000-000000000002"); // zweite Stelle in der Reihenfolge (Rang 1)
+        var devices = new List<DeviceEntry>
+        {
+            TestDevice("00000000-0000-0000-0000-000000000001", "2.0.0"), // schon aktualisiert -> n=1
+            TestDevice("00000000-0000-0000-0000-000000000003", "1.0.0"), // wartet noch
+            TestDevice("00000000-0000-0000-0000-000000000004", "1.0.0"), // wartet noch
+        };
+        // n=1 reicht für unseren Rang 1 noch nicht (1 < 1 ist falsch).
+        Assert.False(UpdateOrchestrator.IsMyTurn(identity, ApprovedConfig("2.0.0"), devices));
+
+        // Sobald ein WEITERES Gerät aktualisiert hat (n=2, ohne dass WIR selbst schon dran
+        // waren und ohne jeden Admin-Klick), sind wir dran.
+        devices[1] = TestDevice("00000000-0000-0000-0000-000000000003", "2.0.0");
+        Assert.True(UpdateOrchestrator.IsMyTurn(identity, ApprovedConfig("2.0.0"), devices));
+    }
 }

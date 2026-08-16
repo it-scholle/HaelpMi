@@ -1,5 +1,6 @@
 using System.IO;
 using System.IO.Compression;
+using System.Text;
 using HaelpMi.UpdateSigner;
 
 namespace HaelpMi.InstallCreator;
@@ -74,5 +75,33 @@ public static class UpdatePackageBuilder
         File.WriteAllText(Path.Combine(versionDir, "manifest.json"), result.ManifestJson);
         File.WriteAllBytes(Path.Combine(versionDir, "package.zip"), result.PackageZip);
         return true;
+    }
+
+    /// <summary>
+    /// Self-Bootstrap-Update (Nutzerwunsch 16.08.2026, "Update erstellen"-Knopf): kopiert
+    /// eine bereits fertig veröffentlichte, generische HaelpMi.UpdateBootstrapper.exe nach
+    /// <paramref name="outputExePath"/> und hängt das signierte Update-Paket als Rohdaten
+    /// an ihr Ende an - siehe HaelpMi.UpdateBootstrapper/EmbeddedPackage.cs für die
+    /// Lese-Seite und die ausführliche Begründung, warum ein simpler Byte-Anhang statt
+    /// eines &lt;EmbeddedResource&gt; (vermeidet, echte Paket-Binärdaten im Projektordner/Git
+    /// vorhalten zu müssen, nur damit das Bootstrapper-Projekt für sich allein baubar bleibt).
+    ///
+    /// Footer-Format (MUSS mit EmbeddedPackage.TryExtract synchron gehalten werden):
+    /// [package.zip-Bytes][manifest.json-Bytes als UTF-8][8 Byte LE Länge Paket]
+    /// [8 Byte LE Länge Manifest][8 ASCII-Byte Magic "HMUBEGG1"].
+    /// </summary>
+    public static void AppendUpdatePackage(string sourceExePath, string outputExePath, BuildResult result)
+    {
+        const string magicFooter = "HMUBEGG1";
+
+        File.Copy(sourceExePath, outputExePath, overwrite: true);
+
+        using var stream = new FileStream(outputExePath, FileMode.Append, FileAccess.Write);
+        var manifestBytes = Encoding.UTF8.GetBytes(result.ManifestJson);
+        stream.Write(result.PackageZip);
+        stream.Write(manifestBytes);
+        stream.Write(BitConverter.GetBytes((long)result.PackageZip.Length));
+        stream.Write(BitConverter.GetBytes((long)manifestBytes.Length));
+        stream.Write(Encoding.ASCII.GetBytes(magicFooter));
     }
 }

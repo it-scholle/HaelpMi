@@ -20,6 +20,14 @@ namespace HaelpMi.Core.Networking.Protocol;
 /// Rätselraten). Kostet nur ein zusätzliches kleines Feld im ohnehin schon gegossipten
 /// Eintrag, kein neuer Kanal, kein zusätzliches Datenschutz-Risiko.
 /// </summary>
+/// <param name="ProgramVersion">
+/// Nutzerwunsch 16.08.2026 (Wellen-Rollout, siehe DeviceEntry.LastKnownProgramVersion):
+/// gibt dem Empfänger auch für Geräte, die er nie direkt selbst kontaktiert hat, eine
+/// Schätzung, wie viele Peers eine freigegebene Version schon haben. Default leer, damit
+/// ein älteres Gerät, das dieses Feld beim Senden noch nicht kennt, trotzdem ein gültiges
+/// (nur unvollständiges) Gossip-Paket verschickt - siehe BootCallMessage.KnownDevices-
+/// Kommentar zum selben Rückwärtskompatibilitäts-Prinzip.
+/// </param>
 public sealed record KnownDeviceSummary(
     Guid DeviceId,
     string ComputerName,
@@ -29,4 +37,5 @@ public sealed record KnownDeviceSummary(
     Role Role,
     string IpAddress,
     int TcpPort,
-    DateTimeOffset LastSeenUtc);
+    DateTimeOffset LastSeenUtc,
+    string ProgramVersion = "");

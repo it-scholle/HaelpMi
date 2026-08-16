@@ -131,6 +131,44 @@ public class StorageTests
     }
 
     [Fact]
+    public void Upsert_SetsLastKnownProgramVersion_OnNewDevice()
+    {
+        var devices = new List<DeviceEntry>();
+        var deviceId = Guid.NewGuid();
+        var info = MakeInfo("PC", "User", "Raum", "1", "192.168.1.40") with { ProgramVersion = "0.31.0" };
+
+        DeviceStore.Upsert(devices, deviceId, info, DateTimeOffset.UtcNow);
+
+        Assert.Equal("0.31.0", devices[0].LastKnownProgramVersion);
+    }
+
+    [Fact]
+    public void Upsert_UpdatesLastKnownProgramVersion_OnExistingDevice()
+    {
+        var deviceId = Guid.NewGuid();
+        var devices = new List<DeviceEntry> { new() { DeviceId = deviceId, LastKnownProgramVersion = "0.29.1" } };
+        var info = MakeInfo("PC", "User", "Raum", "1", "192.168.1.40") with { ProgramVersion = "0.31.0" };
+
+        DeviceStore.Upsert(devices, deviceId, info, DateTimeOffset.UtcNow);
+
+        Assert.Equal("0.31.0", devices[0].LastKnownProgramVersion);
+    }
+
+    [Fact]
+    public void Upsert_WithUnknownProgramVersion_DoesNotOverwriteAnAlreadyKnownVersion()
+    {
+        // Ein Aufrufer, der die Programmversion gar nicht kennt (leer), darf einen schon
+        // bekannten Wert nicht rückwärts auf "unbekannt" zurücksetzen - das Wellen-Rollout-
+        // Gate (UpdateOrchestrator.IsMyTurn) verlässt sich darauf.
+        var deviceId = Guid.NewGuid();
+        var devices = new List<DeviceEntry> { new() { DeviceId = deviceId, LastKnownProgramVersion = "0.29.1" } };
+
+        DeviceStore.Upsert(devices, deviceId, MakeInfo("PC", "User", "Raum", "1", "192.168.1.40"), DateTimeOffset.UtcNow);
+
+        Assert.Equal("0.29.1", devices[0].LastKnownProgramVersion);
+    }
+
+    [Fact]
     public void AcknowledgeNewState_ClearsIsNew()
     {
         var deviceId = Guid.NewGuid();

@@ -28,7 +28,11 @@ public sealed record DeviceUpsertInfo(
     int TcpPort,
     DateTimeOffset? ReportedLastSeenUtc = null,
     int? ObservedProtocolVersion = null,
-    string? PinnedDeviceIdentityPublicKeyBase64 = null);
+    string? PinnedDeviceIdentityPublicKeyBase64 = null,
+    // Wellen-Rollout (Nutzerwunsch 16.08.2026, siehe DeviceEntry.LastKnownProgramVersion):
+    // Default leer statt Pflichtfeld, damit die drei bestehenden AuditSyncTests-Aufrufe
+    // (nur direkter Kontakt, kein Interesse an der Programmversion) unverändert bleiben.
+    string ProgramVersion = "");
 
 /// <summary>Loads/saves the locally known list of other devices (FR-18, 5.4).</summary>
 public sealed class DeviceStore
@@ -68,6 +72,7 @@ public sealed class DeviceStore
                 IsNew = true,
                 ProtocolVersion = protocolVersion,
                 PinnedDeviceIdentityPublicKeyBase64 = pinnedKey,
+                LastKnownProgramVersion = info.ProgramVersion,
             });
         }
         else
@@ -84,6 +89,12 @@ public sealed class DeviceStore
             existing.ProtocolVersion = protocolVersion;
             existing.PinnedDeviceIdentityPublicKeyBase64 = pinnedKey;
             // Favorite/Notified/Note/IsNew are local decisions and are deliberately left untouched.
+            // Leeres info.ProgramVersion (z. B. ein Aufrufer, der das Feld gar nicht kennt)
+            // überschreibt einen schon bekannten Wert nicht rückwärts mit "unbekannt".
+            if (!string.IsNullOrWhiteSpace(info.ProgramVersion))
+            {
+                existing.LastKnownProgramVersion = info.ProgramVersion;
+            }
         }
 
         return devices;

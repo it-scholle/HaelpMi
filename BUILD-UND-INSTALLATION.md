@@ -100,14 +100,26 @@ mehr nötig. Der private Schlüssel liegt dafür verschlüsselt in Vaultwarden (
    dabei angezeigt/in die Zwischenablage kopiert und muss einmalig manuell in
    `HälpMi\src\HaelpMi.Core\Updates\UpdateSignaturePublicKey.cs` eingetragen werden (bewusst
    kein automatisches Editieren von Quelltext durch das Tool).
-2. Häkchen "Update-Ei" setzen, dann wie gewohnt "Admin-Installer erstellen" klicken - das
-   Update-Paket wird nach dem Payload-Publish signiert und landet automatisch in
-   `installer/payload/update-seed/`, bevor ISCC läuft.
-3. Für den häufigeren Fall "nur eine neue Version an bereits installierte Geräte
-   verteilen" (kein neuer Kunde, kein neuer Installer nötig): stattdessen "Update-Paket
-   veröffentlichen" klicken - läuft ohne ISCC/Kundengruppen-ID/Installer-Passwort durch und
-   schreibt zusätzlich in den lokalen P2P-Cache dieser Maschine, falls HälpMi hier installiert
-   ist.
+2. "Admin-Installer erstellen" klicken (kein separates Häkchen mehr nötig seit 16.08.2026 -
+   das Update-Paket wird automatisch signiert und eingebettet, sofern ein Schlüssel geladen
+   ist) - landet in `installer/payload/update-seed/`, bevor ISCC läuft.
+3. "Update-Paket veröffentlichen" (ohne ISCC/Kundengruppen-ID/Installer-Passwort) schreibt
+   zusätzlich in den lokalen P2P-Cache dieser Maschine, falls HälpMi hier installiert ist -
+   nützlich zum Vorbereiten, macht aber **keine** Maschine selbst auf die neue Version:
+   ohne mindestens einen Peer, der die Version bereits tatsächlich AUSFÜHRT, beobachtet nie
+   jemand einen neueren Boot-Call und die P2P-Kaskade (Wellen-Rollout, siehe CLAUDE.md)
+   startet nie von selbst.
+4. **"Update erstellen"** (seit 16.08.2026, löst genau die Lücke aus Punkt 3): baut eine
+   einzelne, eigenständig lauffähige Datei (`HaelpMi-Update-<Version>.exe`) - signiertes
+   Paket an eine einmal veröffentlichte `HaelpMi.UpdateBootstrapper`-Kopie angehängt. Diese
+   eine Datei geht an den Admin; per Doppelklick auf einer bereits installierten Maschine
+   aktualisiert sie diese Maschine sofort selbst (Install/Test/Swap gegen den lokal
+   laufenden `HaelpMi.UpdateService`, ohne auf einen Peer zu warten) und macht die Version
+   danach im "Updates"-Tab des Admin-Dashboards zur Freigabe sichtbar. Das ist der
+   vorgesehene Weg, um die allererste Maschine einer Kundengruppe auf eine neue Version zu
+   bringen, ohne einen kompletten neuen Installer laufen lassen zu müssen. Ab der
+   Ein-Klick-Freigabe im Dashboard verbreitet sich die Version wie gewohnt automatisch
+   (in Wellen) an alle anderen erreichbaren Geräte weiter.
 
 **Fallback (manuell, z. B. auf einer Maschine ohne Vaultwarden-Zugriff):**
 

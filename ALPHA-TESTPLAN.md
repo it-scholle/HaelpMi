@@ -263,7 +263,8 @@ signieren - hier bewusst nicht automatisiert (echter Vaultwarden-Zugriff nötig)
       tatsächlich angelegt wurde
       - [ ] Erneut klicken, während schon ein Schlüssel existiert - Warndialog vor dem
             Überschreiben muss erscheinen, "Nein" darf nichts verändern
-- [ ] "Update-Ei" ankreuzen, Test-Installer bauen wie in Test 1 - danach prüfen, dass
+- [ ] Test-Installer bauen wie in Test 1 (seit 16.08.2026 kein "Update-Ei"-Häkchen mehr -
+      passiert automatisch, sobald ein Schlüssel geladen ist) - danach prüfen, dass
       `installer/payload/update-seed/manifest.json` und `package.zip` frisch entstanden sind
 - [ ] Diesen Test-Installer installieren (wie Test 2) - im Admin-Dashboard, Tab "Updates",
       zeigt die Versions-Combobox jetzt die gebaute Version an (siehe Fehlerbericht
@@ -272,8 +273,37 @@ signieren - hier bewusst nicht automatisiert (echter Vaultwarden-Zugriff nötig)
       spürbar schneller durch (kein ISCC), fragt kein Kundenname/Passwort ab; auf einer
       Maschine mit installiertem HälpMi zusätzlich `%ProgramData%\HaelpMi\updates-cache\`
       prüfen - neuer Versionsordner mit beiden Dateien sollte dort liegen
-- [ ] "Überspringen" klicken, ohne vorher etwas einzutragen - Test-Installer ohne Update-Ei
-      muss weiterhin klaglos bauen (Rückwärtskompatibilität zum bisherigen Ablauf)
+- [ ] Ohne geladenen Schlüssel bauen (Vaultwarden-Karte übersprungen) - Test-Installer muss
+      weiterhin klaglos bauen, nur ohne eingebettetes Startpaket (Protokoll sagt das explizit)
+
+## Test 9d: Self-Bootstrap-Update (Nutzerwunsch 16.08.2026, "Update erstellen") — ⚠️ ebenfalls
+mit Vorsicht, gleiche Kategorie wie Test 9 (selbstmodifizierend, Dienst mit Systemrechten)
+
+Deckt genau den Teil ab, der von den coded Tests nicht erreichbar ist: das tatsächliche
+Anhängen/Auslesen des Pakets an eine echte veröffentlichte .exe, und der komplette
+Install-StartTest-ConfirmSwap-Ablauf gegen einen echten laufenden `HaelpMi.UpdateService`,
+ausgelöst OHNE vorherige Peer-Beobachtung.
+
+- [ ] Auf der Build-Maschine: Update-Schlüssel geladen (siehe Test 9b), "Update erstellen"
+      klicken - Protokoll zeigt Payload-Publish, Paket-Signatur, `dotnet publish` des
+      Bootstrap-Werkzeugs, dann "Update erstellt: ...\Output\HaelpMi-Update-<Version>.exe"
+- [ ] Diese eine Datei auf ein zweites, bereits installiertes Testgerät (Wegwerf-VM!)
+      kopieren und dort per Doppelklick ausführen - Konsolenausgabe sollte Schritt für
+      Schritt Signaturprüfung/Installation/Selbsttest/Übernahme zeigen
+- [ ] Nach "Fertig" auf diesem Gerät prüfen: läuft `HaelpMi.Agent.exe` jetzt tatsächlich mit
+      der neuen Versionsnummer (Tray-Icon-Tooltip/Dashboard "Eigene Version")?
+- [ ] Im Admin-Dashboard, Tab "Updates": erscheint die Version jetzt in der Auswahl-Liste,
+      ohne dass dieses Gerät sie je von einem Peer gezogen hätte?
+- [ ] Freigeben klicken, ein drittes (älteres) Testgerät im selben Netz beobachten - zieht es
+      die Version automatisch (Wellen-Rollout, siehe CLAUDE.md), sobald es einen Boot-Call
+      von der bereits aktualisierten Maschine hört?
+- [ ] Die rohe, unbestückte `HaelpMi.UpdateBootstrapper.exe` (ohne über "Update erstellen"
+      gelaufen zu sein, z. B. direkt aus `installer/UpdateBootstrapperPublish/`) separat
+      ausführen - muss eine klare Fehlermeldung zeigen ("kein eingebettetes Update-Paket"),
+      nicht abstürzen
+- [ ] **Falls es zu einem Absturz, Hänger oder halb-installierten Zustand kommt: nicht selbst
+      reparieren versuchen** - gleiches Vorgehen wie bei Test 9 (Zustand notieren/Screenshot,
+      zurückmelden)
 
 ## Test 9c: Revisionssicheres Audit-Log — Push-Sync an Admin-Geräte (Nutzerwunsch 14./15.08.2026)
 

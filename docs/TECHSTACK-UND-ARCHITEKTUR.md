@@ -207,13 +207,20 @@ ein Lock nach 10 Minuten automatisch wieder freigegeben.
 
 Läuft komplett getrennt vom Config-Hot-Reload, über die "Swap-Pipeline"
 (`UpdateOrchestrator.cs` + `UpdateServiceWorker.cs`): Ein Gerät erkennt eine neuere Peer-Version
-→ prüft Admin-Freigabe/Rollout-Quote → prüft, ob es wegen zu vieler Fehlschläge gerade in einem
+→ prüft Admin-Freigabe für genau diese Version → prüft das Wellen-Gate (`IsMyTurn`, seit
+16.08.2026: automatisch abgeleitete Wellenbreite = Zahl bereits aktualisierter Peers, kein
+manuell gestuftes Kontingent) → prüft, ob es wegen zu vieler Fehlschläge gerade in einem
 24-Stunden-Lockout steckt (Kill-Switch nach 3 Fehlschlägen in Folge) → wartet zufälligen Jitter
 ab → zieht sich das signierte Paket per P2P (Port 51506) → lässt den privilegierten
 `UpdateService` das Paket auf einem separaten Testport installieren und selbst testen → erst
 nach lokalem Erfolg **und** mindestens einer Peer-Bestätigung wird die neue Version scharf
 geschaltet (alte Version nach `_previous`, neue Version übernimmt) und die Altversion entfernt.
-Nur signierte Pakete (Ed25519, separater Update-Schlüssel) werden überhaupt angenommen.
+Nur signierte Pakete (Ed25519, separater Update-Schlüssel) werden überhaupt angenommen. Das
+Wellen-Gate setzt mindestens einen bereits aktualisierten Peer voraus - die allererste Maschine
+einer Kundengruppe kommt stattdessen über `HaelpMi.UpdateBootstrapper` (Install-Creator, Knopf
+"Update erstellen") auf eine neue Version: eine einzelne, vom Admin per Doppelklick ausgeführte
+Datei, die genau diese eine Maschine sofort selbst durch dieselbe Install-Test-Swap-Kette führt,
+ohne auf einen Peer-Boot-Call zu warten.
 
 ### Ablauf: Revisionssicheres Audit-Log (seit 14./15.08.2026)
 

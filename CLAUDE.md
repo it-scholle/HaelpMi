@@ -56,8 +56,9 @@ stillschweigend zu ignorieren.
   Private Schlüssel gehören nie ins Repo, nie ins Log, nie in eine Fehlermeldung.
 - **Aufbewahrung des privaten Update-Signaturschlüssels (seit 13.08.2026):** liegt verschlüsselt
   in Vaultwarden (Secure Note `HälpMi-Update-PrivateKey`), nicht als Klartextdatei auf einer
-  Build-Maschine. `HaelpMi.InstallCreator` ("Update-Ei"-Häkchen, Knopf "Update-Paket
-  veröffentlichen") holt ihn dort bei Bedarf per Bitwarden-CLI ab (Master-Passwort einmal pro
+  Build-Maschine. `HaelpMi.InstallCreator` (Knöpfe "Update-Paket veröffentlichen" und "Update
+  erstellen", siehe "Self-Bootstrap-Update" weiter unten) holt ihn dort bei Bedarf per
+  Bitwarden-CLI ab (Master-Passwort einmal pro
   Programmstart), hält ihn ausschließlich im Arbeitsspeicher dieses einen Laufs und schreibt ihn
   nie auf die Platte. Der bisherige rein manuelle Weg über `HaelpMi.UpdateSigner` (Schlüssel als
   lokale `.txt`-Datei) bleibt als Fallback für Maschinen ohne Vaultwarden-Zugriff bestehen, siehe
@@ -136,6 +137,37 @@ stillschweigend zu ignorieren.
   jeder Übernahme, Jitter vor dem Update-Pull, Retry-Obergrenze pro Gerät, Fehlermeldung an den
   Admin. Der dortige Not-Aus-Mechanismus ("bei mehreren Fehlschlägen stoppt die gesamte
   Verteilung") gilt jetzt pro Kreis statt pro Stufe, da es keine Stufen mehr gibt.
+- **Wellen-Rollout (ergänzt 16.08.2026):** ergänzt die Korrektur oben, hebt sie nicht auf — nach
+  wie vor genau eine Admin-Freigabe pro Version, nach wie vor kein manuell gestuftes Kontingent
+  (der Admin klickt nie eine Stufe hoch, es gibt keine Stufen-UI mehr im Dashboard). Die erlaubte
+  Wellenbreite ergibt sich aber automatisch statt "sofort alle auf einen Schlag": ein Gerät darf
+  erst aktualisieren, wenn mindestens so viele Peers laut eigenem, zwangsläufig unvollständigem
+  P2P-Wissen (`DeviceEntry.LastKnownProgramVersion`, aus Boot-Call + Gossip) die freigegebene
+  Version schon haben, wie es selbst in der deterministischen Warteschlange vor sich hat — siehe
+  `UpdateOrchestrator.IsMyTurn`. Kein Admin-Eingriff pro Welle, kein zentraler Zähler (bleibt
+  P2P). Grund: ein einziger Schlag auf die gesamte Kundengruppe birgt bei einer fehlerhaften
+  Version ein größeres Blast-Radius-Risiko als eine automatisch anwachsende Welle; der
+  bestehende Kill-Switch (pro Kreis, siehe oben) bleibt zusätzlich unverändert bestehen.
+- **Self-Bootstrap-Update (ergänzt 16.08.2026):** löst die Lücke, dass die allererste Maschine
+  einer Kundengruppe bisher nur per komplett neuem Installer-Lauf auf eine neue Version kam — das
+  Wellen-Gate oben setzt zwingend mindestens einen bereits aktualisierten Peer voraus und kann
+  daher nie die allererste Maschine selbst bedienen. Die frühere "Update-Ei"-Checkbox in
+  `HaelpMi.InstallCreator` ist entfernt: jeder Admin-Installer-Build bettet das P2P-Startpaket
+  jetzt automatisch ein, sofern ein Update-Schlüssel geladen ist (kein Nachteil, wenn es immer
+  dabei ist). Neuer Knopf "Update erstellen" baut zusätzlich eine einzelne, eigenständig
+  lauffähige Datei (`HaelpMi.UpdateBootstrapper` mit angehängtem signiertem Paket, siehe
+  `EmbeddedPackage.cs`/`UpdatePackageBuilder.AppendUpdatePackage` für das Dateiformat). Ein Admin
+  führt sie einmalig per Doppelklick auf einer bereits installierten Maschine aus - diese
+  Maschine aktualisiert sich sofort selbst (Install/Test/Swap gegen den lokalen
+  `HaelpMi.UpdateService`, ohne auf einen Peer-Boot-Call zu warten - der bei der allerersten
+  Maschine ja noch niemanden gäbe) und wird danach im "Updates"-Tab des Admin-Dashboards zur
+  Freigabe sichtbar. Ab der Freigabe gilt wieder unverändert die normale P2P-Wellen-Kaskade oben.
+  Bewusst noch NICHT umgesetzt (Nutzerwunsch, für später vorgemerkt): ein Auto-Publish, das das
+  fertige Update-Paket automatisch per hinterlegter Mail an alle hinterlegten Kunden verschickt -
+  die Build-Logik (`HaelpMi.InstallCreator.MainWindow.BuildUpdateBootstrapperAsync`) ist bewusst
+  von der UI getrennt und liefert schon den fertigen Dateipfad zurück, damit ein künftiger
+  Versand-Schritt sie direkt aufrufen kann, ohne einen Button-Klick zu simulieren - Kundenregister
+  und Mailversand selbst existieren noch nicht und sind eigenständig zu klären, wenn es soweit ist.
 
 ## Datenschutz-Prinzipien (konkretisiert aus NFR-5 der Pflichtenheft)
 - Zeige nie mehr personenbezogene Daten an als für die Alarmierung nötig: Raum + Raumnummer

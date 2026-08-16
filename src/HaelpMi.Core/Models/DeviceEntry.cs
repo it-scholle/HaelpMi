@@ -75,4 +75,13 @@ public sealed class DeviceEntry
     /// bleibt beim zuerst gesehenen Wert, der Vorfall landet im Audit-Log.
     /// </summary>
     public string? PinnedDeviceIdentityPublicKeyBase64 { get; set; }
+
+    /// <summary>
+    /// Zuletzt per Boot-Call oder Gossip (<see cref="Networking.Protocol.KnownDeviceSummary"/>)
+    /// gemeldete <see cref="LiveIdentity.ProgramVersion"/> dieses Peers (Nutzerwunsch
+    /// 16.08.2026, Wellen-Rollout). Leer = noch nie beobachtet. Rein informativ/lokal
+    /// geschätzt wie der gesamte Geräte-Cache - kein zentraler, verlässlicher Zähler, siehe
+    /// <c>UpdateOrchestrator.IsMyTurn</c>, der einzige Verwender.
+    /// </summary>
+    public string LastKnownProgramVersion { get; set; } = string.Empty;
 }

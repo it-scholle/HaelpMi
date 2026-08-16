@@ -254,6 +254,89 @@ public class NetworkingTests
         Assert.Equal("Lager", gossiped.RoomName);
     }
 
+    // --- Wellen-Rollout (Nutzerwunsch 16.08.2026): UpdateOrchestrator.IsMyTurn schätzt die
+    // erlaubte Wellenbreite aus DeviceEntry.LastKnownProgramVersion - die beiden folgenden
+    // Tests prüfen, dass dieses Feld tatsächlich sowohl aus dem direkten Boot-Call-Kontakt
+    // als auch aus dem Gossip-Anhang einer Reply ankommt. ---
+
+    [Fact]
+    public async Task DiscoveryService_DirectBootCall_PropagatesProgramVersionIntoDeviceEntry()
+    {
+        using var scope = new TestAppDataScope();
+        var discoveryPort = GetFreeUdpPort();
+        var customerGroupId = Guid.NewGuid();
+
+        var ownDeviceId = Guid.NewGuid();
+        var ownIdentity = MakeIdentity(customerGroupId, ownDeviceId, "Neu-PC", "Herr Neu", "Empfang", "1");
+
+        var peerDeviceId = Guid.NewGuid();
+        var updatedSignal = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        await using var discovery = new DiscoveryService(() => ownIdentity, discoveryPort: discoveryPort);
+        discovery.DeviceUpdated += (_, entry) =>
+        {
+            if (entry.DeviceId == peerDeviceId)
+            {
+                updatedSignal.TrySetResult();
+            }
+        };
+        discovery.StartListening();
+
+        using var peerSocket = new UdpClient(0) { EnableBroadcast = true };
+        var announce = new BootCallMessage(
+            MessageKind.Announce, customerGroupId, peerDeviceId, "PC-Peer", "Frau Peer", "Büro", "5",
+            Role.User, false, 51999, "0.31.0", 0, DateTimeOffset.UtcNow);
+        var announceBytes = JsonSerializer.SerializeToUtf8Bytes(announce, WireOptions);
+
+        await peerSocket.SendAsync(announceBytes, announceBytes.Length, new IPEndPoint(IPAddress.Loopback, discoveryPort));
+
+        await updatedSignal.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+        var devices = new DeviceStore().Load();
+        var peer = Assert.Single(devices, d => d.DeviceId == peerDeviceId);
+        Assert.Equal("0.31.0", peer.LastKnownProgramVersion);
+    }
+
+    [Fact]
+    public async Task DiscoveryService_MergesKnownDevicesFromReply_AlsoPropagatesGossipedProgramVersion()
+    {
+        using var scope = new TestAppDataScope();
+        var discoveryPort = GetFreeUdpPort();
+        var customerGroupId = Guid.NewGuid();
+
+        var ownDeviceId = Guid.NewGuid();
+        var ownIdentity = MakeIdentity(customerGroupId, ownDeviceId, "Neu-PC", "Herr Neu", "Empfang", "1");
+
+        var replierDeviceId = Guid.NewGuid();
+        var gossipedDeviceId = Guid.NewGuid();
+        var updatedSignal = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        await using var discovery = new DiscoveryService(() => ownIdentity, discoveryPort: discoveryPort);
+        discovery.DeviceUpdated += (_, entry) =>
+        {
+            if (entry.DeviceId == replierDeviceId)
+            {
+                updatedSignal.TrySetResult();
+            }
+        };
+        discovery.StartListening();
+
+        using var replierSocket = new UdpClient(0) { EnableBroadcast = true };
+        var reply = new BootCallMessage(
+            MessageKind.Reply, customerGroupId, replierDeviceId, "PC-Antwortend", "Frau Antwort", "Büro", "5",
+            Role.User, false, 51999, "0.29.1", 0, DateTimeOffset.UtcNow,
+            new List<KnownDeviceSummary> { new(gossipedDeviceId, "PC-Weitweg", "Herr Fern", "Lager", "99", Role.User, "192.168.1.77", 51501, DateTimeOffset.UtcNow, "0.31.0") });
+        var replyBytes = JsonSerializer.SerializeToUtf8Bytes(reply, WireOptions);
+
+        await replierSocket.SendAsync(replyBytes, replyBytes.Length, new IPEndPoint(IPAddress.Loopback, discoveryPort));
+
+        await updatedSignal.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+        var devices = new DeviceStore().Load();
+        var gossiped = Assert.Single(devices, d => d.DeviceId == gossipedDeviceId);
+        Assert.Equal("0.31.0", gossiped.LastKnownProgramVersion);
+    }
+
     // --- Multi-VLAN-Bridge-Seed (Nutzerwunsch 13.08.2026): "Admin als so eine Art erster
     // Peer" für geroutete, aber nicht per Broadcast erreichbare Subnetze/VLANs hinweg. Alle
     // drei Tests zielen auf 127.0.0.x-Adressen statt 127.0.0.1: explizit auf eine konkrete

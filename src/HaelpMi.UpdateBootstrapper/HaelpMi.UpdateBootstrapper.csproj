@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>HaelpMi.UpdateBootstrapper</RootNamespace>
+    <AssemblyName>HaelpMi.UpdateBootstrapper</AssemblyName>
+    <Platforms>x64;ARM64</Platforms>
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+
+  <!-- Nutzerwunsch 16.08.2026 (Self-Bootstrap-Update): reine Konsolen-.exe, kein WPF/
+       WinForms - läuft einmalig auf einer bereits installierten HälpMi-Maschine, ein
+       Sysadmin doppelklickt sie, Fortschritt als Text reicht, kein GUI nötig
+       (CLAUDE.md "kein Over-Engineering"). Install-Creator ("Update erstellen") hängt das
+       eigentliche signierte Update-Paket an eine EINMAL veröffentlichte generische
+       Kopie dieser .exe an - siehe EmbeddedPackage.cs für das Format. -->
+
+  <!-- ProjectReference auf HaelpMi.Core (anders als HaelpMi.InstallCreator, siehe dessen
+       .csproj-Kommentar zur bewussten Trennung): dieses Tool spricht die ECHTEN Laufzeit-
+       Protokolle (Named-Pipe-IPC zum UpdateService, Cache-Dateilayout, Signaturprüfung) -
+       das hier nachzubauen statt wiederzuverwenden wäre genau das Protokoll-Drift-Risiko,
+       vor dem UpdatePackageBuilder.TryWriteToLocalDeviceCache warnt (dort bewusst
+       dupliziert, weil es nur ein Ordnername-Literal ist; hier wäre es komplette IPC-/
+       Crypto-Logik). -->
+  <ItemGroup>
+    <ProjectReference Include="..\HaelpMi.Core\HaelpMi.Core.csproj" />
+  </ItemGroup>
+
+</Project>

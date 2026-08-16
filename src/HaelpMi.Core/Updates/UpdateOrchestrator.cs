@@ -11,14 +11,16 @@ namespace HaelpMi.Core.Updates;
 /// Orchestriert die 0-Downtime-Update-Pipeline (Abschnitt 11) auf einem Gerät: hört auf
 /// <see cref="DiscoveryService.PeerVersionObserved"/> (bereits vorhandener Boot-Call-
 /// Mechanismus), entscheidet ob dieses Gerät aktualisieren darf (Admin-Freigabe genau
-/// dieser Version + Kill-Switch-Sperre + zufälliger Jitter - siehe CLAUDE.md
+/// dieser Version + Wellen-Gate + Kill-Switch-Sperre + zufälliger Jitter - siehe CLAUDE.md
 /// "Rollout-Freigabe"), zieht das Paket per P2P, lässt den privilegierten
 /// HaelpMi.UpdateService installieren/testen/swappen und wertet den eigenen Selbsttest
 /// sowie eine einfache Peer-Erreichbarkeits-Bestätigung aus, bevor der eigentliche Swap
-/// freigegeben wird. Kein Freigabekontingent mehr: sobald der Admin eine Version einmal
-/// freigegeben hat, darf jedes Gerät, das die neuere Version bei einem Peer sieht,
-/// sofort (nach Jitter) selbst aktualisieren und verbreitet sie danach über den eigenen
-/// nächsten Boot-Call automatisch weiter.
+/// freigegeben wird.
+///
+/// Wellen-Rollout (korrigiert 16.08.2026, siehe <see cref="IsMyTurn"/>): kein manuell
+/// gestuftes Freigabekontingent mehr wie vor v0.18.0 (Admin musste damals jede Stufe
+/// einzeln freigeben) - stattdessen ergibt sich die erlaubte Wellenbreite automatisch aus
+/// der Zahl bereits aktualisierter Peers, kein Admin-Klick pro Stufe nötig.
 ///
 /// Vereinfachung ggü. einem vollständigen Ausbau (bewusst, siehe CLAUDE.md "kein
 /// Over-Engineering" - hier nicht weiter spezifiziert): "Peer-Bestätigung" ist ein reiner
@@ -90,6 +92,11 @@ public sealed class UpdateOrchestrator
 
             var devices = _deviceListProvider();
 
+            if (!IsMyTurn(identity, config, devices))
+            {
+                return; // Wellen-Kontingent für diese Version noch nicht erreicht
+            }
+
             var jitterSeconds = Random.Shared.Next(AppConstants.UpdatePullJitter.MinSeconds, AppConstants.UpdatePullJitter.MaxSeconds + 1);
             await Task.Delay(TimeSpan.FromSeconds(jitterSeconds));
 
@@ -115,24 +122,69 @@ public sealed class UpdateOrchestrator
         }
     }
 
-    internal static bool IsNewer(string candidate, string current)
+    internal static bool IsNewer(string candidate, string current) => CompareVersions(candidate, current) > 0;
+
+    // Programmversionen sind "Major.Minor.Patch" (siehe MyAppVersion in den Installer-
+    // Skripten) - numerischer Vergleich wie CompareDottedVersion dort, keine simple
+    // String-Ordnung (die "1.10.0" fälschlich vor "1.2.0" einsortieren würde). Fehlende/nicht
+    // parsbare Segmente (z. B. ein noch nie beobachtetes DeviceEntry.LastKnownProgramVersion
+    // == "") zählen als 0, sind also immer "älter" als jede echte Versionsnummer.
+    private static int CompareVersions(string a, string b)
     {
-        // Programmversionen sind "Major.Minor.Patch" (siehe MyAppVersion in den Installer-
-        // Skripten) - numerischer Vergleich wie CompareDottedVersion dort, keine simple
-        // String-Ordnung (die "1.10.0" fälschlich vor "1.2.0" einsortieren würde).
-        var candidateParts = candidate.Split('.');
-        var currentParts = current.Split('.');
-        var length = Math.Max(candidateParts.Length, currentParts.Length);
+        var aParts = a.Split('.');
+        var bParts = b.Split('.');
+        var length = Math.Max(aParts.Length, bParts.Length);
         for (var i = 0; i < length; i++)
         {
-            var c = i < candidateParts.Length && int.TryParse(candidateParts[i], out var cv) ? cv : 0;
-            var k = i < currentParts.Length && int.TryParse(currentParts[i], out var kv) ? kv : 0;
-            if (c != k)
+            var av = i < aParts.Length && int.TryParse(aParts[i], out var an) ? an : 0;
+            var bv = i < bParts.Length && int.TryParse(bParts[i], out var bn) ? bn : 0;
+            if (av != bv)
             {
-                return c > k;
+                return av.CompareTo(bv);
             }
         }
-        return false;
+        return 0;
+    }
+
+    /// <summary>
+    /// Wellen-Gate (CLAUDE.md, Rollout-Freigabe korrigiert 16.08.2026): ersetzt das bis
+    /// v0.17.x manuell gestufte Freigabekontingent (<c>SharedConfig.UpdateRolloutState.
+    /// ApprovedDeviceQuota</c>, in v0.18.0 komplett entfernt) durch eine automatisch
+    /// abgeleitete Wellenbreite n = Zahl der Peers, die laut eigenem, zwangsläufig
+    /// unvollständigem Geräte-Cache (<see cref="DeviceEntry.LastKnownProgramVersion"/>, aus
+    /// Boot-Call + KnownDeviceSummary-Gossip) die freigegebene Version schon erfolgreich
+    /// übernommen haben. Kein Admin-Klick pro Stufe, kein zentraler Zähler - bleibt P2P,
+    /// jedes Gerät schätzt n rein aus seiner eigenen Sicht. Gleiche deterministische
+    /// Reihenfolge wie die frühere Implementierung (stabile DeviceId-Sortierung), nur mit
+    /// dynamischem statt admin-gesetztem n.
+    ///
+    /// n=0 (noch kein einziger bekannter Peer auf der freigegebenen Version) blockiert
+    /// bewusst jeden Peer-Beobachtungs-getriebenen Versuch - das allererste Gerät jeder
+    /// Kundengruppe kommt nicht über dieses Gate auf eine neue Version, sondern über das
+    /// separate, vom Menschen einmalig angestoßene HaelpMi.UpdateBootstrapper-Tool (siehe
+    /// dortiger Klassenkommentar), das komplett außerhalb dieser Peer-Beobachtungskette
+    /// läuft. Erst danach kennt überhaupt ein Peer die neue Version, und n startet bei 1.
+    /// </summary>
+    internal static bool IsMyTurn(LiveIdentity identity, SharedConfig config, IReadOnlyList<DeviceEntry> devices)
+    {
+        var approvedVersion = config.UpdateRollout.ApprovedVersion;
+        if (string.IsNullOrWhiteSpace(approvedVersion))
+        {
+            return false;
+        }
+
+        var updatedCount = devices.Count(d => CompareVersions(d.LastKnownProgramVersion, approvedVersion) >= 0);
+        if (updatedCount <= 0)
+        {
+            return false;
+        }
+
+        var allIds = devices.Select(d => d.DeviceId).ToHashSet();
+        allIds.Add(identity.DeviceId); // die eigene Geräteliste kennt das eigene Gerät nicht als "anderes Gerät"
+
+        var ordered = allIds.OrderBy(id => id).ToList();
+        var myIndex = ordered.IndexOf(identity.DeviceId);
+        return myIndex >= 0 && myIndex < updatedCount;
     }
 
     private async Task<bool> AttemptUpdateAsync(PeerVersionInfo info, IReadOnlyList<DeviceEntry> devices)
@@ -161,7 +213,7 @@ public sealed class UpdateOrchestrator
             return false;
         }
 
-        var testPort = GetEphemeralPort();
+        var testPort = UpdateTestInstancePing.GetEphemeralPort();
         var startTest = await _updateServiceClient.SendAsync(new UpdateServiceRequest(UpdateServiceCommandType.StartTest, info.ProgramVersion, TestPort: testPort));
         if (!startTest.Success)
         {
@@ -170,7 +222,7 @@ public sealed class UpdateOrchestrator
             return false;
         }
 
-        if (!await PingTestInstanceAsync(testPort))
+        if (!await UpdateTestInstancePing.PingAsync(testPort))
         {
             _audit?.Invoke("update lokaler Selbsttest fehlgeschlagen");
             await RollbackAsync(info.ProgramVersion);
@@ -197,49 +249,6 @@ public sealed class UpdateOrchestrator
 
     private Task RollbackAsync(string version) =>
         _updateServiceClient.SendAsync(new UpdateServiceRequest(UpdateServiceCommandType.Rollback, version));
-
-    private static int GetEphemeralPort()
-    {
-        var listener = new TcpListener(IPAddress.Loopback, 0);
-        listener.Start();
-        var port = ((IPEndPoint)listener.LocalEndpoint).Port;
-        listener.Stop();
-        return port;
-    }
-
-    // Verbindet sich zum lokalen Selbsttest-Port der Testinstanz (siehe HaelpMi.Agent
-    // App.xaml.cs, --update-test-port). Mehrere Versuche mit kurzer Pause, weil der neu
-    // gestartete Prozess einen Moment braucht, bis sein Listener steht.
-    private static async Task<bool> PingTestInstanceAsync(int testPort)
-    {
-        var deadline = DateTimeOffset.UtcNow + TimeSpan.FromSeconds(35);
-        while (DateTimeOffset.UtcNow < deadline)
-        {
-            try
-            {
-                using var client = new TcpClient();
-                using var connectCts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
-                await client.ConnectAsync(IPAddress.Loopback, testPort, connectCts.Token);
-
-                await using var stream = client.GetStream();
-                using var readCts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-                var buffer = new byte[8];
-                var read = await stream.ReadAsync(buffer, readCts.Token);
-                if (read > 0 && System.Text.Encoding.UTF8.GetString(buffer, 0, read).TrimEnd() == "OK")
-                {
-                    return true;
-                }
-            }
-            catch (Exception)
-            {
-                // Testinstanz noch nicht bereit oder abgestürzt - kurz warten und erneut versuchen
-            }
-
-            await Task.Delay(500);
-        }
-
-        return false;
-    }
 
     // "Mindestens eine Peer-Bestätigung" (CLAUDE.md) - hier bewusst ein einfacher
     // Erreichbarkeits-Handshake (reiner TCP-Connect zum Alarm-Port, ohne Daten zu senden)

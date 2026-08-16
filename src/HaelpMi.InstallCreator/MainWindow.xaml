@@ -73,26 +73,21 @@
                 <Border Background="{StaticResource CardBackgroundBrush}" BorderBrush="{StaticResource HairlineBrush}"
                         BorderThickness="1" CornerRadius="12" Padding="16">
                     <StackPanel>
-                        <!-- Nutzerwunsch 15.08.2026: Klammer-Erklärungen raus, die selbsterklärend
-                             sind (was "Test-Installer"/"Update-Ei" tun, steht bei Bedarf nur noch
-                             im Tooltip, nicht mehr fest im sichtbaren Text) - dafür beide Häkchen
-                             nebeneinander statt untereinander, kompakter. -->
-                        <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
-                            <CheckBox x:Name="TestInstallerCheckBox" IsChecked="True" Margin="0,0,24,0"
+                        <!-- Nutzerwunsch 15.08.2026: Klammer-Erklärung raus, die selbsterklärend
+                             ist (was "Test-Installer" tut, steht bei Bedarf nur noch im Tooltip,
+                             nicht mehr fest im sichtbaren Text). -->
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
+                            <CheckBox x:Name="TestInstallerCheckBox" IsChecked="True"
                                       Content="Test-Installer"
                                       ToolTip="Kein Passwort nötig - für internes Testen, niemals an einen Kunden ausliefern." />
-
-                            <!-- "Update-Ei" (Nutzerwunsch 13.08.2026): ersetzt den bisherigen manuellen
-                                 Schritt 1b aus BUILD-UND-INSTALLATION.md. Deaktiviert, solange kein
-                                 Schlüssel geladen ist (siehe "Vaultwarden"-Reiter rechts) - Hover-Text
-                                 exakt wie vorgegeben, unverändert auch im deaktivierten Zustand. -->
-                            <CheckBox x:Name="UpdateEggCheckBox" IsEnabled="False"
-                                      Content="Update-Ei"
-                                      ToolTip="Wenn angehakt wird die Update Datei für den automatischen Rollout im Installer angefügt." />
                         </StackPanel>
-                        <TextBlock x:Name="UpdateEggHintText" Foreground="{StaticResource TextSecondaryBrush}" FontSize="11"
-                                   TextWrapping="Wrap" Margin="0,0,0,16"
-                                   Text="Braucht einen geladenen Update-Schlüssel (siehe &quot;Vaultwarden&quot;-Reiter rechts)." />
+
+                        <!-- Die frühere "Update-Ei"-Checkbox ist raus (Nutzerwunsch 16.08.2026):
+                             das eingebettete Startpaket kostet nichts, wenn es immer dabei ist -
+                             jeder Admin-Installer-Build bettet es jetzt automatisch ein, sofern ein
+                             Update-Schlüssel geladen ist (siehe "Vaultwarden"-Reiter rechts). Für
+                             die neue, davon unabhängige Self-Bootstrap-Update-Datei siehe den
+                             "Update erstellen"-Knopf unten. -->
 
                         <TextBlock Text="Kundenname (Pflicht bei Produktiv-Installer; bei Test-Installer optionale Bezeichnung z. B. &quot;Testgruppe 3&quot;)"
                                    FontWeight="SemiBold" TextWrapping="Wrap" FontSize="12" />
@@ -192,8 +187,22 @@
                     </StackPanel>
                 </Border>
 
-                <Button x:Name="BuildAdminButton" Content="Admin-Installer erstellen" HorizontalAlignment="Left"
-                        Style="{StaticResource AccentButtonStyle}" Padding="18,9" Margin="0,16,0,8" Click="BuildAdminButton_Click" />
+                <StackPanel Orientation="Horizontal" Margin="0,16,0,8">
+                    <Button x:Name="BuildAdminButton" Content="Admin-Installer erstellen" HorizontalAlignment="Left"
+                            Style="{StaticResource AccentButtonStyle}" Padding="18,9" Margin="0,0,8,0" Click="BuildAdminButton_Click" />
+
+                    <!-- "Update erstellen" (Nutzerwunsch 16.08.2026, ersetzt die frühere
+                         "Update-Ei"-Checkbox): baut eine einzelne, eigenständig lauffähige .exe -
+                         signiertes Update-Paket eingebettet (siehe UpdatePackageBuilder.
+                         AppendUpdatePackage/HaelpMi.UpdateBootstrapper). Der Admin bekommt genau
+                         diese eine Datei, führt sie auf einer bereits installierten Maschine aus -
+                         die aktualisiert sich sofort selbst UND steht danach im "Updates"-Tab des
+                         Admin-Dashboards zur Freigabe bereit. Braucht einen geladenen
+                         Update-Schlüssel (siehe "Vaultwarden"-Reiter rechts). -->
+                    <Button x:Name="CreateUpdateBootstrapperButton" Content="Update erstellen" HorizontalAlignment="Left"
+                            Padding="18,9" IsEnabled="False" Click="CreateUpdateBootstrapperButton_Click"
+                            ToolTip="Baut eine einzelne Datei, die ein Admin auf einer bereits installierten Maschine ausführt - sie aktualisiert sich sofort selbst und macht die Version für die Freigabe im Dashboard verfügbar." />
+                </StackPanel>
 
                 <!-- Schlanker Weg (Nutzerwunsch 13.08.2026): nur ein Update-Paket veröffentlichen,
                      ohne ISCC/Kundengruppen-ID/Installer-Passwort - für den Normalfall "neue
@@ -210,7 +219,7 @@
                 <Border x:Name="LastBuildPanel" Visibility="Collapsed" Background="{StaticResource SuccessLightBrush}"
                         BorderBrush="{StaticResource HairlineBrush}" BorderThickness="1" CornerRadius="12" Padding="16">
                     <StackPanel>
-                        <TextBlock Text="Admin-Installer erstellt" FontWeight="SemiBold" FontSize="13" />
+                        <TextBlock x:Name="LastBuildTitleText" Text="Admin-Installer erstellt" FontWeight="SemiBold" FontSize="13" />
                         <TextBlock x:Name="LastBuildFileText" Foreground="{StaticResource TextSecondaryBrush}"
                                    FontSize="11" TextWrapping="Wrap" Margin="0,4,0,12" />
                         <Button x:Name="LastBuildShowButton" Content="Anzeigen" HorizontalAlignment="Left"

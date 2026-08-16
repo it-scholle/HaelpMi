@@ -368,9 +368,8 @@ public partial class MainWindow : Window
             }
 
             GenerateUpdateKeyButton.IsEnabled = true;
-            UpdateEggCheckBox.IsEnabled = _updatePrivateKeyBytes is not null;
-            UpdateEggHintText.Visibility = _updatePrivateKeyBytes is not null ? Visibility.Collapsed : Visibility.Visible;
             PublishUpdatePackageButton.IsEnabled = _updatePrivateKeyBytes is not null;
+            CreateUpdateBootstrapperButton.IsEnabled = _updatePrivateKeyBytes is not null;
         }
         catch (Exception ex)
         {
@@ -461,9 +460,8 @@ public partial class MainWindow : Window
             KeyPresentIcon.Visibility = Visibility.Visible;
             KeyMissingIcon.Visibility = Visibility.Collapsed;
             VaultwardenStatusText.Text = "Neuer Schlüssel gespeichert. Öffentlicher Schlüssel wurde kopiert - bitte manuell in UpdateSignaturePublicKey.cs eintragen.";
-            UpdateEggCheckBox.IsEnabled = true;
-            UpdateEggHintText.Visibility = Visibility.Collapsed;
             PublishUpdatePackageButton.IsEnabled = true;
+            CreateUpdateBootstrapperButton.IsEnabled = true;
         }
         catch (Exception ex)
         {
@@ -540,6 +538,130 @@ public partial class MainWindow : Window
         }
     }
 
+    private async void CreateUpdateBootstrapperButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_updatePrivateKeyBytes is null)
+        {
+            return; // Button ist ohne geladenen Schlüssel ohnehin deaktiviert
+        }
+
+        SetBusy(true);
+        CreateUpdateBootstrapperButton.IsEnabled = false;
+        try
+        {
+            Log("--- Update wird erstellt ---");
+            var outputExePath = await BuildUpdateBootstrapperAsync();
+            if (outputExePath is not null)
+            {
+                Log("Diese eine Datei geht an den Admin - Doppelklick dort aktualisiert die Maschine sofort selbst " +
+                    "und macht die Version im \"Updates\"-Tab des Dashboards zur Freigabe verfügbar.");
+                ShowUpdateSuccessToast(outputExePath);
+            }
+        }
+        catch (Exception ex)
+        {
+            Log($"Unerwarteter Fehler: {ex.Message}");
+            CrashLogger.Log("CreateUpdateBootstrapperButton_Click", ex);
+            System.Windows.MessageBox.Show($"Update-Erstellung fehlgeschlagen:{Environment.NewLine}{ex.Message}",
+                "HälpMi Install-Creator", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+        finally
+        {
+            SetBusy(false);
+            CreateUpdateBootstrapperButton.IsEnabled = _updatePrivateKeyBytes is not null;
+        }
+    }
+
+    /// <summary>
+    /// Baut die einzelne, eigenständig lauffähige Self-Bootstrap-Update-Datei (Nutzerwunsch
+    /// 16.08.2026) - signiertes Paket + veröffentlichtes HaelpMi.UpdateBootstrapper an eine
+    /// Datei angehängt (siehe UpdatePackageBuilder.AppendUpdatePackage). Gibt den fertigen
+    /// Dateipfad zurück (oder null bei einem Fehler, bereits geloggt).
+    ///
+    /// Bewusst getrennt vom Klick-Handler und ohne jeden UI-Zugriff außer Log(...): eine
+    /// spätere Auto-Publish-Erweiterung (Nutzerwunsch, noch nicht umgesetzt - "Update-Paket
+    /// automatisch per hinterlegter Mail an alle hinterlegten Kunden verschicken") kann
+    /// diese Methode direkt aufrufen, ohne einen Button-Klick zu simulieren. Der
+    /// Rückgabewert (fertiger, deterministisch benannter Dateipfad unter installer/Output/)
+    /// ist bereits genau das, was ein künftiger Versand-Schritt bräuchte - hier absichtlich
+    /// noch kein Kundenregister/Mailversand/SMTP eingebaut, nur der Weg dahin nicht verbaut.
+    /// </summary>
+    private async Task<string?> BuildUpdateBootstrapperAsync()
+    {
+        var installerDir = FindInstallerDirectory();
+
+        if (!await RefreshPayloadAsync(installerDir))
+        {
+            Log("Payload-Aktualisierung fehlgeschlagen - Update wird nicht erstellt.");
+            return null;
+        }
+
+        var payloadDir = Path.Combine(installerDir, "payload");
+        var result = UpdatePackageBuilder.Build(payloadDir, _productVersion, _updatePrivateKeyBytes!);
+        Log($"Update-Paket für Version {_productVersion} signiert.");
+
+        var repoRoot = Directory.GetParent(installerDir)?.FullName;
+        if (repoRoot is null)
+        {
+            Log("Fehler: Repo-Wurzel (oberhalb von installer/) konnte nicht bestimmt werden.");
+            return null;
+        }
+
+        var bootstrapperProject = Path.Combine(repoRoot, "src", "HaelpMi.UpdateBootstrapper", "HaelpMi.UpdateBootstrapper.csproj");
+        if (!File.Exists(bootstrapperProject))
+        {
+            Log($"Fehler: {bootstrapperProject} nicht gefunden.");
+            return null;
+        }
+
+        // Immer frisch veröffentlichen statt eine frühere Kopie wiederzuverwenden - gleiches
+        // Prinzip wie RefreshPayloadAsync (Bugfix 11.08.2026: ein tagealter, still
+        // veralteter Payload darf nie stillschweigend weiterverwendet werden).
+        var publishDir = Path.Combine(installerDir, "UpdateBootstrapperPublish");
+        if (Directory.Exists(publishDir))
+        {
+            Directory.Delete(publishDir, true);
+        }
+
+        Log("Update-Bootstrap-Werkzeug wird veröffentlicht (Single-File, self-contained)...");
+        var exitCode = await RunProcessAsync("dotnet", repoRoot, args =>
+        {
+            args.Add("publish");
+            args.Add(bootstrapperProject);
+            args.Add("-c");
+            args.Add("Release");
+            args.Add("-r");
+            args.Add("win-x64");
+            args.Add("-p:Platform=x64");
+            args.Add("--self-contained");
+            args.Add("true");
+            args.Add("-p:PublishSingleFile=true");
+            args.Add("-o");
+            args.Add(publishDir);
+        }, "[dotnet publish] ");
+
+        if (exitCode != 0)
+        {
+            Log($"Fehler: dotnet publish für HaelpMi.UpdateBootstrapper fehlgeschlagen (Exitcode {exitCode}).");
+            return null;
+        }
+
+        var genericExePath = Path.Combine(publishDir, "HaelpMi.UpdateBootstrapper.exe");
+        if (!File.Exists(genericExePath))
+        {
+            Log($"Fehler: {genericExePath} fehlt nach dem Publish.");
+            return null;
+        }
+
+        var outputDir = Path.Combine(installerDir, "Output");
+        Directory.CreateDirectory(outputDir);
+        var outputExePath = Path.Combine(outputDir, $"HaelpMi-Update-{_productVersion}.exe");
+        UpdatePackageBuilder.AppendUpdatePackage(genericExePath, outputExePath, result);
+        Log($"Update erstellt: {outputExePath}");
+
+        return outputExePath;
+    }
+
     private async void BuildAdminButton_Click(object sender, RoutedEventArgs e)
     {
         if (!TryValidate(out var error))
@@ -606,11 +728,11 @@ public partial class MainWindow : Window
         BuildAdminButton.IsEnabled = !busy;
         TestInstallerCheckBox.IsEnabled = !busy;
         CustomerNameBox.IsEnabled = !busy;
-        UpdateEggCheckBox.IsEnabled = !busy && _updatePrivateKeyBytes is not null;
-        // PublishUpdatePackageButton greift auf denselben installer/payload/-Ordner zu wie
-        // RefreshPayloadAsync - während eines Baus (egal welcher der beiden Aktionen) darf
-        // der jeweils andere Weg nicht gleichzeitig hineinschreiben.
+        // PublishUpdatePackageButton/CreateUpdateBootstrapperButton greifen auf denselben
+        // installer/payload/-Ordner zu wie RefreshPayloadAsync - während eines Baus (egal
+        // welcher der drei Aktionen) darf keiner der anderen Wege gleichzeitig hineinschreiben.
         PublishUpdatePackageButton.IsEnabled = !busy && _updatePrivateKeyBytes is not null;
+        CreateUpdateBootstrapperButton.IsEnabled = !busy && _updatePrivateKeyBytes is not null;
     }
 
     private async Task BuildAdminInstallerAsync(Guid customerGroupId, string groupKeyBase64, bool isTestInstaller, string password, string customerNameOrTestLabel)
@@ -657,22 +779,25 @@ public partial class MainWindow : Window
             return;
         }
 
-        // "Update-Ei" (Nutzerwunsch 13.08.2026): NACH RefreshPayloadAsync (frischer Payload-
-        // Ordner), VOR dem User-Installer-ISCC-Lauf unten - der kopiert "payload\*" 1:1 in
-        // beide Installer, update-seed/ muss also schon drinstehen, bevor ISCC läuft.
-        if (UpdateEggCheckBox.IsChecked == true)
+        // Startpaket-Einbettung (bis 15.08.2026 hinter der "Update-Ei"-Checkbox, seit
+        // 16.08.2026 immer automatisch - Nutzerwunsch: kostet nichts, wenn es immer dabei
+        // ist). NACH RefreshPayloadAsync (frischer Payload-Ordner), VOR dem
+        // User-Installer-ISCC-Lauf unten - der kopiert "payload\*" 1:1 in beide Installer,
+        // update-seed/ muss also schon drinstehen, bevor ISCC läuft. Ohne geladenen
+        // Schlüssel wird der Installer trotzdem gebaut, nur eben ohne Startpaket (wie
+        // früher bei nicht angehaktem "Update-Ei") - kein Hard-Stop mehr, ein Installer
+        // ohne Update-Signaturschlüssel zur Hand ist ein legitimer Zwischenstand.
+        if (_updatePrivateKeyBytes is not null)
         {
-            if (_updatePrivateKeyBytes is null)
-            {
-                Log("Fehler: Update-Ei ist angehakt, aber kein Update-Schlüssel geladen - Installer wird nicht gebaut.");
-                return;
-            }
-
-            Log("Update-Ei: Update-Paket wird für diesen Build signiert und eingebettet...");
+            Log("Update-Paket wird für diesen Build signiert und eingebettet...");
             var payloadDir = Path.Combine(installerDir, "payload");
             var eggResult = UpdatePackageBuilder.Build(payloadDir, _productVersion, _updatePrivateKeyBytes);
             UpdatePackageBuilder.WriteToPayloadSeed(installerDir, eggResult);
-            Log($"Update-Ei: Version {_productVersion} signiert, landet in payload/update-seed/.");
+            Log($"Update-Paket: Version {_productVersion} signiert, landet in payload/update-seed/.");
+        }
+        else
+        {
+            Log("Kein Update-Schlüssel geladen - Installer wird ohne eingebettetes Startpaket gebaut.");
         }
 
         // Nutzer-Wunsch 04.08.2026: der User-Installer wird nicht mehr auf dem
@@ -863,6 +988,7 @@ public partial class MainWindow : Window
             // bleibt zusätzlich im Hauptfenster stehen, falls der Toast übersehen wurde
             // (siehe MainWindow.xaml, LastBuildPanel).
             _lastBuiltInstallerPath = newestExe.FullName;
+            LastBuildTitleText.Text = "Admin-Installer erstellt";
             LastBuildFileText.Text = newestExe.Name + " liegt bereit für den Sysadmin.";
             LastBuildPanel.Visibility = Visibility.Visible;
 
@@ -870,6 +996,27 @@ public partial class MainWindow : Window
                 "Admin-Installer erstellt",
                 newestExe.Name + " liegt bereit für den Sysadmin.",
                 newestExe.FullName);
+            toast.Show();
+        }
+        catch (Exception)
+        {
+            // best-effort - das Protokoll oben hat die Erfolgsmeldung bereits geloggt
+        }
+    }
+
+    // Gleiches Panel/Toast-Muster wie ShowSuccessToast oben, nur ohne "neueste .exe im
+    // Ordner suchen" - beim Update-Erstellen kennen wir den fertigen Pfad schon exakt.
+    private void ShowUpdateSuccessToast(string exePath)
+    {
+        try
+        {
+            _lastBuiltInstallerPath = exePath;
+            var fileName = Path.GetFileName(exePath);
+            LastBuildTitleText.Text = "Update erstellt";
+            LastBuildFileText.Text = fileName + " liegt bereit für den Admin.";
+            LastBuildPanel.Visibility = Visibility.Visible;
+
+            var toast = new BuildSuccessToastWindow("Update erstellt", fileName + " liegt bereit für den Admin.", exePath);
             toast.Show();
         }
         catch (Exception)

@@ -338,7 +338,8 @@ public sealed class DiscoveryService : IAsyncDisposable
                 message.ComputerName, message.User, message.RoomName, message.RoomNumber,
                 message.Role, message.IsRemoteSession, remoteIp, message.TcpPort,
                 ObservedProtocolVersion: message.ProtocolVersion,
-                PinnedDeviceIdentityPublicKeyBase64: pinnedKeyToApply);
+                PinnedDeviceIdentityPublicKeyBase64: pinnedKeyToApply,
+                ProgramVersion: message.ProgramVersion);
             DeviceStore.Upsert(devices, message.DeviceId, info, DateTimeOffset.UtcNow);
             updated = devices.First(d => d.DeviceId == message.DeviceId);
             learnedNewDevice = isNewPrimaryDevice;
@@ -363,7 +364,8 @@ public sealed class DiscoveryService : IAsyncDisposable
 
                     var knownInfo = new DeviceUpsertInfo(
                         known.ComputerName, known.User, known.RoomName, known.RoomNumber,
-                        known.Role, false, known.IpAddress, known.TcpPort, known.LastSeenUtc);
+                        known.Role, false, known.IpAddress, known.TcpPort, known.LastSeenUtc,
+                        ProgramVersion: known.ProgramVersion);
                     DeviceStore.Upsert(devices, known.DeviceId, knownInfo, DateTimeOffset.UtcNow);
                 }
             }
@@ -483,7 +485,7 @@ public sealed class DiscoveryService : IAsyncDisposable
 
         return devices
             .Where(d => d.DeviceId != excludeDeviceId)
-            .Select(d => new KnownDeviceSummary(d.DeviceId, d.ComputerName, d.User, d.RoomName, d.RoomNumber, d.Role, d.IpAddress, d.TcpPort, d.LastSeenUtc))
+            .Select(d => new KnownDeviceSummary(d.DeviceId, d.ComputerName, d.User, d.RoomName, d.RoomNumber, d.Role, d.IpAddress, d.TcpPort, d.LastSeenUtc, d.LastKnownProgramVersion))
             .ToList();
     }
 
