@@ -64,35 +64,30 @@ stillschweigend zu ignorieren.
   lokale `.txt`-Datei) bleibt als Fallback für Maschinen ohne Vaultwarden-Zugriff bestehen, siehe
   `BUILD-UND-INSTALLATION.md` Schritt 1b.
 
-## Entwickler-Tool Install-Creator — bei Bedarf immer direkt neu bauen
-- **Für Claude Code (diese Datei gilt als Sitzung):** sobald eine Sitzung `tools/InstallCreator/`
-  bzw. `src/HaelpMi.InstallCreator` selbst benutzt oder gerade daran etwas geändert hat, wird das
-  Tool bei Bedarf **direkt neu gebaut** (`dotnet publish`), ohne Rückfrage und ohne sich auf einen
-  zufällig schon frischen Stand zu verlassen. "Bei Bedarf" heißt: Quelle neuer als letzte
-  gebaute `.exe`, oder unklar/nicht geprüft, welcher Stand gerade vorliegt — im Zweifel neu bauen
-  statt zu raten.
-- Blockiert dabei eine offen herumliegende, nicht aktiv genutzte Instanz den Build (Datei-in-
-  Benutzung-Fehler), wird sie beendet und der Build sofort wiederholt, ohne den Nutzer vorher zu
-  bitten, sie zu schließen — diese Tools bleiben erfahrungsgemäß nur idle offen, kein Zeichen
-  ungesicherter Arbeit. Ausnahme: konkreter Hinweis, dass die Instanz gerade aktiv benutzt wird
-  (z. B. mitten in einer Passwort-Eingabe).
+## Entwickler-Tool Install-Creator — Rebuild läuft automatisiert (Hook, seit 16.08.2026)
+- `tools/InstallCreator/HaelpMi.InstallCreator.exe` ist eine gitignorete, von Hand veröffentlichte
+  Kopie von `src/HaelpMi.InstallCreator`. Der Git-Hook `.githooks/pre-commit` baut sie automatisch
+  neu, sobald ein Commit `src/HaelpMi.InstallCreator` oder `src/HaelpMi.UpdateSigner` berührt —
+  läuft als reiner Git-Subprozess (`dotnet publish`), unabhängig von einer Claude-Code-Sitzung und
+  ohne deren Tokens zu verbrauchen. Details, inkl. einmaliger Aktivierung
+  (`git config core.hooksPath .githooks` — gilt repo-weit für alle Worktrees, nicht nur den
+  einen Checkout, in dem der Befehl lief): `docs/WORKFLOW.md` Abschnitt
+  "Install-Creator-Rebuild-Hook".
+- **Frühere Fassung dieses Abschnitts (bis 16.08.2026) verlangte zusätzlich, dass jede
+  Claude-Code-Sitzung nach eigenen Änderungen an `src/HaelpMi.InstallCreator` manuell neu baut —
+  das ist mit dem Hook entfallen, keine Session muss sich das mehr merken.** Grund für die
+  Streichung: genau diese Prosa-Regel wurde in der Praxis mehrfach vergessen (v0.29.2/v0.29.3 —
+  die veröffentlichte exe lief danach noch auf dem Stand von v0.27.0), ein bei jedem Commit
+  automatisch greifender Hook ist zuverlässiger als das Erinnern einer Sitzung.
 - **Für den Menschen bleibt unverändert `tools/InstallCreator/Start.cmd` (bzw. `Start.ps1`)** der
   vorgesehene Weg: vergleicht Quell- und Exe-Zeitstempel selbst und baut bei Bedarf automatisch
-  neu, bevor das Tool startet. Der rohe Aufruf von `HaelpMi.InstallCreator.exe` prüft das nicht
-  und bleibt potenziell veraltet — bei Verdacht auf einen veralteten Stand zuerst prüfen, ob die
-  Desktop-Verknüpfung noch auf die rohe `.exe` statt auf `Start.cmd` zeigt.
-- Grund für diese Regel: ein 3 Tage alter, still veralteter Stand von `tools/InstallCreator.exe`
-  hat schon einmal zu einem falschen Fehlerbericht geführt (fehlende Icon-Buttons, die auf `main`
-  längst gefixt waren). Direkt-Neubau statt Vertrauen auf einen vermeintlich aktuellen Stand
-  verhindert das strukturell, nicht nur für diesen einen Fall.
-- **Nicht nur auf diese Regel verlassen (seit 16.08.2026):** genau das "bei Bedarf direkt neu
-  bauen" oben wurde mehrfach von Sessions vergessen (v0.29.2/v0.29.3 committeten Änderungen an
-  `src/HaelpMi.InstallCreator`, ohne die veröffentlichte Kopie neu zu bauen — sie lief danach noch
-  auf v0.27.0). Zusätzliche, vom Erinnern einer Session unabhängige Absicherung: der Git-Hook
-  `.githooks/pre-commit` baut `tools/InstallCreator` automatisch neu, sobald ein Commit
-  `src/HaelpMi.InstallCreator` oder `src/HaelpMi.UpdateSigner` berührt — siehe
-  `docs/WORKFLOW.md` Abschnitt "Install-Creator-Rebuild-Hook" für Aktivierung
-  (`git config core.hooksPath .githooks`, einmalig pro Checkout/Worktree).
+  neu, bevor das Tool startet — zweite, vom Hook unabhängige Absicherung, greift z. B. falls der
+  Hook aus irgendeinem Grund nicht aktiv war. Der rohe Aufruf von `HaelpMi.InstallCreator.exe`
+  prüft das nicht und bleibt potenziell veraltet — bei Verdacht auf einen veralteten Stand zuerst
+  prüfen, ob die Desktop-Verknüpfung noch auf die rohe `.exe` statt auf `Start.cmd` zeigt.
+- Grund für den ursprünglichen Rebuild-Zwang überhaupt: ein 3 Tage alter, still veralteter Stand
+  von `tools/InstallCreator.exe` hat schon einmal zu einem falschen Fehlerbericht geführt
+  (fehlende Icon-Buttons, die auf `main` längst gefixt waren).
 
 ## Architekturprinzipien — nicht verhandelbar
 

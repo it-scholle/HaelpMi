@@ -82,17 +82,21 @@ Prosa-Regel zu verlassen, gibt es jetzt `.githooks/pre-commit`: baut `tools/Inst
 automatisch neu, sobald ein Commit Quellcode aus `src/HaelpMi.InstallCreator` oder
 `src/HaelpMi.UpdateSigner` enthält — unabhängig davon, ob Mensch oder Claude Code committet.
 
-Aktivierung pro Checkout einmalig (Hooks sind nicht automatisch aktiv, `core.hooksPath` ist keine
-Repo-weite Server-Einstellung):
+Aktivierung einmalig pro lokalem Repository-Klon (Hooks sind nicht automatisch aktiv):
 
 ```
 git config core.hooksPath .githooks
 ```
 
-`EnterWorktree` erzeugt neue, isolierte Checkouts — dort ebenfalls einmalig setzen, bevor an
-`src/HaelpMi.InstallCreator` gearbeitet wird. Der `Start.ps1`-Selbstheilungsmechanismus (siehe
-CLAUDE.md) bleibt zusätzlich bestehen und greift beim nächsten Start ohnehin, falls der Hook aus
-irgendeinem Grund nicht aktiv war — zwei unabhängige Absicherungen statt einer.
+**Nicht pro Worktree wiederholen — `core.hooksPath` liegt in der von allen Worktrees geteilten
+`.git/config`** (kein `extensions.worktreeConfig` gesetzt) und wird beim Setzen auf einen
+absoluten Pfad im Haupt-Checkout aufgelöst. Ein einziges `git config core.hooksPath .githooks`,
+irgendwo im Repo ausgeführt, greift danach automatisch auch in jedem künftigen `EnterWorktree`-
+Worktree — verifiziert 16.08.2026 (frischer Worktree ohne jede eigene Config zeigte den Hook
+sofort aktiv). Nötig ist der Befehl nur einmal pro unabhängigem Klon (z. B. auf einer neuen
+Build-Maschine). Der `Start.ps1`-Selbstheilungsmechanismus (siehe CLAUDE.md) bleibt zusätzlich
+bestehen und greift beim nächsten Start ohnehin, falls der Hook aus irgendeinem Grund nicht aktiv
+war — zwei unabhängige Absicherungen statt einer.
 
 ### Versionsnummer-Kollisionen
 
