@@ -6,19 +6,38 @@
 # v0.27.0). Ein Git-Hook hängt nicht vom Erinnern einer Session ab, sondern greift bei jedem
 # Commit automatisch, egal ob Mensch oder Claude Code committet.
 #
+# Directory.Build.props zählt hier ausdrücklich mit dazu (Nutzerkorrektur 17.08.2026): das
+# Tool zeigt seine eigene Versionsnummer im Fenstertitel an (MainWindow.xaml.cs,
+# Assembly.GetExecutingAssembly().GetName().Version, gespeist aus genau dieser Datei bei
+# Build-Zeit) - ein reiner Versions-Bump-Commit ohne sonstige InstallCreator-Änderung ließ
+# die angezeigte Version sonst veraltet stehen (v0.34.1 bumpte nur die Zahl, der Hook griff
+# nicht, die schon veröffentlichte exe zeigte weiter v0.34.0).
+#
 # Aktivierung pro Checkout einmalig: git config core.hooksPath .githooks
 # (siehe docs/WORKFLOW.md und BUILD-UND-INSTALLATION.md)
+#
+# Bugfix 17.08.2026 (Fehlerbericht "Startmenü-Verknüpfung zeigt noch die alte Version"):
+# `git rev-parse --show-toplevel` liefert den Wurzelpfad des GERADE AUSFÜHRENDEN Checkouts -
+# bei einem Commit aus einem EnterWorktree-Worktree (Normalfall laut Branch-Pflicht in
+# CLAUDE.md) also den Worktree selbst, nicht den Haupt-Checkout. Der Rebuild landete dadurch
+# jeweils in der eigenen, beim Aufräumen wieder gelöschten Kopie des Worktrees - nie in
+# tools/InstallCreator/ des Haupt-Checkouts, auf das die tatsächlich genutzte Verknüpfung
+# zeigt. core.hooksPath wird beim Setzen dagegen immer als fester absoluter Pfad im
+# Haupt-Checkout abgelegt (siehe docs/WORKFLOW.md) - git führt das Hook-Skript also so oder so
+# immer von dort aus, egal welcher Worktree committet. Der eigene Skriptpfad ($0) ist daher
+# die verlässliche Quelle für den Haupt-Checkout-Pfad, nicht `git rev-parse --show-toplevel`.
 
 set -e
 
-repo_root=$(git rev-parse --show-toplevel)
+hook_dir=$(cd "$(dirname "$0")" && pwd)
+repo_root=$(dirname "$hook_dir")
 staged=$(git diff --cached --name-only)
 
-if ! printf '%s\n' "$staged" | grep -qE '^src/HaelpMi\.(InstallCreator|UpdateSigner)/'; then
+if ! printf '%s\n' "$staged" | grep -qE '^src/HaelpMi\.(InstallCreator|UpdateSigner)/|^Directory\.Build\.props$'; then
     exit 0
 fi
 
-echo "Pre-Commit-Hook: src/HaelpMi.InstallCreator bzw. UpdateSigner geändert - baue tools/InstallCreator neu..."
+echo "Pre-Commit-Hook: src/HaelpMi.InstallCreator, UpdateSigner bzw. Directory.Build.props geändert - baue tools/InstallCreator neu..."
 
 csproj="$repo_root/src/HaelpMi.InstallCreator/HaelpMi.InstallCreator.csproj"
 tools_dir="$repo_root/tools/InstallCreator"

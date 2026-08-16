@@ -67,9 +67,13 @@ stillschweigend zu ignorieren.
 ## Entwickler-Tool Install-Creator — Rebuild läuft automatisiert (Hook, seit 16.08.2026)
 - `tools/InstallCreator/HaelpMi.InstallCreator.exe` ist eine gitignorete, von Hand veröffentlichte
   Kopie von `src/HaelpMi.InstallCreator`. Der Git-Hook `.githooks/pre-commit` baut sie automatisch
-  neu, sobald ein Commit `src/HaelpMi.InstallCreator` oder `src/HaelpMi.UpdateSigner` berührt —
-  läuft als reiner Git-Subprozess (`dotnet publish`), unabhängig von einer Claude-Code-Sitzung und
-  ohne deren Tokens zu verbrauchen. Details, inkl. einmaliger Aktivierung
+  neu, sobald ein Commit `src/HaelpMi.InstallCreator`, `src/HaelpMi.UpdateSigner` oder
+  `Directory.Build.props` berührt (letzteres zählt mit, weil das Tool seine eigene
+  Versionsnummer im Fenstertitel aus genau dieser Datei zur Build-Zeit anzeigt — ein reiner
+  Versions-Bump ohne sonstige InstallCreator-Änderung ließ die angezeigte Version sonst
+  veraltet stehen, Nutzerkorrektur 17.08.2026) — läuft als reiner Git-Subprozess
+  (`dotnet publish`), unabhängig von einer Claude-Code-Sitzung und ohne deren Tokens zu
+  verbrauchen. Details, inkl. einmaliger Aktivierung
   (`git config core.hooksPath .githooks` — gilt repo-weit für alle Worktrees, nicht nur den
   einen Checkout, in dem der Befehl lief): `docs/WORKFLOW.md` Abschnitt
   "Install-Creator-Rebuild-Hook".

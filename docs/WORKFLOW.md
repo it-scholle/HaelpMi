@@ -46,10 +46,11 @@ sich, ohne Merge-Rauschen.
 1. `EnterWorktree` - legt automatisch einen neuen Branch + isoliertes Arbeitsverzeichnis an.
 2. Arbeiten, committen, testen (die für den Bump-Grad passende Stufe aus `TEST-STRATEGY.md` -
    mindestens das 🔹-Smoke-Set) - alles innerhalb des Worktrees, gegen den eigenen Branch. Berührt
-   ein Commit `src/HaelpMi.InstallCreator/` oder `src/HaelpMi.UpdateSigner/`, baut der
-   Pre-Commit-Hook (`.githooks/pre-commit`, siehe unten) die veröffentlichte Kopie in
-   `tools/InstallCreator/` automatisch neu — nicht mehr auf das Erinnern der Session verlassen
-   (siehe Begründung unten).
+   ein Commit `src/HaelpMi.InstallCreator/`, `src/HaelpMi.UpdateSigner/` oder
+   `Directory.Build.props` (auch ein reiner Versions-Bump zählt — das Tool zeigt seine eigene
+   Version daraus an), baut der Pre-Commit-Hook (`.githooks/pre-commit`, siehe unten) die
+   veröffentlichte Kopie in `tools/InstallCreator/` automatisch neu — nicht mehr auf das
+   Erinnern der Session verlassen (siehe Begründung unten).
 3. Branch nach jedem Commit (mindestens aber einmal je Aufgabe) mit `git push -u origin <branch>`
    nach GitHub spiegeln - Sichtbarkeit/Backup der laufenden Arbeit, nicht erst beim fertigen Merge.
 4. `git rebase main` - funktioniert direkt aus dem Worktree heraus, **ohne** Umweg über
@@ -79,8 +80,16 @@ Kopie (siehe CLAUDE.md-Abschnitt "Entwickler-Tool Install-Creator"). Die dort be
 schlicht vergessen (zuletzt v0.29.2/v0.29.3 — die veröffentlichte exe lief danach noch auf dem
 Stand von v0.27.0, bis das am 16.08.2026 auffiel). Statt sich weiter auf das Erinnern einer
 Prosa-Regel zu verlassen, gibt es jetzt `.githooks/pre-commit`: baut `tools/InstallCreator`
-automatisch neu, sobald ein Commit Quellcode aus `src/HaelpMi.InstallCreator` oder
-`src/HaelpMi.UpdateSigner` enthält — unabhängig davon, ob Mensch oder Claude Code committet.
+automatisch neu, sobald ein Commit Quellcode aus `src/HaelpMi.InstallCreator`,
+`src/HaelpMi.UpdateSigner` oder `Directory.Build.props` (auch ein reiner Versions-Bump zählt,
+seit 17.08.2026) enthält — unabhängig davon, ob Mensch oder Claude Code committet.
+
+**Bugfix 17.08.2026:** der Hook baut dabei immer in `tools/InstallCreator/` des **Haupt-
+Checkouts**, egal aus welchem `EnterWorktree`-Worktree heraus committet wurde — er ermittelt
+seinen Zielpfad über den eigenen Skriptpfad (`$0`), nicht über `git rev-parse --show-toplevel`
+(das hätte bei einem Commit aus einem Worktree fälschlich dessen eigene, beim Aufräumen wieder
+gelöschte Kopie getroffen — genau das ist der tatsächlichen Startmenü-Verknüpfung des Nutzers
+nie zugutegekommen, bis dieser Bugfix landete).
 
 Aktivierung einmalig pro lokalem Repository-Klon (Hooks sind nicht automatisch aktiv):
 
