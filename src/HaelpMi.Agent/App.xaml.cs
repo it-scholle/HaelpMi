@@ -318,24 +318,13 @@ public partial class App : System.Windows.Application
 
         _coordinator = new AlarmFlowCoordinator(BuildIdentity, () => _settings, _sharedConfigStore.LoadOrCreate, _feedbackChannel, _auditLog, _auditSyncService);
 
-        // Multi-VLAN-Bridge-Seed (Nutzerwunsch 13.08.2026, Liste seit 15.08.2026):
-        // SharedConfig gewinnt, weil sie hot-reload-editierbar ist (IPs können per DHCP
-        // wandern, kein neuer Installer nötig) - deployment.json (Install-Creator-Startwert,
-        // weiterhin nur eine einzelne Adresse) ist nur der Fallback für den allerersten
-        // Start, solange noch nie ein Config-Sync stattgefunden hat (frisch installiertes
-        // Gerät an einer Außenstelle).
-        _discovery = new DiscoveryService(BuildIdentity, _auditLog.Append, bridgeSeedAddressProvider: () =>
-        {
-            var fromConfig = _sharedConfigStore.LoadOrCreate().BridgeSeedAddresses;
-            if (fromConfig.Count > 0)
-            {
-                return fromConfig;
-            }
-
-            return string.IsNullOrWhiteSpace(_deployment.BridgeSeedAddress)
-                ? Array.Empty<string>()
-                : new[] { _deployment.BridgeSeedAddress! };
-        });
+        // Multi-VLAN-Bridge-Seed (Nutzerwunsch 13.08.2026, Liste seit 15.08.2026): kommt
+        // ausschließlich aus SharedConfig, hot-reload-editierbar im Admin-Dashboard
+        // (Netzwerk-Tab). Den früheren deployment.json-Startwert (Install-Creator-Feld) gibt
+        // es seit 15.08.2026 nicht mehr - der Admin pflegt die Bridge-Adressen vollständig
+        // im Dashboard, ein Installer-Neubau nur für eine IP-Änderung war unnötiger Umweg.
+        _discovery = new DiscoveryService(BuildIdentity, _auditLog.Append,
+            bridgeSeedAddressProvider: () => _sharedConfigStore.LoadOrCreate().BridgeSeedAddresses);
         _discovery.StartListening();
         _ = _discovery.AnnounceAsync();
 

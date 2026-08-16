@@ -13,7 +13,7 @@
 #define MyAppName "HälpMi"
 ; Alpha: 0.x until release, per city/product decision - Version 1.0.0 is reserved for
 ; the actual release. Bump the third number for ordinary fixes, second for a feature.
-#define MyAppVersion "0.29.2"
+#define MyAppVersion "0.29.3"
 #define MyAppPublisher "HälpMi contributors"
 #define MyAgentExeName "HaelpMi.Agent.exe"
 #define MyConfigExeName "HaelpMi.Config.exe"
@@ -38,18 +38,6 @@
 #endif
 #ifndef IsTestInstaller
   #define IsTestInstaller "true"
-#endif
-
-; Multi-VLAN-Bridge-Seed (Nutzerwunsch 13.08.2026, siehe CLAUDE.md/DiscoveryService.cs):
-; optionaler Startwert für DeploymentInfo.BridgeSeedAddress - IP/Hostname eines Geräts in
-; einem anderen, nur gerouteten Subnetz/VLAN. Vom Install-Creator per
-; "/DBridgeSeedAddress=..." gesetzt, wenn im Bau-Dialog ausgefüllt; leer = kein Multi-VLAN-
-; Bootstrap (Normalfall). Rein installer-seitiger Startwert (bewusst weiterhin nur eine
-; einzelne Adresse, siehe DeploymentInfo.cs-Kommentar) - der Admin kann/soll die tatsächlich
-; verwendete(n) Adresse(n) später im Dashboard (Netzwerk-Tab, mehrere möglich) hot-reload
-; pflegen, siehe SharedConfig.BridgeSeedAddresses-Kommentar, warum der dort Vorrang hat.
-#ifndef BridgeSeedAddress
-  #define BridgeSeedAddress ""
 #endif
 
 ; Optionales Installer-Passwort (kein Schlüsselpaar - siehe CLAUDE.md Lizenz & Secrets,
@@ -460,8 +448,7 @@ begin
     '{' + #13#10 +
     '  "CustomerGroupId": "{#CustomerGroupId}",' + #13#10 +
     '  "Role": ' + GetRoleValue() + ',' + #13#10 +
-    '  "IsTestInstaller": {#IsTestInstaller},' + #13#10 +
-    '  "BridgeSeedAddress": "' + JsonEscape('{#BridgeSeedAddress}') + '"' + #13#10 +
+    '  "IsTestInstaller": {#IsTestInstaller}' + #13#10 +
     '}';
 
   // Aktuell nur ASCII-Inhalte (GUID/Zahlen), aber aus Konsistenz mit WriteSettingsJson

@@ -98,14 +98,6 @@
                                    FontWeight="SemiBold" TextWrapping="Wrap" FontSize="12" />
                         <TextBox x:Name="CustomerNameBox" Margin="0,6,0,16" />
 
-                        <!-- Multi-VLAN-Bridge-Seed (Nutzerwunsch 13.08.2026): nur nötig, wenn
-                             der Kunde getrennte, gerouteten VLANs/Standorte hat und Broadcast
-                             sie nicht verbindet - reiner Startwert, später im Admin-Dashboard
-                             (Netzwerk-Tab) editierbar, siehe DeploymentInfo.BridgeSeedAddress. -->
-                        <TextBlock Text="Bridge-Seed-Adresse (optional, nur bei getrennten VLANs/Standorten - IP oder Hostname des Admin-Geräts)"
-                                   FontWeight="SemiBold" TextWrapping="Wrap" FontSize="12" />
-                        <TextBox x:Name="BridgeSeedAddressBox" Margin="0,6,0,16" />
-
                         <TextBlock Text="Admin-Installer-Passwort (Pflicht außer bei Test-Installer)" FontWeight="SemiBold" FontSize="12" />
                         <Grid Margin="0,6,0,4">
                             <Grid.ColumnDefinitions>

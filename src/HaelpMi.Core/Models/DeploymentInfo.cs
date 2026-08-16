@@ -26,19 +26,11 @@ public sealed class DeploymentInfo
     /// </summary>
     public bool IsTestInstaller { get; set; }
 
-    /// <summary>
-    /// Multi-VLAN-Bootstrap-Seed, optional im Install-Creator vorbelegt (Nutzerwunsch
-    /// 13.08.2026) - IP/Hostname eines Geräts in einem anderen, nur gerouteten Subnetz/VLAN,
-    /// das dieses Gerät beim Discovery-Boot-Call zusätzlich zum lokalen Broadcast unicastet
-    /// (siehe <see cref="DiscoveryService"/>). Reiner Fallback für den allerersten Start,
-    /// solange <see cref="SharedConfig.BridgeSeedAddresses"/> noch leer ist (frisch
-    /// installiertes Gerät hat noch nie einen Config-Sync erhalten) - danach gewinnt der
-    /// Admin-Dashboard-Wert, weil der sich hot-reload aktualisieren lässt, ohne einen neuen
-    /// Installer bauen zu müssen (IP kann sich per DHCP ändern). Bewusst weiterhin nur eine
-    /// einzelne Adresse (Nutzerwunsch 15.08.2026, im Gegensatz zur admin-editierbaren Liste
-    /// zur Laufzeit): der Install-Creator läuft immer auf einer eigenen Dev-Maschine, nie im
-    /// künftigen Kundennetz - eine Mehrfach-Erkennung/-Eingabe dort hätte keinen echten
-    /// Mehrwert gegenüber einem einzelnen, vom Entwickler bewusst eingetragenen Startwert.
-    /// </summary>
-    public string? BridgeSeedAddress { get; set; }
+    // Multi-VLAN-Bootstrap-Seed (Nutzerwunsch 13.08.2026) hatte hier von 13.-15.08.2026 einen
+    // Startwert namens BridgeSeedAddress - entfernt (Nutzerwunsch 15.08.2026): mit der
+    // admin-editierbaren, hot-reload-verteilten Liste in SharedConfig.BridgeSeedAddresses
+    // war der Install-Creator-Startwert überflüssig geworden (der Admin pflegt die
+    // Bridge-Adressen jetzt vollständig im Dashboard, kein Installer-Neubau nötig). Alte
+    // deployment.json-Dateien mit dem jetzt unbekannten Feld werden beim Deserialisieren
+    // einfach ignoriert (System.Text.Json), kein Migrationsschritt nötig.
 }

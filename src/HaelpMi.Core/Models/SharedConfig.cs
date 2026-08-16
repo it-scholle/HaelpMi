@@ -40,12 +40,13 @@ public sealed class SharedConfig
     /// Leer = kein Multi-VLAN-Bootstrap konfiguriert (Normalfall: alle Geräte im selben
     /// Subnetz/VLAN, Broadcast reicht). Editierbar im Admin-Dashboard (Netzwerk-Tab,
     /// <see cref="EditScopeKind.NetworkBridge"/> - ein Sperr-Datensatz für die ganze Liste,
-    /// nicht pro Adresse) und hot-reload-verteilt wie jedes andere Feld hier - ein per
-    /// Install-Creator vorbelegter Startwert (siehe <see cref="DeploymentInfo.BridgeSeedAddress"/>,
-    /// bewusst weiterhin nur eine einzelne Adresse, siehe dortiger Kommentar) dient nur als
-    /// Fallback, solange noch nie ein Config-Sync stattgefunden hat (frisch installiertes
-    /// Gerät an einer Außenstelle, das seine erste Config erst über genau diese Brücke
-    /// ziehen kann).
+    /// nicht pro Adresse) und hot-reload-verteilt wie jedes andere Feld hier.
+    ///
+    /// Bis 15.08.2026 gab es zusätzlich einen per Install-Creator vorbelegten Startwert in
+    /// <c>deployment.json</c> (<c>DeploymentInfo.BridgeSeedAddress</c>) als Fallback für ein
+    /// frisch installiertes Außenstellen-Gerät ohne bisherigen Config-Sync - entfernt
+    /// (Nutzerwunsch, überflüssig geworden), weil der Admin die Bridge-Adressen jetzt
+    /// vollständig hier im Dashboard pflegt, ohne dafür einen Installer neu bauen zu müssen.
     ///
     /// Formatänderung 15.08.2026: war zuvor <c>string? BridgeSeedAddress</c>. Korrektur
     /// desselben Tages (Prio 0.1, vor dem Verschlüsselungs-Task): der ursprünglich hier

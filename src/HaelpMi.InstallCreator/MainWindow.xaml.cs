@@ -552,12 +552,11 @@ public partial class MainWindow : Window
         var password = PasswordBox.Password;
         var isTestInstaller = TestInstallerCheckBox.IsChecked == true;
         var customerNameOrTestLabel = CustomerNameBox.Text.Trim();
-        var bridgeSeedAddress = BridgeSeedAddressBox.Text.Trim(); // Multi-VLAN-Bridge-Seed, optional - siehe XAML-Kommentar dort
 
         SetBusy(true);
         try
         {
-            await BuildAdminInstallerAsync(customerGroupId, isTestInstaller, password, customerNameOrTestLabel, bridgeSeedAddress);
+            await BuildAdminInstallerAsync(customerGroupId, isTestInstaller, password, customerNameOrTestLabel);
         }
         catch (Exception ex)
         {
@@ -609,7 +608,7 @@ public partial class MainWindow : Window
         PublishUpdatePackageButton.IsEnabled = !busy && _updatePrivateKeyBytes is not null;
     }
 
-    private async Task BuildAdminInstallerAsync(Guid customerGroupId, bool isTestInstaller, string password, string customerNameOrTestLabel, string bridgeSeedAddress)
+    private async Task BuildAdminInstallerAsync(Guid customerGroupId, bool isTestInstaller, string password, string customerNameOrTestLabel)
     {
         Log("--- Installer werden erstellt ---");
         Log($"Kunden-Gruppen-ID: {customerGroupId}");
@@ -684,10 +683,6 @@ public partial class MainWindow : Window
         {
             args.Add($"/DCustomerGroupId={customerGroupId}");
             args.Add($"/DIsTestInstaller={(isTestInstaller ? "true" : "false")}");
-            if (!string.IsNullOrEmpty(bridgeSeedAddress))
-            {
-                args.Add($"/DBridgeSeedAddress={bridgeSeedAddress}");
-            }
             args.Add($"/O{userPayloadDir}");
             args.Add("/FHaelpMi-User-Setup");
         });
@@ -707,10 +702,6 @@ public partial class MainWindow : Window
         {
             args.Add($"/DCustomerGroupId={customerGroupId}");
             args.Add($"/DIsTestInstaller={(isTestInstaller ? "true" : "false")}");
-            if (!string.IsNullOrEmpty(bridgeSeedAddress))
-            {
-                args.Add($"/DBridgeSeedAddress={bridgeSeedAddress}");
-            }
             if (!string.IsNullOrEmpty(password))
             {
                 args.Add($"/DInstallerPassword={password}");
