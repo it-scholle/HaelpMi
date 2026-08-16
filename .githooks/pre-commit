@@ -1,0 +1,41 @@
+#!/bin/sh
+# Baut die veröffentlichte Install-Creator-Kopie in tools/InstallCreator/ automatisch neu,
+# sobald ein Commit Quellcode aus src/HaelpMi.InstallCreator oder src/HaelpMi.UpdateSigner
+# enthält. Grund: die CLAUDE.md-Regel "nach Änderung direkt neu bauen" wurde mehrfach von
+# Sessions vergessen (zuletzt v0.29.2/v0.29.3 - die exe lief danach noch auf dem Stand von
+# v0.27.0). Ein Git-Hook hängt nicht vom Erinnern einer Session ab, sondern greift bei jedem
+# Commit automatisch, egal ob Mensch oder Claude Code committet.
+#
+# Aktivierung pro Checkout einmalig: git config core.hooksPath .githooks
+# (siehe docs/WORKFLOW.md und BUILD-UND-INSTALLATION.md)
+
+set -e
+
+repo_root=$(git rev-parse --show-toplevel)
+staged=$(git diff --cached --name-only)
+
+if ! printf '%s\n' "$staged" | grep -qE '^src/HaelpMi\.(InstallCreator|UpdateSigner)/'; then
+    exit 0
+fi
+
+echo "Pre-Commit-Hook: src/HaelpMi.InstallCreator bzw. UpdateSigner geändert - baue tools/InstallCreator neu..."
+
+csproj="$repo_root/src/HaelpMi.InstallCreator/HaelpMi.InstallCreator.csproj"
+tools_dir="$repo_root/tools/InstallCreator"
+
+if [ ! -f "$csproj" ]; then
+    echo "Pre-Commit-Hook: $csproj nicht gefunden - überspringe Rebuild." >&2
+    exit 0
+fi
+
+# Idle offen gelassene Vorgänger-Instanz sperrt sonst die exe beim Publish - unkritisch zu
+# killen (reines Entwickler-Werkzeug, siehe Speicher install-creator-idle-process-kill-ok).
+taskkill //IM HaelpMi.InstallCreator.exe //F >/dev/null 2>&1 || true
+
+if ! dotnet publish "$csproj" -c Release -r win-x64 -p:Platform=x64 --self-contained true -p:PublishReadyToRun=true -o "$tools_dir"; then
+    echo "Pre-Commit-Hook: Rebuild von tools/InstallCreator fehlgeschlagen - Commit wird trotzdem nicht blockiert," >&2
+    echo "da tools/InstallCreator/ ohnehin nur eine gitignorete Bequemlichkeitskopie ist. Bitte manuell nachbauen." >&2
+    exit 0
+fi
+
+echo "Pre-Commit-Hook: tools/InstallCreator neu veröffentlicht."

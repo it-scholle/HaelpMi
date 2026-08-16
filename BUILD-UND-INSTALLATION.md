@@ -180,6 +180,12 @@ dotnet publish HälpMi\src\HaelpMi.InstallCreator\HaelpMi.InstallCreator.csproj 
 Start automatisch nach oben nach dem `installer`-Ordner) - nicht einzeln auf einen anderen
 Rechner kopieren, ohne den Rest des Repos mitzunehmen.
 
+**Zusätzliche Absicherung seit 16.08.2026:** wer aus diesem Checkout heraus an
+`src\HaelpMi.InstallCreator` committet, sollte einmalig `git config core.hooksPath .githooks`
+setzen - ein Pre-Commit-Hook baut die Kopie in `tools\InstallCreator` dann automatisch bei jedem
+Commit neu, der den Quellcode berührt, statt sich auf `Start.cmd` beim nächsten Start zu
+verlassen. Details: `docs/WORKFLOW.md` Abschnitt "Install-Creator-Rebuild-Hook".
+
 In der App:
 1. Häkchen "Test-Installer" setzen (für interne Tests) oder Kundenname + Passwort
    eintragen (für eine echte Auslieferung).

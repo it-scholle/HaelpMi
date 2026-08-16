@@ -45,7 +45,11 @@ sich, ohne Merge-Rauschen.
 
 1. `EnterWorktree` - legt automatisch einen neuen Branch + isoliertes Arbeitsverzeichnis an.
 2. Arbeiten, committen, testen (die für den Bump-Grad passende Stufe aus `TEST-STRATEGY.md` -
-   mindestens das 🔹-Smoke-Set) - alles innerhalb des Worktrees, gegen den eigenen Branch.
+   mindestens das 🔹-Smoke-Set) - alles innerhalb des Worktrees, gegen den eigenen Branch. Berührt
+   ein Commit `src/HaelpMi.InstallCreator/` oder `src/HaelpMi.UpdateSigner/`, baut der
+   Pre-Commit-Hook (`.githooks/pre-commit`, siehe unten) die veröffentlichte Kopie in
+   `tools/InstallCreator/` automatisch neu — nicht mehr auf das Erinnern der Session verlassen
+   (siehe Begründung unten).
 3. Branch nach jedem Commit (mindestens aber einmal je Aufgabe) mit `git push -u origin <branch>`
    nach GitHub spiegeln - Sichtbarkeit/Backup der laufenden Arbeit, nicht erst beim fertigen Merge.
 4. `git rebase main` - funktioniert direkt aus dem Worktree heraus, **ohne** Umweg über
@@ -66,6 +70,29 @@ sich, ohne Merge-Rauschen.
 9. Aufräumen: `git worktree remove <pfad>`, `git branch -d <branch>`, sowie den Feature-Branch
    auch auf GitHub löschen (`git push origin --delete <branch>`) - er wurde in Schritt 3 dorthin
    gespiegelt und bleibt sonst als bereits gemergter Branch liegen.
+
+### Install-Creator-Rebuild-Hook (seit 16.08.2026)
+
+`tools/InstallCreator/HaelpMi.InstallCreator.exe` ist eine gitignorete, von Hand veröffentlichte
+Kopie (siehe CLAUDE.md-Abschnitt "Entwickler-Tool Install-Creator"). Die dort beschriebene Regel
+"nach jeder Änderung an `src/HaelpMi.InstallCreator` direkt neu bauen" wurde mehrfach von Sessions
+schlicht vergessen (zuletzt v0.29.2/v0.29.3 — die veröffentlichte exe lief danach noch auf dem
+Stand von v0.27.0, bis das am 16.08.2026 auffiel). Statt sich weiter auf das Erinnern einer
+Prosa-Regel zu verlassen, gibt es jetzt `.githooks/pre-commit`: baut `tools/InstallCreator`
+automatisch neu, sobald ein Commit Quellcode aus `src/HaelpMi.InstallCreator` oder
+`src/HaelpMi.UpdateSigner` enthält — unabhängig davon, ob Mensch oder Claude Code committet.
+
+Aktivierung pro Checkout einmalig (Hooks sind nicht automatisch aktiv, `core.hooksPath` ist keine
+Repo-weite Server-Einstellung):
+
+```
+git config core.hooksPath .githooks
+```
+
+`EnterWorktree` erzeugt neue, isolierte Checkouts — dort ebenfalls einmalig setzen, bevor an
+`src/HaelpMi.InstallCreator` gearbeitet wird. Der `Start.ps1`-Selbstheilungsmechanismus (siehe
+CLAUDE.md) bleibt zusätzlich bestehen und greift beim nächsten Start ohnehin, falls der Hook aus
+irgendeinem Grund nicht aktiv war — zwei unabhängige Absicherungen statt einer.
 
 ### Versionsnummer-Kollisionen
 

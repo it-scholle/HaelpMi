@@ -85,6 +85,14 @@ stillschweigend zu ignorieren.
   hat schon einmal zu einem falschen Fehlerbericht geführt (fehlende Icon-Buttons, die auf `main`
   längst gefixt waren). Direkt-Neubau statt Vertrauen auf einen vermeintlich aktuellen Stand
   verhindert das strukturell, nicht nur für diesen einen Fall.
+- **Nicht nur auf diese Regel verlassen (seit 16.08.2026):** genau das "bei Bedarf direkt neu
+  bauen" oben wurde mehrfach von Sessions vergessen (v0.29.2/v0.29.3 committeten Änderungen an
+  `src/HaelpMi.InstallCreator`, ohne die veröffentlichte Kopie neu zu bauen — sie lief danach noch
+  auf v0.27.0). Zusätzliche, vom Erinnern einer Session unabhängige Absicherung: der Git-Hook
+  `.githooks/pre-commit` baut `tools/InstallCreator` automatisch neu, sobald ein Commit
+  `src/HaelpMi.InstallCreator` oder `src/HaelpMi.UpdateSigner` berührt — siehe
+  `docs/WORKFLOW.md` Abschnitt "Install-Creator-Rebuild-Hook" für Aktivierung
+  (`git config core.hooksPath .githooks`, einmalig pro Checkout/Worktree).
 
 ## Architekturprinzipien — nicht verhandelbar
 
