@@ -59,14 +59,23 @@ public sealed class VaultwardenClient
     /// </summary>
     public async Task<VaultwardenUnlockResult> UnlockAsync(string serverUrl, string email, string masterPassword)
     {
+        // "bw config server" verweigert sich mit "Logout required before server config update",
+        // sobald die CLI noch vom vorherigen Install-Creator-Lauf eingeloggt ist (bw merkt sich
+        // den Login-Zustand persistent auf der Maschine, nicht nur pro Prozess). Deshalb hier
+        // immer erst best-effort ausloggen, bevor die Server-URL gesetzt wird - schlägt "logout"
+        // fehl, weil ohnehin schon ausgeloggt war ("You are not logged in"), ist das der
+        // Normalfall und kein echter Fehler, daher Ergebnis bewusst ignoriert.
+        await RunAsync(new[] { "logout" }, env: null);
+
         var configResult = await RunAsync(new[] { "config", "server", serverUrl }, env: null);
         if (configResult.ExitCode != 0)
         {
             return VaultwardenUnlockResult.Failure($"Server-Konfiguration fehlgeschlagen: {configResult.StdErr}");
         }
 
-        // "bw login" schlägt fehl, wenn schon eingeloggt - das ist hier kein echter Fehler,
-        // sondern der Normalfall bei jedem Start nach dem allerersten (siehe status-Prüfung).
+        // Nach dem Logout oben ist hier eigentlich immer "unauthenticated" - Prüfung bleibt
+        // trotzdem als Sicherheitsnetz, falls "logout" oben mal aus anderem Grund als "war
+        // eh nicht eingeloggt" fehlschlägt.
         var status = await GetStatusAsync();
         if (status != "unlocked" && status != "locked")
         {
