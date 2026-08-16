@@ -81,6 +81,99 @@ public class UpdatesTests
         Assert.False(UpdatePackageVerifier.Verify("payload"u8.ToArray(), manifest, publicKeyBytes));
     }
 
+    // --- UpdateSigningOperations.DerivePublicKey (Nutzerwunsch 16.08.2026, "separater
+    // Test-Key für Test-Installer"): Install-Creator hält in Vaultwarden nur private
+    // Schlüssel, der öffentliche Teil wird beim Bauen aus ihm abgeleitet. ----------------
+
+    [Fact]
+    public void DerivePublicKey_MatchesThePublicKeyFromTheSameGeneratedPair()
+    {
+        var pair = UpdateSigningOperations.GenerateKeyPair();
+
+        var derived = UpdateSigningOperations.DerivePublicKey(pair.PrivateKey);
+
+        Assert.Equal(pair.PublicKey, derived);
+    }
+
+    [Fact]
+    public void DerivePublicKey_VerifiesASignatureMadeWithTheSamePrivateKey()
+    {
+        // Round-Trip über den tatsächlichen Verwendungszweck: Install-Creator signiert mit
+        // dem privaten Schlüssel, leitet den öffentlichen Teil ab und schreibt NUR den in
+        // deployment.json - der Client muss ihn zum Prüfen genauso ableiten können.
+        var (privateKey, _) = GenerateTestKeyPair();
+        var payload = "fake-update-package-bytes"u8.ToArray();
+        var manifest = SignPayload(payload, privateKey);
+
+        var derivedPublicKey = UpdateSigningOperations.DerivePublicKey(privateKey);
+
+        Assert.True(UpdatePackageVerifier.Verify(payload, manifest, derivedPublicKey));
+    }
+
+    // --- UpdateSeedImporter.TryImport mit publicKeyOverride (Nutzerwunsch 16.08.2026):
+    // seit App.xaml.cs den Override aus DeploymentInfo.UpdatePublicKeyBase64 füttert, ist
+    // das kein reiner Test-Hook mehr - eine Installation, die mit dem Test-Key signiert
+    // wurde, muss ihr eigenes update-seed auch nur gegen den Test-Public-Key akzeptieren. ---
+
+    [Fact]
+    public void TryImport_AcceptsSeed_SignedWithKeyMatchingThePublicKeyOverride()
+    {
+        using var tempDir = new TempDirectory();
+        var (privateKey, publicKeyBytes) = GenerateTestKeyPair();
+        var payload = "fake-update-package-bytes"u8.ToArray();
+        var manifest = SignPayload(payload, privateKey, version: "9.9.9");
+        WriteSeed(tempDir.Path, manifest, payload);
+
+        using var cacheDir = new TempDirectory();
+        using var _ = HaelpMi.Core.Storage.AppPaths.UseRootForTests(cacheDir.Path);
+        var cacheStore = new HaelpMi.Core.Storage.UpdatePackageCacheStore();
+
+        var imported = UpdateSeedImporter.TryImport(cacheStore, "9.9.9", seedDirectoryOverride: tempDir.Path, publicKeyOverride: publicKeyBytes);
+
+        Assert.True(imported);
+    }
+
+    [Fact]
+    public void TryImport_RejectsSeed_SignedWithADifferentKeyThanThePublicKeyOverride()
+    {
+        // Genau der Fall, den die Test-/Produktiv-Trennung verhindern soll: ein mit dem
+        // (hier: fremden) Schlüssel signiertes Paket gegen einen NICHT dazu passenden
+        // öffentlichen Schlüssel geprüft - z. B. ein Test-signiertes Paket, das versehentlich
+        // bei einer Produktiv-Installation landet.
+        using var tempDir = new TempDirectory();
+        var (privateKey, _) = GenerateTestKeyPair();
+        var (_, unrelatedPublicKeyBytes) = GenerateTestKeyPair();
+        var payload = "fake-update-package-bytes"u8.ToArray();
+        var manifest = SignPayload(payload, privateKey, version: "9.9.9");
+        WriteSeed(tempDir.Path, manifest, payload);
+
+        using var cacheDir = new TempDirectory();
+        using var _ = HaelpMi.Core.Storage.AppPaths.UseRootForTests(cacheDir.Path);
+        var cacheStore = new HaelpMi.Core.Storage.UpdatePackageCacheStore();
+
+        var imported = UpdateSeedImporter.TryImport(cacheStore, "9.9.9", seedDirectoryOverride: tempDir.Path, publicKeyOverride: unrelatedPublicKeyBytes);
+
+        Assert.False(imported);
+    }
+
+    private static void WriteSeed(string seedDir, UpdatePackageManifest manifest, byte[] payload)
+    {
+        System.IO.File.WriteAllText(System.IO.Path.Combine(seedDir, "manifest.json"), System.Text.Json.JsonSerializer.Serialize(manifest));
+        System.IO.File.WriteAllBytes(System.IO.Path.Combine(seedDir, "package.zip"), payload);
+    }
+
+    private sealed class TempDirectory : IDisposable
+    {
+        public string Path { get; } = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"haelpmi-test-{Guid.NewGuid():N}");
+
+        public TempDirectory() => System.IO.Directory.CreateDirectory(Path);
+
+        public void Dispose()
+        {
+            try { System.IO.Directory.Delete(Path, recursive: true); } catch { /* best-effort */ }
+        }
+    }
+
     // --- UpdateOrchestrator.IsNewer: numerischer Versionsvergleich (Abschnitt 11) -------
 
     [Theory]

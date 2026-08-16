@@ -13,7 +13,7 @@
 #define MyAppName "HälpMi"
 ; Alpha: 0.x until release, per city/product decision - Version 1.0.0 is reserved for
 ; the actual release. Bump the third number for ordinary fixes, second for a feature.
-#define MyAppVersion "0.33.1"
+#define MyAppVersion "0.34.0"
 #define MyAppPublisher "HälpMi contributors"
 #define MyAgentExeName "HaelpMi.Agent.exe"
 #define MyConfigExeName "HaelpMi.Config.exe"
@@ -49,6 +49,18 @@
 ; Gruppenschlüssel wie einen alten, vor-verschlüsselungsfähigen Installer-Stand).
 #ifndef GroupKeyBase64
   #define GroupKeyBase64 ""
+#endif
+
+; Update-Signaturprüfung (Nutzerwunsch 16.08.2026, "separater Test-Key für Test-
+; Installer"): der Install-Creator leitet aus dem für DIESEN Build genutzten privaten
+; Schlüssel (Test- oder Produktiv-, je nach IsTestInstaller) den öffentlichen Teil ab und
+; setzt ihn per "/DUpdatePublicKeyBase64=..." - landet unverändert in deployment.json,
+; UpdateSeedImporter/UpdatePackageDistributionService verifizieren damit statt (nur) gegen
+; den kompilierten Fallback in UpdateSignaturePublicKey.cs. Ohne diese Angabe (z. B.
+; manuelles Kompilieren ohne geladenen Schlüssel) bleibt er leer - dann gilt für dieses
+; Gerät weiterhin ausschließlich der kompilierte Fallback.
+#ifndef UpdatePublicKeyBase64
+  #define UpdatePublicKeyBase64 ""
 #endif
 
 ; Optionales Installer-Passwort (kein Schlüsselpaar - siehe CLAUDE.md Lizenz & Secrets,
@@ -460,7 +472,8 @@ begin
     '  "CustomerGroupId": "{#CustomerGroupId}",' + #13#10 +
     '  "Role": ' + GetRoleValue() + ',' + #13#10 +
     '  "IsTestInstaller": {#IsTestInstaller},' + #13#10 +
-    '  "GroupKeyBase64": "' + JsonEscape('{#GroupKeyBase64}') + '"' + #13#10 +
+    '  "GroupKeyBase64": "' + JsonEscape('{#GroupKeyBase64}') + '",' + #13#10 +
+    '  "UpdatePublicKeyBase64": "' + JsonEscape('{#UpdatePublicKeyBase64}') + '"' + #13#10 +
     '}';
 
   // Aktuell nur ASCII-Inhalte (GUID/Zahlen), aber aus Konsistenz mit WriteSettingsJson

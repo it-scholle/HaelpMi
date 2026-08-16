@@ -78,7 +78,7 @@
                              nicht mehr fest im sichtbaren Text). -->
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
                             <CheckBox x:Name="TestInstallerCheckBox" IsChecked="True"
-                                      Content="Test-Installer"
+                                      Content="Test-Installer" Click="TestInstallerCheckBox_Click"
                                       ToolTip="Kein Passwort nötig - für internes Testen, niemals an einen Kunden ausliefern." />
                         </StackPanel>
 
@@ -187,9 +187,15 @@
                     </StackPanel>
                 </Border>
 
+                <!-- Nutzerwunsch 16.08.2026: "erstellen" raus aus dem Admin-Installer-Knopf,
+                     damit beide Knöpfe nebeneinander passen; beide teilen sich jetzt außerdem
+                     dasselbe Farbschema (PrimaryActionButtonStyle, ModernStyles.xaml) - grau
+                     wenn (mangels geladenem Schlüssel) nicht klickbar, blau wenn klickbar,
+                     statt bisher "Admin-Installer" immer blau/"Update erstellen" immer grau. -->
                 <StackPanel Orientation="Horizontal" Margin="0,16,0,8">
-                    <Button x:Name="BuildAdminButton" Content="Admin-Installer erstellen" HorizontalAlignment="Left"
-                            Style="{StaticResource AccentButtonStyle}" Padding="18,9" Margin="0,0,8,0" Click="BuildAdminButton_Click" />
+                    <Button x:Name="BuildAdminButton" Content="Admin-Installer" HorizontalAlignment="Left"
+                            Style="{StaticResource PrimaryActionButtonStyle}" Padding="18,9" Margin="0,0,8,0"
+                            IsEnabled="False" Click="BuildAdminButton_Click" />
 
                     <!-- "Update erstellen" (Nutzerwunsch 16.08.2026, ersetzt die frühere
                          "Update-Ei"-Checkbox): baut eine einzelne, eigenständig lauffähige .exe -
@@ -200,7 +206,7 @@
                          Admin-Dashboards zur Freigabe bereit. Braucht einen geladenen
                          Update-Schlüssel (siehe "Vaultwarden"-Reiter rechts). -->
                     <Button x:Name="CreateUpdateBootstrapperButton" Content="Update erstellen" HorizontalAlignment="Left"
-                            Padding="18,9" IsEnabled="False" Click="CreateUpdateBootstrapperButton_Click"
+                            Style="{StaticResource PrimaryActionButtonStyle}" Padding="18,9" IsEnabled="False" Click="CreateUpdateBootstrapperButton_Click"
                             ToolTip="Baut eine einzelne Datei, die ein Admin auf einer bereits installierten Maschine ausführt - sie aktualisiert sich sofort selbst und macht die Version für die Freigabe im Dashboard verfügbar." />
                 </StackPanel>
 
@@ -291,10 +297,14 @@
                             <TextBlock Text="Master-Passwort" FontWeight="SemiBold" FontSize="12" />
                             <PasswordBox x:Name="VaultwardenPasswordBox" Margin="0,6,0,12" />
 
+                            <!-- Nutzerwunsch 16.08.2026: der bisherige "Überspringen"-Knopf ist raus - Admin-
+                                 Installer UND Update-Paket brauchen jetzt zwingend einen geladenen Schlüssel
+                                 (siehe BuildAdminButton/PublishUpdatePackageButton/CreateUpdateBootstrapperButton),
+                                 "ohne Signierung bauen" ist damit kein sinnvoller Zwischenzustand mehr. Wer nicht
+                                 signieren will, lässt diesen Reiter einfach unbenutzt (Felder leer/Reiter zu). -->
                             <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
                                 <Button x:Name="VaultwardenUnlockButton" Content="Vault entsperren und Schlüssel laden" Style="{StaticResource AccentButtonStyle}"
-                                        Padding="14,7" Margin="0,0,8,0" Click="VaultwardenUnlockButton_Click" />
-                                <Button x:Name="VaultwardenSkipButton" Content="Überspringen" Padding="14,7" Click="VaultwardenSkipButton_Click" />
+                                        Padding="14,7" Click="VaultwardenUnlockButton_Click" />
                             </StackPanel>
 
                             <TextBlock x:Name="VaultwardenLockedStatusText" TextWrapping="Wrap" FontSize="12" />
@@ -303,12 +313,19 @@
                         <!-- Entsperrter Zustand: kein Schlüsselwert wird je angezeigt (Schutz
                              gegen Mitlesen, Nutzerwunsch 15.08.2026) - nur ein farbiges Status-
                              Icon (grün = vorhanden, rot = nicht vorhanden), gleiches
-                             Überlappungs-/Visibility-Muster wie EyeOpenIcon/EyeClosedIcon oben. -->
+                             Überlappungs-/Visibility-Muster wie EyeOpenIcon/EyeClosedIcon oben.
+                             Siebte Runde (Nutzerwunsch 16.08.2026): der bisherige große "Neuen
+                             Schlüssel erzeugen"-Knopf ist einem kleinen Rotier-Icon-Knopf direkt
+                             neben der Status-Zeile gewichen (gleiche Funktion inkl. Warn-Popup vor
+                             dem Archivieren) - dazu jetzt zwei Zeilen, Produktiv- UND Test-
+                             Schlüssel (separater Notizname, siehe VaultwardenClient.
+                             UpdateTestPrivateKeyItemName), sonst 1:1 gleich gehandhabt. -->
                         <StackPanel x:Name="VaultwardenUnlockedPanel" Visibility="Collapsed">
-                            <Grid Margin="0,0,0,10">
+                            <Grid Margin="0,0,0,16">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="Auto" />
                                     <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
                                 </Grid.ColumnDefinitions>
                                 <Grid Grid.Column="0" Width="18" Height="18" Margin="0,0,8,0" VerticalAlignment="Top">
                                     <Grid x:Name="KeyPresentIcon" Visibility="Collapsed">
@@ -327,11 +344,71 @@
                                     </Grid>
                                 </Grid>
                                 <TextBlock Grid.Column="1" x:Name="VaultwardenStatusText" TextWrapping="Wrap" FontSize="12"
-                                           Text="Kein Schlüssel geladen." />
+                                           VerticalAlignment="Center" Text="Kein Schlüssel geladen." />
+                                <Button Grid.Column="2" x:Name="GenerateUpdateKeyButton" Width="24" Height="24" Padding="0" Margin="8,0,0,0"
+                                        IsEnabled="False" ToolTip="Neuen Schlüssel erzeugen (archiviert den bisherigen)"
+                                        Click="GenerateUpdateKeyButton_Click">
+                                    <!-- Kreispfeil (Rotieren/Neu erzeugen) - ein großer Bogen + Pfeilspitze am
+                                         offenen Ende, gleicher Abstraktionsgrad wie die übrigen handgezeichneten
+                                         Icons hier (Zahnrad, Auge, Würfel, Kopieren). -->
+                                    <Grid Width="14" Height="14">
+                                        <Path Stroke="{StaticResource TextPrimaryBrush}" StrokeThickness="1.4">
+                                            <Path.Data>
+                                                <PathGeometry>
+                                                    <PathFigure StartPoint="12.5,4.2" IsClosed="False">
+                                                        <ArcSegment Point="4.2,11.5" Size="5.5,5.5" SweepDirection="Counterclockwise" IsLargeArc="True" />
+                                                    </PathFigure>
+                                                </PathGeometry>
+                                            </Path.Data>
+                                        </Path>
+                                        <Polygon Fill="{StaticResource TextPrimaryBrush}" Points="12.5,1.6 15,4.6 10.8,5.4" />
+                                    </Grid>
+                                </Button>
                             </Grid>
 
-                            <Button x:Name="GenerateUpdateKeyButton" Content="Neuen Schlüssel erzeugen" HorizontalAlignment="Left"
-                                    Padding="14,7" IsEnabled="False" Click="GenerateUpdateKeyButton_Click" />
+                            <!-- Test-Schlüssel: gleiches Muster wie oben, eigener Notizname/eigenes Feld -
+                                 nur für Test-Installer-Builds genutzt (siehe TestInstallerCheckBox links). -->
+                            <Grid Margin="0,0,0,10">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <Grid Grid.Column="0" Width="18" Height="18" Margin="0,0,8,0" VerticalAlignment="Top">
+                                    <Grid x:Name="TestKeyPresentIcon" Visibility="Collapsed">
+                                        <Ellipse Width="7" Height="7" Stroke="{StaticResource SuccessBrush}" StrokeThickness="1.6"
+                                                 HorizontalAlignment="Left" VerticalAlignment="Center" />
+                                        <Line X1="6" Y1="8" X2="15" Y2="8" Stroke="{StaticResource SuccessBrush}" StrokeThickness="1.6" />
+                                        <Line X1="11" Y1="8" X2="11" Y2="12" Stroke="{StaticResource SuccessBrush}" StrokeThickness="1.6" />
+                                        <Line X1="14" Y1="8" X2="14" Y2="11" Stroke="{StaticResource SuccessBrush}" StrokeThickness="1.6" />
+                                    </Grid>
+                                    <Grid x:Name="TestKeyMissingIcon" Visibility="Collapsed">
+                                        <Ellipse Width="7" Height="7" Stroke="{StaticResource DangerBrush}" StrokeThickness="1.6"
+                                                 HorizontalAlignment="Left" VerticalAlignment="Center" />
+                                        <Line X1="6" Y1="8" X2="15" Y2="8" Stroke="{StaticResource DangerBrush}" StrokeThickness="1.6" />
+                                        <Line X1="11" Y1="8" X2="11" Y2="12" Stroke="{StaticResource DangerBrush}" StrokeThickness="1.6" />
+                                        <Line X1="14" Y1="8" X2="14" Y2="11" Stroke="{StaticResource DangerBrush}" StrokeThickness="1.6" />
+                                    </Grid>
+                                </Grid>
+                                <TextBlock Grid.Column="1" x:Name="VaultwardenTestStatusText" TextWrapping="Wrap" FontSize="12"
+                                           VerticalAlignment="Center" Text="Kein Test-Key geladen." />
+                                <Button Grid.Column="2" x:Name="GenerateTestUpdateKeyButton" Width="24" Height="24" Padding="0" Margin="8,0,0,0"
+                                        IsEnabled="False" ToolTip="Neuen Test-Key erzeugen (archiviert den bisherigen)"
+                                        Click="GenerateTestUpdateKeyButton_Click">
+                                    <Grid Width="14" Height="14">
+                                        <Path Stroke="{StaticResource TextPrimaryBrush}" StrokeThickness="1.4">
+                                            <Path.Data>
+                                                <PathGeometry>
+                                                    <PathFigure StartPoint="12.5,4.2" IsClosed="False">
+                                                        <ArcSegment Point="4.2,11.5" Size="5.5,5.5" SweepDirection="Counterclockwise" IsLargeArc="True" />
+                                                    </PathFigure>
+                                                </PathGeometry>
+                                            </Path.Data>
+                                        </Path>
+                                        <Polygon Fill="{StaticResource TextPrimaryBrush}" Points="12.5,1.6 15,4.6 10.8,5.4" />
+                                    </Grid>
+                                </Button>
+                            </Grid>
                         </StackPanel>
                     </StackPanel>
                 </Border>

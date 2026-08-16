@@ -31,6 +31,21 @@ public static class UpdateSigningOperations
     }
 
     /// <summary>
+    /// Leitet den öffentlichen Schlüssel aus einem vorhandenen privaten Ed25519-Schlüssel ab
+    /// (deterministische Eigenschaft von Ed25519 - der öffentliche Teil muss nie separat
+    /// aufbewahrt werden). Nutzerwunsch 16.08.2026 ("separater Test-Key für Test-Installer"):
+    /// Install-Creator hält in Vaultwarden nur die privaten Schlüssel - beim Bauen eines
+    /// Installers wird hierüber der zum jeweils gewählten (Test- oder Produktiv-)Schlüssel
+    /// passende öffentliche Schlüssel neu berechnet und in deployment.json eingebettet, statt
+    /// ihn zusätzlich irgendwo vorzuhalten.
+    /// </summary>
+    public static byte[] DerivePublicKey(byte[] privateKeyBytes)
+    {
+        var privateKey = new Ed25519PrivateKeyParameters(privateKeyBytes, 0);
+        return privateKey.GeneratePublicKey().GetEncoded();
+    }
+
+    /// <summary>
     /// Signiert <paramref name="payload"/> (SHA-256 + Ed25519) und liefert das fertige
     /// Manifest-Objekt zum Serialisieren - Format identisch zu dem, was
     /// <see cref="UpdatePackageVerifier"/> (HaelpMi.Core) und <c>UpdateSeedImporter</c> erwarten.

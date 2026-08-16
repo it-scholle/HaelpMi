@@ -45,4 +45,19 @@ public sealed class DeploymentInfo
     /// SecureEnvelopeCodec.Seal/TryOpen), kein Fehler.
     /// </summary>
     public string? GroupKeyBase64 { get; set; }
+
+    /// <summary>
+    /// Öffentlicher Ed25519-Schlüssel (Base64) zur Update-Signaturprüfung DIESER
+    /// Installation - vom Install-Creator aus genau dem privaten Schlüssel abgeleitet
+    /// (<see cref="Updates.UpdateSignaturePublicKey"/> bleibt der kompilierte Fallback für
+    /// alte Installer-Stände ohne dieses Feld), mit dem der eingebettete Startpaket-
+    /// signiert wurde (Nutzerwunsch 16.08.2026, "separater Test-Key für Test-Installer"):
+    /// Test-Installer-Builds bekommen hier den öffentlichen Teil des Test-Schlüssels,
+    /// Produktiv-Installer den des Produktiv-Schlüssels - jede Installation kennt und
+    /// vertraut dadurch ausschließlich dem für sie relevanten Schlüssel, Test- und
+    /// Produktiv-Kreise können sich beim Signaturcheck nie gegenseitig beeinflussen.
+    /// Nullable/leer bei alten Installer-Ständen aus der Zeit vor diesem Feld - dann gilt
+    /// weiterhin der kompilierte Fallback.
+    /// </summary>
+    public string? UpdatePublicKeyBase64 { get; set; }
 }

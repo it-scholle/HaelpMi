@@ -27,11 +27,13 @@ public static class UpdateSeedImporter
     private const string SeedFolderName = "update-seed";
 
     /// <summary>
-    /// <paramref name="seedDirectoryOverride"/> und <paramref name="publicKeyOverride"/>
-    /// sind nur für Tests gedacht (gleiches Muster wie die tcpPort-Overrides der
-    /// Netzwerk-Services bzw. der 3-Parameter-Overload von <see cref="UpdatePackageVerifier"/>)
-    /// - im echten Betrieb liegt der Ordner immer neben der laufenden exe und wird immer
-    /// gegen den eingebetteten Produktionsschlüssel geprüft.
+    /// <paramref name="seedDirectoryOverride"/> ist nur für Tests gedacht (gleiches Muster
+    /// wie die tcpPort-Overrides der Netzwerk-Services) - im echten Betrieb liegt der Ordner
+    /// immer neben der laufenden exe. <paramref name="publicKeyOverride"/> wird seit
+    /// 16.08.2026 auch produktiv genutzt (App.xaml.cs übergibt hier
+    /// <see cref="Models.DeploymentInfo.UpdatePublicKeyBase64"/> dieser Installation, sofern
+    /// vorhanden) - ohne Angabe (Tests mit einem Wegwerf-Schlüsselpaar, oder alte
+    /// Installer-Stände ohne das Feld) gilt weiterhin der eingebettete Produktionsschlüssel.
     /// </summary>
     public static bool TryImport(
         UpdatePackageCacheStore cacheStore,

@@ -359,12 +359,21 @@ public partial class App : System.Windows.Application
         _discovery.PeerConfigVersionObserved += _configSync.OnPeerConfigVersionObserved;
 
         var cacheStore = new UpdatePackageCacheStore();
+        // Nutzerwunsch 16.08.2026 ("separater Test-Key für Test-Installer"): diese
+        // Installation vertraut nur dem öffentlichen Schlüssel, den der Install-Creator ihr
+        // selbst mitgegeben hat (deployment.json) - Test- und Produktiv-Installationen
+        // können sich dadurch beim Signaturcheck nie gegenseitig beeinflussen. Fehlt das
+        // Feld (alter Installer-Stand), bleibt es beim kompilierten Fallback (null hier).
+        var updatePublicKeyOverride = string.IsNullOrEmpty(_deployment.UpdatePublicKeyBase64)
+            ? null
+            : Convert.FromBase64String(_deployment.UpdatePublicKeyBase64);
+
         // Nutzerwunsch 09.08.2026: "vollautomatisch, sobald der Admin sich selbst aktualisiert
         // hat" - der Installer bringt dafür ein signiertes update-seed\ mit (siehe
         // UpdateSeedImporter). Vor dem Start von _updateDistribution, damit ein frisch
         // importiertes Paket ab der allerersten Anfrage eines Peers bedient werden kann.
-        UpdateSeedImporter.TryImport(cacheStore, LiveIdentityFactory.CurrentProgramVersion, _auditLog.Append);
-        _updateDistribution = new UpdatePackageDistributionService(BuildIdentity, cacheStore, _auditLog.Append);
+        UpdateSeedImporter.TryImport(cacheStore, LiveIdentityFactory.CurrentProgramVersion, _auditLog.Append, publicKeyOverride: updatePublicKeyOverride);
+        _updateDistribution = new UpdatePackageDistributionService(BuildIdentity, cacheStore, _auditLog.Append, updatePublicKeyOverride);
         _updateDistribution.Start();
 
         var orchestrator = new UpdateOrchestrator(

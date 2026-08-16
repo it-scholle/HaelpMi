@@ -19,6 +19,12 @@ namespace HaelpMi.InstallCreator;
 /// unter einen abgeleiteten "-deprecated-&lt;Zeitstempel&gt;"-Namen statt gelöscht/überschrieben
 /// zu werden - weiterhin gibt es aber nur einen aktiven Schlüssel unter dem Standardnamen.
 ///
+/// Seit 16.08.2026 (Nutzerwunsch "separater Test-Key für Test-Installer"): die Methoden
+/// unten nehmen den Notiznamen als Parameter statt ihn selbst fest zu verdrahten - "global,
+/// nur ein Schlüssel" gilt weiterhin PRO Notizname, es gibt jetzt aber zwei parallele, gleich
+/// gehandhabte Notizen (Produktiv/<see cref="UpdatePrivateKeyItemName"/> und
+/// Test/<see cref="UpdateTestPrivateKeyItemName"/>), keine Vermischung der beiden.
+///
 /// Passwort/Session-Key laufen ausschließlich über ProcessStartInfo.EnvironmentVariables des
 /// jeweils einen bw-Kindprozesses - nie eine dauerhafte Umgebungsvariable, nie geloggt, nie als
 /// Kommandozeilen-Argument (das würde in der Prozessliste anderer Nutzer auftauchen).
@@ -26,6 +32,10 @@ namespace HaelpMi.InstallCreator;
 public sealed class VaultwardenClient
 {
     public const string UpdatePrivateKeyItemName = "HälpMi-Update-PrivateKey";
+
+    /// <summary>Nur für Test-Installer-Builds genutzt (siehe TestInstallerCheckBox in
+    /// MainWindow.xaml) - ansonsten identisch gehandhabt wie <see cref="UpdatePrivateKeyItemName"/>.</summary>
+    public const string UpdateTestPrivateKeyItemName = "HälpMi-Update-PrivateKey-TestKey";
 
     private readonly string _bwPath;
 
@@ -117,9 +127,10 @@ public sealed class VaultwardenClient
         }
     }
 
-    /// <summary>Liest den Inhalt der festen Update-Schlüssel-Notiz (Base64-Text, gleiches
-    /// Format wie UpdateSigner "genkey" es in privateKeyOut.txt schreibt).</summary>
-    public async Task<string?> TryGetUpdatePrivateKeyAsync(string sessionKey)
+    /// <summary>Liest den Inhalt der angegebenen Update-Schlüssel-Notiz (Base64-Text, gleiches
+    /// Format wie UpdateSigner "genkey" es in privateKeyOut.txt schreibt). <paramref name="itemName"/>
+    /// ist <see cref="UpdatePrivateKeyItemName"/> oder <see cref="UpdateTestPrivateKeyItemName"/>.</summary>
+    public async Task<string?> TryGetUpdatePrivateKeyAsync(string sessionKey, string itemName)
     {
         var env = new Dictionary<string, string> { ["BW_SESSION"] = sessionKey };
         var syncResult = await RunAsync(new[] { "sync" }, env);
@@ -128,7 +139,7 @@ public sealed class VaultwardenClient
             return null; // best-effort - falls sync fehlschlägt, versuchen wir trotzdem mit dem lokalen Cache-Stand
         }
 
-        var result = await RunAsync(new[] { "get", "notes", UpdatePrivateKeyItemName }, env);
+        var result = await RunAsync(new[] { "get", "notes", itemName }, env);
         if (result.ExitCode != 0)
         {
             return null; // nicht gefunden - Aufrufer bietet dann "Neuen Schlüssel erzeugen" an
@@ -138,10 +149,10 @@ public sealed class VaultwardenClient
         return string.IsNullOrEmpty(content) ? null : content;
     }
 
-    /// <summary>Legt die feste Update-Schlüssel-Notiz neu an. Aufrufer muss vorher selbst
+    /// <summary>Legt die angegebene Update-Schlüssel-Notiz neu an. Aufrufer muss vorher selbst
     /// prüfen/warnen, falls schon eine existiert (siehe TryGetUpdatePrivateKeyAsync) - diese
     /// Methode überschreibt bewusst kommentarlos, das Abfangen ist UI-Verantwortung.</summary>
-    public async Task<bool> CreateUpdatePrivateKeyNoteAsync(string sessionKey, string privateKeyBase64)
+    public async Task<bool> CreateUpdatePrivateKeyNoteAsync(string sessionKey, string itemName, string privateKeyBase64)
     {
         // Bitwardens "encode"-Schritt (JSON -> Base64) ist Teil des offiziellen CLI-Workflows
         // fürs Anlegen von Items ("bw encode | bw create item") - vermeidet Escaping-Ärger mit
@@ -152,7 +163,7 @@ public sealed class VaultwardenClient
             organizationId = (string?)null,
             folderId = (string?)null,
             type = 2, // SecureNote
-            name = UpdatePrivateKeyItemName,
+            name = itemName,
             notes = privateKeyBase64,
             secureNote = new { type = 0 },
         });
@@ -173,12 +184,12 @@ public sealed class VaultwardenClient
     /// CreateUpdatePrivateKeyNoteAsync-Aufruf überschreiben zu lassen (Nutzerwunsch
     /// 15.08.2026: "ich möchte nicht, dass beim Neuerstellen der alte überschrieben wird" -
     /// revisionssicher in Vaultwarden nachvollziehbar, ohne dass Install-Creator selbst einen
-    /// Schlüssel-Browser bauen muss). Existiert keine Notiz unter dem Standardnamen, ist das
-    /// kein Fehler (Ok=true, DeprecatedName=null) - dann gibt es schlicht nichts zu archivieren.</summary>
-    public async Task<ArchiveResult> ArchiveExistingKeyIfPresentAsync(string sessionKey)
+    /// Schlüssel-Browser bauen muss). Existiert keine Notiz unter dem angegebenen Namen, ist
+    /// das kein Fehler (Ok=true, DeprecatedName=null) - dann gibt es schlicht nichts zu archivieren.</summary>
+    public async Task<ArchiveResult> ArchiveExistingKeyIfPresentAsync(string sessionKey, string itemName)
     {
-        var deprecatedName = $"{UpdatePrivateKeyItemName}-deprecated-{DateTime.UtcNow:yyyy-MM-dd'T'HH-mm-ss'Z'}";
-        var outcome = await RenameItemIfPresentAsync(sessionKey, UpdatePrivateKeyItemName, deprecatedName);
+        var deprecatedName = $"{itemName}-deprecated-{DateTime.UtcNow:yyyy-MM-dd'T'HH-mm-ss'Z'}";
+        var outcome = await RenameItemIfPresentAsync(sessionKey, itemName, deprecatedName);
         if (!outcome.Found)
         {
             return new ArchiveResult(true, null);
@@ -187,12 +198,12 @@ public sealed class VaultwardenClient
     }
 
     /// <summary>Best-effort-Rollback für den Fall, dass nach erfolgreichem Archivieren das
-    /// Anlegen des neuen Schlüssels fehlschlägt - benennt die archivierte Notiz zurück auf den
-    /// Standardnamen, damit nicht am Ende gar kein gültiger Schlüssel mehr unter dem
-    /// Standardnamen liegt.</summary>
-    public async Task<bool> RestoreArchivedKeyAsync(string sessionKey, string deprecatedName)
+    /// Anlegen des neuen Schlüssels fehlschlägt - benennt die archivierte Notiz zurück auf
+    /// <paramref name="itemName"/>, damit nicht am Ende gar kein gültiger Schlüssel mehr unter
+    /// dem Standardnamen liegt.</summary>
+    public async Task<bool> RestoreArchivedKeyAsync(string sessionKey, string deprecatedName, string itemName)
     {
-        var outcome = await RenameItemIfPresentAsync(sessionKey, deprecatedName, UpdatePrivateKeyItemName);
+        var outcome = await RenameItemIfPresentAsync(sessionKey, deprecatedName, itemName);
         return outcome.Found && outcome.Ok;
     }
 
