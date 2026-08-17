@@ -326,7 +326,9 @@ public class AuditSyncTests
         log.Append("test-ereignis");
         var service = new AuditSyncService(() => MakeIdentity(customerGroupId, ownDeviceId), log);
 
-        var adminPeer = new DeviceEntry { DeviceId = Guid.NewGuid(), Role = Role.Admin, IpAddress = "127.0.0.1", TcpPort = port };
+        // Admin-Rollen-Kryptoverifikation (Nutzerwunsch 17.08.2026): Push-Ziele brauchen
+        // seitdem zusätzlich AdminVerified, nicht nur die Role-Selbstauskunft.
+        var adminPeer = new DeviceEntry { DeviceId = Guid.NewGuid(), Role = Role.Admin, AdminVerified = true, IpAddress = "127.0.0.1", TcpPort = port };
         var userPeer = new DeviceEntry { DeviceId = Guid.NewGuid(), Role = Role.User, IpAddress = "127.0.0.1", TcpPort = port };
 
         await service.PushPendingAsync(new[] { adminPeer, userPeer }, pushPort: port);
@@ -360,7 +362,7 @@ public class AuditSyncTests
             senderLog.Append("alarm beendet");
             var senderService = new AuditSyncService(() => MakeIdentity(customerGroupId, senderDeviceId), senderLog);
 
-            var adminPeer = new DeviceEntry { DeviceId = adminDeviceId, Role = Role.Admin, IpAddress = "127.0.0.1", TcpPort = pushPort };
+            var adminPeer = new DeviceEntry { DeviceId = adminDeviceId, Role = Role.Admin, AdminVerified = true, IpAddress = "127.0.0.1", TcpPort = pushPort };
 
             await senderService.PushPendingAsync(new[] { adminPeer }, pushPort: pushPort);
 
@@ -436,6 +438,13 @@ public class AuditSyncTests
 
         new AuditIngestStore().Append(originDeviceId, MakeChain(originDeviceId, 5));
 
+        var requesterDeviceId = Guid.NewGuid();
+        // Admin-Rollen-Kryptoverifikation (Nutzerwunsch 17.08.2026): HandleIncomingDigestAsync
+        // beantwortet eine Digest-Anfrage nur noch, wenn der Requester in der eigenen
+        // Geräteliste als Role.Admin+AdminVerified bekannt ist (echter Produktivpfad: das
+        // wäre bei direktem Boot-Call-Kontakt schon geschehen, siehe DiscoveryService).
+        new DeviceStore().Save(new List<DeviceEntry> { new() { DeviceId = requesterDeviceId, Role = Role.Admin, AdminVerified = true } });
+
         var service = new AuditSyncService(() => MakeIdentity(customerGroupId, responderDeviceId), new AuditLog(() => responderDeviceId));
         service.StartListening(pushPort, meshPort);
 
@@ -445,7 +454,7 @@ public class AuditSyncTests
             await client.ConnectAsync(IPAddress.Loopback, meshPort);
             await using var stream = client.GetStream();
 
-            var request = new AuditDigestRequestMessage(customerGroupId, Guid.NewGuid(), new Dictionary<Guid, long> { [originDeviceId] = 2 });
+            var request = new AuditDigestRequestMessage(customerGroupId, requesterDeviceId, new Dictionary<Guid, long> { [originDeviceId] = 2 });
             var bytes = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(request, WireOptions) + "\n");
             await stream.WriteAsync(bytes);
             await stream.FlushAsync();
@@ -458,6 +467,50 @@ public class AuditSyncTests
             Assert.NotNull(response);
             Assert.Equal(5, response!.ResponderHighWaterMarks[originDeviceId]);
             Assert.Equal(new long[] { 3, 4, 5 }, response.EntriesForRequester.Select(e => e.Seq)); // Requester hatte nur bis Seq 2
+        }
+        finally
+        {
+            await service.DisposeAsync();
+        }
+    }
+
+    [Fact]
+    public async Task AuditSyncService_HandleIncomingDigest_IgnoresRequest_FromNotAdminVerifiedRequester()
+    {
+        // Admin-Rollen-Kryptoverifikation (Nutzerwunsch 17.08.2026): ohne diese Prüfung
+        // könnte jedes Gerät der Kundengruppe die gesamten gesammelten Audit-Daten abgreifen.
+        using var appData = new TestAppDataScope();
+        using var sharedLog = SharedLogPaths.ForceLocalFallbackForTests();
+        var pushPort = GetFreeTcpPort();
+        var meshPort = GetFreeTcpPort();
+        var customerGroupId = Guid.NewGuid();
+        var responderDeviceId = Guid.NewGuid();
+        var originDeviceId = Guid.NewGuid();
+
+        new AuditIngestStore().Append(originDeviceId, MakeChain(originDeviceId, 5));
+
+        var requesterDeviceId = Guid.NewGuid();
+        // Bewusst KEIN DeviceStore-Eintrag für requesterDeviceId - unbekannter/nicht
+        // verifizierter Requester, genau die Migrationslücke bzw. der Angriffsfall.
+
+        var service = new AuditSyncService(() => MakeIdentity(customerGroupId, responderDeviceId), new AuditLog(() => responderDeviceId));
+        service.StartListening(pushPort, meshPort);
+
+        try
+        {
+            using var client = new TcpClient();
+            await client.ConnectAsync(IPAddress.Loopback, meshPort);
+            await using var stream = client.GetStream();
+
+            var request = new AuditDigestRequestMessage(customerGroupId, requesterDeviceId, new Dictionary<Guid, long> { [originDeviceId] = 2 });
+            var bytes = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(request, WireOptions) + "\n");
+            await stream.WriteAsync(bytes);
+            await stream.FlushAsync();
+
+            // Stiller Drop statt Antwort - gleiche Philosophie wie CustomerGroupFilter.
+            using var readCts = new CancellationTokenSource(TestTimeout);
+            var line = await BoundedLineReader.ReadLineAsync(stream, readCts.Token);
+            Assert.Null(line);
         }
         finally
         {
@@ -564,6 +617,7 @@ public class AuditSyncTests
             {
                 DeviceId = adminDeviceId,
                 Role = Role.Admin,
+                AdminVerified = true,
                 IpAddress = "127.0.0.1",
                 TcpPort = pushPort,
                 ProtocolVersion = AppConstants.CurrentProtocolVersion,

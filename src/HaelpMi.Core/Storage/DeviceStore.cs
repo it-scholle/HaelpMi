@@ -9,13 +9,18 @@ namespace HaelpMi.Core.Storage;
 /// gesehen hat) - bei direktem Kontakt bleibt es null, dort ist "jetzt" (der seenAtUtc-
 /// Parameter von Upsert) weiterhin die genaueste verfügbare Angabe.
 ///
-/// <see cref="ObservedProtocolVersion"/>/<see cref="PinnedDeviceIdentityPublicKeyBase64"/>
-/// (LAN-Verschlüsselung, siehe CLAUDE.md "Lizenz &amp; Secrets"): <c>null</c> = "nicht
-/// anfassen" - beide werden ausschließlich bei direktem Boot-Call-Kontakt explizit gesetzt
-/// (siehe DiscoveryService.HandleDatagramAsync), nie aus dem Gossip-Pfad übernommen,
-/// gleiches Prinzip wie beim Admin-Rollen-Nachweis. Ein gossip-gelernter Eintrag bleibt
-/// deshalb bis zum ersten eigenen direkten Kontakt konsequent "nicht verschlüsselungsfähig"
-/// (sicherer Standardfall, siehe PeerCryptoCapability).
+/// <see cref="ObservedProtocolVersion"/>/<see cref="PinnedDeviceIdentityPublicKeyBase64"/>/
+/// <see cref="AdminVerified"/> (LAN-Verschlüsselung bzw. Admin-Rollen-Kryptoverifikation,
+/// siehe CLAUDE.md "Lizenz &amp; Secrets"): <c>null</c> = "nicht anfassen" - alle drei
+/// werden ausschließlich bei direktem Boot-Call-Kontakt explizit gesetzt (siehe
+/// DiscoveryService.HandleDatagramAsync), nie aus dem Gossip-Pfad übernommen. Ein
+/// gossip-gelernter Eintrag bleibt deshalb bis zum ersten eigenen direkten Kontakt
+/// konsequent "nicht verschlüsselungsfähig"/"nicht Admin-verifiziert" (sicherer
+/// Standardfall, siehe PeerCryptoCapability). Anders als die beiden anderen Felder ist
+/// <see cref="AdminVerified"/> bei direktem Kontakt IMMER explizit gesetzt (auch
+/// <c>false</c>, nie <c>null</c>) - ein früher verifizierter, jetzt nicht mehr
+/// verifizierender Peer (z. B. Rollen-Downgrade) muss den alten Zustand tatsächlich
+/// verlieren, siehe Upsert unten.
 /// </summary>
 public sealed record DeviceUpsertInfo(
     string ComputerName,
@@ -30,9 +35,12 @@ public sealed record DeviceUpsertInfo(
     int? ObservedProtocolVersion = null,
     string? PinnedDeviceIdentityPublicKeyBase64 = null,
     // Wellen-Rollout (Nutzerwunsch 16.08.2026, siehe DeviceEntry.LastKnownProgramVersion):
-    // Default leer statt Pflichtfeld, damit die drei bestehenden AuditSyncTests-Aufrufe
-    // (nur direkter Kontakt, kein Interesse an der Programmversion) unverändert bleiben.
-    string ProgramVersion = "");
+    // Default leer statt Pflichtfeld, damit bestehende AuditSyncTests-Aufrufe (nur
+    // direkter Kontakt, kein Interesse an der Programmversion) unverändert bleiben.
+    string ProgramVersion = "",
+    // Admin-Rollen-Kryptoverifikation (Nutzerwunsch 17.08.2026): null = Gossip-Pfad (siehe
+    // Klassendoku oben), aus demselben Kompatibilitätsgrund default null statt Pflichtfeld.
+    bool? AdminVerified = null);
 
 /// <summary>Loads/saves the locally known list of other devices (FR-18, 5.4).</summary>
 public sealed class DeviceStore
@@ -54,6 +62,7 @@ public sealed class DeviceStore
         var lastSeenUtc = ResolveLastSeenUtc(existing?.LastSeenUtc, info, seenAtUtc);
         var protocolVersion = info.ObservedProtocolVersion ?? existing?.ProtocolVersion;
         var pinnedKey = info.PinnedDeviceIdentityPublicKeyBase64 ?? existing?.PinnedDeviceIdentityPublicKeyBase64;
+        var adminVerified = info.AdminVerified ?? existing?.AdminVerified ?? false;
 
         if (existing is null)
         {
@@ -73,6 +82,7 @@ public sealed class DeviceStore
                 ProtocolVersion = protocolVersion,
                 PinnedDeviceIdentityPublicKeyBase64 = pinnedKey,
                 LastKnownProgramVersion = info.ProgramVersion,
+                AdminVerified = adminVerified,
             });
         }
         else
@@ -88,6 +98,7 @@ public sealed class DeviceStore
             existing.LastSeenUtc = lastSeenUtc;
             existing.ProtocolVersion = protocolVersion;
             existing.PinnedDeviceIdentityPublicKeyBase64 = pinnedKey;
+            existing.AdminVerified = adminVerified;
             // Favorite/Notified/Note/IsNew are local decisions and are deliberately left untouched.
             // Leeres info.ProgramVersion (z. B. ein Aufrufer, der das Feld gar nicht kennt)
             // überschreibt einen schon bekannten Wert nicht rückwärts mit "unbekannt".

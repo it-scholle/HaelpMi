@@ -12,6 +12,7 @@ using HaelpMi.Core.Licensing;
 using HaelpMi.Core.Models;
 using HaelpMi.Core.Networking;
 using HaelpMi.Core.Runtime;
+using HaelpMi.Core.Security;
 using HaelpMi.Core.Storage;
 using HaelpMi.Core.Updates;
 
@@ -63,6 +64,7 @@ public partial class App : System.Windows.Application
     private AuditLog _auditLog = null!;
 
     private AuditSyncService? _auditSyncService;
+    private AdminRoleKeySyncService? _adminRoleKeySync;
 
     private Mutex? _singleInstanceMutex;
     private bool _ownsSingleInstanceMutex;
@@ -270,6 +272,15 @@ public partial class App : System.Windows.Application
     // kleine JSON-Datei, kein spürbarer Zusatzaufwand pro Boot-Call/Announce.
     private LiveIdentity BuildIdentity() => LiveIdentityFactory.Create(_settingsStore.Load(), _deployment);
 
+    /// <summary>
+    /// Admin-Rollen-Kryptoverifikation (Nutzerwunsch 17.08.2026): effektiver eigener
+    /// privater Schlüssel - Installer (deployment.json) hat immer Vorrang vor dem
+    /// laufzeit-eigenen Migrationspfad (AdminRoleTrustStore, siehe dortige Klassendoku).
+    /// Von DiscoveryService (Signieren des eigenen Boot-Calls) UND AdminRoleKeySyncService
+    /// (Anbieten des eigenen Schlüssels an einen bedürftigen Admin-Peer) genutzt.
+    /// </summary>
+    private string? AdminRolePrivateKeyProvider() => _deployment.AdminRolePrivateKeyBase64 ?? AdminRoleTrustStore.Load().OwnPrivateKeyBase64;
+
     private void StartBackgroundServices()
     {
         // Bugfix 06.08.2026 (Fehlerbericht "Dashboard startet nicht" + Crash-Log-Fund:
@@ -363,7 +374,23 @@ public partial class App : System.Windows.Application
         // erst ALLE Discovery-Event-Handler verdrahten, dann StartListening()/AnnounceAsync()
         // ganz am Ende dieses Blocks.
         _discovery = new DiscoveryService(BuildIdentity, _auditLog.Append,
-            bridgeSeedAddressProvider: () => _sharedConfigStore.LoadOrCreate().BridgeSeedAddresses);
+            bridgeSeedAddressProvider: () => _sharedConfigStore.LoadOrCreate().BridgeSeedAddresses,
+            adminRolePrivateKeyProvider: AdminRolePrivateKeyProvider);
+
+        // Admin-Rollen-Kryptoverifikation, Migrationspfad (Nutzerwunsch 17.08.2026): läuft
+        // wie AuditSyncService auf jedem Gerät (Sendeseite/Anfragen an Peers ist harmlos für
+        // ein User-Gerät, da AdminPeerContactObserved dort ohnehin nie feuert), Empfangsseite
+        // nur bei Role.Admin gestartet.
+        _adminRoleKeySync = new AdminRoleKeySyncService(
+            BuildIdentity,
+            AdminRolePrivateKeyProvider,
+            isOwnKeyReplaceableProvider: () => string.IsNullOrEmpty(_deployment.AdminRolePublicKeyBase64),
+            groupKeyProvider: () => _deployment.GroupKeyBase64,
+            audit: _auditLog.Append);
+        if (_deployment.Role == Role.Admin)
+        {
+            _adminRoleKeySync.Start();
+        }
 
         _listener = new AlarmTcpListener(BuildIdentity, _auditLog.Append, groupKeyProvider: () => _deployment.GroupKeyBase64);
         _listener.AlarmReceived += OnAlarmReceived;
@@ -405,6 +432,11 @@ public partial class App : System.Windows.Application
         // sind, ein Anhängen auf einem User-Gerät ist also harmlos (Handler wird nie
         // aufgerufen), keine zusätzliche Rollenprüfung hier nötig.
         _discovery.AdminPeerContactObserved += _auditSyncService.OnAdminPeerContactObserved;
+
+        // Admin-Rollen-Kryptoverifikation, Migrationspfad (Nutzerwunsch 17.08.2026):
+        // gleicher Anschlusspunkt, gleiche Begründung wie beim Audit-Mesh-Abgleich direkt
+        // darüber - siehe AdminRoleKeySyncService-Klassendoku für den Ablauf.
+        _discovery.AdminPeerContactObserved += _adminRoleKeySync.OnAdminPeerContactObserved;
 
         _discovery.StartListening();
         _ = _discovery.AnnounceAsync();
@@ -716,6 +748,7 @@ public partial class App : System.Windows.Application
         _ = _configSync?.DisposeAsync();
         _ = _updateDistribution?.DisposeAsync();
         _ = _auditSyncService?.DisposeAsync();
+        _ = _adminRoleKeySync?.DisposeAsync();
         _ = _discovery?.DisposeAsync();
         _ = _ipcServer?.DisposeAsync();
 

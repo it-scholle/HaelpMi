@@ -404,7 +404,7 @@ public partial class App : System.Windows.Application
 
         _configSync ??= new ConfigSyncService(IdentityProvider, deviceStore.Load, groupKeyProvider: () => deployment.GroupKeyBase64);
         _configSync.Start();
-        _editLock ??= new EditLockService(IdentityProvider);
+        _editLock ??= new EditLockService(IdentityProvider, deviceListProvider: deviceStore.Load);
         _editLock.Start();
 
         var context = new AdminDashboardContext

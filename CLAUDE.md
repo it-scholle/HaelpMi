@@ -58,11 +58,30 @@ stillschweigend zu ignorieren.
   dazu einen deutlichen Entwurfs-Hinweis. **Vor einem echten Release weiterhin offen:** schriftliche
   Bestätigung der Stadt nachholen und den Lizenztext von einer rechtskundigen Person prüfen lassen.
 - `.gitignore` gegen Secret-Dateimuster von Anfang an.
-- Drei getrennte kryptografische Schlüsselpaare, niemals verwechseln oder zusammenlegen:
+- Vier getrennte kryptografische Schlüsselpaare, niemals verwechseln oder zusammenlegen:
   1. Kunden-Lizenzsignatur (Ed25519) — Soft-Expiry, kein Hard-Lock.
   2. Update-Signatur (Ed25519, **separater** Schlüssel) — nur signierte Programm-Updates werden
      von einem Client angenommen und weiterverteilt.
   3. Optional pro Kunde: Installer-Passwort (kein Schlüsselpaar, siehe Install-Creator).
+  4. **Admin-Rollen-Signatur (Ed25519, seit 17.08.2026)** — **pro Kunden-Gruppe**, nicht
+     global (bewusster Unterschied zu Schlüssel 2): Install-Creator erzeugt sie bei jeder
+     Neuinstallation, direkt neben der `CustomerGroupId`. Öffentlicher Schlüssel in beiden
+     Installer-Varianten, privater nur im Admin-Installer. Macht `Role.Admin` in
+     Boot-Call-Nachrichten kryptografisch nachprüfbar (`AdminRoleSigner`/`AdminRoleVerifier`
+     in `HaelpMi.Core/Security`, `DeviceEntry.AdminVerified`) statt einer reinen
+     unauthentifizierten Selbstauskunft — Grundlage für die Antwort auf EditLock-Anfragen,
+     die Herkunftsprüfung bei Config-Sync und die Audit-Sync-Push-Ziele/Digest-Antworten.
+     Migrationspfad für bereits installierte Admin-Geräte (`deployment.json` wird nie vom
+     laufenden Programm neu geschrieben, ein reines Programm-Update liefert diesen
+     Schlüssel also nicht automatisch nach): `AdminRoleTrustStore` erzeugt auf einem
+     Admin-Gerät ohne jeden Schlüssel selbst eines und verbreitet es danach automatisch
+     P2P an andere Admin-Geräte derselben Kundengruppe (`AdminRoleKeySyncService`, hängt am
+     ohnehin stattfindenden Boot-Call-Kontakt) — kein manueller Bootstrapper-Lauf pro
+     Bestandsgerät nötig, der private Schlüssel verlässt ein Gerät dabei ausschließlich
+     über einen SecureEnvelope-verschlüsselten Kanal. Restrisiko bewusst in Kauf genommen:
+     die allererste Schlüssel-Verbreitung in einem noch komplett schlüssellosen Kreis ist
+     Trust-on-First-Use, dieselbe Grenze, die für die Geräte-Identität (fünftes
+     Schlüsselpaar unten) bereits akzeptiert ist.
 - Nur die jeweiligen **öffentlichen** Schlüssel werden ins Repository/die Binary eingebettet.
   Private Schlüssel gehören nie ins Repo, nie ins Log, nie in eine Fehlermeldung.
 - **Aufbewahrung des privaten Update-Signaturschlüssels (seit 13.08.2026):** liegt verschlüsselt

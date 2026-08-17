@@ -21,12 +21,12 @@ namespace HaelpMi.Core.Networking;
 /// ein Admin eine Kopie hat (siehe AuditIngestStore), kann das Ursprungsgerät seine
 /// Historie nicht mehr unbemerkt umschreiben.
 ///
-/// Bewusst vertagter Punkt: <see cref="DeviceEntry.Role"/> ist weiterhin eine
-/// unauthentifizierte Selbstauskunft des Peers, genau wie bei EditLockService/
-/// ConfigSyncService - keine Regression durch diese Klasse, aber ein Gerät könnte sich im
-/// Boot-Call als Role.Admin ausgeben und würde hier als legitimes Push-Ziel akzeptiert.
-/// Sauber lösbar nur mit einem vierten (asymmetrischen) Schlüsselpaar, bewusst als eigener
-/// Folge-Task vorgemerkt (siehe Dokumente/infos-und-fragen.md), nicht Teil dieser Klasse.
+/// Admin-Rollen-Kryptoverifikation (Nutzerwunsch 17.08.2026, viertes Schlüsselpaar - siehe
+/// CLAUDE.md "Lizenz &amp; Secrets"): <see cref="DeviceEntry.Role"/> allein war früher eine
+/// unauthentifizierte Selbstauskunft des Peers - <see cref="PushPendingAsync"/> und
+/// <see cref="HandleIncomingDigestAsync"/> vertrauen seitdem zusätzlich
+/// <see cref="DeviceEntry.AdminVerified"/> (nur von DiscoveryService bei direktem,
+/// signaturgeprüftem Boot-Call-Kontakt gesetzt, siehe Security.AdminRoleVerifier).
 ///
 /// Empfangsseite (<see cref="StartListening"/>) darf nur gestartet werden, wenn das eigene
 /// Gerät Role.Admin ist - Gating liegt beim Aufrufer (HaelpMi.Agent/App.xaml.cs), nicht hier.
@@ -109,7 +109,7 @@ public sealed class AuditSyncService : IAsyncDisposable
     public async Task PushPendingAsync(IReadOnlyList<DeviceEntry> devices, CancellationToken ct = default, int? pushPort = null)
     {
         var identity = _identityProvider();
-        var adminPeers = devices.Where(d => d.Role == Role.Admin && d.DeviceId != identity.DeviceId).ToList();
+        var adminPeers = devices.Where(d => d.Role == Role.Admin && d.AdminVerified && d.DeviceId != identity.DeviceId).ToList();
         if (adminPeers.Count == 0)
         {
             return;
@@ -474,6 +474,19 @@ public sealed class AuditSyncService : IAsyncDisposable
             }
 
             if (request.RequesterDeviceId == Guid.Empty)
+            {
+                return;
+            }
+
+            // Admin-Rollen-Kryptoverifikation (Nutzerwunsch 17.08.2026): ohne diese Prüfung
+            // würde JEDES Gerät, das sich die Mühe macht, direkt auf diesen Port zu
+            // verbinden, die gesamten gesammelten Audit-Daten abgreifen können - eine
+            // Vertraulichkeitslücke, die über die reine Koordinationsfrage hinausgeht.
+            // Wiederverwendet dieselbe AdminVerified-Grundlage wie PushPendingAsync, keine
+            // eigene Signaturprüfung auf dieser Nachricht nötig.
+            var requesterIsVerifiedAdmin = _deviceStore.Load()
+                .Any(d => d.DeviceId == request.RequesterDeviceId && d.Role == Role.Admin && d.AdminVerified);
+            if (!requesterIsVerifiedAdmin)
             {
                 return;
             }

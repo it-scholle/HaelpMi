@@ -84,4 +84,16 @@ public sealed class DeviceEntry
     /// <c>UpdateOrchestrator.IsMyTurn</c>, der einzige Verwender.
     /// </summary>
     public string LastKnownProgramVersion { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Admin-Rollen-Kryptoverifikation (Nutzerwunsch 17.08.2026): nur <c>true</c>, wenn der
+    /// letzte DIREKTE Boot-Call-Kontakt mit diesem Gerät eine gültig signierte
+    /// Admin-Rollen-Behauptung trug (siehe Security.AdminRoleVerifier) - anders als
+    /// <see cref="Role"/> selbst (unauthentifizierte Selbstauskunft) ist das die
+    /// tatsächliche Vertrauensgrundlage für Netzwerk-Entscheidungen (EditLock-Antwort,
+    /// Config-Sync-Herkunft, Audit-Sync-Push-Ziele/Digest-Antworten). Wird nie über Gossip
+    /// gesetzt/zurückgesetzt - nur direkter Kontakt darf diesen Wert ändern, gleiches
+    /// Prinzip wie <see cref="ProtocolVersion"/>/<see cref="PinnedDeviceIdentityPublicKeyBase64"/>.
+    /// </summary>
+    public bool AdminVerified { get; set; }
 }

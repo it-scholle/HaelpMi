@@ -742,6 +742,12 @@ public partial class MainWindow : Window
         // erzeugt und über denselben Weg (deployment.json in beiden Installer-Varianten)
         // eingebettet - nie über das Netzwerk übertragen, nie hier geloggt.
         var groupKeyBase64 = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
+        // Admin-Rollen-Signatur (Nutzerwunsch 17.08.2026, viertes Schlüsselpaar, CLAUDE.md
+        // "Lizenz & Secrets"): pro Kunden-Gruppe neu, an derselben Stelle wie
+        // customerGroupId/groupKeyBase64 erzeugt (jeder Klick auf "Installer erstellen"
+        // mintet ohnehin eine komplett neue, unabhängige Kundengruppe - kein Rebuild-für-
+        // denselben-Kunden-Fall in diesem Tool, siehe customerGroupId-Kommentar oben).
+        var adminRoleKeyPair = AdminRoleKeyGenerator.GenerateKeyPair();
         var password = PasswordBox.Password;
         var isTestInstaller = TestInstallerCheckBox.IsChecked == true;
         var customerNameOrTestLabel = CustomerNameBox.Text.Trim();
@@ -749,7 +755,7 @@ public partial class MainWindow : Window
         SetBusy(true);
         try
         {
-            await BuildAdminInstallerAsync(customerGroupId, groupKeyBase64, isTestInstaller, password, customerNameOrTestLabel);
+            await BuildAdminInstallerAsync(customerGroupId, groupKeyBase64, adminRoleKeyPair, isTestInstaller, password, customerNameOrTestLabel);
         }
         catch (Exception ex)
         {
@@ -838,11 +844,14 @@ public partial class MainWindow : Window
 
     private void TestInstallerCheckBox_Click(object sender, RoutedEventArgs e) => UpdateBuildButtonsEnabledState();
 
-    private async Task BuildAdminInstallerAsync(Guid customerGroupId, string groupKeyBase64, bool isTestInstaller, string password, string customerNameOrTestLabel)
+    private async Task BuildAdminInstallerAsync(Guid customerGroupId, string groupKeyBase64, AdminRoleKeyGenerator.KeyPair adminRoleKeyPair, bool isTestInstaller, string password, string customerNameOrTestLabel)
     {
         Log("--- Installer werden erstellt ---");
         Log($"Kunden-Gruppen-ID: {customerGroupId}");
         Log("Gruppenschlüssel (LAN-Verschlüsselung) wurde erzeugt."); // Wert selbst landet nie im Log, siehe Kommentar bei der Erzeugung
+        // Nur der öffentliche Teil landet im Protokoll - der private Teil wird nie geloggt,
+        // nie zwischengelagert (siehe AdminRoleKeyGenerator-Klassendoku).
+        Log($"Admin-Rollen-Schlüssel erzeugt (öffentlicher Teil: {adminRoleKeyPair.PublicKeyBase64}).");
         Log($"Test-Installer: {(isTestInstaller ? "ja" : "nein")}");
         if (isTestInstaller && customerNameOrTestLabel.Length > 0)
         {
@@ -929,6 +938,10 @@ public partial class MainWindow : Window
             args.Add($"/DGroupKeyBase64={groupKeyBase64}");
             args.Add($"/DIsTestInstaller={(isTestInstaller ? "true" : "false")}");
             args.Add($"/DUpdatePublicKeyBase64={updatePublicKeyBase64}");
+            // Öffentlicher Admin-Rollen-Schlüssel geht in BEIDE Installer-Varianten - jedes
+            // Gerät, Admin wie User, muss Admin-Behauptungen anderer Geräte prüfen können.
+            // Der private Teil geht bewusst NICHT hierher (nur unten, Admin-Installer).
+            args.Add($"/DAdminRolePublicKeyBase64={adminRoleKeyPair.PublicKeyBase64}");
             args.Add($"/O{userPayloadDir}");
             args.Add("/FHaelpMi-User-Setup");
         });
@@ -950,6 +963,10 @@ public partial class MainWindow : Window
             args.Add($"/DGroupKeyBase64={groupKeyBase64}");
             args.Add($"/DIsTestInstaller={(isTestInstaller ? "true" : "false")}");
             args.Add($"/DUpdatePublicKeyBase64={updatePublicKeyBase64}");
+            args.Add($"/DAdminRolePublicKeyBase64={adminRoleKeyPair.PublicKeyBase64}");
+            // Privater Teil NUR hier - gleiches Muster wie InstallerPassword unten (nur der
+            // Admin-Installer bekommt ihn übergeben, nie der User-Installer-Aufruf oben).
+            args.Add($"/DAdminRolePrivateKeyBase64={adminRoleKeyPair.PrivateKeyBase64}");
             if (!string.IsNullOrEmpty(password))
             {
                 args.Add($"/DInstallerPassword={password}");

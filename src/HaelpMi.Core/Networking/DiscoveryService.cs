@@ -57,6 +57,7 @@ public sealed class DiscoveryService : IAsyncDisposable
     private readonly SemaphoreSlim _storeLock = new(1, 1);
     private readonly Action<string>? _audit;
     private readonly Func<IReadOnlyCollection<string>>? _bridgeSeedAddressProvider;
+    private readonly Func<string?>? _adminRolePrivateKeyProvider;
     private UdpClient? _socket;
     private CancellationTokenSource? _cts;
     private Task? _receiveLoop;
@@ -90,6 +91,19 @@ public sealed class DiscoveryService : IAsyncDisposable
     /// Feuert bewusst nur für den direkt kontaktierten Peer, nicht für gossip-gelernte
     /// Geräte - deren IP-Adresse kann veraltet/unerreichbar sein, und das Event feuert
     /// ohnehin erneut, sobald dieses Gerät selbst direkten Kontakt aufnimmt.
+    ///
+    /// Admin-Rollen-Kryptoverifikation (Nutzerwunsch 17.08.2026): feuert bewusst weiterhin
+    /// auf der rohen Selbstauskunft <c>Role.Admin</c>, NICHT erst nach erfolgreicher
+    /// Signaturprüfung - genau das brauchen sowohl AuditSyncService.
+    /// ReconcileWithAdminPeerAsync als auch der neue AdminRoleKeySyncService (der Dienst,
+    /// der den Migrationspfad überhaupt erst in Gang setzt: zwei Admin-Geräte ohne jeden
+    /// Schlüssel könnten sich sonst nie kennenlernen, um sich einen zu geben - klassisches
+    /// Henne-Ei-Problem, wenn man hier stattdessen AdminVerified verlangen würde). Die
+    /// eigentliche Härtung sitzt tiefer: EditLockService/ConfigSyncService/AuditSyncService
+    /// selbst prüfen AdminVerified, bevor sie einer Anfrage vertrauen oder ein Geheimnis
+    /// herausgeben (siehe dortige Klassen sowie AdminRoleKeySyncService, das die
+    /// Schlüsselweitergabe zusätzlich hart an einen verschlüsselten SecureEnvelope-Kanal
+    /// bindet statt an diese Selbstauskunft allein).
     /// </summary>
     public event EventHandler<AdminPeerContactInfo>? AdminPeerContactObserved;
 
@@ -100,16 +114,26 @@ public sealed class DiscoveryService : IAsyncDisposable
     /// statt eines festen Werts, weil der Aufrufer (HaelpMi.Agent) sie hot-reload-fähig aus
     /// SharedConfig lesen soll, nicht einmalig beim Konstruieren einfrieren darf.
     /// </param>
+    /// <param name="adminRolePrivateKeyProvider">
+    /// Admin-Rollen-Kryptoverifikation (Nutzerwunsch 17.08.2026): liefert den eigenen
+    /// effektiven privaten Schlüssel (Installer- ODER Migrationspfad, siehe
+    /// Security.AdminRoleTrustStore), mit dem <see cref="BuildMessage"/> jeden ausgehenden
+    /// Boot-Call signiert - null/nicht gesetzt = kein Admin-Gerät bzw. noch keine
+    /// Signierfähigkeit, Announces bleiben dann unsigniert (kompatibel, siehe
+    /// BootCallMessage-Klassendoku).
+    /// </param>
     public DiscoveryService(
         Func<LiveIdentity> identityProvider,
         Action<string>? audit = null,
         int? discoveryPort = null,
-        Func<IReadOnlyCollection<string>>? bridgeSeedAddressProvider = null)
+        Func<IReadOnlyCollection<string>>? bridgeSeedAddressProvider = null,
+        Func<string?>? adminRolePrivateKeyProvider = null)
     {
         _identityProvider = identityProvider;
         _audit = audit;
         _discoveryPort = discoveryPort ?? AppConstants.DiscoveryUdpPort;
         _bridgeSeedAddressProvider = bridgeSeedAddressProvider;
+        _adminRolePrivateKeyProvider = adminRolePrivateKeyProvider;
     }
 
     /// <summary>Binds the socket and starts the background receive loop. Call once at Agent startup.</summary>
@@ -206,6 +230,19 @@ public sealed class DiscoveryService : IAsyncDisposable
         // HandleDatagramAsync), nie über Gossip weitergegeben (KnownDeviceSummary trägt
         // dieses Feld bewusst nicht).
         var deviceIdentity = DeviceIdentityStore.LoadOrCreate();
+
+        // Admin-Rollen-Kryptoverifikation (Nutzerwunsch 17.08.2026): TrySign liefert null
+        // für jedes Nicht-Admin-Gerät und für ein Admin-Gerät ohne (noch) verfügbaren
+        // privaten Schlüssel - beides einfach "unsigniert versenden", kein Fehlerfall.
+        // identity.AdminRolePublicKeyBase64 ist für ein signierfähiges Admin-Gerät IMMER
+        // exakt der zum verwendeten privaten Schlüssel passende öffentliche Teil (siehe
+        // AdminRoleTrustStore.SaveOwnKey/EnsureSelfGeneratedKeyIfNeeded: der eigene
+        // Schlüssel wird dort stets zusammen mit der eigenen Gruppenschlüssel-Vorstellung
+        // gesetzt) - kein zweiter Provider nötig.
+        var sentAtUtc = DateTimeOffset.UtcNow;
+        var adminRoleSignature = AdminRoleSigner.TrySign(
+            identity.Role, identity.CustomerGroupId, _adminRolePrivateKeyProvider?.Invoke(), identity.DeviceId, sentAtUtc);
+
         return new BootCallMessage(
             kind,
             identity.CustomerGroupId,
@@ -219,10 +256,12 @@ public sealed class DiscoveryService : IAsyncDisposable
             AppConstants.AlarmTcpPort,
             identity.ProgramVersion,
             identity.ConfigVersion,
-            DateTimeOffset.UtcNow,
+            sentAtUtc,
             knownDevices,
             ProtocolVersion: AppConstants.CurrentProtocolVersion,
-            DeviceIdentityPublicKeyBase64: deviceIdentity.PublicKeyBase64);
+            DeviceIdentityPublicKeyBase64: deviceIdentity.PublicKeyBase64,
+            AdminRoleSignatureBase64: adminRoleSignature,
+            AdminRolePublicKeyBase64: adminRoleSignature is null ? null : identity.AdminRolePublicKeyBase64);
     }
 
     private async Task ReceiveLoopAsync(UdpClient socket, CancellationToken ct)
@@ -306,6 +345,37 @@ public sealed class DiscoveryService : IAsyncDisposable
         DeviceEntry updated;
         var learnedNewDevice = false;
 
+        // Admin-Rollen-Kryptoverifikation (Nutzerwunsch 17.08.2026): nur bei DIREKTEM
+        // Kontakt geprüft, nie im Gossip-Loop unten (gleiches Prinzip wie beim
+        // Geräte-Identitätspin). TOFU-Erstlernen: kennt dieses Gerät noch KEINEN
+        // Gruppenschlüssel (ownIdentity.AdminRolePublicKeyBase64 null), aber der Peer
+        // behauptet Role.Admin und liefert einen mitsamt gültiger Signatur, wird dessen
+        // Schlüssel als Gruppenschlüssel gepinnt (Security.AdminRoleTrustStore -
+        // Migrationspfad). Kennt es bereits einen, muss der gemeldete exakt
+        // übereinstimmen - ein abweichender wird verworfen + auditiert statt stillschweigend
+        // übernommen (identisches Prinzip wie beim Geräte-Identitätspin).
+        var adminVerified = false;
+        if (message.Role == Role.Admin && !string.IsNullOrEmpty(message.AdminRolePublicKeyBase64))
+        {
+            var pinnedGroupKey = ownIdentity.AdminRolePublicKeyBase64;
+            if (string.IsNullOrEmpty(pinnedGroupKey))
+            {
+                if (AdminRoleVerifier.Verify(message.AdminRolePublicKeyBase64, message.CustomerGroupId, message.DeviceId, message.SentAtUtc, message.AdminRoleSignatureBase64, DateTimeOffset.UtcNow))
+                {
+                    AdminRoleTrustStore.PinGroupPublicKeyIfUnset(message.AdminRolePublicKeyBase64);
+                    adminVerified = true;
+                }
+            }
+            else if (pinnedGroupKey == message.AdminRolePublicKeyBase64)
+            {
+                adminVerified = AdminRoleVerifier.Verify(pinnedGroupKey, message.CustomerGroupId, message.DeviceId, message.SentAtUtc, message.AdminRoleSignatureBase64, DateTimeOffset.UtcNow);
+            }
+            else
+            {
+                _audit?.Invoke($"admin-role-key-mismatch deviceId={message.DeviceId} - gepinnter Gruppenschluessel weicht ab, Behauptung abgelehnt");
+            }
+        }
+
         await _storeLock.WaitAsync(ct);
         try
         {
@@ -339,7 +409,8 @@ public sealed class DiscoveryService : IAsyncDisposable
                 message.Role, message.IsRemoteSession, remoteIp, message.TcpPort,
                 ObservedProtocolVersion: message.ProtocolVersion,
                 PinnedDeviceIdentityPublicKeyBase64: pinnedKeyToApply,
-                ProgramVersion: message.ProgramVersion);
+                ProgramVersion: message.ProgramVersion,
+                AdminVerified: adminVerified);
             DeviceStore.Upsert(devices, message.DeviceId, info, DateTimeOffset.UtcNow);
             updated = devices.First(d => d.DeviceId == message.DeviceId);
             learnedNewDevice = isNewPrimaryDevice;

@@ -283,6 +283,18 @@ public sealed class ConfigSyncService : IAsyncDisposable
             return; // will be retried on the next announce/boot-call once we've learned this device
         }
 
+        // Admin-Rollen-Kryptoverifikation (Nutzerwunsch 17.08.2026): eine als Config-
+        // Ursprung akzeptierte Herkunft muss ein tatsächlich verifiziertes Admin-Gerät
+        // sein, sonst könnte jedes Gerät der Kundengruppe eine erfundene, höhere
+        // ConfigVersion behaupten und die eigene (manipulierte) Config als "neuer"
+        // andrehen. Sichtbar statt still verworfen, damit ein Admin eine echte
+        // Migrationslücke (Bestandsgerät ohne Admin-Rollen-Schlüssel) auch bemerkt.
+        if (originDevice.Role != Role.Admin || !originDevice.AdminVerified)
+        {
+            _audit?.Invoke($"configsync: announce von nicht verifiziertem absender={originDeviceId} ignoriert");
+            return;
+        }
+
         await _applyLock.WaitAsync(ct);
         try
         {

@@ -28,6 +28,13 @@ internal static class MessageValidation
     private const int MaxNonceBase64Length = 24;
     private const int MaxCiphertextBase64Length = 48 * 1024;
 
+    // Admin-Rollen-Kryptoverifikation (Nutzerwunsch 17.08.2026): Ed25519-Signatur ist immer
+    // 64 Byte -> 88 Zeichen Base64 (inkl. Padding). Großzügig aufgerundet statt exakt 88
+    // verlangt, damit ein künftiger Wechsel der Kodierung nicht sofort hier bricht - der
+    // eigentliche Schutz ist ohnehin die kryptografische Prüfung in AdminRoleVerifier, das
+    // hier ist nur die übliche Plausibilitätsgrenze gegen absurd lange Strings.
+    private const int MaxAdminRoleSignatureBase64Length = 200;
+
     // Nutzerwunsch 05.08.2026 (Gossip-Anhang): eine sehr großzügige, aber endliche Grenze -
     // der eigentliche Schutz gegen ein überdimensioniertes Datagramm ist schon
     // DiscoveryService.MaxDatagramBytes (das Paket würde vorher verworfen); das hier ist nur
@@ -46,7 +53,9 @@ internal static class MessageValidation
         Enum.IsDefined(message.Role) &&
         Enum.IsDefined(message.Kind) &&
         (message.KnownDevices is null || IsPlausible(message.KnownDevices)) &&
-        (message.DeviceIdentityPublicKeyBase64 is null || message.DeviceIdentityPublicKeyBase64.Length <= MaxPublicKeyBase64Length);
+        (message.DeviceIdentityPublicKeyBase64 is null || message.DeviceIdentityPublicKeyBase64.Length <= MaxPublicKeyBase64Length) &&
+        (message.AdminRoleSignatureBase64 is null || message.AdminRoleSignatureBase64.Length <= MaxAdminRoleSignatureBase64Length) &&
+        (message.AdminRolePublicKeyBase64 is null || message.AdminRolePublicKeyBase64.Length <= MaxPublicKeyBase64Length);
 
     private static bool IsPlausible(IReadOnlyList<KnownDeviceSummary> knownDevices) =>
         knownDevices.Count <= MaxKnownDevicesCount &&

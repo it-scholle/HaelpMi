@@ -60,4 +60,27 @@ public sealed class DeploymentInfo
     /// weiterhin der kompilierte Fallback.
     /// </summary>
     public string? UpdatePublicKeyBase64 { get; set; }
+
+    /// <summary>
+    /// Viertes kryptografisches Schlüsselpaar (Ed25519, Admin-Rollen-Signatur, CLAUDE.md
+    /// "Lizenz &amp; Secrets", Nutzerwunsch 17.08.2026) - **pro Kunden-Gruppe**, nicht
+    /// global: Install-Creator erzeugt es bei einer Neuinstallation, direkt neben
+    /// <see cref="CustomerGroupId"/> (Wiederverwendung bei einem Rebuild derselben Gruppe,
+    /// siehe dortige Klassendoku). Der öffentliche Schlüssel steckt in BEIDEN
+    /// Installer-Varianten (jedes Gerät muss Admin-Behauptungen anderer Geräte prüfen
+    /// können). Nullable/leer bei Installer-Ständen aus der Zeit vor diesem Feld - siehe
+    /// Security.AdminRoleTrustStore für den Migrationspfad, der diese Lücke für
+    /// Bestandsgeräte zur Laufzeit schließt.
+    /// </summary>
+    public string? AdminRolePublicKeyBase64 { get; set; }
+
+    /// <summary>
+    /// Nur im Admin-Installer gesetzt, bleibt <c>null</c> im User-Installer - ein
+    /// User-Gerät kann damit selbst nie eine gültige Admin-Behauptung erzeugen. Klartext-
+    /// Base64, wie <see cref="CustomerGroupId"/> - DPAPI wäre an die Build-Maschine
+    /// gebunden und funktioniert nicht Build-Maschine → Kundenrechner hinweg (anders als
+    /// der laufzeit-eigene Migrationspfad in AdminRoleTrustStore, der DPAPI sehr wohl
+    /// nutzt - der dort erzeugte/übernommene Schlüssel bleibt auf dem Zielrechner).
+    /// </summary>
+    public string? AdminRolePrivateKeyBase64 { get; set; }
 }

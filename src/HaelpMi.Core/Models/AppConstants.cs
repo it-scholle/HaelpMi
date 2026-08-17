@@ -88,6 +88,9 @@ public static class AppConstants
     /// <summary>Timeout pro Ziel-Peer für einen einzelnen AuditSync-Push/-Digest-Call (analog EditLockService.RequestTimeout, etwas großzügiger wegen der potenziell größeren Nutzlast).</summary>
     public static readonly TimeSpan AuditSyncRequestTimeout = TimeSpan.FromSeconds(5);
 
+    /// <summary>TCP port für den Admin-Rollen-Schlüssel-Migrationsaustausch (Nutzerwunsch 17.08.2026, siehe AdminRoleKeySyncService) - eigener Port statt Multiplexing, wie überall sonst in diesem Projekt (Discovery/ConfigSync/EditLock/AuditSync).</summary>
+    public const int AdminRoleKeySyncTcpPort = 51509;
+
     /// <summary>Folder under the machine-wide %ProgramData% where all local device state lives (Teil 2, FR-34 - siehe AppPaths.cs).</summary>
     public const string AppDataFolderName = "HaelpMi";
 

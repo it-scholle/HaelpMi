@@ -602,7 +602,9 @@ public class NetworkingTests
             await stream.WriteAsync(responseBytes);
         });
 
-        var deviceList = new List<DeviceEntry> { new() { DeviceId = peerDeviceId, IpAddress = "127.0.0.1" } };
+        // Admin-Rollen-Kryptoverifikation (Nutzerwunsch 17.08.2026): ConfigSyncService
+        // zieht seitdem nur noch von einem als Role.Admin+AdminVerified bekannten Ursprung.
+        var deviceList = new List<DeviceEntry> { new() { DeviceId = peerDeviceId, IpAddress = "127.0.0.1", Role = Role.Admin, AdminVerified = true } };
 
         var appliedSignal = new TaskCompletionSource<SharedConfig>(TaskCreationOptions.RunContinuationsAsynchronously);
         await using var configSync = new ConfigSyncService(() => ownIdentity, () => deviceList);
@@ -617,6 +619,33 @@ public class NetworkingTests
 
         Assert.Equal(5, new SettingsStore().Load().AppliedConfigVersion);
         await peerTask.WaitAsync(TimeSpan.FromSeconds(5));
+    }
+
+    [Fact]
+    public async Task ConfigSyncService_IgnoresAnnounce_FromNotAdminVerifiedOrigin()
+    {
+        // Admin-Rollen-Kryptoverifikation (Nutzerwunsch 17.08.2026): ohne diese Prüfung
+        // könnte jedes Gerät der Kundengruppe eine erfundene, höhere ConfigVersion behaupten
+        // und die eigene (manipulierte) Config als "neuer" andrehen.
+        using var scope = new TestAppDataScope();
+        var customerGroupId = Guid.NewGuid();
+        var ownDeviceId = Guid.NewGuid();
+        new SettingsStore().Save(new OwnSettings { DeviceId = ownDeviceId, CustomerGroupId = customerGroupId, AppliedConfigVersion = 0 });
+        var ownIdentity = MakeIdentity(customerGroupId, ownDeviceId);
+
+        var peerDeviceId = Guid.NewGuid();
+        // Role.Admin, aber NICHT AdminVerified - genau der Migrationslückenfall.
+        var deviceList = new List<DeviceEntry> { new() { DeviceId = peerDeviceId, IpAddress = "127.0.0.1", Role = Role.Admin, AdminVerified = false } };
+
+        await using var configSync = new ConfigSyncService(() => ownIdentity, () => deviceList);
+        var applied = false;
+        configSync.ConfigApplied += (_, _) => applied = true;
+
+        configSync.OnPeerConfigVersionObserved(null, new PeerConfigVersionInfo { DeviceId = peerDeviceId, ConfigVersion = 5 });
+        await Task.Delay(TimeSpan.FromMilliseconds(500)); // best-effort: kein Pull-Versuch sollte überhaupt starten
+
+        Assert.False(applied);
+        Assert.Equal(0, new SettingsStore().Load().AppliedConfigVersion);
     }
 
     // Regressionsschutz 17.08.2026 (Fehlerbericht "neu beigetretenes Gerät bekommt keine
@@ -752,6 +781,8 @@ public class NetworkingTests
             await stream.WriteAsync(responseBytes);
         });
 
+        // Admin-Rollen-Kryptoverifikation (Nutzerwunsch 17.08.2026): siehe Pendant-Test ohne
+        // SecureEnvelope.
         var deviceList = new List<DeviceEntry>
         {
             new()
@@ -760,6 +791,8 @@ public class NetworkingTests
                 IpAddress = "127.0.0.1",
                 ProtocolVersion = AppConstants.CurrentProtocolVersion,
                 PinnedDeviceIdentityPublicKeyBase64 = sharedKeyPair.PublicKeyBase64,
+                Role = Role.Admin,
+                AdminVerified = true,
             },
         };
 
@@ -854,6 +887,57 @@ public class NetworkingTests
         Assert.Null(exception);
 
         await editLock.DisposeAsync();
+    }
+
+    [Fact]
+    public async Task EditLockService_AnswersRequest_OnlyWhenRequesterIsAdminVerified()
+    {
+        // Admin-Rollen-Kryptoverifikation (Nutzerwunsch 17.08.2026): ein per deviceListProvider
+        // bekannter, aber nicht AdminVerified-Requester bekommt gar keine Antwort mehr (statt
+        // fälschlich "Granted") - ein echter Admin (Role.Admin + AdminVerified) weiterhin schon.
+        var port = GetFreeTcpPort();
+        var customerGroupId = Guid.NewGuid();
+        var verifiedRequesterId = Guid.NewGuid();
+        var unverifiedRequesterId = Guid.NewGuid();
+
+        var deviceList = new List<DeviceEntry>
+        {
+            new() { DeviceId = verifiedRequesterId, Role = Role.Admin, AdminVerified = true },
+            new() { DeviceId = unverifiedRequesterId, Role = Role.Admin, AdminVerified = false },
+        };
+
+        await using var editLock = new EditLockService(() => MakeIdentity(customerGroupId, Guid.NewGuid()), deviceListProvider: () => deviceList);
+        editLock.Start(port);
+
+        var verifiedResponse = await SendEditLockRequestAsync(port, customerGroupId, verifiedRequesterId);
+        Assert.NotNull(verifiedResponse);
+        Assert.True(verifiedResponse!.Granted);
+
+        var unverifiedResponse = await SendEditLockRequestAsync(port, customerGroupId, unverifiedRequesterId);
+        Assert.Null(unverifiedResponse); // stiller Drop statt Antwort
+    }
+
+    private static async Task<EditLockResponseMessage?> SendEditLockRequestAsync(int port, Guid customerGroupId, Guid requesterDeviceId)
+    {
+        using var client = new TcpClient();
+        await client.ConnectAsync(IPAddress.Loopback, port);
+        await using var stream = client.GetStream();
+
+        var request = new EditLockRequestMessage(customerGroupId, EditScopeKind.Group, Guid.NewGuid(), requesterDeviceId, "PC", "User", DateTimeOffset.UtcNow);
+        var payload = NetworkSerializer.Encoding.GetBytes(NetworkSerializer.ToJsonLine(request));
+        await stream.WriteAsync(payload);
+        await stream.FlushAsync();
+
+        using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+        try
+        {
+            var line = await BoundedLineReader.ReadLineAsync(stream, timeoutCts.Token);
+            return line is null ? null : NetworkSerializer.FromJsonLine<EditLockResponseMessage>(line);
+        }
+        catch (OperationCanceledException)
+        {
+            return null; // kein Response innerhalb des Timeouts - gleichbedeutend mit stillem Drop
+        }
     }
 
     [Fact]

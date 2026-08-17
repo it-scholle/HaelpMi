@@ -10,6 +10,15 @@ namespace HaelpMi.Core.Models;
 /// "program version" are derived - that assembly work happens once, in the hosting app
 /// (HaelpMi.Agent), not scattered across every Core service that needs to announce itself.
 /// </summary>
+/// <param name="AdminRolePublicKeyBase64">
+/// Admin-Rollen-Kryptoverifikation (Nutzerwunsch 17.08.2026): der öffentliche Schlüssel,
+/// mit dem JEDES Gerät (Admin wie User) fremde Admin-Behauptungen prüft - aufgelöst aus
+/// <see cref="Models.DeploymentInfo.AdminRolePublicKeyBase64"/> (Neuinstallation) oder,
+/// falls das fehlt, aus dem TOFU-gepinnten Wert in Security.AdminRoleTrustStore
+/// (Migrationspfad). Der PRIVATE Schlüssel wandert bewusst NICHT hierher (LiveIdentity
+/// fließt an viele Stellen, landet potenziell in Audit-Log-Strings) - Signieren liest ihn
+/// gezielt über einen eigenen Provider, siehe DiscoveryService.
+/// </param>
 public sealed record LiveIdentity(
     Guid CustomerGroupId,
     Guid DeviceId,
@@ -20,4 +29,5 @@ public sealed record LiveIdentity(
     Role Role,
     bool IsRemoteSession,
     string ProgramVersion,
-    int ConfigVersion);
+    int ConfigVersion,
+    string? AdminRolePublicKeyBase64 = null);

@@ -13,7 +13,7 @@
 #define MyAppName "HälpMi"
 ; Alpha: 0.x until release, per city/product decision - Version 1.0.0 is reserved for
 ; the actual release. Bump the third number for ordinary fixes, second for a feature.
-#define MyAppVersion "0.35.3"
+#define MyAppVersion "0.36.0"
 #define MyAppPublisher "HälpMi contributors"
 #define MyAgentExeName "HaelpMi.Agent.exe"
 #define MyConfigExeName "HaelpMi.Config.exe"
@@ -70,6 +70,23 @@
 ; gespeichert, nur transient für diesen ISCC-Aufruf.
 #ifndef InstallerPassword
   #define InstallerPassword ""
+#endif
+
+; Admin-Rollen-Signatur (Ed25519, viertes Schlüsselpaar, Nutzerwunsch 17.08.2026, siehe
+; CLAUDE.md "Lizenz & Secrets") - anders als CustomerGroupId/InstallerPassword PRO
+; KUNDEN-GRUPPE erzeugt, nicht global. Der öffentliche Schlüssel geht in BEIDE
+; Installer-Varianten (siehe WriteDeploymentJson unten), der private nur in den
+; Admin-Installer-ISCC-Aufruf - genau wie InstallerPassword oben nie zentral
+; gespeichert, nur transient für diesen einen Build. Ohne diese Angabe (z. B. manuelles
+; Kompilieren ohne Install-Creator) bleiben beide leer - ein damit gebautes Gerät gilt für
+; jeden Peer als nicht Admin-rollen-verifizierbar (HaelpMi.Core.Security.
+; AdminRoleTrustStore-Migrationspfad übernimmt für ein Admin-Gerät ohne Installer-Schlüssel
+; die Selbst-Erzeugung zur Laufzeit, kein Fehlerfall).
+#ifndef AdminRolePublicKeyBase64
+  #define AdminRolePublicKeyBase64 ""
+#endif
+#ifndef AdminRolePrivateKeyBase64
+  #define AdminRolePrivateKeyBase64 ""
 #endif
 
 [Languages]
@@ -429,6 +446,21 @@ begin
 #endif
 end;
 
+// Admin-Rollen-Signatur, privater Teil (Nutzerwunsch 17.08.2026): nur der Admin-Installer-
+// ISCC-Aufruf bekommt {#AdminRolePrivateKeyBase64} überhaupt per /D gesetzt (siehe
+// MainWindow.xaml.cs) - im User-Installer-Zweig bliebe das Makro sonst beim leeren
+// #ifndef-Fallback oben ("") stehen. Echtes JSON-`null` statt eines leeren Strings, damit
+// DeploymentInfo.AdminRolePrivateKeyBase64 im User-Installer wortwörtlich null bleibt
+// (siehe dortiger Klassenkommentar "bleibt null im User-Installer") statt nur gefühlt leer.
+function GetAdminRolePrivateKeyJsonValue(): String;
+begin
+#ifdef HaelpMiAdminInstall
+  Result := '"' + JsonEscape('{#AdminRolePrivateKeyBase64}') + '"';
+#else
+  Result := 'null';
+#endif
+end;
+
 procedure WriteSettingsJson();
 var
   DeviceId, ComputerName, RoomName, RoomNumber, Json, SettingsDir: String;
@@ -473,7 +505,9 @@ begin
     '  "Role": ' + GetRoleValue() + ',' + #13#10 +
     '  "IsTestInstaller": {#IsTestInstaller},' + #13#10 +
     '  "GroupKeyBase64": "' + JsonEscape('{#GroupKeyBase64}') + '",' + #13#10 +
-    '  "UpdatePublicKeyBase64": "' + JsonEscape('{#UpdatePublicKeyBase64}') + '"' + #13#10 +
+    '  "UpdatePublicKeyBase64": "' + JsonEscape('{#UpdatePublicKeyBase64}') + '",' + #13#10 +
+    '  "AdminRolePublicKeyBase64": "' + JsonEscape('{#AdminRolePublicKeyBase64}') + '",' + #13#10 +
+    '  "AdminRolePrivateKeyBase64": ' + GetAdminRolePrivateKeyJsonValue() + #13#10 +
     '}';
 
   // Aktuell nur ASCII-Inhalte (GUID/Zahlen), aber aus Konsistenz mit WriteSettingsJson

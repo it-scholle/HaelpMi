@@ -40,6 +40,17 @@ public enum MessageKind
 /// NUR bei direktem Boot-Call-Kontakt gepinnt (siehe DiscoveryService), nie aus einem
 /// gossip-gelernten <see cref="KnownDeviceSummary"/>-Eintrag - deshalb steht das Feld
 /// bewusst nur hier, nicht auf KnownDeviceSummary.
+///
+/// <see cref="AdminRoleSignatureBase64"/>/<see cref="AdminRolePublicKeyBase64"/>
+/// (Admin-Rollen-Kryptoverifikation, Nutzerwunsch 17.08.2026): nur gesetzt, wenn der
+/// Absender ein Admin-Gerät MIT verfügbarem privaten Schlüssel ist (siehe
+/// Security.AdminRoleSigner.TrySign) - signiert (CustomerGroupId, DeviceId, SentAtUtc)
+/// dieser Nachricht. <see cref="AdminRolePublicKeyBase64"/> wird immer mitgeschickt, wenn
+/// signiert wurde (auch wenn der Empfänger den Gruppenschlüssel schon kennt) - trägt die
+/// TOFU-Erstlernphase für Geräte, die ihn noch nicht gepinnt haben (siehe
+/// Security.AdminRoleTrustStore). Beide optional/nullable wie KnownDevices, alte
+/// Announces ohne Signatur bleiben kompatibel (gelten dann einfach als nicht verifiziert,
+/// siehe DeviceEntry.AdminVerified).
 /// </summary>
 public sealed record BootCallMessage(
     MessageKind Kind,
@@ -57,4 +68,6 @@ public sealed record BootCallMessage(
     DateTimeOffset SentAtUtc,
     IReadOnlyList<KnownDeviceSummary>? KnownDevices = null,
     int? ProtocolVersion = null,
-    string? DeviceIdentityPublicKeyBase64 = null);
+    string? DeviceIdentityPublicKeyBase64 = null,
+    string? AdminRoleSignatureBase64 = null,
+    string? AdminRolePublicKeyBase64 = null);

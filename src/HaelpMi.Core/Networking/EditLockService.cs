@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 using HaelpMi.Core.Models;
@@ -53,16 +54,28 @@ public sealed class EditLockService : IAsyncDisposable
 
     private readonly Func<LiveIdentity> _identityProvider;
     private readonly Action<string>? _audit;
+    private readonly Func<List<DeviceEntry>>? _deviceListProvider;
     private readonly ConcurrentDictionary<(EditScopeKind Kind, Guid Id), ScopeLockState> _states = new();
     private readonly Random _random = Random.Shared;
     private TcpListener? _listener;
     private CancellationTokenSource? _cts;
     private Task? _acceptLoop;
 
-    public EditLockService(Func<LiveIdentity> identityProvider, Action<string>? audit = null)
+    /// <param name="deviceListProvider">
+    /// Admin-Rollen-Kryptoverifikation (Nutzerwunsch 17.08.2026): wenn gesetzt, antwortet
+    /// <see cref="HandleIncomingRequestAsync"/> einem Requester nur, wenn er in dieser
+    /// Liste als <see cref="Role.Admin"/> UND <see cref="DeviceEntry.AdminVerified"/>
+    /// bekannt ist - nur Verteidigung in der Tiefe (eine ausbleibende Antwort gilt laut
+    /// Abschnitt 5 ohnehin als "Zugriff gewährt", ein von einem nicht verifizierten Gerät
+    /// erhaltenes "Granted" beeinflusst nirgends den lokalen Zustand eines echten Admins).
+    /// Bewusst optional/null-tolerant (alte Semantik ohne Prüfung) statt Pflicht wie bei
+    /// AuditSyncService, weil hier kein eigenständiger Sicherheitsgewinn dranhängt.
+    /// </param>
+    public EditLockService(Func<LiveIdentity> identityProvider, Action<string>? audit = null, Func<List<DeviceEntry>>? deviceListProvider = null)
     {
         _identityProvider = identityProvider;
         _audit = audit;
+        _deviceListProvider = deviceListProvider;
     }
 
     public void Start(int port = AppConstants.EditLockTcpPort)
@@ -271,6 +284,20 @@ public sealed class EditLockService : IAsyncDisposable
             if (!CustomerGroupFilter.Matches(request.CustomerGroupId, identity.CustomerGroupId))
             {
                 return; // Teil 2, Abschnitt 6
+            }
+
+            // Admin-Rollen-Kryptoverifikation (Nutzerwunsch 17.08.2026) - siehe
+            // Konstruktor-Kommentar zu deviceListProvider für Hintergrund/Tragweite. Nur
+            // aktiv, wenn ein Provider gesetzt ist (Produktivpfad); ohne Provider
+            // unverändertes altes Verhalten.
+            if (_deviceListProvider is not null)
+            {
+                var requesterIsVerifiedAdmin = _deviceListProvider()
+                    .Any(d => d.DeviceId == request.RequesterDeviceId && d.Role == Role.Admin && d.AdminVerified);
+                if (!requesterIsVerifiedAdmin)
+                {
+                    return;
+                }
             }
 
             var response = BuildResponse(request, identity);
