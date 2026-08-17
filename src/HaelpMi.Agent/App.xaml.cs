@@ -97,6 +97,10 @@ public partial class App : System.Windows.Application
     {
         base.OnStartup(e);
 
+        // Diagnose-Instrumentierung, siehe StartupTimingLog-Klassendoku - temporär für die
+        // Untersuchung "Selbsttest nach Admin-Installation verzögert".
+        StartupTimingLog.Mark(nameof(HaelpMi.Agent), "OnStartup entered");
+
         CrashLogger.InstallProcessWideHooks(nameof(HaelpMi.Agent));
         DispatcherUnhandledException += (_, args) =>
         {
@@ -295,6 +299,7 @@ public partial class App : System.Windows.Application
         _ipcServer.On(IpcCommandType.DisarmTestMode, HandleDisarmTestModeRequestAsync);
         _ipcServer.On(IpcCommandType.TestModeStatus, HandleTestModeStatusRequestAsync);
         _ipcServer.Start();
+        StartupTimingLog.Mark(nameof(HaelpMi.Agent), "IpcServer.Start() done");
 
         var executablePath = Environment.ProcessPath ?? Process.GetCurrentProcess().MainModule?.FileName ?? string.Empty;
         if (!string.IsNullOrEmpty(executablePath))
@@ -319,6 +324,7 @@ public partial class App : System.Windows.Application
                 _auditLog.Append($"Autostart-Registrierung fehlgeschlagen: {_autostartError}");
             }
         }
+        StartupTimingLog.Mark(nameof(HaelpMi.Agent), "AutostartRegistrar.EnsureRegistered done (misst schtasks.exe-Laufzeit)");
 
         // Nutzerwunsch 14./15.08.2026 (revisionssicheres Audit-Log): Sendeseite läuft auf
         // JEDEM Gerät unabhängig von der Rolle (jedes Gerät hat ein eigenes AuditLog),
@@ -338,6 +344,7 @@ public partial class App : System.Windows.Application
         _feedbackChannel.Start();
 
         _coordinator = new AlarmFlowCoordinator(BuildIdentity, () => _settings, _sharedConfigStore.LoadOrCreate, _feedbackChannel, _auditLog, _auditSyncService, groupKeyProvider: () => _deployment.GroupKeyBase64);
+        StartupTimingLog.Mark(nameof(HaelpMi.Agent), "_coordinator zugewiesen (Selbsttest waere ab hier IPC-seitig bedienbar)");
 
         // Multi-VLAN-Bridge-Seed (Nutzerwunsch 13.08.2026, Liste seit 15.08.2026): kommt
         // ausschließlich aus SharedConfig, hot-reload-editierbar im Admin-Dashboard
@@ -365,6 +372,7 @@ public partial class App : System.Windows.Application
         // (bindet den Port direkt) oder Satellite (hängt sich an eine andere Sitzungsinstanz
         // an) wird - s. TryBecomePrimaryOrSatellite/AlarmRelayServer-Klassendoku.
         TryBecomePrimaryOrSatellite();
+        StartupTimingLog.Mark(nameof(HaelpMi.Agent), "TryBecomePrimaryOrSatellite() done (Selbsttest-Empfang waere ab hier moeglich)");
 
         _configSync = new ConfigSyncService(BuildIdentity, _deviceStore.Load, _auditLog.Append, groupKeyProvider: () => _deployment.GroupKeyBase64);
         _configSync.ConfigApplied += (_, _) =>
@@ -652,6 +660,7 @@ public partial class App : System.Windows.Application
 
     private async Task<IpcResponse> HandleSelfTestRequestAsync()
     {
+        StartupTimingLog.Mark(nameof(HaelpMi.Agent), "IPC SelfTest-Request empfangen");
         var config = _sharedConfigStore.LoadOrCreate();
         var profile = config.AlarmProfiles.FirstOrDefault();
         if (profile is null)
@@ -660,6 +669,7 @@ public partial class App : System.Windows.Application
         }
 
         var ok = await _coordinator!.SendSelfTestAsync(profile);
+        StartupTimingLog.Mark(nameof(HaelpMi.Agent), $"IPC SelfTest-Request beantwortet (ok={ok})");
         return new IpcResponse(ok);
     }
 

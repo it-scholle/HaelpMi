@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using HaelpMi.Core.Audio;
+using HaelpMi.Core.Diagnostics;
 using HaelpMi.Core.Models;
 using HaelpMi.Core.Networking;
 using HaelpMi.Core.Networking.Protocol;
@@ -64,6 +65,7 @@ public sealed class AlarmFlowCoordinator
     /// <summary>Called from the TCP listener's background thread when an alarm arrives (FR-9/FR-47).</summary>
     public void HandleIncomingAlarmRequest(AlarmReceivedEventArgs args)
     {
+        StartupTimingLog.Mark(nameof(HaelpMi.Agent), $"AlarmReceived (isTest={args.Request.IsTest}) - Popup/Sound wird jetzt ausgeloest");
         var request = args.Request;
         var settings = _settingsProvider();
         var soundOption = IncomingSoundCatalog.Resolve(settings.IncomingSoundId);
