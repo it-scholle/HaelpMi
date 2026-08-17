@@ -4,6 +4,7 @@ using System.Text.Json;
 using HaelpMi.Core.Models;
 using HaelpMi.Core.Networking;
 using HaelpMi.Core.Networking.Protocol;
+using HaelpMi.Core.Runtime;
 using HaelpMi.Core.Security;
 using HaelpMi.Core.Storage;
 using Xunit;
@@ -616,6 +617,93 @@ public class NetworkingTests
 
         Assert.Equal(5, new SettingsStore().Load().AppliedConfigVersion);
         await peerTask.WaitAsync(TimeSpan.FromSeconds(5));
+    }
+
+    // Regressionsschutz 17.08.2026 (Fehlerbericht "neu beigetretenes Gerät bekommt keine
+    // Config, bis der Admin neu startet"): der eigentliche Bug saß in HaelpMi.Agent/
+    // App.xaml.cs' BuildIdentity(), das ConfigVersion aus einem einmalig bei OnStartup
+    // gecachten OwnSettings-Feld las statt bei jedem Aufruf frisch von der Platte -
+    // ConfigSyncService.ApplyToSelf schreibt eine per Hot-Reload übernommene ConfigVersion
+    // über eine EIGENE, separate SettingsStore-Instanz weg (siehe Klassenkommentar dort),
+    // der gecachte Snapshot im Agent bekam davon nie etwas mit. Der Test unten spielt genau
+    // diesen zeitlichen Ablauf mit zwei SettingsStore-Instanzen nach (wie App.xaml.cs vs.
+    // ConfigSyncService in Produktion) und dokumentiert per Kontrast beide Verhalten: ein
+    // einmal gecachter identityProvider (Bug) meldet in seinem Boot-Call-Reply weiterhin die
+    // alte Version, ein bei jedem Aufruf frisch ladender (Fix, wie BuildIdentity() jetzt)
+    // meldet die neue.
+    [Fact]
+    public async Task DiscoveryService_Reply_WithCachedIdentitySnapshot_StillReportsStaleConfigVersion()
+    {
+        using var scope = new TestAppDataScope();
+        var discoveryPort = GetFreeUdpPort();
+        var customerGroupId = Guid.NewGuid();
+        var ownDeviceId = Guid.NewGuid();
+        var deployment = new DeploymentInfo { CustomerGroupId = customerGroupId, Role = Role.User };
+
+        var settingsStore = new SettingsStore();
+        settingsStore.Save(new OwnSettings { DeviceId = ownDeviceId, CustomerGroupId = customerGroupId, AppliedConfigVersion = 0 });
+
+        // Bug-Nachstellung: identityProvider ist ein Closure über einen EINMAL geladenen
+        // OwnSettings-Snapshot - genau das alte BuildIdentity()-Verhalten.
+        var cachedSnapshot = settingsStore.Load();
+        Func<LiveIdentity> staleIdentityProvider = () => LiveIdentityFactory.Create(cachedSnapshot, deployment);
+
+        await using var discovery = new DiscoveryService(staleIdentityProvider, discoveryPort: discoveryPort);
+        discovery.StartListening();
+
+        // Simuliert ConfigSyncService.ApplyToSelf: eine ANDERE SettingsStore-Instanz schreibt
+        // inzwischen die per Hot-Reload übernommene neue Version auf dieselbe Platte.
+        new SettingsStore().Save(new OwnSettings { DeviceId = ownDeviceId, CustomerGroupId = customerGroupId, AppliedConfigVersion = 5 });
+
+        var reply = await SendAnnounceAndReceiveReplyAsync(discoveryPort, customerGroupId);
+
+        // Der Bug: die Reply meldet weiterhin 0, obwohl auf der Platte längst 5 steht - ein
+        // neu beigetretenes Gerät (ebenfalls bei 0) hätte PeerConfigVersionObserved nie
+        // ausgelöst (siehe DiscoveryService.cs:404, message.ConfigVersion > ownIdentity.ConfigVersion).
+        Assert.Equal(0, reply.ConfigVersion);
+    }
+
+    [Fact]
+    public async Task DiscoveryService_Reply_WithFreshlyLoadedIdentity_ReportsCurrentConfigVersion()
+    {
+        using var scope = new TestAppDataScope();
+        var discoveryPort = GetFreeUdpPort();
+        var customerGroupId = Guid.NewGuid();
+        var ownDeviceId = Guid.NewGuid();
+        var deployment = new DeploymentInfo { CustomerGroupId = customerGroupId, Role = Role.User };
+
+        var settingsStore = new SettingsStore();
+        settingsStore.Save(new OwnSettings { DeviceId = ownDeviceId, CustomerGroupId = customerGroupId, AppliedConfigVersion = 0 });
+
+        // Fix-Muster: identityProvider lädt bei JEDEM Aufruf frisch (wie BuildIdentity() jetzt).
+        Func<LiveIdentity> freshIdentityProvider = () => LiveIdentityFactory.Create(settingsStore.Load(), deployment);
+
+        await using var discovery = new DiscoveryService(freshIdentityProvider, discoveryPort: discoveryPort);
+        discovery.StartListening();
+
+        // Simuliert ConfigSyncService.ApplyToSelf über eine separate SettingsStore-Instanz,
+        // exakt wie im "stale"-Gegenstück oben.
+        new SettingsStore().Save(new OwnSettings { DeviceId = ownDeviceId, CustomerGroupId = customerGroupId, AppliedConfigVersion = 5 });
+
+        var reply = await SendAnnounceAndReceiveReplyAsync(discoveryPort, customerGroupId);
+
+        Assert.Equal(5, reply.ConfigVersion);
+    }
+
+    private static async Task<BootCallMessage> SendAnnounceAndReceiveReplyAsync(int discoveryPort, Guid customerGroupId)
+    {
+        using var peerSocket = new UdpClient(0) { EnableBroadcast = true };
+        var peerDeviceId = Guid.NewGuid();
+        var announce = new BootCallMessage(
+            MessageKind.Announce, customerGroupId, peerDeviceId, "PC-PERSONAL", "Personal", "Zimmer 3", "3",
+            Role.User, false, 51999, "9.9.9", 0, DateTimeOffset.UtcNow);
+        var announceBytes = JsonSerializer.SerializeToUtf8Bytes(announce, WireOptions);
+        await peerSocket.SendAsync(announceBytes, announceBytes.Length, new IPEndPoint(IPAddress.Loopback, discoveryPort));
+
+        var replyResult = await peerSocket.ReceiveAsync().WaitAsync(TimeSpan.FromSeconds(5));
+        var reply = JsonSerializer.Deserialize<BootCallMessage>(replyResult.Buffer, WireOptions);
+        Assert.NotNull(reply);
+        return reply!;
     }
 
     [Fact]

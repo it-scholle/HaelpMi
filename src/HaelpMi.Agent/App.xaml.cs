@@ -243,7 +243,20 @@ public partial class App : System.Windows.Application
         Shutdown(ok ? 0 : 1);
     }
 
-    private LiveIdentity BuildIdentity() => LiveIdentityFactory.Create(_settings, _deployment);
+    // Bugfix 17.08.2026 (Fehlerbericht "neu beigetretenes Gerät bekommt keine Config, bis
+    // der Admin neu startet"): vorher `LiveIdentityFactory.Create(_settings, _deployment)`
+    // mit dem gecachten Feld _settings, das nur einmal bei OnStartup geladen wird (Zeile
+    // unten bei _settingsStore.Load()). ConfigSyncService.ApplyToSelf (eigene, separate
+    // SettingsStore-Instanz) schreibt eine neu per Hot-Reload übernommene ConfigVersion auf
+    // die Platte, aktualisiert aber nie dieses App-lokale Feld - jeder eigene Boot-Call
+    // meldete Peers danach für den Rest der Prozesslaufzeit die VERALTETE ConfigVersion.
+    // Ein neu beigetretenes Gerät verglich sich dadurch nie als "älter" als ein längst
+    // aktualisiertes, aber schon vorher laufendes Peer-Gerät und zog sich die Config nie -
+    // erst ein Neustart (der _settings frisch lädt) meldete wieder die korrekte Version.
+    // Fix: immer frisch von der Platte lesen, wie es SettingsStore-Aufrufer im Rest der
+    // Codebasis ohnehin schon tun (ConfigSyncService, RegisterHotkeysFromConfig etc.) - eine
+    // kleine JSON-Datei, kein spürbarer Zusatzaufwand pro Boot-Call/Announce.
+    private LiveIdentity BuildIdentity() => LiveIdentityFactory.Create(_settingsStore.Load(), _deployment);
 
     private void StartBackgroundServices()
     {
@@ -323,31 +336,39 @@ public partial class App : System.Windows.Application
         // (Netzwerk-Tab). Den früheren deployment.json-Startwert (Install-Creator-Feld) gibt
         // es seit 15.08.2026 nicht mehr - der Admin pflegt die Bridge-Adressen vollständig
         // im Dashboard, ein Installer-Neubau nur für eine IP-Änderung war unnötiger Umweg.
+        //
+        // Bugfix 17.08.2026 (derselbe Fehlerbericht wie bei BuildIdentity() oben):
+        // StartListening()/AnnounceAsync() standen bisher HIER, vor der Konstruktion von
+        // _configSync und vor dem Verdrahten von PeerConfigVersionObserved/
+        // AdminPeerContactObserved weiter unten. Auf einem echten LAN kann die Antwort auf
+        // den eigenen allerersten Announce (von einem bereits laufenden Peer) den
+        // ReceiveLoop erreichen, noch während diese synchrone Methode weiter unten mit
+        // weiteren Socket-Binds beschäftigt ist - das jeweilige Event feuert dann ohne
+        // Subscriber ins Leere und ist unwiederbringlich verloren. Reihenfolge jetzt:
+        // erst ALLE Discovery-Event-Handler verdrahten, dann StartListening()/AnnounceAsync()
+        // ganz am Ende dieses Blocks.
         _discovery = new DiscoveryService(BuildIdentity, _auditLog.Append,
             bridgeSeedAddressProvider: () => _sharedConfigStore.LoadOrCreate().BridgeSeedAddresses);
-        _discovery.StartListening();
-        _ = _discovery.AnnounceAsync();
-
-        // Nutzerwunsch 15.08.2026: Admin<->Admin-Mesh-Abgleich hängt am ohnehin
-        // stattfindenden Boot-Call-Kontakt (siehe DiscoveryService.AdminPeerContactObserved-
-        // Klassendoku) - das Event feuert dort ohnehin nur, wenn BEIDE Seiten Role.Admin
-        // sind, ein Anhängen auf einem User-Gerät ist also harmlos (Handler wird nie
-        // aufgerufen), keine zusätzliche Rollenprüfung hier nötig.
-        _discovery.AdminPeerContactObserved += _auditSyncService.OnAdminPeerContactObserved;
-
-        // Eigener Boot-Push (Nutzerwunsch 14.08.2026): mit dem beim letzten Beenden
-        // gespeicherten Geräte-/Zustellstand, ohne auf die (fire-and-forget) Antworten des
-        // gerade abgesetzten Announce oben zu warten - der nächste eigene Trigger (nächster
-        // Alarm oder nächster Boot) holt jeden inzwischen neu erreichbaren Admin ab, kein
-        // zusätzlicher Aufwand nötig, um exakt diesen einen Moment zu treffen.
-        _ = _auditSyncService.PushPendingAsync(_deviceStore.Load());
 
         _listener = new AlarmTcpListener(BuildIdentity, _auditLog.Append, groupKeyProvider: () => _deployment.GroupKeyBase64);
         _listener.AlarmReceived += (_, args) => _coordinator.HandleIncomingAlarmRequest(args);
         _listener.Start();
 
         _configSync = new ConfigSyncService(BuildIdentity, _deviceStore.Load, _auditLog.Append, groupKeyProvider: () => _deployment.GroupKeyBase64);
-        _configSync.ConfigApplied += (_, _) => RegisterHotkeysFromConfig();
+        _configSync.ConfigApplied += (_, _) =>
+        {
+            RegisterHotkeysFromConfig();
+
+            // Bugfix 17.08.2026 (Fehlerbericht "neu beigetretenes Gerät bekommt keine
+            // Config, bis der Admin neu startet"): sobald WIR selbst per Hot-Reload eine
+            // neuere Config übernommen haben, sofort erneut ankündigen, statt auf den
+            // nächsten fremden Boot-Call zu warten - erreicht bereits online lauschende
+            // Peers zeitnah, statt dass sie erst bei ihrem eigenen nächsten Boot davon
+            // erfahren. BuildIdentity() liest die ConfigVersion jetzt ohnehin bei jedem
+            // Aufruf frisch von der Platte (siehe Kommentar dort) - dieser Re-Announce
+            // beschleunigt die Zustellung nur zusätzlich, behebt den Bug aber nicht allein.
+            _ = _discovery.AnnounceAsync();
+        };
         _configSync.Start();
 
         // Bugfix 11.08.2026 (Fehlerbericht "frisch installierte Geräte bleiben ohne
@@ -357,6 +378,23 @@ public partial class App : System.Windows.Application
         // DiscoveryService.PeerConfigVersionObserved); diese Verdrahtung macht daraus
         // zusätzlich einen Config-Pull-Trigger, symmetrisch für beide Seiten des Austauschs.
         _discovery.PeerConfigVersionObserved += _configSync.OnPeerConfigVersionObserved;
+
+        // Nutzerwunsch 15.08.2026: Admin<->Admin-Mesh-Abgleich hängt am ohnehin
+        // stattfindenden Boot-Call-Kontakt (siehe DiscoveryService.AdminPeerContactObserved-
+        // Klassendoku) - das Event feuert dort ohnehin nur, wenn BEIDE Seiten Role.Admin
+        // sind, ein Anhängen auf einem User-Gerät ist also harmlos (Handler wird nie
+        // aufgerufen), keine zusätzliche Rollenprüfung hier nötig.
+        _discovery.AdminPeerContactObserved += _auditSyncService.OnAdminPeerContactObserved;
+
+        _discovery.StartListening();
+        _ = _discovery.AnnounceAsync();
+
+        // Eigener Boot-Push (Nutzerwunsch 14.08.2026): mit dem beim letzten Beenden
+        // gespeicherten Geräte-/Zustellstand, ohne auf die (fire-and-forget) Antworten des
+        // gerade abgesetzten Announce oben zu warten - der nächste eigene Trigger (nächster
+        // Alarm oder nächster Boot) holt jeden inzwischen neu erreichbaren Admin ab, kein
+        // zusätzlicher Aufwand nötig, um exakt diesen einen Moment zu treffen.
+        _ = _auditSyncService.PushPendingAsync(_deviceStore.Load());
 
         var cacheStore = new UpdatePackageCacheStore();
         // Nutzerwunsch 16.08.2026 ("separater Test-Key für Test-Installer"): diese
