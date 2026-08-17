@@ -78,7 +78,11 @@ bewusst *nicht* Teil der automatisierten Tests, statt eine unechte Abdeckung vor
 
 ## Lizenz
 
-MIT, siehe [`LICENSE`](LICENSE). Der Copyright-Halter in der `LICENSE`-Datei ist aktuell
+Source-available (kein OSI-Open-Source), siehe [`LICENSE`](LICENSE): Quellcode öffentlich
+einsehbar, kostenfrei für Privatpersonen, kostenpflichtige Nutzungsvereinbarung für
+Unternehmen/Behörden, keine Nutzung durch Dritte zum Bau konkurrierender Produkte. **Entwurf** —
+Klärung mit der Stadt bislang nur telefonisch, schriftliche Bestätigung und rechtskundige Prüfung
+stehen vor einem echten Release noch aus. Der Copyright-Halter in der `LICENSE`-Datei ist aktuell
 ein Platzhalter ("HälpMi contributors") - vor Veröffentlichung durch die tatsächliche
 Rechteinhaberin (die Stadt) ersetzen.
 

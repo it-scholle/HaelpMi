@@ -46,6 +46,17 @@ stillschweigend zu ignorieren.
   geändert wird. Bis dahin bleibt die im Repository liegende `LICENSE`-Datei unverändert MIT.
   `pflichtenheft-HälpMi.md` selbst wird nicht rückwirkend editiert (historische FR-Quelle), diese
   CLAUDE.md-Notiz gewinnt bei Widersprüchen wie in den Referenzdokumenten oben beschrieben.
+- **Umstellung auf Source-Available als Entwurf (ergänzt 17.08.2026):** Die oben verlangte
+  schriftliche Klärung mit der Stadt liegt weiterhin nicht vor — die Klärung erfolgte bislang nur
+  **telefonisch mit der städtischen IT** (17.08.2026). Auf ausdrücklichen Wunsch des Nutzers wird
+  die `LICENSE`-Datei trotzdem bereits jetzt auf das oben beschriebene Source-Available-Modell
+  umgestellt (öffentlicher Quellcode, kostenfrei für Privatpersonen, kostenpflichtige
+  Nutzungsvereinbarung für Organisationen, keine Weiterverwertung durch Dritte zu
+  Konkurrenzprodukten) — bewusst als vorläufige Schutzmaßnahme, um die im bisherigen MIT-Text
+  erlaubte freie kommerzielle Weiterverwertung durch Dritte nicht länger offenzulassen, während die
+  schriftliche Bestätigung noch aussteht. `LICENSE` und der Lizenz-Abschnitt in `README.md` tragen
+  dazu einen deutlichen Entwurfs-Hinweis. **Vor einem echten Release weiterhin offen:** schriftliche
+  Bestätigung der Stadt nachholen und den Lizenztext von einer rechtskundigen Person prüfen lassen.
 - `.gitignore` gegen Secret-Dateimuster von Anfang an.
 - Drei getrennte kryptografische Schlüsselpaare, niemals verwechseln oder zusammenlegen:
   1. Kunden-Lizenzsignatur (Ed25519) — Soft-Expiry, kein Hard-Lock.

@@ -1,21 +1,21 @@
-MIT License
+HälpMi — Quellverfügbare Lizenz (Entwurf)
 
 Copyright (c) 2026 HälpMi contributors
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+Der Quellcode dieses Projekts ist öffentlich einsehbar und auditierbar.
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+- Privatpersonen dürfen diese Software für private, nicht-kommerzielle Zwecke kostenfrei
+  nutzen.
+- Unternehmen, Behörden und sonstige Organisationen benötigen für die Nutzung eine
+  kostenpflichtige Nutzungsvereinbarung mit der Rechteinhaberin.
+- Die Erstellung und der Vertrieb eigener, konkurrierender Produkte auf Basis dieses
+  Quellcodes durch Dritte ist nicht gestattet.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+Dies ist KEINE Open-Source-Lizenz im Sinne der Open Source Initiative (OSI) — insbesondere
+keine MIT- oder AGPL-Lizenz. Es handelt sich um ein "Source-available"-Modell.
+
+---
+HINWEIS: Dies ist ein Entwurf. Die Klärung mit der Stadt als Auftraggeberin erfolgte bislang
+nur telefonisch (17.08.2026); eine schriftliche Bestätigung steht noch aus. Der endgültige
+Lizenztext muss vor einem echten Release von einer rechtskundigen Person geprüft und die
+Klärung mit der Stadt schriftlich nachgeholt werden.
