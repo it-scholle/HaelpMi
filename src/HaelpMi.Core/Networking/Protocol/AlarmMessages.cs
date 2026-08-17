@@ -40,3 +40,12 @@ public sealed record AlarmAckMessage(
     Guid AlarmSessionId,
     Guid ReceiverDeviceId,
     DateTimeOffset ReceivedAtUtc);
+
+/// <summary>
+/// Rein lokales Umschlagformat für die Primary→Satellite-Weiterleitung eines bereits
+/// empfangenen Alarms auf derselben Maschine (Fast-User-Switching-Fix 17.08.2026, s.
+/// AlarmRelayServer/AlarmRelayClient). Kein Netzwerkformat - läuft ausschließlich über eine
+/// lokale Named Pipe, deshalb kein SecureEnvelope/keine Verschlüsselung nötig: der Alarm wurde
+/// bereits von der Primary-Instanz über <see cref="AlarmRequestMessage"/> entschlüsselt/geprüft.
+/// </summary>
+internal sealed record AlarmRelayMessage(AlarmRequestMessage Request, string SenderAddress);

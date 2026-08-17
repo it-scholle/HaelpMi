@@ -44,6 +44,20 @@ public class AutostartRegistrarTests
     }
 
     [Fact]
+    public void BuildTaskXml_AllowsParallelInstances_NotJustOnePerMachine()
+    {
+        // Bugfix 17.08.2026 (Fast User Switching): IgnoreNew wertet Task Scheduler pro Task
+        // maschinenweit aus, nicht pro Sitzung - solange Account A's Instanz noch lief, wurde
+        // der LogonTrigger für Account B's Anmeldung kommentarlos ignoriert, obwohl der
+        // Trigger selbst längst für jede Anmeldung gedacht war (s. Tests oben).
+        var doc = XDocument.Parse(AutostartRegistrar.BuildTaskXml(@"C:\Program Files\HaelpMi\HaelpMi.Agent.exe"));
+
+        var settings = doc.Root!.Element(Ns + "Settings")!;
+
+        Assert.Equal("Parallel", settings.Element(Ns + "MultipleInstancesPolicy")!.Value);
+    }
+
+    [Fact]
     public void BuildTaskXml_DoesNotSkipRunOnBatteryPower()
     {
         // Zweiter Teil desselben Bugfix: schtasks' eigene Standardwerte hätten den Agent auf
@@ -115,6 +129,21 @@ public class AutostartRegistrarTests
             """;
 
         Assert.False(AutostartRegistrar.TaskXmlIsUpToDate(preFixXml, ExePath));
+    }
+
+    [Fact]
+    public void TaskXmlIsUpToDate_PreFix_IgnoreNewPolicy_IsNotUpToDate()
+    {
+        // Bugfix 17.08.2026 (Fast User Switching): ein Task von VOR diesem Fix (IgnoreNew statt
+        // Parallel) muss als veraltet erkannt werden, sonst repariert sich eine bereits
+        // installierte Maschine nie selbst - sonst bliebe genau der gemeldete Fehler
+        // ("Ummelden auf anderen Account startet HälpMi nicht") auf Bestandsinstallationen
+        // bestehen, obwohl BuildTaskXml längst korrigiert ist.
+        var xmlWithIgnoreNew = AutostartRegistrar.BuildTaskXml(ExePath)
+            .Replace("<MultipleInstancesPolicy>Parallel</MultipleInstancesPolicy>",
+                     "<MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>");
+
+        Assert.False(AutostartRegistrar.TaskXmlIsUpToDate(xmlWithIgnoreNew, ExePath));
     }
 
     [Fact]

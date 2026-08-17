@@ -47,8 +47,28 @@ public static class AppConstants
     /// <summary>TCP port for post-trigger alarm feedback ("bin unterwegs" + status relay, Teil 2, Abschnitt 7/8).</summary>
     public const int AlarmFeedbackTcpPort = 51505;
 
-    /// <summary>Name of the local named-pipe used for Config/Admin-Dashboard &lt;-&gt; Agent IPC on the same machine.</summary>
+    /// <summary>
+    /// Basisname der lokalen Named Pipe für Config/Admin-Dashboard &lt;-&gt; Agent-IPC auf
+    /// derselben Maschine. Bugfix 17.08.2026 (Fast User Switching): seit mehrere Agent-
+    /// Instanzen gleichzeitig laufen können (eine pro angemeldeter Sitzung, s.
+    /// AutostartRegistrar), ist dieser Basisname allein nicht mehr eindeutig genug - jede
+    /// Session hängt bei Verwendung zusätzlich die eigene <c>Process.SessionId</c> an (s.
+    /// IpcServer/IpcClient), sonst könnte Config.exe in Sitzung B nichtdeterministisch vom
+    /// Agent in Sitzung A statt vom eigenen bedient werden (Named Pipes sind - anders als der
+    /// bewusst "Local\"-präfigierte Single-Instance-Mutex - kein session-isolierter Namespace).
+    /// </summary>
     public const string IpcPipeName = "HaelpMi.Agent.Ipc";
+
+    /// <summary>
+    /// Name der lokalen Named Pipe, über die die "Primary"-Agent-Instanz (die Instanz, die den
+    /// exklusiven <see cref="AlarmTcpPort"/> tatsächlich binden konnte) empfangene Alarme an
+    /// alle "Satellite"-Instanzen in anderen gleichzeitig angemeldeten Sitzungen weiterreicht
+    /// (Fast-User-Switching-Fix 17.08.2026, s. AlarmRelayServer/AlarmRelayClient). Bewusst ein
+    /// fester, maschinenweiter Name (keine Session-ID angehängt, anders als
+    /// <see cref="IpcPipeName"/> oben) - genau eine Primary-Instanz pro Maschine soll hier
+    /// gefunden werden, unabhängig davon, in welcher Sitzung sie läuft.
+    /// </summary>
+    public const string AlarmRelayPipeName = "HaelpMi.Agent.AlarmRelay";
 
     /// <summary>Name of the local named-pipe used for Agent &lt;-&gt; Update-Dienst IPC on the same machine (Teil 2, Abschnitt 11).</summary>
     public const string UpdateServiceIpcPipeName = "HaelpMi.UpdateService.Ipc";

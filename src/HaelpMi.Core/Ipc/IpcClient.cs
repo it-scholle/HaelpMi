@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.IO.Pipes;
 using HaelpMi.Core.Models;
 using HaelpMi.Core.Networking.Protocol;
@@ -7,12 +8,18 @@ namespace HaelpMi.Core.Ipc;
 /// <summary>Used by HaelpMi.Config to ask the running HaelpMi.Agent to do something (see <see cref="IpcServer"/>).</summary>
 public sealed class IpcClient
 {
+    // Muss exakt dieselbe sitzungsspezifische Pipe treffen wie IpcServer.PipeName - Config.exe
+    // läuft immer in derselben Windows-Sitzung wie der Agent, den es erreichen will (gestartet
+    // aus dem Tray/Startmenü/Autostart derselben Sitzung), daher liefert die eigene SessionId
+    // hier zuverlässig den richtigen Wert (s. AppConstants.IpcPipeName-Kommentar).
+    private static readonly string PipeName = $"{AppConstants.IpcPipeName}.{Process.GetCurrentProcess().SessionId}";
+
     public async Task<IpcResponse> SendAsync(IpcCommandType command, TimeSpan? timeout = null, CancellationToken ct = default)
     {
         var effectiveTimeout = timeout ?? TimeSpan.FromSeconds(5);
         try
         {
-            using var client = new NamedPipeClientStream(".", AppConstants.IpcPipeName, PipeDirection.InOut, PipeOptions.Asynchronous);
+            using var client = new NamedPipeClientStream(".", PipeName, PipeDirection.InOut, PipeOptions.Asynchronous);
             using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
             timeoutCts.CancelAfter(effectiveTimeout);
 

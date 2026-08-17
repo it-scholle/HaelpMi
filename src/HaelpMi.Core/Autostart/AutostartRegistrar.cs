@@ -73,12 +73,26 @@ public static class AutostartRegistrar
             var doc = XDocument.Parse(existingTaskXml);
             var principal = doc.Root?.Element(ns + "Principals")?.Element(ns + "Principal");
             var command = doc.Root?.Element(ns + "Actions")?.Element(ns + "Exec")?.Element(ns + "Command")?.Value;
+            var instancesPolicy = doc.Root?.Element(ns + "Settings")?.Element(ns + "MultipleInstancesPolicy")?.Value;
 
             var hasGroupPrincipal = principal?.Element(ns + "GroupId") is not null
                                      && principal.Element(ns + "UserId") is null;
             var commandMatchesCurrentPath = string.Equals(command, executablePath, StringComparison.OrdinalIgnoreCase);
 
-            return hasGroupPrincipal && commandMatchesCurrentPath;
+            // Bugfix 17.08.2026 (Fast-User-Switching: "Ummelden auf anderen Account startet
+            // HälpMi für den neuen Account nicht"): IgnoreNew wird von schtasks/Task Scheduler
+            // PRO TASK, MASCHINENWEIT ausgewertet, nicht pro Sitzung - solange Account A's
+            // Instanz noch läuft, wurde der LogonTrigger für Account B's Anmeldung kommentarlos
+            // ignoriert, obwohl der Trigger selbst (kein <UserId>, GroupId-Principal, siehe oben)
+            // schon lange korrekt für jede Anmeldung gedacht war. Parallel statt IgnoreNew lässt
+            // pro angemeldeter Sitzung eine eigene Instanz zu (Primary/Satellite-Rollenverteilung
+            // für den exklusiven Alarm-Port siehe AlarmRelayServer/AlarmRelayClient). Wie beim
+            // GroupId-Fix muss eine VOR diesem Fix registrierte Installation sich selbst heilen,
+            // ohne Neuinstallation - deshalb hier Teil der Up-to-date-Prüfung, nicht nur in
+            // BuildTaskXml.
+            var allowsParallelInstances = instancesPolicy == "Parallel";
+
+            return hasGroupPrincipal && commandMatchesCurrentPath && allowsParallelInstances;
         }
         catch (System.Xml.XmlException)
         {
@@ -185,7 +199,13 @@ public static class AutostartRegistrar
                         new XElement(ns + "GroupId", BuiltInUsersGroupSid), // Gruppe statt fester Nutzer-SID - läuft in der jeweils eigenen Sitzung
                         new XElement(ns + "RunLevel", "LeastPrivilege"))),
                 new XElement(ns + "Settings",
-                    new XElement(ns + "MultipleInstancesPolicy", "IgnoreNew"),
+                    // Bugfix 17.08.2026 (Fast-User-Switching): IgnoreNew wertet Task Scheduler
+                    // pro Task maschinenweit aus statt pro Sitzung - siehe ausführlicher
+                    // Kommentar bei TaskXmlIsUpToDate. Parallel lässt eine eigene Instanz je
+                    // angemeldeter Sitzung zu; welche davon den exklusiven Alarm-Port bekommt
+                    // ("Primary"), entscheidet weiterhin allein das Betriebssystem beim Socket-
+                    // Bind (siehe AlarmRelayServer/AlarmRelayClient in HaelpMi.Agent).
+                    new XElement(ns + "MultipleInstancesPolicy", "Parallel"),
                     new XElement(ns + "DisallowStartIfOnBatteries", "false"), // Alarmsystem - darf nicht vom Netzteilstatus abhängen
                     new XElement(ns + "StopIfGoingOnBatteries", "false"),
                     new XElement(ns + "AllowHardTerminate", "true"),

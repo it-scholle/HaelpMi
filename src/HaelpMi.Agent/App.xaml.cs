@@ -72,6 +72,14 @@ public partial class App : System.Windows.Application
 
     private DiscoveryService? _discovery;
     private AlarmTcpListener? _listener;
+    // Fast-User-Switching-Fix 17.08.2026 (s. AlarmRelayServer/AlarmRelayClient-Klassendoku):
+    // genau eines der beiden ist gesetzt, nie beide - Primary hostet _relayServer, Satellite
+    // hält _relayClient. _alarmRoleBackoffRandom ist bewusst ein Feld statt eine lokale
+    // Variable je Aufruf, damit aufeinanderfolgende Übernahmeversuche (selten, aber möglich bei
+    // mehreren Sitzungswechseln kurz hintereinander) nicht alle mit demselben Startwert seeden.
+    private AlarmRelayServer? _relayServer;
+    private AlarmRelayClient? _relayClient;
+    private readonly Random _alarmRoleBackoffRandom = new();
     private AlarmFeedbackChannel? _feedbackChannel;
     private ConfigSyncService? _configSync;
     private UpdatePackageDistributionService? _updateDistribution;
@@ -351,8 +359,12 @@ public partial class App : System.Windows.Application
             bridgeSeedAddressProvider: () => _sharedConfigStore.LoadOrCreate().BridgeSeedAddresses);
 
         _listener = new AlarmTcpListener(BuildIdentity, _auditLog.Append, groupKeyProvider: () => _deployment.GroupKeyBase64);
-        _listener.AlarmReceived += (_, args) => _coordinator.HandleIncomingAlarmRequest(args);
-        _listener.Start();
+        _listener.AlarmReceived += OnAlarmReceived;
+        // Fast-User-Switching-Fix 17.08.2026: statt direkt _listener.Start() aufzurufen und den
+        // Rückgabewert zu ignorieren, entscheidet dieser Aufruf, ob diese Sitzung Primary
+        // (bindet den Port direkt) oder Satellite (hängt sich an eine andere Sitzungsinstanz
+        // an) wird - s. TryBecomePrimaryOrSatellite/AlarmRelayServer-Klassendoku.
+        TryBecomePrimaryOrSatellite();
 
         _configSync = new ConfigSyncService(BuildIdentity, _deviceStore.Load, _auditLog.Append, groupKeyProvider: () => _deployment.GroupKeyBase64);
         _configSync.ConfigApplied += (_, _) =>
@@ -453,6 +465,62 @@ public partial class App : System.Windows.Application
             _licenseChecker = new LicenseChecker(_settingsStore, _auditLog.Append);
             RunLicenseCheck();
             _licenseCheckTimer = new System.Threading.Timer(_ => RunLicenseCheck(), null, AppConstants.LicenseCheckInterval, AppConstants.LicenseCheckInterval);
+        }
+    }
+
+    // Fast-User-Switching-Fix 17.08.2026 (s. AlarmRelayServer/AlarmRelayClient-Klassendoku für
+    // den vollen Hintergrund): entscheidet, ob diese Sitzung den exklusiven Alarm-Port selbst
+    // bekommt (Primary) oder sich stattdessen an eine bereits laufende Primary-Instanz in einer
+    // anderen Sitzung anhängt (Satellite). Läuft beim ersten Start UND jedes Mal erneut, wenn
+    // eine bestehende Satellite-Verbindung abreißt (Primary-Sitzung hat sich abgemeldet) -
+    // dadurch übernimmt automatisch eine der verbleibenden Sitzungen, ohne dass ein Admin
+    // eingreifen oder ein neuer Anmeldevorgang abgewartet werden muss.
+    private void TryBecomePrimaryOrSatellite()
+    {
+        if (_listener!.Start())
+        {
+            _ = _relayClient?.DisposeAsync(); // war zuvor Satellite - als frisch gewordene Primary nicht mehr gebraucht
+            _relayClient = null;
+            _relayServer = new AlarmRelayServer();
+            _relayServer.Start();
+            return;
+        }
+
+        _relayServer = null;
+        _relayClient = new AlarmRelayClient();
+        _relayClient.AlarmRelayed += (_, args) => _coordinator!.HandleIncomingAlarmRequest(args);
+        _relayClient.ConnectionLost += (_, _) => _ = RetryAlarmRoleAfterBackoffAsync();
+        _relayClient.Start();
+    }
+
+    // Kein Netzwerkverkehr, kein Polling im Leerlauf (CLAUDE.md) - läuft nur EINMALIG als
+    // Reaktion auf ein tatsächliches ConnectionLost-Ereignis, nicht wiederholt im Hintergrund.
+    private async Task RetryAlarmRoleAfterBackoffAsync()
+    {
+        try
+        {
+            // Gleiches Zufalls-Backoff-Muster wie beim bestehenden Edit-Lock-Kollisionsschutz
+            // (CLAUDE.md, Teil 2 Abschnitt 5) - vermeidet, dass mehrere im selben Moment frei
+            // gewordene Satellites gleichzeitig um den Port konkurrieren.
+            var (minMs, maxMs) = AppConstants.EditLockCollisionBackoff;
+            await Task.Delay(_alarmRoleBackoffRandom.Next(minMs, maxMs));
+            TryBecomePrimaryOrSatellite();
+        }
+        catch (Exception ex)
+        {
+            CrashLogger.Log(nameof(HaelpMi.Agent), "Alarm-Relay-Uebernahme fehlgeschlagen", ex);
+        }
+    }
+
+    private void OnAlarmReceived(object? sender, AlarmReceivedEventArgs args)
+    {
+        _coordinator!.HandleIncomingAlarmRequest(args);
+
+        // Nur gesetzt, wenn diese Instanz Primary ist (s. TryBecomePrimaryOrSatellite) - reicht
+        // den Alarm zusätzlich an alle Satellites in anderen Sitzungen weiter.
+        if (_relayServer is not null)
+        {
+            _ = _relayServer.BroadcastAsync(args.Request, args.SenderAddress.ToString());
         }
     }
 
@@ -631,6 +699,8 @@ public partial class App : System.Windows.Application
 
         _licenseCheckTimer?.Dispose();
         _hotkey?.Dispose();
+        _ = _relayServer?.DisposeAsync();
+        _ = _relayClient?.DisposeAsync();
         _ = _listener?.DisposeAsync();
         _ = _feedbackChannel?.DisposeAsync();
         _ = _configSync?.DisposeAsync();

@@ -45,11 +45,20 @@ public sealed class AlarmTcpListener : IAsyncDisposable
         _groupKeyProvider = groupKeyProvider;
     }
 
-    public void Start(int port = Models.AppConstants.AlarmTcpPort)
+    /// <summary>
+    /// Versucht, den exklusiven Alarm-Port zu binden. Gibt <c>true</c> zurück, wenn diese
+    /// Instanz dadurch zur "Primary" für die Maschine wird (s. AlarmRelayServer-Klassendoku),
+    /// sonst <c>false</c> - der Aufrufer (HaelpMi.Agent) entscheidet anhand dessen, ob er als
+    /// Satellite stattdessen eine Relay-Verbindung zur Primary-Instanz aufbaut. Erneuter Aufruf
+    /// nach einem vorherigen Fehlschlag versucht bewusst erneut zu binden (kein "einmal
+    /// gescheitert, für immer gescheitert") - genau das braucht die Satellite→Primary-Übernahme
+    /// bei Verbindungsabbruch (s. dortiger Kommentar).
+    /// </summary>
+    public bool Start(int port = Models.AppConstants.AlarmTcpPort)
     {
         if (_listener is not null)
         {
-            return;
+            return true; // schon gebunden (durch einen früheren erfolgreichen Aufruf)
         }
 
         // Bugfix 06.08.2026 ("Dashboard startet nicht" - Crash-Log-Fund): fehlte hier bisher
@@ -61,6 +70,12 @@ public sealed class AlarmTcpListener : IAsyncDisposable
         // GENAU der Alarm-Empfänger ist (FR-9/FR-13) - "degradiert weiterlaufen" bedeutet
         // hier "dieses Gerät empfängt bis zum nächsten erfolgreichen Start keine Alarme
         // mehr", deshalb zusätzlich ins Audit-Log statt nur stillschweigend zu degradieren.
+        //
+        // Bugfix 17.08.2026 (Fast User Switching): "bis zum nächsten erfolgreichen Start"
+        // stimmt seither nicht mehr uneingeschränkt - ein Bind-Fehlschlag bedeutet jetzt "diese
+        // Sitzung wird Satellite statt Primary" (s. Rückgabewert-Doku oben), nicht mehr
+        // zwingend "kein Alarmempfang". Der Audit-Text bleibt trotzdem korrekt: er beschreibt
+        // den Zustand DIESER Instanz, die Weiterleitung passiert außerhalb dieser Klasse.
         try
         {
             _listener = new TcpListener(IPAddress.Any, port);
@@ -69,12 +84,13 @@ public sealed class AlarmTcpListener : IAsyncDisposable
         catch (SocketException)
         {
             _listener = null;
-            _audit?.Invoke($"AlarmTcpListener konnte Port {port} nicht öffnen (belegt) - Alarme kommen bis zum nächsten Neustart nicht an.");
-            return;
+            _audit?.Invoke($"AlarmTcpListener konnte Port {port} nicht öffnen (belegt) - lauscht in dieser Sitzung nicht direkt, s. Alarm-Relay.");
+            return false;
         }
 
         _cts = new CancellationTokenSource();
         _acceptLoop = AcceptLoopAsync(_listener, _cts.Token);
+        return true;
     }
 
     private async Task AcceptLoopAsync(TcpListener listener, CancellationToken ct)

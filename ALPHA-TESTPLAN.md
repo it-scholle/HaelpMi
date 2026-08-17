@@ -332,6 +332,35 @@ zwei Geräte, echte Netzwerktrennung.
 (ohne Klarnamen sollte da ohnehin nichts drinstehen) sowie ob eine `*.gaps.jsonl`-Datei
 entstanden ist, mitschicken.
 
+## Test 9e: Fast User Switching — Autostart + Alarmempfang für jede angemeldete Sitzung (17.08.2026)
+
+Kernanforderung, kein Komfort-Test: jeder angemeldete Windows-Account muss zuverlässig Alarme
+empfangen, auch bei Benutzerwechsel ohne Ab-/Anmeldung. Braucht ein Testgerät mit zwei lokalen
+Windows-Standard-Accounts (A und B), HälpMi darauf installiert.
+
+- [ ] Account A anmelden - Agent läuft (Tray-Icon sichtbar), Alarm von einem Peer-Gerät
+      auslösen - A bekommt Popup+Ton (Baseline, unverändert)
+- [ ] Ohne A abzumelden: "Benutzer wechseln" (Startmenü) → Account B anmelden. Tray-Icon für
+      B muss binnen weniger Sekunden erscheinen (Task-Scheduler-LogonTrigger, jetzt mit
+      `Parallel`-Policy statt `IgnoreNew`)
+- [ ] Erneut Alarm von einem Peer-Gerät auslösen - **B muss Popup+Ton bekommen**, obwohl B den
+      Alarm-TCP-Port nicht selbst hält (Satellite-Relay von A's Primary-Instanz, siehe
+      AlarmRelayServer/AlarmRelayClient)
+- [ ] Zurück zu Account A wechseln, erneut Alarm auslösen - A weiterhin funktionsfähig
+      (Primary unverändert aktiv)
+- [ ] Account A **komplett abmelden** (nicht nur wegschalten), während B aktiv ist - B muss
+      binnen kurzer Zeit selbst zur Primary werden (Relay-Pipe-Abbruch löst Bind-Übernahme
+      aus); mit einem weiteren Peer-Alarm nach der Übernahme verifizieren
+- [ ] In Sitzung B `HaelpMi.Config` öffnen, "Erneut suchen" oder Selbsttest auslösen - muss
+      gegen B's eigene Agent-Instanz laufen (jeweiliges lokales Audit-Log prüfen), nicht
+      gegen die von A (Test für die Session-Scoping-Korrektur der Config↔Agent-IPC-Pipe)
+- [ ] Stresstest: mehrfach schnell zwischen A und B hin- und herwechseln - keine hängenden
+      Prozesse, kein Deadlock bei der Primary/Satellite-Übernahme
+
+**Wenn das fehlschlägt:** welcher Punkt genau, ob das Tray-Icon für die zweite Sitzung
+überhaupt erscheint (Autostart-Problem) oder nur der Alarm ausbleibt (Relay-Problem), plus
+`%LocalAppData%\HaelpMi\crash-*.log` beider Sitzungen falls vorhanden.
+
 ---
 
 ## Was mir beim Zurückmelden am meisten hilft
