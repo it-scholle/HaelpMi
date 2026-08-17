@@ -62,6 +62,22 @@ public sealed class RepeatingAlarmSession : IDisposable
     private readonly AlarmFeedbackChannel _feedbackChannel;
     private readonly LiveIdentity _ownIdentity;
     private readonly CancellationTokenSource _stopCts = new();
+
+    // Bugfix 17.08.2026 (Fehlerbericht "Empfangen 0 von N bleibt dauerhaft hängen", Flaw 6):
+    // vorher wurde _stopCts.Token direkt als ct an _alarmSender.SendAsync durchgereicht -
+    // derselbe Token, den OnMyWayReceived unten beim Erreichen des Schwellwerts sofort
+    // cancelt. Eine schnelle "Ich komme"-Antwort (Standard-Schwellwert 1) brach dadurch die
+    // noch offene(n) Ack-Wartephase(n) DERSELBEN, gerade laufenden Sendewelle ab, bevor sie
+    // echte Acks natürlich einsammeln konnte - ein Ziel zählte dann als "nicht empfangen",
+    // obwohl die Zustellung (sonst gäbe es kein "Ich komme") längst stattgefunden hatte.
+    // Da danach keine weitere Welle mehr lief, blieb der so verfälschte Zähler dauerhaft
+    // stehen. Fix: eigener Token nur für den ECHTEN, manuellen Abbrechen-Pfad (Cancel()) -
+    // der Schwellwert-Auto-Stop cancelt weiterhin nur _stopCts (stoppt die nächste Welle/
+    // den Delay-Loop), lässt die gerade laufende Ack-Sammlung aber bis zu ihrem echten
+    // AlarmAckTimeout auslaufen. Der bestehende Cancel-Test (SendingTests.cs,
+    // "...ReturnsQuickly_EvenWhileSendIsStillPendingAgainstAnUnresponsiveTarget") bleibt
+    // davon unberührt, weil Cancel() beide Tokens cancelt.
+    private readonly CancellationTokenSource _manualCancelCts = new();
     private readonly HashSet<Guid> _onTheWayResponderIds = new();
     private readonly List<string> _onTheWayNames = new();
     private readonly DateTimeOffset _startedAtUtc;
@@ -107,7 +123,7 @@ public sealed class RepeatingAlarmSession : IDisposable
                     break;
                 }
 
-                var result = await _alarmSender.SendAsync(Profile, AlarmSessionId, _ownIdentity, Targets, isTest: IsTest, ct: _stopCts.Token);
+                var result = await _alarmSender.SendAsync(Profile, AlarmSessionId, _ownIdentity, Targets, isTest: IsTest, ct: _manualCancelCts.Token);
                 _lastAckedCount = result.AckedCount;
                 await RaiseAndRelayAsync(stillSending: true);
 
@@ -165,6 +181,10 @@ public sealed class RepeatingAlarmSession : IDisposable
     public void Cancel()
     {
         _cancelledByUser = true;
+        // Beide Tokens: _manualCancelCts bricht eine gerade laufende Ack-Wartephase sofort ab
+        // (siehe Feldkommentar) - ein echter Nutzer-Abbruch soll weiterhin sofort greifen,
+        // anders als der Schwellwert-Auto-Stop unten in OnMyWayReceived.
+        _manualCancelCts.Cancel();
         _stopCts.Cancel();
     }
 
@@ -231,5 +251,6 @@ public sealed class RepeatingAlarmSession : IDisposable
     {
         _feedbackChannel.OnMyWayReceived -= OnMyWayReceived;
         _stopCts.Dispose();
+        _manualCancelCts.Dispose();
     }
 }
