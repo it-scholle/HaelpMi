@@ -108,7 +108,15 @@ public partial class SenderStatusWindow : Window
         Top = workArea.Bottom - ActualHeight - margin - verticalOffset;
     }
 
-    private void CancelButton_Click(object sender, RoutedEventArgs e) => _session.Cancel();
+    // Bugfix 17.08.2026 (Fehlerbericht "UI friert beim Abbrechen ein"): Cancel() darf nicht
+    // mehr direkt auf dem UI-Thread laufen - CancellationTokenSource.Cancel() arbeitet alle
+    // verlinkten Abbruch-Callbacks (Socket-Teardown der noch offenen Ziel-Sends, siehe
+    // AlarmSender.SendToOneAsync) synchron INLINE auf dem aufrufenden Thread ab, ohne eigenes
+    // Timeout. Bei einer trägen/nicht antwortenden Gegenstelle blockierte das bisher den
+    // einzigen WPF-Dispatcher-Thread unvorhersehbar lange - und damit die gesamte App, nicht
+    // nur dieses Fenster. Task.Run verlagert die Abbruch-Kaskade dorthin, wo sie ohnehin
+    // thematisch hingehört (Hintergrund-Netzwerk-Cleanup).
+    private void CancelButton_Click(object sender, RoutedEventArgs e) => _ = Task.Run(_session.Cancel);
 
     private void CloseBannerButton_Click(object sender, RoutedEventArgs e) => Close();
 }

@@ -1,3 +1,6 @@
+using System.Diagnostics;
+using System.Net;
+using System.Net.Sockets;
 using System.Reflection;
 using HaelpMi.Core.Models;
 using HaelpMi.Core.Networking;
@@ -148,6 +151,69 @@ public class SendingTests
         finally
         {
             session.Dispose();
+        }
+    }
+
+    [Fact]
+    public async Task RepeatingAlarmSession_Cancel_ReturnsQuickly_EvenWhileSendIsStillPendingAgainstAnUnresponsiveTarget()
+    {
+        // Regressionstest für den Fehlerbericht "UI friert beim Abbrechen ein" (17.08.2026,
+        // siehe SenderStatusWindow.CancelButton_Click): Cancel() ruft _stopCts.Cancel() auf,
+        // das alle verlinkten Abbruch-Callbacks (Socket-Teardown der noch offenen Ziel-Sends,
+        // siehe AlarmSender.SendToOneAsync) synchron auf dem aufrufenden Thread abarbeitet.
+        // Dieser Test hält absichtlich eine echte TCP-Verbindung offen (Listener nimmt an,
+        // antwortet nie), damit AlarmSender.SendAsync beim Cancel()-Aufruf garantiert noch
+        // mitten in einer wartenden Netzwerkoperation steckt - genau der im Screenshot
+        // dokumentierte Zustand ("Alarm wird gesendet... Empfangen: 0 von 2"). Cancel() selbst
+        // muss trotzdem sofort zurückkehren, nicht erst nach AlarmAckTimeout (5s) oder gar
+        // unbegrenzt.
+        var customerGroupId = Guid.NewGuid();
+        var senderIdentity = new LiveIdentity(customerGroupId, Guid.NewGuid(), "Sender-PC", "Frau Meier", "Zimmer", "1", Role.User, false, "0.0.0", 0);
+        var feedbackChannel = new AlarmFeedbackChannel(() => senderIdentity);
+
+        var listener = new TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+        var port = ((IPEndPoint)listener.LocalEndpoint).Port;
+        try
+        {
+            // Verbindung annehmen, aber nie etwas zurückschreiben und nie schließen -
+            // simuliert die "träge/schwer erreichbare Gegenstelle" aus der Root-Cause-Hypothese.
+            var acceptTask = listener.AcceptTcpClientAsync();
+
+            var profile = new AlarmProfile { Text = "Bitte kommen!", ResponseThreshold = 1 };
+            var target = new DeviceEntry { DeviceId = Guid.NewGuid(), IpAddress = "127.0.0.1", TcpPort = port };
+            var session = new RepeatingAlarmSession(profile, new[] { target }, senderIdentity, new AlarmSender(), feedbackChannel, DateTimeOffset.UtcNow);
+            try
+            {
+                // Finished statt runTask abwarten (wie in den beiden Tests oben): RunAsync
+                // läuft nach dem Stoppen noch bis zu AlarmAutoCloseAfterLastSignal (1 Minute)
+                // weiter (Nachlauf-Fenster für Spätantworten, siehe Klassendoku) - das ist
+                // hier nicht der Punkt, es geht nur darum, dass das PINGEN sofort stoppt.
+                var finished = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                session.Finished += (_, _) => finished.TrySetResult();
+                _ = session.RunAsync();
+
+                // Sicherstellen, dass der Sende-Versuch tatsächlich schon in der wartenden
+                // Netzwerkoperation hängt, bevor abgebrochen wird.
+                using var acceptedClient = await acceptTask.WaitAsync(TimeSpan.FromSeconds(5));
+
+                var stopwatch = Stopwatch.StartNew();
+                session.Cancel();
+                stopwatch.Stop();
+
+                Assert.True(stopwatch.Elapsed < TimeSpan.FromSeconds(1),
+                    $"Cancel() blockierte {stopwatch.Elapsed.TotalMilliseconds}ms - genau das UI-Freeze-Symptom aus dem Fehlerbericht.");
+
+                await finished.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            }
+            finally
+            {
+                session.Dispose();
+            }
+        }
+        finally
+        {
+            listener.Stop();
         }
     }
 }

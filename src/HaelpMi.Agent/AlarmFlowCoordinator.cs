@@ -68,7 +68,14 @@ public sealed class AlarmFlowCoordinator
         var settings = _settingsProvider();
         var soundOption = IncomingSoundCatalog.Resolve(settings.IncomingSoundId);
 
-        System.Windows.Application.Current.Dispatcher.Invoke(() =>
+        // Bugfix 17.08.2026 (Fehlerbericht "UI friert beim Abbrechen ein"): BeginInvoke statt
+        // Invoke - dieser Aufruf kommt vom TCP-Listener-Hintergrundthread, ein blockierendes
+        // Invoke lässt diesen Thread (und damit potenziell weitere eingehende Verbindungen)
+        // warten, sobald der UI-Thread anderweitig kurz beschäftigt ist, statt einfach die
+        // Anzeige nachzuliefern, sobald der UI-Thread wieder frei ist - kein Grund, hier zu
+        // blockieren (Ergebnis wird nirgends synchron gebraucht). Gleiches Muster wie
+        // SenderStatusWindow/ConfigWindow/App.xaml.cs (Tray-Icon).
+        System.Windows.Application.Current.Dispatcher.BeginInvoke(() =>
         {
             if (_openPopups.TryGetValue(request.AlarmSessionId, out var existing))
             {
@@ -109,7 +116,10 @@ public sealed class AlarmFlowCoordinator
             return;
         }
 
-        System.Windows.Application.Current.Dispatcher.Invoke(() => popup.UpdateOnTheWayCount(relay.OnTheWayUserNames.Count));
+        // Bugfix 17.08.2026: BeginInvoke statt Invoke, gleiche Begründung wie in
+        // HandleIncomingAlarmRequest oben - auch dieser Aufruf kommt aus dem TCP-Accept-
+        // Hintergrundthread und braucht das Ergebnis nirgends synchron.
+        System.Windows.Application.Current.Dispatcher.BeginInvoke(() => popup.UpdateOnTheWayCount(relay.OnTheWayUserNames.Count));
     }
 
     private async Task ReportOnMyWayAsync(AlarmRequestMessage request, AlarmReceivedEventArgs args)
