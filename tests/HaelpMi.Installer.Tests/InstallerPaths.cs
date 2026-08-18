@@ -25,6 +25,12 @@ internal static class InstallerPaths
     public static string StartMenuGroupDir => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.CommonPrograms), "HälpMi");
 
+    // Gegenstück zu StartMenuGroupDir für die Admin-Dashboard-Verknüpfung, die bewusst
+    // unter {userprograms} statt {group} liegt (siehe HaelpMiCommon.iss.inc, [Icons]) -
+    // nur der Nutzer, der den Admin-Installer ausführt, soll sie im Startmenü sehen.
+    public static string StartMenuUserProgramsDir => Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.Programs), "HälpMi");
+
     public static string SettingsJsonPath => Path.Combine(ProgramDataDir, "settings.json");
 
     public static string DeploymentJsonPath => Path.Combine(ProgramFilesInstallDir, "deployment.json");

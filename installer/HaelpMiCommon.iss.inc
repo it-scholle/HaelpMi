@@ -13,7 +13,7 @@
 #define MyAppName "HälpMi"
 ; Alpha: 0.x until release, per city/product decision - Version 1.0.0 is reserved for
 ; the actual release. Bump the third number for ordinary fixes, second for a feature.
-#define MyAppVersion "0.37.0"
+#define MyAppVersion "0.37.1"
 #define MyAppPublisher "HälpMi contributors"
 #define MyAgentExeName "HaelpMi.Agent.exe"
 #define MyConfigExeName "HaelpMi.Config.exe"
@@ -119,13 +119,28 @@ Source: "payload\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs creat
 Source: "UserInstallerPayload\HaelpMi-User-Setup.exe"; DestDir: "{app}"; Flags: ignoreversion
 #endif
 
+[InstallDelete]
+; Migration (18.08.2026): frühere Versionen legten die Admin-Dashboard-Verknüpfung fälschlich
+; unter {group} (= {commonprograms}, da PrivilegesRequired=admin) ab - sichtbar für JEDES
+; Windows-Konto auf dem Gerät, nicht nur für den installierenden Admin-Nutzer. Räumt diese
+; Alt-Verknüpfung auf Bestandsgeräten weg, bevor [Icons] unten die neue, nutzerspezifische
+; Verknüpfung anlegt. Unconditional (kein #ifdef), damit auch ein Rollenwechsel Admin->User
+; denselben Altfall aufräumt.
+Type: files; Name: "{commonprograms}\{#MyAppName}\HälpMi Dashboard.lnk"
+
 [Icons]
 ; FR-4: Start Menu shortcut for the Konfigurationsprogramm.
 ; User-Installer: reines Einstellungsfenster (eigener Raum/Hotkeys/Ton), kein Dashboard -
 ; Admin-Installer: derselbe Prozess, aber mit --open-dashboard direkt ins Dashboard, daher
 ; auch anders benannt, damit der Unterschied schon am Startmenü-Eintrag sichtbar ist.
+;
+; Admin-Dashboard bewusst NICHT unter {group} (löst sich bei PrivilegesRequired=admin auf
+; {commonprograms} auf, sichtbar für alle Windows-Konten): die App-interne Admin-Rolle gehört
+; nur dem einen installierenden/vorgesehenen Nutzer (CLAUDE.md, Abschnitt "Rollen"), nicht
+; jedem Windows-Konto auf dem Gerät. {userprograms} löst - anders als {group} - immer auf den
+; aktuell installierenden Nutzer auf, unabhängig vom Installationsmodus.
 #ifdef HaelpMiAdminInstall
-Name: "{group}\HälpMi Dashboard"; Filename: "{app}\{#MyConfigExeName}"; Parameters: "--open-dashboard"
+Name: "{userprograms}\{#MyAppName}\HälpMi Dashboard"; Filename: "{app}\{#MyConfigExeName}"; Parameters: "--open-dashboard"
 #else
 Name: "{group}\HälpMi Konfiguration"; Filename: "{app}\{#MyConfigExeName}"
 #endif

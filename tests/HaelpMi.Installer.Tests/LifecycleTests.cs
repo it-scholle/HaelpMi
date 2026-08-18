@@ -56,6 +56,10 @@ public class LifecycleTests
         AssertAgentIsRunning();
         AssertServiceExists("HaelpMiUpdateService");
         AssertScheduledTaskExists("HaelpMi Agent");
+
+        // FR-4: Konfigurator-Verknüpfung bleibt für ALLE Windows-Konten sichtbar (unter
+        // {group}, im Gegensatz zur Admin-Dashboard-Verknüpfung - siehe Step85 unten).
+        AssertShortcutTargetsExecutable(Path.Combine(InstallerPaths.StartMenuGroupDir, "HälpMi Konfiguration.lnk"), "HaelpMi.Config.exe");
     }
 
     [Fact, TestPriority(15)]
@@ -229,6 +233,14 @@ public class LifecycleTests
         var adminInstallerPath = RequireInstaller(InstallerPaths.FindAdminInstaller(), "Admin-Installer");
         Assert.False(Directory.Exists(InstallerPaths.ProgramFilesInstallDir), "Voraussetzung: Step70 muss vollständig aufgeräumt haben.");
 
+        // Migrationsfall simulieren: eine ältere Installer-Version hätte die Admin-Dashboard-
+        // Verknüpfung noch fälschlich unter {group} (= {commonprograms}, für ALLE Windows-
+        // Konten sichtbar) abgelegt. [InstallDelete] in HaelpMiCommon.iss.inc soll diesen
+        // Altbestand beim Installieren wegräumen.
+        Directory.CreateDirectory(InstallerPaths.StartMenuGroupDir);
+        var staleDashboardLnk = Path.Combine(InstallerPaths.StartMenuGroupDir, "HälpMi Dashboard.lnk");
+        File.WriteAllBytes(staleDashboardLnk, new byte[] { 0 }); // Inhalt irrelevant, nur Existenz zählt
+
         var process = ProcessRunner.StartInteractive(adminInstallerPath, "/LOG=" + LogPathFor("admin-fresh-install"));
         await WizardAutomation.RunFirstInstallWizardAsync(process, TestRoomName, TestRoomNumber, InstallerPaths.DeploymentJsonPath);
         await WaitForExitAsync(process);
@@ -238,11 +250,20 @@ public class LifecycleTests
         AssertFirewallRuleExists("HälpMi Discovery");
         AssertFirewallRuleExists("HälpMi Alarm");
 
+        // Admin-Dashboard-Verknüpfung gehört nur dem installierenden Nutzer (CLAUDE.md,
+        // Abschnitt "Rollen") - liegt unter {userprograms}, NICHT unter {group}. Das
+        // [InstallDelete] von oben muss außerdem die simulierte Altverknüpfung entfernt haben.
+        var dashboardLnkPath = Path.Combine(InstallerPaths.StartMenuUserProgramsDir, "HälpMi Dashboard.lnk");
+        AssertShortcutTargetsExecutable(dashboardLnkPath, "HaelpMi.Config.exe");
+        Assert.Contains("--open-dashboard", ReadShortcutRawText(dashboardLnkPath), StringComparison.Ordinal);
+        AssertShortcutDoesNotExist(Path.Combine(InstallerPaths.StartMenuGroupDir, "HälpMi Dashboard.lnk"));
+
         // Aufräumen für Step90+: Admin-Installation wieder silent entfernen, inkl. Firewall-Regeln.
         var uninstallerPath = RequireInstaller(InstallerPaths.FindUninstaller(), "Uninstaller (unins000.exe)");
         await ProcessRunner.RunAsync(uninstallerPath, "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART", InstallerTimeout);
         AssertFirewallRuleDoesNotExist("HälpMi Discovery");
         AssertFirewallRuleDoesNotExist("HälpMi Alarm");
+        AssertShortcutDoesNotExist(dashboardLnkPath); // {userprograms}-Verknüpfung wird ebenfalls sauber deinstalliert
     }
 
     [Fact, TestPriority(90)]
@@ -325,16 +346,22 @@ public class LifecycleTests
         }
     }
 
-    // .lnk-Dateien speichern ihr Ziel (LocalBasePath) als lesbaren UTF-16LE-Text im
-    // Binärformat - für eine reine Testassertion reicht ein Substring-Check auf den rohen
-    // Bytes, statt eine volle IShellLinkW-COM-Interop-Deklaration nur für diesen einen
-    // Zweck ins Testprojekt zu ziehen (CLAUDE.md "kein Pattern ohne konkreten Anwendungsfall").
-    private static void AssertShortcutTargetsExecutable(string lnkPath, string exeFileName)
+    // .lnk-Dateien speichern Ziel (LocalBasePath) und Parameter (CommandLineArguments) als
+    // lesbaren UTF-16LE-Text im Binärformat - für eine reine Testassertion reicht ein
+    // Substring-Check auf den rohen Bytes, statt eine volle IShellLinkW-COM-Interop-
+    // Deklaration nur für diesen einen Zweck ins Testprojekt zu ziehen (CLAUDE.md "kein
+    // Pattern ohne konkreten Anwendungsfall").
+    private static string ReadShortcutRawText(string lnkPath)
     {
         Assert.True(File.Exists(lnkPath), $"Verknüpfung fehlt: {lnkPath}");
-        var text = System.Text.Encoding.Unicode.GetString(File.ReadAllBytes(lnkPath));
-        Assert.Contains(exeFileName, text, StringComparison.OrdinalIgnoreCase);
+        return System.Text.Encoding.Unicode.GetString(File.ReadAllBytes(lnkPath));
     }
+
+    private static void AssertShortcutTargetsExecutable(string lnkPath, string exeFileName) =>
+        Assert.Contains(exeFileName, ReadShortcutRawText(lnkPath), StringComparison.OrdinalIgnoreCase);
+
+    private static void AssertShortcutDoesNotExist(string lnkPath) =>
+        Assert.False(File.Exists(lnkPath), $"Verknüpfung sollte hier nicht (mehr) existieren: {lnkPath}");
 
     private static void AssertAgentIsRunning()
     {
