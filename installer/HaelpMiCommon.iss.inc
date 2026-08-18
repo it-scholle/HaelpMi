@@ -13,7 +13,7 @@
 #define MyAppName "HälpMi"
 ; Alpha: 0.x until release, per city/product decision - Version 1.0.0 is reserved for
 ; the actual release. Bump the third number for ordinary fixes, second for a feature.
-#define MyAppVersion "0.36.1"
+#define MyAppVersion "0.37.0"
 #define MyAppPublisher "HälpMi contributors"
 #define MyAgentExeName "HaelpMi.Agent.exe"
 #define MyConfigExeName "HaelpMi.Config.exe"
@@ -120,8 +120,7 @@ Source: "UserInstallerPayload\HaelpMi-User-Setup.exe"; DestDir: "{app}"; Flags: 
 #endif
 
 [Icons]
-; FR-4: Start Menu shortcut for the Konfigurationsprogramm - the Agent has no shortcut
-; and no window of its own; it is reached only via its own autostart self-registration.
+; FR-4: Start Menu shortcut for the Konfigurationsprogramm.
 ; User-Installer: reines Einstellungsfenster (eigener Raum/Hotkeys/Ton), kein Dashboard -
 ; Admin-Installer: derselbe Prozess, aber mit --open-dashboard direkt ins Dashboard, daher
 ; auch anders benannt, damit der Unterschied schon am Startmenü-Eintrag sichtbar ist.
@@ -130,6 +129,15 @@ Name: "{group}\HälpMi Dashboard"; Filename: "{app}\{#MyConfigExeName}"; Paramet
 #else
 Name: "{group}\HälpMi Konfiguration"; Filename: "{app}\{#MyConfigExeName}"
 #endif
+; Nutzerwunsch 18.08.2026 ("bei einem Absturz kann HälpMi nicht manuell neu gestartet
+; werden"): bis hierhin hatte der Agent - anders als der Konfigurator oben - keine eigene
+; Verknüpfung und war nur über seinen Autostart-Task (bei Anmeldung) erreichbar. Gleiche
+; Sichtbarkeit wie der Konfigurator-Eintrag (in beiden Installer-Varianten, kein #ifdef):
+; reines Notfall-Hilfsmittel, kein Admin-Feature. Idempotenz (kein Zweitprozess bei
+; bereits laufendem Agent) übernimmt App.xaml.cs selbst (Einzelinstanz-Mutex + Tray-
+; Sprechblase als Rückmeldung statt eines für den Agent technisch nicht vorhandenen
+; Fensters), nicht der Installer.
+Name: "{group}\HälpMi starten"; Filename: "{app}\{#MyAgentExeName}"
 Name: "{group}\{cm:UninstallProgram,HälpMi}"; Filename: "{uninstallexe}"
 
 [Run]

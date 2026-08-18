@@ -153,6 +153,26 @@ ob die Kunden-Gruppen-ID wirklich exakt übereinstimmt.
 
 ---
 
+## Test 5b: "HälpMi starten" (Nutzerwunsch 18.08.2026, manueller Neustart nach Absturz)
+
+Automatisiert deckt `HaelpMi.Installer.Tests` schon ab, dass die Verknüpfung existiert und
+auf die richtige exe zeigt sowie dass kein Zweitprozess entsteht - hier geht es nur um das,
+was sich nicht sinnvoll automatisieren lässt: die tatsächlich sichtbare Tray-Sprechblase.
+
+- [ ] Startmenü (Gerät #1 **und** #2, also Admin- **und** User-Installer): Eintrag
+      "HälpMi starten" ist vorhanden
+- [ ] `HaelpMi.Agent.exe` per Taskmanager beenden, dann "HälpMi starten" klicken →
+      Tray-Icon erscheint wieder, kein Fehlerdialog
+- [ ] Bei bereits laufendem Agent erneut "HälpMi starten" klicken → Tray-Sprechblase
+      "HälpMi läuft bereits" erscheint, im Taskmanager bleibt weiterhin **genau ein**
+      `HaelpMi.Agent.exe`-Prozess sichtbar (kein zweites Fenster, kein Doppel-Icon)
+
+**Melde zurück:** Erscheint die Sprechblase zuverlässig, oder nur manchmal (z. B. weil der
+Agent noch mitten im Hochfahren war)? Das ist der einzige Teil, den ich als Diagnose-Kommentar
+im Code schon als seltene Startrace eingeplant habe, aber nicht selbst timen konnte.
+
+---
+
 ## Test 6: Alarm auslösen und empfangen
 
 - [ ] Auf Gerät #1 (oder #2): konfiguriertes Tastenkürzel eines Alarm-Profils drücken

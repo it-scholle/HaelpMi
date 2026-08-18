@@ -58,6 +58,43 @@ public class LifecycleTests
         AssertScheduledTaskExists("HaelpMi Agent");
     }
 
+    [Fact, TestPriority(15)]
+    public void Step15_StartShortcut_ExistsAndTargetsAgentExe()
+    {
+        // Nutzerwunsch 18.08.2026 ("bei einem Absturz kann HälpMi nicht manuell neu gestartet
+        // werden") - Voraussetzung: Step10 hat gerade frisch installiert.
+        var lnkPath = Path.Combine(InstallerPaths.StartMenuGroupDir, "HälpMi starten.lnk");
+        AssertShortcutTargetsExecutable(lnkPath, "HaelpMi.Agent.exe");
+    }
+
+    [Fact, TestPriority(17)]
+    public void Step17_ManualSecondStart_WhileAgentRunning_EndsWithExactlyOneAgentProcess()
+    {
+        // Simuliert einen Klick auf "HälpMi starten" bei bereits laufendem Agent (siehe
+        // App.xaml.cs WaitForActivationRequests/ActivateEventName) - AssertAgentIsRunning()
+        // stellt sicher, dass aus Step10 schon eine Instanz läuft, bevor hier eine zweite
+        // angestoßen wird, genau wie beim echten Doppelklick auf die Verknüpfung.
+        AssertAgentIsRunning();
+
+        var agentExePath = Path.Combine(InstallerPaths.ProgramFilesInstallDir, "HaelpMi.Agent.exe");
+        using (var secondAttempt = Process.Start(new ProcessStartInfo(agentExePath) { UseShellExecute = true }))
+        {
+            // Die zweite Instanz signalisiert die erste (Tray-Sprechblase) und beendet sich
+            // danach selbst - kurz auf ihr eigenes Prozessende warten statt sofort zu zählen.
+            secondAttempt?.WaitForExit((int)TimeSpan.FromSeconds(10).TotalMilliseconds);
+        }
+
+        var agentProcesses = Process.GetProcessesByName("HaelpMi.Agent");
+        try
+        {
+            Assert.Single(agentProcesses);
+        }
+        finally
+        {
+            foreach (var p in agentProcesses) p.Dispose();
+        }
+    }
+
     [Fact, TestPriority(20)]
     public async Task Step20_ReRunSameVersion_TreatsAsRepair_KeepsDeviceId()
     {
@@ -286,6 +323,17 @@ public class LifecycleTests
                 p.Dispose();
             }
         }
+    }
+
+    // .lnk-Dateien speichern ihr Ziel (LocalBasePath) als lesbaren UTF-16LE-Text im
+    // Binärformat - für eine reine Testassertion reicht ein Substring-Check auf den rohen
+    // Bytes, statt eine volle IShellLinkW-COM-Interop-Deklaration nur für diesen einen
+    // Zweck ins Testprojekt zu ziehen (CLAUDE.md "kein Pattern ohne konkreten Anwendungsfall").
+    private static void AssertShortcutTargetsExecutable(string lnkPath, string exeFileName)
+    {
+        Assert.True(File.Exists(lnkPath), $"Verknüpfung fehlt: {lnkPath}");
+        var text = System.Text.Encoding.Unicode.GetString(File.ReadAllBytes(lnkPath));
+        Assert.Contains(exeFileName, text, StringComparison.OrdinalIgnoreCase);
     }
 
     private static void AssertAgentIsRunning()

@@ -54,6 +54,13 @@ public partial class App : System.Windows.Application
     // einzuschränken.
     private const string SingleInstanceMutexName = "Local\\HaelpMi.Agent.SingleInstance";
 
+    // Aktivierungs-Signal (Nutzerwunsch 18.08.2026, Startmenü-Eintrag "HälpMi starten" -
+    // siehe installer/HaelpMiCommon.iss.inc [Icons]): der Agent hat kein eigenes Fenster,
+    // "nach vorne holen" wie bei HaelpMi.Config/App.xaml.cs (dortiges Vorbild für dieses
+    // Muster) entfällt daher technisch - stattdessen zeigt die schon laufende Instanz beim
+    // Signal eine Tray-Sprechblase, die zweite Instanz beendet sich wie bisher sofort.
+    private const string ActivateEventName = "Local\\HaelpMi.Agent.ActivateRequest";
+
     private readonly SettingsStore _settingsStore = new();
     private readonly SharedConfigStore _sharedConfigStore = new();
     private readonly DeviceStore _deviceStore = new();
@@ -68,6 +75,7 @@ public partial class App : System.Windows.Application
 
     private Mutex? _singleInstanceMutex;
     private bool _ownsSingleInstanceMutex;
+    private EventWaitHandle? _activateEvent;
 
     private OwnSettings _settings = null!;
     private DeploymentInfo _deployment = null!;
@@ -148,10 +156,32 @@ public partial class App : System.Windows.Application
         if (!createdNew)
         {
             // Schon eine Produktivinstanz in dieser Sitzung aktiv (siehe Feldkommentar oben) -
-            // beenden statt um TCP-Ports und den Autostart-Task-Eintrag zu konkurrieren.
+            // beenden statt um TCP-Ports und den Autostart-Task-Eintrag zu konkurrieren. Vorher
+            // best-effort die laufende Instanz signalisieren (Nutzerwunsch 18.08.2026, "HälpMi
+            // starten"-Verknüpfung): ohne Rückmeldung sah ein Klick bei bereits laufendem Agent
+            // aus wie "macht nichts" - gleiches try/catch-Muster wie in
+            // HaelpMi.Config/App.xaml.cs (dortiger Kommentar zum selben Fall).
+            try
+            {
+                using var existingActivateEvent = EventWaitHandle.OpenExisting(ActivateEventName);
+                existingActivateEvent.Set();
+            }
+            catch (WaitHandleCannotBeOpenedException)
+            {
+                // Die andere Instanz ist zwischen Mutex-Check und hier bereits beendet, oder
+                // steckt noch vor dem Anlegen ihres eigenen Events (siehe Kommentar unten) -
+                // dann gibt es nichts zu signalisieren, einfach beenden.
+            }
+
             Shutdown();
             return;
         }
+
+        // Sofort nach Mutex-Erwerb, noch vor dem (etwas dauernden) Laden von Settings/Deployment
+        // unten - ein Klick auf "HälpMi starten" kurz nach dem eigenen Prozessstart soll nicht
+        // in die Lücke fallen (gleiche Reihenfolge-Überlegung wie in HaelpMi.Config/App.xaml.cs).
+        _activateEvent = new EventWaitHandle(false, EventResetMode.AutoReset, ActivateEventName);
+        new Thread(WaitForActivationRequests) { IsBackground = true }.Start();
 
         try
         {
@@ -255,6 +285,29 @@ public partial class App : System.Windows.Application
         var executablePath = Environment.ProcessPath ?? Process.GetCurrentProcess().MainModule?.FileName ?? string.Empty;
         var ok = !string.IsNullOrEmpty(executablePath) && AutostartRegistrar.EnsureRegistered(executablePath, out _);
         Shutdown(ok ? 0 : 1);
+    }
+
+    // Läuft auf einem eigenen Hintergrund-Thread für die gesamte Prozesslaufzeit (kein
+    // async/await hier - WaitOne() blockiert absichtlich, es gibt sonst nichts zu tun). Eine
+    // zweite gestartete Instanz (Klick auf "HälpMi starten" bei bereits laufendem Agent)
+    // signalisiert über dieses Event statt selbst etwas anzuzeigen (siehe OnStartup oben) -
+    // gleiches Grundmuster wie WaitForActivationRequests in HaelpMi.Config/App.xaml.cs, hier
+    // auf ein einzelnes Signal reduziert (der Agent kennt kein zweites Aktivierungsziel wie
+    // Config's Dashboard-Sonderfall).
+    private void WaitForActivationRequests()
+    {
+        while (true)
+        {
+            _activateEvent!.WaitOne();
+            // Kann in der kurzen Lücke zwischen Event-Erzeugung und InitializeTrayIcon() (spät
+            // in StartBackgroundServices()) noch null sein - dann verpufft dieses eine Signal
+            // einfach, ein erneuter Klick trifft danach ein bereits vorhandenes Tray-Icon.
+            Dispatcher.BeginInvoke(() => _trayIcon?.ShowBalloonTip(
+                5000,
+                "HälpMi läuft bereits",
+                "HälpMi ist schon aktiv (Tray-Symbol unten rechts) - ein zweiter Prozess wurde nicht gestartet.",
+                System.Windows.Forms.ToolTipIcon.Info));
+        }
     }
 
     // Bugfix 17.08.2026 (Fehlerbericht "neu beigetretenes Gerät bekommt keine Config, bis
@@ -751,6 +804,8 @@ public partial class App : System.Windows.Application
         _ = _adminRoleKeySync?.DisposeAsync();
         _ = _discovery?.DisposeAsync();
         _ = _ipcServer?.DisposeAsync();
+
+        _activateEvent?.Dispose();
 
         if (_ownsSingleInstanceMutex)
         {

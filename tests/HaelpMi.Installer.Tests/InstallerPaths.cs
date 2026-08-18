@@ -20,6 +20,11 @@ internal static class InstallerPaths
     public static string ProgramDataDir => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "HaelpMi");
 
+    // DefaultGroupName="HälpMi" + DisableProgramGroupPage=yes in HaelpMi.iss/HaelpMi-Admin.iss
+    // (kein wählbarer Gruppenname) - {group} in [Icons] löst sich damit immer hierhin auf.
+    public static string StartMenuGroupDir => Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.CommonPrograms), "HälpMi");
+
     public static string SettingsJsonPath => Path.Combine(ProgramDataDir, "settings.json");
 
     public static string DeploymentJsonPath => Path.Combine(ProgramFilesInstallDir, "deployment.json");
