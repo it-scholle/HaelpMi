@@ -7,9 +7,11 @@ namespace HaelpMi.InstallCreator;
 
 /// <summary>
 /// Baut+signiert ein Update-Paket aus einem bereits publizierten Payload-Ordner - gemeinsame
-/// Logik für das "Update-Ei"-Häkchen im vollen Installer-Build UND den schlanken
-/// "Update-Paket veröffentlichen"-Knopf (Nutzerwunsch 13.08.2026: nicht für jedes Update den
-/// ganzen ISCC/Kundengruppen-ID/Passwort-Ablauf durchlaufen müssen).
+/// Logik für das automatische Einbetten im vollen Admin-Installer-Build (früher "Update-Ei"-
+/// Häkchen, seit 16.08.2026 kein separater Schritt mehr) UND den "Update erstellen"-Knopf
+/// (CreateUpdateBootstrapperButton). Der frühere schlanke "Update-Paket veröffentlichen"-Knopf
+/// (Nutzerwunsch 13.08.2026) ist entfernt (Nutzerwunsch 18.08.2026) - "Update erstellen" deckt
+/// den Self-Bootstrap-Fall bereits ab.
 ///
 /// Feste Reihenfolge wichtig: IMMER erst zippen, DANN erst update-seed/ in denselben Ordner
 /// schreiben - sonst enthielte das Zip sich beim nächsten Lauf selbst rekursiv.
@@ -61,6 +63,11 @@ public static class UpdatePackageBuilder
     /// Gleiches Dateilayout wie HaelpMi.Core.Storage.UpdatePackageCacheStore, hier ohne
     /// ProjectReference auf HaelpMi.Core nachgebaut (siehe .csproj-Kommentar) - "HaelpMi" als
     /// Ordnername ist AppConstants.AppDataFolderName dort, hier bewusst als Literal dupliziert.
+    ///
+    /// TODO-Hinweis (18.08.2026): seit Entfernung des "Update-Paket veröffentlichen"-Knopfs
+    /// (dessen einzigem Aufrufer) aktuell ohne Aufrufer im Install-Creator - zur Überarbeitung
+    /// markiert statt stillschweigend entfernt, falls die Fähigkeit "lokalen Cache ohne
+    /// Neuinstallation befüllen" nicht mehr gebraucht wird, gehört sie ganz weg.
     /// </summary>
     public static bool TryWriteToLocalDeviceCache(string version, BuildResult result)
     {

@@ -269,14 +269,14 @@ Teil, den ich am wenigsten selbst verifizieren konnte.
       `{app}\versions\`, Dienst-Status) so gut wie möglich notieren/Screenshot und mir
       zurückmelden, das ist genau die Art Fehler, die ich vorab nicht sehen konnte.
 
-## Test 9b: Update-Ei / Vaultwarden / schlanker Update-Publisher (Nutzerwunsch 13.08.2026)
+## Test 9b: Update-Ei / Vaultwarden (Nutzerwunsch 13.08.2026)
 
 Deckt den in `HaelpMi.InstallCreator` neu hinzugekommenen Weg ab, ein Update-Paket zu
 signieren - hier bewusst nicht automatisiert (echter Vaultwarden-Zugriff nötig).
 
 - [ ] Install-Creator öffnen, Vaultwarden-Karte mit Server-URL/Konto-E-Mail/Master-Passwort
-      ausfüllen, "Schlüssel laden" - Statuszeile zeigt Erfolg, "Update-Ei" und "Update-Paket
-      veröffentlichen" werden aktivierbar
+      ausfüllen, "Schlüssel laden" - Statuszeile zeigt Erfolg, "Update erstellen" wird
+      aktivierbar
 - [ ] "Neuen Schlüssel erzeugen" (nur auf einer Wegwerf-/Test-Vaultwarden-Instanz, nicht auf
       der echten Produktiv-Notiz!) - öffentlicher Schlüssel erscheint im Protokoll und in der
       Zwischenablage; in Vaultwarden selbst prüfen, ob die Notiz `HälpMi-Update-PrivateKey`
@@ -289,10 +289,6 @@ signieren - hier bewusst nicht automatisiert (echter Vaultwarden-Zugriff nötig)
 - [ ] Diesen Test-Installer installieren (wie Test 2) - im Admin-Dashboard, Tab "Updates",
       zeigt die Versions-Combobox jetzt die gebaute Version an (siehe Fehlerbericht
       13.08.2026, "Dropdown bleibt leer")
-- [ ] "Update-Paket veröffentlichen" separat testen (ohne "Admin-Installer erstellen"): läuft
-      spürbar schneller durch (kein ISCC), fragt kein Kundenname/Passwort ab; auf einer
-      Maschine mit installiertem HälpMi zusätzlich `%ProgramData%\HaelpMi\updates-cache\`
-      prüfen - neuer Versionsordner mit beiden Dateien sollte dort liegen
 - [ ] Ohne geladenen Schlüssel bauen (Vaultwarden-Karte übersprungen) - Test-Installer muss
       weiterhin klaglos bauen, nur ohne eingebettetes Startpaket (Protokoll sagt das explizit)
 

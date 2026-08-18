@@ -86,8 +86,8 @@ stillschweigend zu ignorieren.
   Private Schlüssel gehören nie ins Repo, nie ins Log, nie in eine Fehlermeldung.
 - **Aufbewahrung des privaten Update-Signaturschlüssels (seit 13.08.2026):** liegt verschlüsselt
   in Vaultwarden (Secure Note `HälpMi-Update-PrivateKey`), nicht als Klartextdatei auf einer
-  Build-Maschine. `HaelpMi.InstallCreator` (Knöpfe "Update-Paket veröffentlichen" und "Update
-  erstellen", siehe "Self-Bootstrap-Update" weiter unten) holt ihn dort bei Bedarf per
+  Build-Maschine. `HaelpMi.InstallCreator` (Knopf "Update erstellen", siehe "Self-Bootstrap-
+  Update" weiter unten) holt ihn dort bei Bedarf per
   Bitwarden-CLI ab (Master-Passwort einmal pro
   Programmstart), hält ihn ausschließlich im Arbeitsspeicher dieses einen Laufs und schreibt ihn
   nie auf die Platte. Der bisherige rein manuelle Weg über `HaelpMi.UpdateSigner` (Schlüssel als

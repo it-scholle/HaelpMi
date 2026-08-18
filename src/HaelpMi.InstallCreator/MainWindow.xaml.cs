@@ -555,55 +555,6 @@ public partial class MainWindow : Window
         }
     }
 
-    private async void PublishUpdatePackageButton_Click(object sender, RoutedEventArgs e)
-    {
-        if (_updatePrivateKeyBytes is null)
-        {
-            return; // Button ist ohne geladenen Schlüssel ohnehin deaktiviert
-        }
-
-        SetBusy(true);
-        PublishUpdatePackageButton.IsEnabled = false;
-        try
-        {
-            Log("--- Update-Paket wird veröffentlicht ---");
-            var installerDir = FindInstallerDirectory();
-
-            if (!await RefreshPayloadAsync(installerDir))
-            {
-                Log("Payload-Aktualisierung fehlgeschlagen - Update-Paket wird nicht veröffentlicht.");
-                return;
-            }
-
-            var payloadDir = Path.Combine(installerDir, "payload");
-            var result = UpdatePackageBuilder.Build(payloadDir, _productVersion, _updatePrivateKeyBytes);
-            UpdatePackageBuilder.WriteToPayloadSeed(installerDir, result);
-            Log($"Update-Paket für Version {_productVersion} signiert und nach installer/payload/update-seed/ geschrieben.");
-
-            if (UpdatePackageBuilder.TryWriteToLocalDeviceCache(_productVersion, result))
-            {
-                Log("Zusätzlich in den lokalen P2P-Cache dieser Maschine geschrieben (%ProgramData%\\HaelpMi\\updates-cache) - " +
-                    "dieses Gerät kann die Version jetzt sofort an Peers weiterverteilen, sobald sie im Admin-Dashboard freigegeben ist.");
-            }
-            else
-            {
-                Log("HälpMi ist auf dieser Maschine nicht installiert - lokaler Cache wurde nicht befüllt (nur der Installer-Payload).");
-            }
-        }
-        catch (Exception ex)
-        {
-            Log($"Unerwarteter Fehler: {ex.Message}");
-            CrashLogger.Log("PublishUpdatePackageButton_Click", ex);
-            System.Windows.MessageBox.Show($"Update-Paket-Veröffentlichung fehlgeschlagen:{Environment.NewLine}{ex.Message}",
-                "HälpMi Install-Creator", MessageBoxButton.OK, MessageBoxImage.Error);
-        }
-        finally
-        {
-            SetBusy(false);
-            PublishUpdatePackageButton.IsEnabled = _updatePrivateKeyBytes is not null;
-        }
-    }
-
     private async void CreateUpdateBootstrapperButton_Click(object sender, RoutedEventArgs e)
     {
         if (_updatePrivateKeyBytes is null)
@@ -820,14 +771,13 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
-    /// Zentrale Grau/Blau-Logik für alle drei Build-Knöpfe (Nutzerwunsch 16.08.2026: "grau
+    /// Zentrale Grau/Blau-Logik für beide Build-Knöpfe (Nutzerwunsch 16.08.2026: "grau
     /// wenn nicht klickbar, blau wenn klickbar", siehe PrimaryActionButtonStyle in
     /// ModernStyles.xaml) - aufgerufen von SetBusy, nach jedem Laden/Erzeugen eines
     /// Schlüssels und beim Umschalten von TestInstallerCheckBox, weil BuildAdminButton je
     /// nach dessen Zustand einen ANDEREN Schlüssel braucht (Test-Key vs. Produktiv-Key).
-    /// PublishUpdatePackageButton/CreateUpdateBootstrapperButton bauen immer ein echtes
-    /// Produktiv-Update, unabhängig vom Test-Installer-Häkchen - brauchen daher immer den
-    /// Produktiv-Schlüssel.
+    /// CreateUpdateBootstrapperButton baut immer ein echtes Produktiv-Update, unabhängig
+    /// vom Test-Installer-Häkchen - braucht daher immer den Produktiv-Schlüssel.
     /// </summary>
     private void UpdateBuildButtonsEnabledState()
     {
@@ -835,10 +785,9 @@ public partial class MainWindow : Window
         var requiredKeyLoaded = isTest ? _updateTestPrivateKeyBytes is not null : _updatePrivateKeyBytes is not null;
 
         BuildAdminButton.IsEnabled = !_isBusy && requiredKeyLoaded;
-        // PublishUpdatePackageButton/CreateUpdateBootstrapperButton greifen auf denselben
-        // installer/payload/-Ordner zu wie RefreshPayloadAsync - während eines Baus (egal
-        // welcher der drei Aktionen) darf keiner der anderen Wege gleichzeitig hineinschreiben.
-        PublishUpdatePackageButton.IsEnabled = !_isBusy && _updatePrivateKeyBytes is not null;
+        // CreateUpdateBootstrapperButton greift auf denselben installer/payload/-Ordner zu
+        // wie RefreshPayloadAsync - während eines Baus (egal welcher der beiden Aktionen)
+        // darf der andere Weg nicht gleichzeitig hineinschreiben.
         CreateUpdateBootstrapperButton.IsEnabled = !_isBusy && _updatePrivateKeyBytes is not null;
     }
 

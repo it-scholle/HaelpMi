@@ -210,13 +210,6 @@
                             ToolTip="Baut eine einzelne Datei, die ein Admin auf einer bereits installierten Maschine ausführt - sie aktualisiert sich sofort selbst und macht die Version für die Freigabe im Dashboard verfügbar." />
                 </StackPanel>
 
-                <!-- Schlanker Weg (Nutzerwunsch 13.08.2026): nur ein Update-Paket veröffentlichen,
-                     ohne ISCC/Kundengruppen-ID/Installer-Passwort - für den Normalfall "neue
-                     Version an bereits installierte Geräte verteilen" statt "neuen Installer für
-                     einen neuen Kunden bauen". Braucht ebenfalls einen geladenen Update-Schlüssel. -->
-                <Button x:Name="PublishUpdatePackageButton" Content="Update-Paket veröffentlichen" HorizontalAlignment="Left"
-                        Padding="18,9" Margin="0,0,0,16" IsEnabled="False" Click="PublishUpdatePackageButton_Click" />
-
                 <!-- Nutzerwunsch 06.08.2026: der Erfolgs-Toast (BuildSuccessToastWindow) schließt
                      nach 8s automatisch - wer ihn übersieht, hatte bisher keine zweite Chance, an
                      die fertige Datei zu kommen außer im Protokoll nachzulesen. Bleibt jetzt hier
@@ -299,7 +292,7 @@
 
                             <!-- Nutzerwunsch 16.08.2026: der bisherige "Überspringen"-Knopf ist raus - Admin-
                                  Installer UND Update-Paket brauchen jetzt zwingend einen geladenen Schlüssel
-                                 (siehe BuildAdminButton/PublishUpdatePackageButton/CreateUpdateBootstrapperButton),
+                                 (siehe BuildAdminButton/CreateUpdateBootstrapperButton),
                                  "ohne Signierung bauen" ist damit kein sinnvoller Zwischenzustand mehr. Wer nicht
                                  signieren will, lässt diesen Reiter einfach unbenutzt (Felder leer/Reiter zu). -->
                             <StackPanel Orientation="Horizontal" Margin="0,0,0,10">

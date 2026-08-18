@@ -103,13 +103,10 @@ mehr nötig. Der private Schlüssel liegt dafür verschlüsselt in Vaultwarden (
 2. "Admin-Installer erstellen" klicken (kein separates Häkchen mehr nötig seit 16.08.2026 -
    das Update-Paket wird automatisch signiert und eingebettet, sofern ein Schlüssel geladen
    ist) - landet in `installer/payload/update-seed/`, bevor ISCC läuft.
-3. "Update-Paket veröffentlichen" (ohne ISCC/Kundengruppen-ID/Installer-Passwort) schreibt
-   zusätzlich in den lokalen P2P-Cache dieser Maschine, falls HälpMi hier installiert ist -
-   nützlich zum Vorbereiten, macht aber **keine** Maschine selbst auf die neue Version:
-   ohne mindestens einen Peer, der die Version bereits tatsächlich AUSFÜHRT, beobachtet nie
-   jemand einen neueren Boot-Call und die P2P-Kaskade (Wellen-Rollout, siehe CLAUDE.md)
-   startet nie von selbst.
-4. **"Update erstellen"** (seit 16.08.2026, löst genau die Lücke aus Punkt 3): baut eine
+3. **"Update erstellen"** (seit 16.08.2026; der frühere schlanke "Update-Paket
+   veröffentlichen"-Knopf ohne ISCC/Kundengruppen-ID/Installer-Passwort ist entfernt,
+   Nutzerwunsch 18.08.2026 - "Update erstellen" deckt den eigentlichen Zweck, eine bereits
+   installierte Maschine auf die neue Version zu bringen, ohnehin ab): baut eine
    einzelne, eigenständig lauffähige Datei (`HaelpMi-Update-<Version>.exe`) - signiertes
    Paket an eine einmal veröffentlichte `HaelpMi.UpdateBootstrapper`-Kopie angehängt. Diese
    eine Datei geht an den Admin; per Doppelklick auf einer bereits installierten Maschine
