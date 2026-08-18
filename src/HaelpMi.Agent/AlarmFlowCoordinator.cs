@@ -154,15 +154,33 @@ public sealed class AlarmFlowCoordinator
         var targets = RecipientResolver.ResolveRecipientsForSender(profile, identity.DeviceId, identity.RoomNumber, devices, groups);
         if (targets.Count == 0)
         {
+            // Fehlerbericht "Sende-Bubble erscheint nicht" (18.08.2026): dieser Fall war bisher
+            // ununterscheidbar von einer verschluckten Exception im Dispatcher.Invoke-Block
+            // unten - jetzt mit Log-Zeile, damit ein leerer (gültig konfigurierter) Empfängerkreis
+            // nicht mehr wie ein stiller Fehler aussieht.
+            StartupTimingLog.Mark(nameof(HaelpMi.Agent), $"TriggerAlarmProfile profile={profile.Id}: leerer Empfängerkreis, kein Versand");
             return; // nothing to send, nothing to show (Teil 2, Abschnitt 4: an empty recipient set is a valid, if useless, admin configuration)
         }
 
         var session = new RepeatingAlarmSession(profile, targets, identity, _sender, _feedbackChannel, DateTimeOffset.UtcNow, isTest);
-        System.Windows.Application.Current.Dispatcher.Invoke(() =>
+        try
         {
-            var window = new SenderStatusWindow(session, profile.Name);
-            window.Show();
-        });
+            System.Windows.Application.Current.Dispatcher.Invoke(() =>
+            {
+                var window = new SenderStatusWindow(session, profile.Name);
+                window.Show();
+            });
+        }
+        catch (Exception ex)
+        {
+            // Fehlerbericht "Sende-Bubble erscheint nicht" (18.08.2026): ohne dieses catch lief
+            // eine Exception hier bis zum globalen DispatcherUnhandledException-Handler durch
+            // (App.xaml.cs) - der loggt zwar auch, aber nur als generische
+            // "DispatcherUnhandledException", nicht erkennbar als "die Sende-Bubble konnte nicht
+            // erzeugt werden". Weiterhin kein Rethrow (NFR-1, 24/7-Prozess darf nicht sterben) -
+            // der Versand unten läuft trotzdem weiter, nur ohne sichtbare Bestätigung.
+            CrashLogger.Log(nameof(HaelpMi.Agent), "SenderStatusWindow", ex);
+        }
 
         _ = RunSessionAsync(session);
     }
@@ -240,7 +258,31 @@ public sealed class AlarmFlowCoordinator
             ResponseThreshold = 1,
         };
 
-        var session = new RepeatingAlarmSession(selfTestProfile, new[] { selfTarget }, identity, _sender, _feedbackChannel, DateTimeOffset.UtcNow);
+        // isTest: true (Fehlerbericht 18.08.2026) - fehlte hier bisher (Default false), obwohl
+        // dies unzweifelhaft ein Test ist: ohne das Flag trug auch die per Loopback beim eigenen
+        // Empfänger ankommende AlarmRequestMessage.IsTest=false, wodurch AlarmPopupWindow keine
+        // TESTMODUS-Kennzeichnung zeigte - und SenderStatusWindow (unten neu ergänzt) hätte ohne
+        // dieses Flag ebenfalls fälschlich wie ein echter Alarm ausgesehen.
+        var session = new RepeatingAlarmSession(selfTestProfile, new[] { selfTarget }, identity, _sender, _feedbackChannel, DateTimeOffset.UtcNow, isTest: true);
+
+        // Fehlerbericht "Sende-Bubble erscheint nicht" (18.08.2026): SendSelfTestAsync hat noch
+        // nie eine SenderStatusWindow-Bubble gezeigt (anders als TriggerAlarmProfile) - seit dem
+        // Umbau auf eine echte RepeatingAlarmSession (v0.17.1) läuft hier derselbe Sende-/
+        // Ack-Mechanismus wie bei einem echten Alarm, nur ohne die dazugehörige Anzeige. Gleiches
+        // try/catch-Muster wie TriggerAlarmProfile - eine Exception beim Fensteraufbau darf den
+        // Selbsttest-Versand selbst nicht verhindern.
+        try
+        {
+            System.Windows.Application.Current.Dispatcher.Invoke(() =>
+            {
+                var window = new SenderStatusWindow(session, profile.Name);
+                window.Show();
+            });
+        }
+        catch (Exception ex)
+        {
+            CrashLogger.Log(nameof(HaelpMi.Agent), "SenderStatusWindow", ex);
+        }
 
         // Nur auf die erste Ping-Welle warten (für den IPC-Rückgabewert "hat's angekommen?"),
         // danach läuft die Session wie bei TriggerAlarmProfile im Hintergrund weiter, um auf die

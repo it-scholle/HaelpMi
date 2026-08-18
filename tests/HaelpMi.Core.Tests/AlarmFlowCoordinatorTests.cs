@@ -20,10 +20,12 @@ namespace HaelpMi.Core.Tests;
 ///
 /// Einstieg per Reflection direkt auf die private RunSessionAsync-Methode (gleiches Muster
 /// wie SendingTests.cs für OnMyWayReceived) statt über TriggerAlarmProfile/
-/// HandleIncomingAlarmRequest (brauchen System.Windows.Application.Current, im headless
-/// Testlauf null) oder SendSelfTestAsync (fire-and-forget, kein awaitbares Ergebnis für den
-/// Audit-Push-Teil - ein dort unbeobachtet geworfener Fehler würde von .NET lautlos
-/// verschluckt und der Test könnte nichts prüfen).
+/// HandleIncomingAlarmRequest, deren Audit-Push- bzw. Popup-Ablauf hier nicht das Testziel ist.
+/// SendSelfTestAsync selbst wird seit dem Fehlerbericht "Sende-Bubble erscheint nicht"
+/// (18.08.2026, s. <see cref="SendSelfTestAsync_MarksOutgoingRequestAsTest"/>) direkt getestet -
+/// der Dispatcher.Invoke-Block dort fängt eine im headless Testlauf fehlende
+/// System.Windows.Application.Current inzwischen selbst ab (try/catch, geloggt statt geworfen),
+/// der Audit-Push-Teil bleibt trotzdem fire-and-forget und damit weiterhin nicht darüber prüfbar.
 ///
 /// Beide Tests laufen bewusst über den echten RepeatingAlarmSession.RunAsync()-Ablauf inkl.
 /// des fest verdrahteten, nicht abkürzbaren 1-Minuten-Nachlauf-Fensters
@@ -141,6 +143,57 @@ public class AlarmFlowCoordinatorTests
         finally
         {
             session.Dispose();
+        }
+    }
+
+    [Fact]
+    public async Task SendSelfTestAsync_MarksOutgoingRequestAsTest()
+    {
+        using var appData = new TestAppDataScope();
+        using var sharedLog = SharedLogPaths.ForceLocalFallbackForTests();
+
+        var customerGroupId = Guid.NewGuid();
+        var deviceId = Guid.NewGuid();
+        var identity = new LiveIdentity(customerGroupId, deviceId, "Sender-PC", "Frau Test", "Zimmer", "1", Role.User, false, "0.0.0", 0);
+
+        // Fehlerbericht "Sende-Bubble erscheint nicht" (18.08.2026): SendSelfTestAsync übergab
+        // bislang kein isTest:true an die RepeatingAlarmSession - dadurch trug auch die per
+        // Loopback ankommende AlarmRequestMessage.IsTest fälschlich false (AlarmPopupWindow hätte
+        // beim Selbsttest keine TESTMODUS-Kennzeichnung gezeigt). Der Listener muss auf dem
+        // echten, festen AlarmTcpPort mithören, weil SendSelfTestAsync das Self-Target nicht auf
+        // einen freien Testport umleiten kann (AlarmFlowCoordinator.cs, AppConstants.AlarmTcpPort
+        // fest verdrahtet) - gleiches akzeptiertes Kollisionsrisiko wie beim AuditSyncTcpPort im
+        // Test oben in dieser Klasse.
+        var listener = new AlarmTcpListener(() => identity);
+        AlarmRequestMessage? received = null;
+        var receivedSignal = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        listener.AlarmReceived += (_, args) =>
+        {
+            received = args.Request;
+            receivedSignal.TrySetResult();
+        };
+        listener.Start();
+
+        try
+        {
+            var feedbackChannel = new AlarmFeedbackChannel(() => identity);
+            var auditLog = new AuditLog(() => deviceId);
+            var auditSync = new AuditSyncService(() => identity, auditLog);
+            var coordinator = new AlarmFlowCoordinator(
+                () => identity, () => new OwnSettings { DeviceId = deviceId }, () => new SharedConfig(),
+                feedbackChannel, auditLog, auditSync);
+
+            var profile = new AlarmProfile { Text = "Selbsttest", ResponseThreshold = 1 };
+
+            await coordinator.SendSelfTestAsync(profile).WaitAsync(TimeSpan.FromSeconds(10));
+            await receivedSignal.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+            Assert.NotNull(received);
+            Assert.True(received!.IsTest);
+        }
+        finally
+        {
+            await listener.DisposeAsync();
         }
     }
 }
