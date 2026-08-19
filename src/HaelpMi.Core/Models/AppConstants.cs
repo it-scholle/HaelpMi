@@ -10,18 +10,6 @@ public static class AppConstants
     public const int DiscoveryUdpPort = 51500;
 
     /// <summary>
-    /// Aktuelle Boot-Call-Protokollversion (LAN-Verschlüsselung, siehe CLAUDE.md
-    /// "Lizenz &amp; Secrets" und SecureEnvelopeCodec) - ein Gerät, das dies in seinem
-    /// eigenen <c>BootCallMessage.ProtocolVersion</c> meldet, versteht SecureEnvelope
-    /// (Ed25519-Geräte-Identität + gruppenweiter ChaCha20-Poly1305-Schlüssel). 1 war
-    /// implizit jede Version vor Einführung dieses Felds (kein Envelope-Support, reines
-    /// Klartextformat) - beginnt bewusst bei 2, nicht 1, damit "Feld fehlt" (alter Peer,
-    /// deserialisiert als <c>null</c>) nie mit einer echten Versionsnummer verwechselt
-    /// werden kann.
-    /// </summary>
-    public const int CurrentProtocolVersion = 2;
-
-    /// <summary>
     /// Fest verdrahtete ID der eingebauten "Alle"-Gruppe (Nutzerwunsch 09.08.2026: "Default-
     /// Gruppe, die auch funktioniert, wenn der Admin gerade nicht online ist"). Jedes Gerät
     /// kennt diese ID unabhängig und ganz ohne Config-Sync (siehe <c>SharedConfigStore</c>) -
@@ -47,49 +35,14 @@ public static class AppConstants
     /// <summary>TCP port for post-trigger alarm feedback ("bin unterwegs" + status relay, Teil 2, Abschnitt 7/8).</summary>
     public const int AlarmFeedbackTcpPort = 51505;
 
-    /// <summary>
-    /// Basisname der lokalen Named Pipe für Config/Admin-Dashboard &lt;-&gt; Agent-IPC auf
-    /// derselben Maschine. Bugfix 17.08.2026 (Fast User Switching): seit mehrere Agent-
-    /// Instanzen gleichzeitig laufen können (eine pro angemeldeter Sitzung, s.
-    /// AutostartRegistrar), ist dieser Basisname allein nicht mehr eindeutig genug - jede
-    /// Session hängt bei Verwendung zusätzlich die eigene <c>Process.SessionId</c> an (s.
-    /// IpcServer/IpcClient), sonst könnte Config.exe in Sitzung B nichtdeterministisch vom
-    /// Agent in Sitzung A statt vom eigenen bedient werden (Named Pipes sind - anders als der
-    /// bewusst "Local\"-präfigierte Single-Instance-Mutex - kein session-isolierter Namespace).
-    /// </summary>
+    /// <summary>Name of the local named-pipe used for Config/Admin-Dashboard &lt;-&gt; Agent IPC on the same machine.</summary>
     public const string IpcPipeName = "HaelpMi.Agent.Ipc";
-
-    /// <summary>
-    /// Name der lokalen Named Pipe, über die die "Primary"-Agent-Instanz (die Instanz, die den
-    /// exklusiven <see cref="AlarmTcpPort"/> tatsächlich binden konnte) empfangene Alarme an
-    /// alle "Satellite"-Instanzen in anderen gleichzeitig angemeldeten Sitzungen weiterreicht
-    /// (Fast-User-Switching-Fix 17.08.2026, s. AlarmRelayServer/AlarmRelayClient). Bewusst ein
-    /// fester, maschinenweiter Name (keine Session-ID angehängt, anders als
-    /// <see cref="IpcPipeName"/> oben) - genau eine Primary-Instanz pro Maschine soll hier
-    /// gefunden werden, unabhängig davon, in welcher Sitzung sie läuft.
-    /// </summary>
-    public const string AlarmRelayPipeName = "HaelpMi.Agent.AlarmRelay";
 
     /// <summary>Name of the local named-pipe used for Agent &lt;-&gt; Update-Dienst IPC on the same machine (Teil 2, Abschnitt 11).</summary>
     public const string UpdateServiceIpcPipeName = "HaelpMi.UpdateService.Ipc";
 
     /// <summary>TCP port for pulling a signed update package (payload + Manifest) from a peer with a newer <see cref="LiveIdentity.ProgramVersion"/> (Teil 2, Abschnitt 11).</summary>
     public const int UpdatePackageTcpPort = 51506;
-
-    /// <summary>TCP port for pushing not-yet-acknowledged <see cref="AuditLogEntry"/> batches to a reachable admin device (Nutzerwunsch 14.08.2026: revisionssicheres Audit-Log ohne zentrale Instanz, siehe AuditSyncService).</summary>
-    public const int AuditSyncTcpPort = 51507;
-
-    /// <summary>TCP port for the Admin&lt;-&gt;Admin Digest-/Mesh-Abgleich (Nutzerwunsch 15.08.2026: "bleeding edge" unter mehreren gleichzeitig erreichbaren Admins, siehe AuditSyncService.ReconcileWithAdminPeerAsync). Bewusst ein eigener Port statt Multiplexing über AuditSyncTcpPort - ein Port pro Nachrichtenzweck, wie überall sonst in diesem Projekt (Discovery/ConfigSync/EditLock/Update).</summary>
-    public const int AuditMeshTcpPort = 51508;
-
-    /// <summary>Max. <see cref="AuditLogEntry"/>-Einträge pro Push-/Mesh-Batch - analog <see cref="Storage.ConfigHistoryStore.MaxEntriesPerScope"/>: verhindert ein einzelnes überdimensioniertes Paket bei großem Rückstand, der wird dann über mehrere Trigger-Ereignisse verteilt nachgeliefert.</summary>
-    public const int AuditSyncBatchCap = 200;
-
-    /// <summary>Timeout pro Ziel-Peer für einen einzelnen AuditSync-Push/-Digest-Call (analog EditLockService.RequestTimeout, etwas großzügiger wegen der potenziell größeren Nutzlast).</summary>
-    public static readonly TimeSpan AuditSyncRequestTimeout = TimeSpan.FromSeconds(5);
-
-    /// <summary>TCP port für den Admin-Rollen-Schlüssel-Migrationsaustausch (Nutzerwunsch 17.08.2026, siehe AdminRoleKeySyncService) - eigener Port statt Multiplexing, wie überall sonst in diesem Projekt (Discovery/ConfigSync/EditLock/AuditSync).</summary>
-    public const int AdminRoleKeySyncTcpPort = 51509;
 
     /// <summary>Folder under the machine-wide %ProgramData% where all local device state lives (Teil 2, FR-34 - siehe AppPaths.cs).</summary>
     public const string AppDataFolderName = "HaelpMi";
@@ -114,16 +67,6 @@ public static class AppConstants
     /// Abbrechen - das schließt das Banner sofort, siehe SenderStatusWindow.
     /// </summary>
     public static readonly TimeSpan SenderStatusBannerAutoCloseAfterFinish = TimeSpan.FromMinutes(2);
-
-    /// <summary>
-    /// Testmodus-Toggle im Konfigurator (Nutzerwunsch 13.08.2026): One-Shot, gilt für den
-    /// nächsten Hotkey-Trigger und deaktiviert sich automatisch nach dieser Zeitspanne,
-    /// falls bis dahin kein Hotkey gedrückt wurde - kein Dauerzustand, keine Persistierung.
-    /// Siehe <see cref="TestModeArmState"/>: das Ablaufen ist reine Zeitstempel-Arithmetik,
-    /// kein separater Reset-Pfad muss dafür erfolgreich laufen (Sicherheitsgarantie gegen
-    /// einen liegen gelassenen Toggle).
-    /// </summary>
-    public static readonly TimeSpan TestModeTimeout = TimeSpan.FromMinutes(2);
 
     /// <summary>Exclusive edit-lock auto-release after this much inactivity (Teil 2, Abschnitt 5).</summary>
     public static readonly TimeSpan EditLockInactivityTimeout = TimeSpan.FromMinutes(10);
@@ -161,19 +104,4 @@ public static class AppConstants
     /// eigenen Ids je Datensatz.
     /// </summary>
     public static readonly Guid UpdateRolloutScopeId = new("d3f1a000-a11d-4000-9000-000000000002");
-
-    /// <summary>
-    /// Fest verdrahtete ScopeId für <see cref="EditScopeKind.NetworkBridge"/> - gleiches
-    /// Prinzip wie <see cref="UpdateRolloutScopeId"/>: genau ein Bridge-Seed-Datensatz
-    /// kundengruppenweit (Multi-VLAN-Bootstrap, siehe <see cref="SharedConfig.BridgeSeedAddresses"/>).
-    /// </summary>
-    public static readonly Guid NetworkBridgeScopeId = new("d3f1a000-a11d-4000-9000-000000000003");
-
-    /// <summary>
-    /// Intervall der lokalen Lizenz-Neuprüfung im Agent (rein lokaler Dateizugriff, kein
-    /// Netzwerkverkehr - das Heartbeat-/Polling-Verbot in CLAUDE.md bezieht sich nur auf
-    /// Netzwerkverkehr und gilt hier nicht). Tagesgranularität der Eskalationsstufen (siehe
-    /// Licensing.LicenseEvaluator) macht ein enges Intervall unnötig.
-    /// </summary>
-    public static readonly TimeSpan LicenseCheckInterval = TimeSpan.FromHours(6);
 }

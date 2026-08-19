@@ -2,7 +2,7 @@ using HaelpMi.Core.Audio;
 using HaelpMi.Core.Models;
 using Xunit;
 
-namespace HaelpMi.Audio.Tests;
+namespace HaelpMi.Core.Tests;
 
 /// <summary>
 /// Läuft bewusst gegen die echte NAudio/WASAPI-Pipeline statt gegen ein Mock - der
@@ -13,13 +13,6 @@ namespace HaelpMi.Audio.Tests;
 /// mindestens ein aktives Wiedergabegerät (WASAPI Render/Active) auf dem Testrechner, um
 /// aussagekräftig zu sein - auf CI-Maschinen ganz ohne Audiogerät ist ein leerer Durchlauf
 /// (kein Play, kein Hang) ebenfalls ein gültiges, wenn auch weniger scharfes Ergebnis.
-///
-/// Umzug 13.08.2026 (Fehlerbericht "VM piept unregelmäßig, ohne installierte HälpMi-
-/// Instanz" - live nachgestellt: keine laufende Instanz, kein Autostart, kein Dienst,
-/// keine Systemklang-Manipulation, aber jeder `dotnet test`-Lauf gegen das alte
-/// HaelpMi.Core.Tests hat hörbar den Standard-Alarmton auf allen Geräten ausgelöst): von
-/// HaelpMi.Core.Tests hierher verschoben, siehe README.md in diesem Projekt. Testinhalt
-/// unverändert.
 /// </summary>
 public class AudioTests
 {

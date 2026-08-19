@@ -1,7 +1,6 @@
 using System.Reflection;
 using HaelpMi.Core.Interop;
 using HaelpMi.Core.Models;
-using HaelpMi.Core.Security;
 
 namespace HaelpMi.Core.Runtime;
 
@@ -17,29 +16,15 @@ public static class LiveIdentityFactory
     public static string CurrentProgramVersion { get; } =
         Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "0.0.0";
 
-    public static LiveIdentity Create(OwnSettings settings, DeploymentInfo deployment)
-    {
-        // Admin-Rollen-Kryptoverifikation, Migrationspfad (Nutzerwunsch 17.08.2026): ein
-        // Admin-Gerät ohne jeden Schlüssel (weder Installer noch Trust-Store) erzeugt sich
-        // hier beim ersten Aufruf selbst eines - danach ist dieser Aufruf ein billiger
-        // Load-Only-Check (gleiches Idempotenz-Muster wie DeviceIdentityStore.LoadOrCreate,
-        // das an vielen Stellen ebenfalls bei jedem ausgehenden Paket erneut aufgerufen
-        // wird). Ein Installer-Schlüssel wird dabei nie ersetzt.
-        AdminRoleTrustStore.EnsureSelfGeneratedKeyIfNeeded(deployment.Role, deployment.AdminRolePrivateKeyBase64);
-        var trust = AdminRoleTrustStore.Load();
-        var effectiveAdminRolePublicKey = deployment.AdminRolePublicKeyBase64 ?? trust.PinnedGroupPublicKeyBase64;
-
-        return new(
-            deployment.CustomerGroupId,
-            settings.DeviceId,
-            Environment.MachineName,
-            Environment.UserName,
-            settings.RoomName,
-            settings.RoomNumber,
-            deployment.Role,
-            RemoteSessionDetector.IsCurrentSessionRemote(),
-            CurrentProgramVersion,
-            settings.AppliedConfigVersion,
-            effectiveAdminRolePublicKey);
-    }
+    public static LiveIdentity Create(OwnSettings settings, DeploymentInfo deployment) => new(
+        deployment.CustomerGroupId,
+        settings.DeviceId,
+        Environment.MachineName,
+        Environment.UserName,
+        settings.RoomName,
+        settings.RoomNumber,
+        deployment.Role,
+        RemoteSessionDetector.IsCurrentSessionRemote(),
+        CurrentProgramVersion,
+        settings.AppliedConfigVersion);
 }

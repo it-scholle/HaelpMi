@@ -1,6 +1,10 @@
+using System.Security.Cryptography;
 using HaelpMi.Core.Models;
 using HaelpMi.Core.Updates;
-using HaelpMi.UpdateSigner;
+using Org.BouncyCastle.Crypto.Generators;
+using Org.BouncyCastle.Crypto.Parameters;
+using Org.BouncyCastle.Crypto.Signers;
+using Org.BouncyCastle.Security;
 using Xunit;
 
 namespace HaelpMi.Core.Tests;
@@ -8,32 +12,29 @@ namespace HaelpMi.Core.Tests;
 /// <summary>
 /// Abschnitt 11: "nur signierte Programm-Updates werden von einem Client angenommen".
 /// Nutzt ein eigenes Wegwerf-Schlüsselpaar (nie den echten eingebetteten Produktions-
-/// schlüssel), erzeugt/signiert über <see cref="UpdateSigningOperations"/> - dieselbe Klasse,
-/// die auch HaelpMi.UpdateSigner (CLI) und HaelpMi.InstallCreator ("Update-Ei", 13.08.2026)
-/// verwenden. Damit sind das hier zugleich Round-Trip-Tests für den echten Signierpfad, nicht
-/// nur für die Verify-Seite: GenerateKeyPair -&gt; Sign -&gt; <see cref="UpdatePackageVerifier.Verify(byte[], UpdatePackageManifest, byte[])"/>.
+/// schlüssel) über den 3-Parameter-Overload von <see cref="UpdatePackageVerifier.Verify(byte[], UpdatePackageManifest, byte[])"/>.
 /// </summary>
 public class UpdatesTests
 {
-    private static (byte[] PrivateKey, byte[] PublicKeyBytes) GenerateTestKeyPair()
+    private static (Ed25519PrivateKeyParameters Private, byte[] PublicKeyBytes) GenerateTestKeyPair()
     {
-        var pair = UpdateSigningOperations.GenerateKeyPair();
-        return (pair.PrivateKey, pair.PublicKey);
+        var generator = new Ed25519KeyPairGenerator();
+        generator.Init(new Ed25519KeyGenerationParameters(new SecureRandom()));
+        var keyPair = generator.GenerateKeyPair();
+        var priv = (Ed25519PrivateKeyParameters)keyPair.Private;
+        var pub = (Ed25519PublicKeyParameters)keyPair.Public;
+        return (priv, pub.GetEncoded());
     }
 
-    private static UpdatePackageManifest SignPayload(byte[] payload, byte[] privateKey, string version = "1.2.3")
+    private static UpdatePackageManifest SignPayload(byte[] payload, Ed25519PrivateKeyParameters privateKey, string version = "1.2.3")
     {
-        var manifest = UpdateSigningOperations.Sign(payload, privateKey, version);
-        return new UpdatePackageManifest(manifest.Version, manifest.Sha256Hex, manifest.SignatureBase64, manifest.BuiltAtUtc);
-    }
+        var hash = SHA256.HashData(payload);
+        var signer = new Ed25519Signer();
+        signer.Init(true, privateKey);
+        signer.BlockUpdate(hash, 0, hash.Length);
+        var signature = signer.GenerateSignature();
 
-    [Fact]
-    public void GenerateKeyPair_ProducesStandardEd25519KeyLengths()
-    {
-        var pair = UpdateSigningOperations.GenerateKeyPair();
-
-        Assert.Equal(32, pair.PrivateKey.Length);
-        Assert.Equal(32, pair.PublicKey.Length);
+        return new UpdatePackageManifest(version, Convert.ToHexString(hash).ToLowerInvariant(), Convert.ToBase64String(signature), DateTimeOffset.UtcNow);
     }
 
     [Fact]
@@ -81,99 +82,6 @@ public class UpdatesTests
         Assert.False(UpdatePackageVerifier.Verify("payload"u8.ToArray(), manifest, publicKeyBytes));
     }
 
-    // --- UpdateSigningOperations.DerivePublicKey (Nutzerwunsch 16.08.2026, "separater
-    // Test-Key für Test-Installer"): Install-Creator hält in Vaultwarden nur private
-    // Schlüssel, der öffentliche Teil wird beim Bauen aus ihm abgeleitet. ----------------
-
-    [Fact]
-    public void DerivePublicKey_MatchesThePublicKeyFromTheSameGeneratedPair()
-    {
-        var pair = UpdateSigningOperations.GenerateKeyPair();
-
-        var derived = UpdateSigningOperations.DerivePublicKey(pair.PrivateKey);
-
-        Assert.Equal(pair.PublicKey, derived);
-    }
-
-    [Fact]
-    public void DerivePublicKey_VerifiesASignatureMadeWithTheSamePrivateKey()
-    {
-        // Round-Trip über den tatsächlichen Verwendungszweck: Install-Creator signiert mit
-        // dem privaten Schlüssel, leitet den öffentlichen Teil ab und schreibt NUR den in
-        // deployment.json - der Client muss ihn zum Prüfen genauso ableiten können.
-        var (privateKey, _) = GenerateTestKeyPair();
-        var payload = "fake-update-package-bytes"u8.ToArray();
-        var manifest = SignPayload(payload, privateKey);
-
-        var derivedPublicKey = UpdateSigningOperations.DerivePublicKey(privateKey);
-
-        Assert.True(UpdatePackageVerifier.Verify(payload, manifest, derivedPublicKey));
-    }
-
-    // --- UpdateSeedImporter.TryImport mit publicKeyOverride (Nutzerwunsch 16.08.2026):
-    // seit App.xaml.cs den Override aus DeploymentInfo.UpdatePublicKeyBase64 füttert, ist
-    // das kein reiner Test-Hook mehr - eine Installation, die mit dem Test-Key signiert
-    // wurde, muss ihr eigenes update-seed auch nur gegen den Test-Public-Key akzeptieren. ---
-
-    [Fact]
-    public void TryImport_AcceptsSeed_SignedWithKeyMatchingThePublicKeyOverride()
-    {
-        using var tempDir = new TempDirectory();
-        var (privateKey, publicKeyBytes) = GenerateTestKeyPair();
-        var payload = "fake-update-package-bytes"u8.ToArray();
-        var manifest = SignPayload(payload, privateKey, version: "9.9.9");
-        WriteSeed(tempDir.Path, manifest, payload);
-
-        using var cacheDir = new TempDirectory();
-        using var _ = HaelpMi.Core.Storage.AppPaths.UseRootForTests(cacheDir.Path);
-        var cacheStore = new HaelpMi.Core.Storage.UpdatePackageCacheStore();
-
-        var imported = UpdateSeedImporter.TryImport(cacheStore, "9.9.9", seedDirectoryOverride: tempDir.Path, publicKeyOverride: publicKeyBytes);
-
-        Assert.True(imported);
-    }
-
-    [Fact]
-    public void TryImport_RejectsSeed_SignedWithADifferentKeyThanThePublicKeyOverride()
-    {
-        // Genau der Fall, den die Test-/Produktiv-Trennung verhindern soll: ein mit dem
-        // (hier: fremden) Schlüssel signiertes Paket gegen einen NICHT dazu passenden
-        // öffentlichen Schlüssel geprüft - z. B. ein Test-signiertes Paket, das versehentlich
-        // bei einer Produktiv-Installation landet.
-        using var tempDir = new TempDirectory();
-        var (privateKey, _) = GenerateTestKeyPair();
-        var (_, unrelatedPublicKeyBytes) = GenerateTestKeyPair();
-        var payload = "fake-update-package-bytes"u8.ToArray();
-        var manifest = SignPayload(payload, privateKey, version: "9.9.9");
-        WriteSeed(tempDir.Path, manifest, payload);
-
-        using var cacheDir = new TempDirectory();
-        using var _ = HaelpMi.Core.Storage.AppPaths.UseRootForTests(cacheDir.Path);
-        var cacheStore = new HaelpMi.Core.Storage.UpdatePackageCacheStore();
-
-        var imported = UpdateSeedImporter.TryImport(cacheStore, "9.9.9", seedDirectoryOverride: tempDir.Path, publicKeyOverride: unrelatedPublicKeyBytes);
-
-        Assert.False(imported);
-    }
-
-    private static void WriteSeed(string seedDir, UpdatePackageManifest manifest, byte[] payload)
-    {
-        System.IO.File.WriteAllText(System.IO.Path.Combine(seedDir, "manifest.json"), System.Text.Json.JsonSerializer.Serialize(manifest));
-        System.IO.File.WriteAllBytes(System.IO.Path.Combine(seedDir, "package.zip"), payload);
-    }
-
-    private sealed class TempDirectory : IDisposable
-    {
-        public string Path { get; } = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"haelpmi-test-{Guid.NewGuid():N}");
-
-        public TempDirectory() => System.IO.Directory.CreateDirectory(Path);
-
-        public void Dispose()
-        {
-            try { System.IO.Directory.Delete(Path, recursive: true); } catch { /* best-effort */ }
-        }
-    }
-
     // --- UpdateOrchestrator.IsNewer: numerischer Versionsvergleich (Abschnitt 11) -------
 
     [Theory]
@@ -188,86 +96,37 @@ public class UpdatesTests
         Assert.Equal(expectedNewer, UpdateOrchestrator.IsNewer(candidate, current));
     }
 
-    // --- UpdateOrchestrator.IsMyTurn: entfernt am 13.08.2026, wieder eingeführt am
-    // 16.08.2026 (Wellen-Rollout) ------------------------------------------------------
-    // Zwischen den beiden Daten testete dieser Abschnitt das frühere gestaffelte
-    // Freigabekontingent (ApprovedDeviceQuota, admin-gesetzt, "die ersten N Geräte in
-    // stabiler ID-Sortierung") und wurde nach dessen ersatzloser Entfernung (CLAUDE.md-
-    // Korrektur "Rollout-Freigabe", 11.08.2026) hinfällig. Die 16.08.2026-Korrektur ergänzt
-    // das wieder - jetzt mit automatisch aus dem eigenen Geräte-Cache abgeleitetem n statt
-    // eines admin-gesetzten Felds, siehe UpdateOrchestrator.IsMyTurn-Klassenkommentar.
+    // --- UpdateOrchestrator.IsMyTurn: gestaffelte, kundengruppenweite Quote (Abschnitt 11,
+    // seit 04.08.2026 global statt pro Kreis - siehe EditScope.cs für den Hintergrund) ---
 
-    private static LiveIdentity TestIdentity(string deviceId) =>
-        new(Guid.NewGuid(), Guid.Parse(deviceId), "PC", "User", "Raum", "1", Role.User, false, "1.0.0", 1);
-
-    private static DeviceEntry TestDevice(string deviceId, string lastKnownProgramVersion) =>
-        new() { DeviceId = Guid.Parse(deviceId), LastKnownProgramVersion = lastKnownProgramVersion };
-
-    private static SharedConfig ApprovedConfig(string? approvedVersion) =>
-        new() { UpdateRollout = new UpdateRolloutState { ApprovedVersion = approvedVersion } };
+    private static LiveIdentity MakeIdentity(Guid deviceId) =>
+        new(Guid.NewGuid(), deviceId, "PC", "User", "Raum", "1", Role.User, false, "1.0.0", 0);
 
     [Fact]
-    public void IsMyTurn_ReturnsFalse_WhenNoVersionIsApproved()
+    public void IsMyTurn_False_WhenNoQuotaSet()
     {
-        var identity = TestIdentity("00000000-0000-0000-0000-000000000001");
-        var devices = new List<DeviceEntry>();
+        var identity = MakeIdentity(Guid.NewGuid());
+        var config = new SharedConfig(); // ApprovedDeviceQuota bleibt 0
 
-        Assert.False(UpdateOrchestrator.IsMyTurn(identity, ApprovedConfig(null), devices));
+        Assert.False(UpdateOrchestrator.IsMyTurn(identity, config, new List<DeviceEntry>()));
     }
 
     [Fact]
-    public void IsMyTurn_ReturnsFalse_WhenNoKnownPeerHasTheApprovedVersionYet()
+    public void IsMyTurn_True_ForTheFirstNDevicesInStableDeviceIdOrder()
     {
-        // n = 0 (noch kein einziger bekannter Peer auf der freigegebenen Version) blockiert
-        // bewusst jeden Versuch - genau die Lücke, die HaelpMi.UpdateBootstrapper füllt.
-        var identity = TestIdentity("00000000-0000-0000-0000-000000000001");
-        var devices = new List<DeviceEntry> { TestDevice("00000000-0000-0000-0000-000000000002", "1.0.0") };
+        var ids = Enumerable.Range(0, 4).Select(_ => Guid.NewGuid()).OrderBy(id => id).ToList();
+        var allDevices = ids.Select(id => new DeviceEntry { DeviceId = id }).ToList();
+        var config = new SharedConfig { UpdateRollout = new UpdateRolloutState { ApprovedDeviceQuota = 2 } };
 
-        Assert.False(UpdateOrchestrator.IsMyTurn(identity, ApprovedConfig("2.0.0"), devices));
-    }
+        // Wie im echten Betrieb: der Geräteliste-Provider liefert von JEDEM Gerät aus
+        // gesehen "alle ANDEREN" - das eigene Gerät fügt IsMyTurn selbst hinzu.
+        bool IsTurnFor(Guid deviceId) =>
+            UpdateOrchestrator.IsMyTurn(MakeIdentity(deviceId), config, allDevices.Where(d => d.DeviceId != deviceId).ToList());
 
-    [Fact]
-    public void IsMyTurn_ReturnsTrue_ForFirstDeviceInLine_OnceOnePeerHasAlreadyUpdated()
-    {
-        var identity = TestIdentity("00000000-0000-0000-0000-000000000001"); // niedrigste ID -> zuerst dran
-        var devices = new List<DeviceEntry>
-        {
-            TestDevice("00000000-0000-0000-0000-000000000002", "1.0.0"), // wartet noch
-            TestDevice("00000000-0000-0000-0000-000000000003", "2.0.0"), // schon aktualisiert -> n=1
-        };
-
-        Assert.True(UpdateOrchestrator.IsMyTurn(identity, ApprovedConfig("2.0.0"), devices));
-    }
-
-    [Fact]
-    public void IsMyTurn_ReturnsFalse_ForSecondDeviceInLine_WhenOnlyOneSlotIsOpen()
-    {
-        var identity = TestIdentity("00000000-0000-0000-0000-000000000002"); // zweite Stelle in der Reihenfolge
-        var devices = new List<DeviceEntry>
-        {
-            TestDevice("00000000-0000-0000-0000-000000000001", "1.0.0"), // wartet auch noch, aber vor uns
-            TestDevice("00000000-0000-0000-0000-000000000003", "2.0.0"), // schon aktualisiert -> n=1
-        };
-
-        Assert.False(UpdateOrchestrator.IsMyTurn(identity, ApprovedConfig("2.0.0"), devices));
-    }
-
-    [Fact]
-    public void IsMyTurn_WaveWidensAutomatically_AsMorePeersUpdate_NoAdminActionNeeded()
-    {
-        var identity = TestIdentity("00000000-0000-0000-0000-000000000002"); // zweite Stelle in der Reihenfolge (Rang 1)
-        var devices = new List<DeviceEntry>
-        {
-            TestDevice("00000000-0000-0000-0000-000000000001", "2.0.0"), // schon aktualisiert -> n=1
-            TestDevice("00000000-0000-0000-0000-000000000003", "1.0.0"), // wartet noch
-            TestDevice("00000000-0000-0000-0000-000000000004", "1.0.0"), // wartet noch
-        };
-        // n=1 reicht für unseren Rang 1 noch nicht (1 < 1 ist falsch).
-        Assert.False(UpdateOrchestrator.IsMyTurn(identity, ApprovedConfig("2.0.0"), devices));
-
-        // Sobald ein WEITERES Gerät aktualisiert hat (n=2, ohne dass WIR selbst schon dran
-        // waren und ohne jeden Admin-Klick), sind wir dran.
-        devices[1] = TestDevice("00000000-0000-0000-0000-000000000003", "2.0.0");
-        Assert.True(UpdateOrchestrator.IsMyTurn(identity, ApprovedConfig("2.0.0"), devices));
+        // Die ersten beiden (Index 0,1) der stabil sortierten Geräte-IDs sind dran, die anderen beiden nicht.
+        Assert.True(IsTurnFor(ids[0]));
+        Assert.True(IsTurnFor(ids[1]));
+        Assert.False(IsTurnFor(ids[2]));
+        Assert.False(IsTurnFor(ids[3]));
     }
 }

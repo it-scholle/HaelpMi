@@ -31,7 +31,7 @@ public class MessageValidationTests
         DateTimeOffset.UtcNow);
 
     private static KnownDeviceSummary ValidKnownDevice() => new(
-        Guid.NewGuid(), "PC-218", "Frau Muster", "Zimmer", "109", Role.User, "192.168.1.51", AppConstants.AlarmTcpPort, DateTimeOffset.UtcNow);
+        Guid.NewGuid(), "PC-218", "Frau Muster", "Zimmer", "109", Role.User, "192.168.1.51", AppConstants.AlarmTcpPort);
 
     [Fact]
     public void BootCallMessage_ValidBaseline_IsPlausible() =>
@@ -189,14 +189,4 @@ public class MessageValidationTests
     [Fact]
     public void AlarmRequestMessage_MaxAllowedTextLength_IsPlausible() =>
         Assert.True((ValidAlarmRequest() with { Text = new string('a', 500) }).IsPlausible());
-
-    [Fact]
-    public void AlarmRequestMessage_IsPlausible_ReturnsTrue_RegardlessOfIsTestValue()
-    {
-        // bool ist immer plausibel (analog SenderIsRemoteSession, das ebenfalls nicht
-        // geprüft wird) - kein neuer Ablehnungsfall, nur Absicherung gegen eine
-        // versehentliche künftige Prüfung, die IsTest fälschlich einschränkt.
-        Assert.True((ValidAlarmRequest() with { IsTest = true }).IsPlausible());
-        Assert.True((ValidAlarmRequest() with { IsTest = false }).IsPlausible());
-    }
 }

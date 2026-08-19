@@ -13,7 +13,7 @@
 #define MyAppName "HälpMi"
 ; Alpha: 0.x until release, per city/product decision - Version 1.0.0 is reserved for
 ; the actual release. Bump the third number for ordinary fixes, second for a feature.
-#define MyAppVersion "0.39.5"
+#define MyAppVersion "0.16.0"
 #define MyAppPublisher "HälpMi contributors"
 #define MyAgentExeName "HaelpMi.Agent.exe"
 #define MyConfigExeName "HaelpMi.Config.exe"
@@ -40,29 +40,6 @@
   #define IsTestInstaller "true"
 #endif
 
-; LAN-Verschlüsselung (siehe CLAUDE.md "Lizenz & Secrets", HaelpMi.Core/Networking/
-; Protocol/SecureEnvelopeCodec.cs): gruppenweiter symmetrischer Schlüssel (256 Bit,
-; Base64), vom Install-Creator an derselben Stelle wie CustomerGroupId erzeugt und per
-; "/DGroupKeyBase64=..." gesetzt. Ohne diese Angabe (z. B. manuelles Kompilieren zu
-; Entwicklungszwecken) bleibt er leer - ein damit gebautes Gerät gilt für alle Peers als
-; nicht verschlüsselungsfähig (SecureEnvelopeCodec behandelt einen leeren/fehlenden
-; Gruppenschlüssel wie einen alten, vor-verschlüsselungsfähigen Installer-Stand).
-#ifndef GroupKeyBase64
-  #define GroupKeyBase64 ""
-#endif
-
-; Update-Signaturprüfung (Nutzerwunsch 16.08.2026, "separater Test-Key für Test-
-; Installer"): der Install-Creator leitet aus dem für DIESEN Build genutzten privaten
-; Schlüssel (Test- oder Produktiv-, je nach IsTestInstaller) den öffentlichen Teil ab und
-; setzt ihn per "/DUpdatePublicKeyBase64=..." - landet unverändert in deployment.json,
-; UpdateSeedImporter/UpdatePackageDistributionService verifizieren damit statt (nur) gegen
-; den kompilierten Fallback in UpdateSignaturePublicKey.cs. Ohne diese Angabe (z. B.
-; manuelles Kompilieren ohne geladenen Schlüssel) bleibt er leer - dann gilt für dieses
-; Gerät weiterhin ausschließlich der kompilierte Fallback.
-#ifndef UpdatePublicKeyBase64
-  #define UpdatePublicKeyBase64 ""
-#endif
-
 ; Optionales Installer-Passwort (kein Schlüsselpaar - siehe CLAUDE.md Lizenz & Secrets,
 ; Punkt 3): schützt nur den Installer selbst vor versehentlichem/unbefugtem Ausführen,
 ; keine Kryptografie. Leer = kein Passwortschutz (siehe Password=-Zeile im jeweiligen
@@ -70,23 +47,6 @@
 ; gespeichert, nur transient für diesen ISCC-Aufruf.
 #ifndef InstallerPassword
   #define InstallerPassword ""
-#endif
-
-; Admin-Rollen-Signatur (Ed25519, viertes Schlüsselpaar, Nutzerwunsch 17.08.2026, siehe
-; CLAUDE.md "Lizenz & Secrets") - anders als CustomerGroupId/InstallerPassword PRO
-; KUNDEN-GRUPPE erzeugt, nicht global. Der öffentliche Schlüssel geht in BEIDE
-; Installer-Varianten (siehe WriteDeploymentJson unten), der private nur in den
-; Admin-Installer-ISCC-Aufruf - genau wie InstallerPassword oben nie zentral
-; gespeichert, nur transient für diesen einen Build. Ohne diese Angabe (z. B. manuelles
-; Kompilieren ohne Install-Creator) bleiben beide leer - ein damit gebautes Gerät gilt für
-; jeden Peer als nicht Admin-rollen-verifizierbar (HaelpMi.Core.Security.
-; AdminRoleTrustStore-Migrationspfad übernimmt für ein Admin-Gerät ohne Installer-Schlüssel
-; die Selbst-Erzeugung zur Laufzeit, kein Fehlerfall).
-#ifndef AdminRolePublicKeyBase64
-  #define AdminRolePublicKeyBase64 ""
-#endif
-#ifndef AdminRolePrivateKeyBase64
-  #define AdminRolePrivateKeyBase64 ""
 #endif
 
 [Languages]
@@ -119,40 +79,17 @@ Source: "payload\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs creat
 Source: "UserInstallerPayload\HaelpMi-User-Setup.exe"; DestDir: "{app}"; Flags: ignoreversion
 #endif
 
-[InstallDelete]
-; Migration (18.08.2026): frühere Versionen legten die Admin-Dashboard-Verknüpfung fälschlich
-; unter {group} (= {commonprograms}, da PrivilegesRequired=admin) ab - sichtbar für JEDES
-; Windows-Konto auf dem Gerät, nicht nur für den installierenden Admin-Nutzer. Räumt diese
-; Alt-Verknüpfung auf Bestandsgeräten weg, bevor [Icons] unten die neue, nutzerspezifische
-; Verknüpfung anlegt. Unconditional (kein #ifdef), damit auch ein Rollenwechsel Admin->User
-; denselben Altfall aufräumt.
-Type: files; Name: "{commonprograms}\{#MyAppName}\HälpMi Dashboard.lnk"
-
 [Icons]
-; FR-4: Start Menu shortcut for the Konfigurationsprogramm.
+; FR-4: Start Menu shortcut for the Konfigurationsprogramm - the Agent has no shortcut
+; and no window of its own; it is reached only via its own autostart self-registration.
 ; User-Installer: reines Einstellungsfenster (eigener Raum/Hotkeys/Ton), kein Dashboard -
 ; Admin-Installer: derselbe Prozess, aber mit --open-dashboard direkt ins Dashboard, daher
 ; auch anders benannt, damit der Unterschied schon am Startmenü-Eintrag sichtbar ist.
-;
-; Admin-Dashboard bewusst NICHT unter {group} (löst sich bei PrivilegesRequired=admin auf
-; {commonprograms} auf, sichtbar für alle Windows-Konten): die App-interne Admin-Rolle gehört
-; nur dem einen installierenden/vorgesehenen Nutzer (CLAUDE.md, Abschnitt "Rollen"), nicht
-; jedem Windows-Konto auf dem Gerät. {userprograms} löst - anders als {group} - immer auf den
-; aktuell installierenden Nutzer auf, unabhängig vom Installationsmodus.
 #ifdef HaelpMiAdminInstall
-Name: "{userprograms}\{#MyAppName}\HälpMi Dashboard"; Filename: "{app}\{#MyConfigExeName}"; Parameters: "--open-dashboard"
+Name: "{group}\HälpMi Dashboard"; Filename: "{app}\{#MyConfigExeName}"; Parameters: "--open-dashboard"
 #else
 Name: "{group}\HälpMi Konfiguration"; Filename: "{app}\{#MyConfigExeName}"
 #endif
-; Nutzerwunsch 18.08.2026 ("bei einem Absturz kann HälpMi nicht manuell neu gestartet
-; werden"): bis hierhin hatte der Agent - anders als der Konfigurator oben - keine eigene
-; Verknüpfung und war nur über seinen Autostart-Task (bei Anmeldung) erreichbar. Gleiche
-; Sichtbarkeit wie der Konfigurator-Eintrag (in beiden Installer-Varianten, kein #ifdef):
-; reines Notfall-Hilfsmittel, kein Admin-Feature. Idempotenz (kein Zweitprozess bei
-; bereits laufendem Agent) übernimmt App.xaml.cs selbst (Einzelinstanz-Mutex + Tray-
-; Sprechblase als Rückmeldung statt eines für den Agent technisch nicht vorhandenen
-; Fensters), nicht der Installer.
-Name: "{group}\HälpMi starten"; Filename: "{app}\{#MyAgentExeName}"
 Name: "{group}\{cm:UninstallProgram,HälpMi}"; Filename: "{uninstallexe}"
 
 [Run]
@@ -469,21 +406,6 @@ begin
 #endif
 end;
 
-// Admin-Rollen-Signatur, privater Teil (Nutzerwunsch 17.08.2026): nur der Admin-Installer-
-// ISCC-Aufruf bekommt {#AdminRolePrivateKeyBase64} überhaupt per /D gesetzt (siehe
-// MainWindow.xaml.cs) - im User-Installer-Zweig bliebe das Makro sonst beim leeren
-// #ifndef-Fallback oben ("") stehen. Echtes JSON-`null` statt eines leeren Strings, damit
-// DeploymentInfo.AdminRolePrivateKeyBase64 im User-Installer wortwörtlich null bleibt
-// (siehe dortiger Klassenkommentar "bleibt null im User-Installer") statt nur gefühlt leer.
-function GetAdminRolePrivateKeyJsonValue(): String;
-begin
-#ifdef HaelpMiAdminInstall
-  Result := '"' + JsonEscape('{#AdminRolePrivateKeyBase64}') + '"';
-#else
-  Result := 'null';
-#endif
-end;
-
 procedure WriteSettingsJson();
 var
   DeviceId, ComputerName, RoomName, RoomNumber, Json, SettingsDir: String;
@@ -526,11 +448,7 @@ begin
     '{' + #13#10 +
     '  "CustomerGroupId": "{#CustomerGroupId}",' + #13#10 +
     '  "Role": ' + GetRoleValue() + ',' + #13#10 +
-    '  "IsTestInstaller": {#IsTestInstaller},' + #13#10 +
-    '  "GroupKeyBase64": "' + JsonEscape('{#GroupKeyBase64}') + '",' + #13#10 +
-    '  "UpdatePublicKeyBase64": "' + JsonEscape('{#UpdatePublicKeyBase64}') + '",' + #13#10 +
-    '  "AdminRolePublicKeyBase64": "' + JsonEscape('{#AdminRolePublicKeyBase64}') + '",' + #13#10 +
-    '  "AdminRolePrivateKeyBase64": ' + GetAdminRolePrivateKeyJsonValue() + #13#10 +
+    '  "IsTestInstaller": {#IsTestInstaller}' + #13#10 +
     '}';
 
   // Aktuell nur ASCII-Inhalte (GUID/Zahlen), aber aus Konsistenz mit WriteSettingsJson

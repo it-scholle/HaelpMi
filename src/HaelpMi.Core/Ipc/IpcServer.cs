@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.IO.Pipes;
 using HaelpMi.Core.Models;
 using HaelpMi.Core.Networking.Protocol;
@@ -13,12 +12,6 @@ namespace HaelpMi.Core.Ipc;
 /// </summary>
 public sealed class IpcServer : IAsyncDisposable
 {
-    // Session-Scoping (Bugfix 17.08.2026, Fast User Switching) - siehe Kommentar bei
-    // AppConstants.IpcPipeName: seit mehrere Agent-Instanzen gleichzeitig laufen können, muss
-    // jede ihre eigene, sitzungsspezifische Pipe hosten, sonst könnte ein Config.exe in einer
-    // anderen Sitzung nichtdeterministisch hier landen statt beim Agent der eigenen Sitzung.
-    private static readonly string PipeName = $"{AppConstants.IpcPipeName}.{Process.GetCurrentProcess().SessionId}";
-
     private readonly Dictionary<IpcCommandType, Func<Task<IpcResponse>>> _handlers = new();
     private CancellationTokenSource? _cts;
     private Task? _acceptLoop;
@@ -46,7 +39,7 @@ public sealed class IpcServer : IAsyncDisposable
         while (!ct.IsCancellationRequested)
         {
             var server = new NamedPipeServerStream(
-                PipeName, PipeDirection.InOut, maxNumberOfServerInstances: 10,
+                AppConstants.IpcPipeName, PipeDirection.InOut, maxNumberOfServerInstances: 10,
                 PipeTransmissionMode.Byte, PipeOptions.Asynchronous);
 
             try

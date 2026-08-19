@@ -5,11 +5,9 @@ using System.Windows;
 using HaelpMi.Core.Diagnostics;
 using HaelpMi.Core.Interop;
 using HaelpMi.Core.Ipc;
-using HaelpMi.Core.Licensing;
 using HaelpMi.Core.Models;
 using HaelpMi.Core.Networking;
 using HaelpMi.Core.Runtime;
-using HaelpMi.Core.Security;
 using HaelpMi.Core.Storage;
 using HaelpMi.UI.ViewModels;
 using HaelpMi.UI.Windows;
@@ -152,42 +150,6 @@ public partial class App : System.Windows.Application
         _deployment = deployment;
         _deviceStore = new DeviceStore();
 
-        // P1-Notfall-Schalter (19.08.2026, siehe EncryptionDebugSwitch-Klassendoku): laut
-        // sichtbar machen, nicht still. Config.exe schreibt kein eigenes AuditLog (der Agent
-        // ist der einzige Schreiber, siehe Kommentar unten bei der Lizenzprüfung) - Konsole
-        // + TestLogger sind hier die verfügbaren Kanäle.
-        if (EncryptionDebugSwitch.IsDisabled)
-        {
-            const string warning = "!!! DISABLE_ENCRYPTION_DEBUG_ONLY=1 aktiv - LAN-Verschlüsselung ausgeschaltet, NUR für P1-Diagnose, vor Produktiveinsatz zwingend entfernen !!!";
-            Console.WriteLine(warning);
-            TestLogger.LogAction(TestLogEventType.StartupMilestone, TestLogLevel.Warn, TestLogDirection.Local,
-                settings.DeviceId, detail: "Verschlüsselung per Debug-Flag deaktiviert");
-        }
-
-        // Lizenz-Prüfung (Soft-Expiry, CLAUDE.md "Lizenz & Secrets"): leichte, nicht
-        // gedrosselte, nicht audit-loggende Variante (Config läuft ohnehin nur on-demand,
-        // "einmal pro Prozessstart" ist damit schon von Natur aus selten). Nur Admin-Rollen
-        // sehen überhaupt etwas - reines try/catch statt LicenseChecker, weil hier weder
-        // AuditLog-Zugriff noch Drosselungs-Persistenz gebraucht wird (siehe
-        // LicenseChecker-Klassendoku: der Agent ist der einzige AuditLog-Schreiber).
-        LicenseWarningToastWindow? licenseToast = null;
-        if (settings.Role == Role.Admin)
-        {
-            try
-            {
-                var result = LicenseEvaluator.Evaluate(LicenseFileLoader.LoadAndVerify(), DateOnly.FromDateTime(DateTime.UtcNow));
-                if (result.Standing != LicenseStanding.Good)
-                {
-                    var (title, body, severe) = LicenseMessages.BuildAdminNotice(result);
-                    licenseToast = new LicenseWarningToastWindow(title, body, severe);
-                }
-            }
-            catch (Exception)
-            {
-                // fail open - kein Toast statt Absturz des Konfigurationsprogramms
-            }
-        }
-
         await EnsureAgentIsRunningAsync();
 
         // "HälpMi Dashboard"-Startmenüeintrag des Admin-Installers ruft mit diesem Flag auf
@@ -218,7 +180,6 @@ public partial class App : System.Windows.Application
 
             if (opened)
             {
-                licenseToast?.Show();
                 return;
             }
         }
@@ -227,9 +188,6 @@ public partial class App : System.Windows.Application
         var configWindow = new ConfigWindow(context);
         MainWindow = configWindow;
         configWindow.Show();
-        TestLogger.LogAction(TestLogEventType.StartupMilestone, TestLogLevel.Info, TestLogDirection.Local,
-            settings.DeviceId, detail: "ConfigWindow sichtbar");
-        licenseToast?.Show();
     }
 
     // Läuft auf einem eigenen Hintergrund-Thread für die gesamte Prozesslaufzeit (kein
@@ -386,9 +344,6 @@ public partial class App : System.Windows.Application
             RequestRebroadcast = async () => (await ipcClient.SendAsync(IpcCommandType.Rebroadcast, TimeSpan.FromSeconds(10))).Success,
             RequestSearchAgain = async () => (await ipcClient.SendAsync(IpcCommandType.SearchAgain, TimeSpan.FromSeconds(10))).Success,
             RequestSelfTest = async () => (await ipcClient.SendAsync(IpcCommandType.SelfTest, TimeSpan.FromSeconds(10))).Success,
-            RequestArmTestMode = async () => (await ipcClient.SendAsync(IpcCommandType.ArmTestMode, TimeSpan.FromSeconds(10))).Success,
-            RequestDisarmTestMode = async () => (await ipcClient.SendAsync(IpcCommandType.DisarmTestMode, TimeSpan.FromSeconds(10))).Success,
-            RequestTestModeStatus = async () => (await ipcClient.SendAsync(IpcCommandType.TestModeStatus, TimeSpan.FromSeconds(5))).Remaining,
             OpenAdminDashboard = settings.Role == Role.Admin
                 ? () => OpenAdminDashboardAsync(settingsStore, deployment, deviceStore)
                 : null,
@@ -417,9 +372,9 @@ public partial class App : System.Windows.Application
         var sharedConfigStore = new SharedConfigStore();
         LiveIdentity IdentityProvider() => LiveIdentityFactory.Create(settingsStore.Load(), deployment);
 
-        _configSync ??= new ConfigSyncService(IdentityProvider, deviceStore.Load, groupKeyProvider: () => deployment.EffectiveGroupKeyBase64);
+        _configSync ??= new ConfigSyncService(IdentityProvider, deviceStore.Load);
         _configSync.Start();
-        _editLock ??= new EditLockService(IdentityProvider, deviceListProvider: deviceStore.Load);
+        _editLock ??= new EditLockService(IdentityProvider);
         _editLock.Start();
 
         var context = new AdminDashboardContext
@@ -464,8 +419,6 @@ public partial class App : System.Windows.Application
         window.Closed += (_, _) => _dashboardWindow = null;
         MainWindow = window;
         window.Show();
-        TestLogger.LogAction(TestLogEventType.StartupMilestone, TestLogLevel.Info, TestLogDirection.Local,
-            IdentityProvider().DeviceId, detail: "AdminDashboardWindow sichtbar");
         return Task.FromResult(true);
     }
 

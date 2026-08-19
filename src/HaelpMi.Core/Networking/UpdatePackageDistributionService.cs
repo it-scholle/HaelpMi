@@ -29,24 +29,15 @@ public sealed class UpdatePackageDistributionService : IAsyncDisposable
     private readonly Func<LiveIdentity> _identityProvider;
     private readonly UpdatePackageCacheStore _cacheStore;
     private readonly Action<string>? _audit;
-    private readonly byte[]? _publicKeyOverride;
     private TcpListener? _listener;
     private CancellationTokenSource? _cts;
     private Task? _acceptLoop;
 
-    /// <summary>
-    /// <paramref name="publicKeyOverride"/> (Nutzerwunsch 16.08.2026, "separater Test-Key für
-    /// Test-Installer"): kommt aus <see cref="Models.DeploymentInfo.UpdatePublicKeyBase64"/>
-    /// dieser Installation - fehlt es (alter Installer-Stand ohne dieses Feld), verifiziert
-    /// diese Instanz weiterhin gegen den kompilierten Fallback in
-    /// <see cref="Updates.UpdateSignaturePublicKey"/>.
-    /// </summary>
-    public UpdatePackageDistributionService(Func<LiveIdentity> identityProvider, UpdatePackageCacheStore cacheStore, Action<string>? audit = null, byte[]? publicKeyOverride = null)
+    public UpdatePackageDistributionService(Func<LiveIdentity> identityProvider, UpdatePackageCacheStore cacheStore, Action<string>? audit = null)
     {
         _identityProvider = identityProvider;
         _cacheStore = cacheStore;
         _audit = audit;
-        _publicKeyOverride = publicKeyOverride;
     }
 
     public void Start(int port = AppConstants.UpdatePackageTcpPort)
@@ -114,7 +105,7 @@ public sealed class UpdatePackageDistributionService : IAsyncDisposable
                 offset += read;
             }
 
-            if (!UpdatePackageVerifier.Verify(payload, header.Manifest, _publicKeyOverride ?? UpdateSignaturePublicKey.Bytes))
+            if (!UpdatePackageVerifier.Verify(payload, header.Manifest))
             {
                 _audit?.Invoke($"update package signature verification failed version={version} peer={peer.DeviceId}");
                 return null;

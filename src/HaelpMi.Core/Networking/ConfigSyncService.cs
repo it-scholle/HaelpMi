@@ -1,9 +1,7 @@
 using System.Net;
 using System.Net.Sockets;
-using HaelpMi.Core.Diagnostics;
 using HaelpMi.Core.Models;
 using HaelpMi.Core.Networking.Protocol;
-using HaelpMi.Core.Security;
 using HaelpMi.Core.Storage;
 
 namespace HaelpMi.Core.Networking;
@@ -26,7 +24,6 @@ public sealed class ConfigSyncService : IAsyncDisposable
     private readonly ConfigHistoryStore _historyStore = new();
     private readonly SettingsStore _settingsStore = new();
     private readonly Action<string>? _audit;
-    private readonly Func<string?>? _groupKeyProvider;
     private readonly SemaphoreSlim _applyLock = new(1, 1);
 
     private UdpClient? _udpSocket;
@@ -38,19 +35,11 @@ public sealed class ConfigSyncService : IAsyncDisposable
     /// <summary>Raised after a newer config has been pulled and applied - callers should re-register hotkeys, refresh UI, etc.</summary>
     public event EventHandler<SharedConfig>? ConfigApplied;
 
-    /// <param name="groupKeyProvider">
-    /// LAN-Verschlüsselung (CLAUDE.md "Lizenz &amp; Secrets"): siehe AlarmSender-
-    /// Konstruktor. Gilt hier NUR für den TCP-Pull (Request+Response, trägt den
-    /// eigentlichen Konfigurationsinhalt) - der UDP-Announce bleibt bewusst unverändert
-    /// im Klartext, er trägt nur "Config-Version X geändert", keinen Inhalt (siehe Plan-
-    /// Dokument).
-    /// </param>
-    public ConfigSyncService(Func<LiveIdentity> identityProvider, Func<List<DeviceEntry>> deviceListProvider, Action<string>? audit = null, Func<string?>? groupKeyProvider = null)
+    public ConfigSyncService(Func<LiveIdentity> identityProvider, Func<List<DeviceEntry>> deviceListProvider, Action<string>? audit = null)
     {
         _identityProvider = identityProvider;
         _deviceListProvider = deviceListProvider;
         _audit = audit;
-        _groupKeyProvider = groupKeyProvider;
     }
 
     // tcpPort-Override (06.08.2026) nur für Tests gedacht - ein Fixport ohne Override
@@ -173,8 +162,6 @@ public sealed class ConfigSyncService : IAsyncDisposable
         var payload = NetworkSerializer.ToUtf8Json(announce);
         var broadcastEndpoint = new IPEndPoint(IPAddress.Broadcast, AppConstants.ConfigSyncUdpPort);
         await _udpSocket.SendAsync(payload, payload.Length, broadcastEndpoint).WaitAsync(ct);
-        TestLogger.LogAction(TestLogEventType.MessageSent, TestLogLevel.Info, TestLogDirection.Send,
-            identity.DeviceId, detail: $"ConfigSyncAnnounce v{configVersion}");
     }
 
     private void ApplyToSelf(SharedConfig config)
@@ -193,8 +180,6 @@ public sealed class ConfigSyncService : IAsyncDisposable
         }
 
         _settingsStore.Save(settings);
-        TestLogger.LogAction(TestLogEventType.StatusChanged, TestLogLevel.Info, TestLogDirection.Local,
-            settings.DeviceId, detail: $"ConfigApplied v{config.ConfigVersion}");
         ConfigApplied?.Invoke(this, config);
     }
 
@@ -257,8 +242,6 @@ public sealed class ConfigSyncService : IAsyncDisposable
             return; // our own broadcast looping back
         }
 
-        TestLogger.LogAction(TestLogEventType.MessageReceived, TestLogLevel.Info, TestLogDirection.Receive,
-            identity.DeviceId, remoteDeviceId: announce.OriginDeviceId, detail: $"ConfigSyncAnnounce v{announce.ConfigVersion}");
         await EvaluateAndPullAsync(announce.OriginDeviceId, announce.ConfigVersion, ct);
     }
 
@@ -280,8 +263,6 @@ public sealed class ConfigSyncService : IAsyncDisposable
         var settings = _settingsStore.Load();
         if (remoteConfigVersion <= settings.AppliedConfigVersion)
         {
-            TestLogger.LogAction(TestLogEventType.ActionSkipped, TestLogLevel.Info, TestLogDirection.Local,
-                settings.DeviceId, remoteDeviceId: originDeviceId, detail: $"veraltete/gleiche Version v{remoteConfigVersion} <= v{settings.AppliedConfigVersion}");
             return; // already current or stale - nothing to do
         }
 
@@ -289,23 +270,7 @@ public sealed class ConfigSyncService : IAsyncDisposable
         if (originDevice is null)
         {
             _audit?.Invoke($"configsync: newer version reported by unknown device={originDeviceId} - awaiting discovery");
-            TestLogger.LogAction(TestLogEventType.ActionSkipped, TestLogLevel.Warn, TestLogDirection.Local,
-                settings.DeviceId, remoteDeviceId: originDeviceId, detail: "Ursprungsgeraet unbekannt, wartet auf Discovery");
             return; // will be retried on the next announce/boot-call once we've learned this device
-        }
-
-        // Admin-Rollen-Kryptoverifikation (Nutzerwunsch 17.08.2026): eine als Config-
-        // Ursprung akzeptierte Herkunft muss ein tatsächlich verifiziertes Admin-Gerät
-        // sein, sonst könnte jedes Gerät der Kundengruppe eine erfundene, höhere
-        // ConfigVersion behaupten und die eigene (manipulierte) Config als "neuer"
-        // andrehen. Sichtbar statt still verworfen, damit ein Admin eine echte
-        // Migrationslücke (Bestandsgerät ohne Admin-Rollen-Schlüssel) auch bemerkt.
-        if (originDevice.Role != Role.Admin || !originDevice.AdminVerified)
-        {
-            _audit?.Invoke($"configsync: announce von nicht verifiziertem absender={originDeviceId} ignoriert");
-            TestLogger.LogAction(TestLogEventType.ActionSkipped, TestLogLevel.Warn, TestLogDirection.Local,
-                settings.DeviceId, remoteDeviceId: originDeviceId, detail: "Ursprung nicht Admin/nicht verifiziert");
-            return;
         }
 
         await _applyLock.WaitAsync(ct);
@@ -332,7 +297,7 @@ public sealed class ConfigSyncService : IAsyncDisposable
         }
     }
 
-    private async Task<SharedConfig?> PullFromAsync(DeviceEntry originDevice, LiveIdentity identity, CancellationToken ct)
+    private static async Task<SharedConfig?> PullFromAsync(DeviceEntry originDevice, LiveIdentity identity, CancellationToken ct)
     {
         try
         {
@@ -349,34 +314,9 @@ public sealed class ConfigSyncService : IAsyncDisposable
             await using var stream = client.GetStream();
 
             var request = new ConfigSyncPullRequestMessage(identity.CustomerGroupId, identity.DeviceId);
-
-            // LAN-Verschlüsselung (CLAUDE.md "Lizenz & Secrets"): gleiche Fallback-Logik
-            // wie AlarmSender - nur wenn wir einen Gruppenschlüssel haben UND das Ziel als
-            // verschlüsselungsfähig+gepinnt bekannt ist. Kein Zustellzwang wie beim Alarm-
-            // Kanal nötig: schlägt der Pull fehl, wird er beim nächsten Announce/Boot-Call
-            // ohnehin erneut versucht (EvaluateAndPullAsync-Klassendoku).
-            var groupKeyBase64 = _groupKeyProvider?.Invoke();
-            var canEncrypt = groupKeyBase64 is not null
-                && originDevice.ProtocolVersion is >= AppConstants.CurrentProtocolVersion
-                && !string.IsNullOrEmpty(originDevice.PinnedDeviceIdentityPublicKeyBase64);
-
-            string requestLine;
-            if (canEncrypt)
-            {
-                var devicePrivateKeyBase64 = DeviceIdentityStore.LoadOrCreate().PrivateKeyBase64;
-                var envelope = SecureEnvelopeCodec.Seal(request, request.CustomerGroupId, request.RequesterDeviceId, groupKeyBase64, devicePrivateKeyBase64, DateTimeOffset.UtcNow);
-                requestLine = envelope is not null ? NetworkSerializer.ToJsonLine(envelope) : NetworkSerializer.ToJsonLine(request);
-            }
-            else
-            {
-                requestLine = NetworkSerializer.ToJsonLine(request);
-            }
-
-            var payload = NetworkSerializer.Encoding.GetBytes(requestLine);
+            var payload = NetworkSerializer.Encoding.GetBytes(NetworkSerializer.ToJsonLine(request));
             await stream.WriteAsync(payload, timeoutCts.Token);
             await stream.FlushAsync(timeoutCts.Token);
-            TestLogger.LogAction(TestLogEventType.MessageSent, TestLogLevel.Info, TestLogDirection.Send,
-                identity.DeviceId, remoteDeviceId: originDevice.DeviceId, detail: "ConfigSyncPullRequest");
 
             var line = await BoundedLineReader.ReadLineAsync(stream, timeoutCts.Token);
             if (line is null)
@@ -384,27 +324,8 @@ public sealed class ConfigSyncService : IAsyncDisposable
                 return null;
             }
 
-            // Antwortformat spiegelt das Anfrageformat (siehe AlarmTcpListener-Klassendoku
-            // für dasselbe Prinzip).
-            SharedConfig? config;
-            if (SecureEnvelopeCodec.TryParse(line, out var responseEnvelope) && responseEnvelope is not null)
-            {
-                var response = SecureEnvelopeCodec.TryOpen<ConfigSyncPullResponseMessage>(responseEnvelope, groupKeyBase64, originDevice.PinnedDeviceIdentityPublicKeyBase64, DateTimeOffset.UtcNow);
-                config = response?.Config;
-            }
-            else
-            {
-                var response = NetworkSerializer.FromJsonLine<ConfigSyncPullResponseMessage>(line);
-                config = response?.Config;
-            }
-
-            if (config is not null)
-            {
-                TestLogger.LogAction(TestLogEventType.MessageReceived, TestLogLevel.Info, TestLogDirection.Receive,
-                    identity.DeviceId, remoteDeviceId: originDevice.DeviceId, detail: "ConfigSyncPullResponse");
-            }
-
-            return config;
+            var response = NetworkSerializer.FromJsonLine<ConfigSyncPullResponseMessage>(line);
+            return response?.Config;
         }
         catch (Exception)
         {
@@ -446,67 +367,23 @@ public sealed class ConfigSyncService : IAsyncDisposable
                 return;
             }
 
+            var request = NetworkSerializer.FromJsonLine<ConfigSyncPullRequestMessage>(line);
+            if (request is null || request.RequesterDeviceId == Guid.Empty)
+            {
+                return;
+            }
+
             var identity = _identityProvider();
-
-            ConfigSyncPullRequestMessage? request;
-            var wasEncrypted = false;
-            string? requesterPinnedKey = null;
-
-            if (SecureEnvelopeCodec.TryParse(line, out var envelope) && envelope is not null)
+            if (!CustomerGroupFilter.Matches(request.CustomerGroupId, identity.CustomerGroupId))
             {
-                if (!CustomerGroupFilter.Matches(envelope.CustomerGroupId, identity.CustomerGroupId) || !envelope.IsPlausible())
-                {
-                    return;
-                }
-
-                requesterPinnedKey = _deviceListProvider().FirstOrDefault(d => d.DeviceId == envelope.DeviceId)?.PinnedDeviceIdentityPublicKeyBase64;
-                var groupKeyBase64 = _groupKeyProvider?.Invoke();
-                request = SecureEnvelopeCodec.TryOpen<ConfigSyncPullRequestMessage>(envelope, groupKeyBase64, requesterPinnedKey, DateTimeOffset.UtcNow);
-                if (request is null)
-                {
-                    return; // falscher Gruppenschlüssel/manipuliert/falscher Absender-Schlüssel - stiller Drop
-                }
-
-                wasEncrypted = true;
+                return;
             }
-            else
-            {
-                request = NetworkSerializer.FromJsonLine<ConfigSyncPullRequestMessage>(line);
-                if (request is null || request.RequesterDeviceId == Guid.Empty)
-                {
-                    return;
-                }
-
-                if (!CustomerGroupFilter.Matches(request.CustomerGroupId, identity.CustomerGroupId))
-                {
-                    return;
-                }
-            }
-
-            TestLogger.LogAction(TestLogEventType.MessageReceived, TestLogLevel.Info, TestLogDirection.Receive,
-                identity.DeviceId, remoteDeviceId: request.RequesterDeviceId, detail: "ConfigSyncPullRequest");
 
             var config = _configStore.LoadOrCreate();
             var response = new ConfigSyncPullResponseMessage(identity.CustomerGroupId, config);
-
-            string responseLine;
-            if (wasEncrypted)
-            {
-                var groupKeyBase64 = _groupKeyProvider?.Invoke();
-                var devicePrivateKeyBase64 = DeviceIdentityStore.LoadOrCreate().PrivateKeyBase64;
-                var responseEnvelope = SecureEnvelopeCodec.Seal(response, response.CustomerGroupId, identity.DeviceId, groupKeyBase64, devicePrivateKeyBase64, DateTimeOffset.UtcNow);
-                responseLine = responseEnvelope is not null ? NetworkSerializer.ToJsonLine(responseEnvelope) : NetworkSerializer.ToJsonLine(response);
-            }
-            else
-            {
-                responseLine = NetworkSerializer.ToJsonLine(response);
-            }
-
-            var responseBytes = NetworkSerializer.Encoding.GetBytes(responseLine);
+            var responseBytes = NetworkSerializer.Encoding.GetBytes(NetworkSerializer.ToJsonLine(response));
             await stream.WriteAsync(responseBytes, ct);
             await stream.FlushAsync(ct);
-            TestLogger.LogAction(TestLogEventType.MessageSent, TestLogLevel.Info, TestLogDirection.Send,
-                identity.DeviceId, remoteDeviceId: request.RequesterDeviceId, detail: "ConfigSyncPullResponse");
         }
         catch (Exception)
         {

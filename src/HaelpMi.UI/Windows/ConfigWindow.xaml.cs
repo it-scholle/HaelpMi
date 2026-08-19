@@ -2,7 +2,6 @@ using System.Collections.ObjectModel;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
-using System.Windows.Threading;
 using HaelpMi.Core.Models;
 using HaelpMi.Core.Networking;
 using HaelpMi.Core.Runtime;
@@ -25,13 +24,6 @@ public partial class ConfigWindow : Window
     private OwnSettings _settings = null!;
     private ObservableCollection<DeviceEntry> _devices = new();
     private bool _isLoadingGeneral;
-
-    // Testmodus-Toggle (Nutzerwunsch 13.08.2026): _isSyncingTestModeToggle nach demselben
-    // Muster wie _isLoadingGeneral oben - verhindert, dass ein programmatisches
-    // IsChecked-Zurücksetzen (Re-Sync, Ablauf) als Nutzeraktion in Checked/Unchecked
-    // durchschlägt und einen ungewollten Arm/Disarm-IPC-Call auslöst.
-    private DispatcherTimer? _testModeCountdownTimer;
-    private bool _isSyncingTestModeToggle;
 
     private sealed record MyAlarmChoice(string Name, string HotkeyText, string RecipientsText);
 
@@ -57,20 +49,14 @@ public partial class ConfigWindow : Window
         LoadGeneralFromDisk();
         ReloadDevicesFromDisk();
         RebuildMyAlarms();
-        _ = RefreshTestModeStatusAsync();
 
-        // Re-Sync bei jeder Aktivierung (nicht nur beim Öffnen): der zentrale Baustein gegen
-        // "vergessen, ob der Testmodus noch scharf ist" - korrigiert Checkbox+Countdown, falls
-        // der Toggle zwischenzeitlich durch einen Hotkey-Trigger verbraucht wurde oder der
-        // 2-Minuten-Timeout ablief, während das Fenster im Hintergrund war.
-        Activated += (_, _) => { ReloadDevicesFromDisk(); RebuildMyAlarms(); _ = RefreshTestModeStatusAsync(); };
+        Activated += (_, _) => { ReloadDevicesFromDisk(); RebuildMyAlarms(); };
         _deviceFileWatcher.Changed += (_, _) => { ReloadDevicesFromDisk(); RebuildMyAlarms(); };
         _configFileWatcher.Changed += (_, _) => RebuildMyAlarms();
         Closed += (_, _) =>
         {
             _deviceFileWatcher.Dispose();
             _configFileWatcher.Dispose();
-            _testModeCountdownTimer?.Stop();
         };
     }
 
@@ -333,127 +319,6 @@ public partial class ConfigWindow : Window
         finally
         {
             SelfTestButton.IsEnabled = true;
-        }
-    }
-
-    private async void TestModeToggle_Checked(object sender, RoutedEventArgs e)
-    {
-        if (_isSyncingTestModeToggle)
-        {
-            return;
-        }
-
-        TestModeToggle.IsEnabled = false;
-        try
-        {
-            var ok = await _context.RequestArmTestMode();
-            if (ok)
-            {
-                StartTestModeCountdown(DateTimeOffset.UtcNow + AppConstants.TestModeTimeout);
-            }
-            else
-            {
-                SetTestModeToggleSilently(false);
-                TestModeStatusText.Text = "Testmodus konnte nicht aktiviert werden - Hintergrunddienst nicht erreichbar.";
-            }
-        }
-        catch (Exception ex)
-        {
-            SetTestModeToggleSilently(false);
-            ActionErrorHandler.Show(this, "Testmodus aktivieren", ex);
-        }
-        finally
-        {
-            TestModeToggle.IsEnabled = true;
-        }
-    }
-
-    private async void TestModeToggle_Unchecked(object sender, RoutedEventArgs e)
-    {
-        _testModeCountdownTimer?.Stop();
-        TestModeStatusText.Text = string.Empty;
-
-        if (_isSyncingTestModeToggle)
-        {
-            return; // programmatisches Zurücksetzen (Ablauf/Re-Sync), kein Nutzerklick
-        }
-
-        // Reiner UX-Komfort für sofortige Rückmeldung, keine Sicherheitsfunktion - der
-        // 2-Minuten-Timeout in TestModeArmState greift unabhängig davon, ob dieser
-        // IPC-Call ankommt (siehe TestModeArmState-Klassendoku).
-        try
-        {
-            await _context.RequestDisarmTestMode();
-        }
-        catch (Exception ex)
-        {
-            ActionErrorHandler.Show(this, "Testmodus deaktivieren", ex);
-        }
-    }
-
-    private void StartTestModeCountdown(DateTimeOffset expiryUtc)
-    {
-        _testModeCountdownTimer?.Stop();
-        _testModeCountdownTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
-        _testModeCountdownTimer.Tick += (_, _) => UpdateTestModeCountdownText(expiryUtc);
-        UpdateTestModeCountdownText(expiryUtc);
-        _testModeCountdownTimer.Start();
-    }
-
-    private void UpdateTestModeCountdownText(DateTimeOffset expiryUtc)
-    {
-        var remaining = expiryUtc - DateTimeOffset.UtcNow;
-        if (remaining <= TimeSpan.Zero)
-        {
-            // Reine Anzeige-Aufräumarbeit - der Agent hat sich serverseitig ohnehin schon
-            // selbst deaktiviert (TestModeArmState-Zeitstempel-Ablauf), kein IPC-Call nötig.
-            _testModeCountdownTimer?.Stop();
-            SetTestModeToggleSilently(false);
-            TestModeStatusText.Text = string.Empty;
-            return;
-        }
-
-        TestModeStatusText.Text = $"Testmodus aktiv - noch {remaining:m\\:ss}";
-    }
-
-    private void SetTestModeToggleSilently(bool value)
-    {
-        _isSyncingTestModeToggle = true;
-        try
-        {
-            TestModeToggle.IsChecked = value;
-        }
-        finally
-        {
-            _isSyncingTestModeToggle = false;
-        }
-    }
-
-    // Fragt den tatsächlichen Agent-Zustand ab und korrigiert Checkbox+Countdown danach -
-    // der zentrale Baustein gegen "vergessen, ob der Toggle noch an ist" (siehe Aufrufer
-    // im Konstruktor/Activated oben).
-    private async Task RefreshTestModeStatusAsync()
-    {
-        TimeSpan? remaining;
-        try
-        {
-            remaining = await _context.RequestTestModeStatus();
-        }
-        catch
-        {
-            return; // best effort - der nächste Re-Sync (Activated) korrigiert es ohnehin wieder
-        }
-
-        if (remaining is { } r && r > TimeSpan.Zero)
-        {
-            SetTestModeToggleSilently(true);
-            StartTestModeCountdown(DateTimeOffset.UtcNow + r);
-        }
-        else
-        {
-            _testModeCountdownTimer?.Stop();
-            SetTestModeToggleSilently(false);
-            TestModeStatusText.Text = string.Empty;
         }
     }
 }

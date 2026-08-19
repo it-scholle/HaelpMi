@@ -1,10 +1,7 @@
 using System.Net;
 using System.Net.Sockets;
-using HaelpMi.Core.Diagnostics;
 using HaelpMi.Core.Models;
 using HaelpMi.Core.Networking.Protocol;
-using HaelpMi.Core.Security;
-using HaelpMi.Core.Storage;
 
 namespace HaelpMi.Core.Networking;
 
@@ -30,36 +27,23 @@ public sealed class AlarmTcpListener : IAsyncDisposable
 {
     private readonly Func<LiveIdentity> _identityProvider;
     private readonly Action<string>? _audit;
-    private readonly Func<string?>? _groupKeyProvider;
-    private readonly DeviceStore _deviceStore = new();
     private TcpListener? _listener;
     private CancellationTokenSource? _cts;
     private Task? _acceptLoop;
 
     public event EventHandler<AlarmReceivedEventArgs>? AlarmReceived;
 
-    /// <param name="groupKeyProvider">Siehe AlarmSender-Konstruktor - gleiche Bedeutung, nur für den Empfangs-/Antwortpfad.</param>
-    public AlarmTcpListener(Func<LiveIdentity> identityProvider, Action<string>? audit = null, Func<string?>? groupKeyProvider = null)
+    public AlarmTcpListener(Func<LiveIdentity> identityProvider, Action<string>? audit = null)
     {
         _identityProvider = identityProvider;
         _audit = audit;
-        _groupKeyProvider = groupKeyProvider;
     }
 
-    /// <summary>
-    /// Versucht, den exklusiven Alarm-Port zu binden. Gibt <c>true</c> zurück, wenn diese
-    /// Instanz dadurch zur "Primary" für die Maschine wird (s. AlarmRelayServer-Klassendoku),
-    /// sonst <c>false</c> - der Aufrufer (HaelpMi.Agent) entscheidet anhand dessen, ob er als
-    /// Satellite stattdessen eine Relay-Verbindung zur Primary-Instanz aufbaut. Erneuter Aufruf
-    /// nach einem vorherigen Fehlschlag versucht bewusst erneut zu binden (kein "einmal
-    /// gescheitert, für immer gescheitert") - genau das braucht die Satellite→Primary-Übernahme
-    /// bei Verbindungsabbruch (s. dortiger Kommentar).
-    /// </summary>
-    public bool Start(int port = Models.AppConstants.AlarmTcpPort)
+    public void Start(int port = Models.AppConstants.AlarmTcpPort)
     {
         if (_listener is not null)
         {
-            return true; // schon gebunden (durch einen früheren erfolgreichen Aufruf)
+            return;
         }
 
         // Bugfix 06.08.2026 ("Dashboard startet nicht" - Crash-Log-Fund): fehlte hier bisher
@@ -71,12 +55,6 @@ public sealed class AlarmTcpListener : IAsyncDisposable
         // GENAU der Alarm-Empfänger ist (FR-9/FR-13) - "degradiert weiterlaufen" bedeutet
         // hier "dieses Gerät empfängt bis zum nächsten erfolgreichen Start keine Alarme
         // mehr", deshalb zusätzlich ins Audit-Log statt nur stillschweigend zu degradieren.
-        //
-        // Bugfix 17.08.2026 (Fast User Switching): "bis zum nächsten erfolgreichen Start"
-        // stimmt seither nicht mehr uneingeschränkt - ein Bind-Fehlschlag bedeutet jetzt "diese
-        // Sitzung wird Satellite statt Primary" (s. Rückgabewert-Doku oben), nicht mehr
-        // zwingend "kein Alarmempfang". Der Audit-Text bleibt trotzdem korrekt: er beschreibt
-        // den Zustand DIESER Instanz, die Weiterleitung passiert außerhalb dieser Klasse.
         try
         {
             _listener = new TcpListener(IPAddress.Any, port);
@@ -85,13 +63,12 @@ public sealed class AlarmTcpListener : IAsyncDisposable
         catch (SocketException)
         {
             _listener = null;
-            _audit?.Invoke($"AlarmTcpListener konnte Port {port} nicht öffnen (belegt) - lauscht in dieser Sitzung nicht direkt, s. Alarm-Relay.");
-            return false;
+            _audit?.Invoke($"AlarmTcpListener konnte Port {port} nicht öffnen (belegt) - Alarme kommen bis zum nächsten Neustart nicht an.");
+            return;
         }
 
         _cts = new CancellationTokenSource();
         _acceptLoop = AcceptLoopAsync(_listener, _cts.Token);
-        return true;
     }
 
     private async Task AcceptLoopAsync(TcpListener listener, CancellationToken ct)
@@ -142,43 +119,14 @@ public sealed class AlarmTcpListener : IAsyncDisposable
                 return;
             }
 
-            var identity = _identityProvider();
-
-            // LAN-Verschlüsselung (CLAUDE.md "Lizenz & Secrets"): eine Zeile ist entweder
-            // ein SecureEnvelope (neuer, verschlüsselungsfähiger Absender) oder das alte
-            // Klartextformat - beide koexistieren während der Rollout-Übergangsphase, siehe
-            // SecureEnvelopeCodec.TryParse-Klassendoku. Die Antwort spiegelt bewusst das
-            // Anfrageformat (siehe unten).
             AlarmRequestMessage? request;
-            var wasEncrypted = false;
-
-            if (SecureEnvelopeCodec.TryParse(line, out var envelope) && envelope is not null)
+            try
             {
-                if (!CustomerGroupFilter.Matches(envelope.CustomerGroupId, identity.CustomerGroupId) || !envelope.IsPlausible())
-                {
-                    return; // different deployment, oder offensichtlich unplausibel - vor jeder teuren Krypto-Operation verwerfen
-                }
-
-                var senderPinnedKey = _deviceStore.Load().FirstOrDefault(d => d.DeviceId == envelope.DeviceId)?.PinnedDeviceIdentityPublicKeyBase64;
-                var groupKeyBase64 = _groupKeyProvider?.Invoke();
-                request = SecureEnvelopeCodec.TryOpen<AlarmRequestMessage>(envelope, groupKeyBase64, senderPinnedKey, DateTimeOffset.UtcNow);
-                if (request is null)
-                {
-                    return; // falscher Gruppenschlüssel, manipuliert, ungepinnter/falscher Absender-Schlüssel o. ä. - stiller Drop wie bei jedem anderen Verifikationsfehlschlag
-                }
-
-                wasEncrypted = true;
+                request = NetworkSerializer.FromJsonLine<AlarmRequestMessage>(line);
             }
-            else
+            catch (Exception)
             {
-                try
-                {
-                    request = NetworkSerializer.FromJsonLine<AlarmRequestMessage>(line);
-                }
-                catch (Exception)
-                {
-                    return; // malformed request - no trust assumptions in an admin-less network (NFR-6)
-                }
+                return; // malformed request - no trust assumptions in an admin-less network (NFR-6)
             }
 
             if (request is null || !request.IsPlausible())
@@ -186,36 +134,20 @@ public sealed class AlarmTcpListener : IAsyncDisposable
                 return;
             }
 
+            var identity = _identityProvider();
             if (!CustomerGroupFilter.Matches(request.CustomerGroupId, identity.CustomerGroupId))
             {
                 return; // different deployment sharing the same physical network (Teil 2, Abschnitt 6)
             }
 
-            _audit?.Invoke($"alarm received from deviceId={request.SenderDeviceId} isTest={request.IsTest}");
-            TestLogger.LogAction(TestLogEventType.MessageReceived, TestLogLevel.Info, TestLogDirection.Receive,
-                identity.DeviceId, request.AlarmSessionId, request.SenderDeviceId, "AlarmRequest");
+            _audit?.Invoke($"alarm received from deviceId={request.SenderDeviceId}");
             AlarmReceived?.Invoke(this, new AlarmReceivedEventArgs { Request = request, SenderAddress = senderAddress });
 
             var ack = new AlarmAckMessage(request.CustomerGroupId, request.AlarmProfileId, request.AlarmSessionId, identity.DeviceId, DateTimeOffset.UtcNow);
-
-            string ackLine;
-            if (wasEncrypted)
-            {
-                var groupKeyBase64 = _groupKeyProvider?.Invoke();
-                var devicePrivateKeyBase64 = DeviceIdentityStore.LoadOrCreate().PrivateKeyBase64;
-                var ackEnvelope = SecureEnvelopeCodec.Seal(ack, ack.CustomerGroupId, identity.DeviceId, groupKeyBase64, devicePrivateKeyBase64, DateTimeOffset.UtcNow);
-                ackLine = ackEnvelope is not null ? NetworkSerializer.ToJsonLine(ackEnvelope) : NetworkSerializer.ToJsonLine(ack);
-            }
-            else
-            {
-                ackLine = NetworkSerializer.ToJsonLine(ack);
-            }
-
+            var ackLine = NetworkSerializer.ToJsonLine(ack);
             var ackBytes = NetworkSerializer.Encoding.GetBytes(ackLine);
             await stream.WriteAsync(ackBytes, ct);
             await stream.FlushAsync(ct);
-            TestLogger.LogAction(TestLogEventType.AckSent, TestLogLevel.Info, TestLogDirection.Send,
-                identity.DeviceId, request.AlarmSessionId, request.SenderDeviceId);
         }
         catch (Exception)
         {

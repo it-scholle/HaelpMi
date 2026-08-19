@@ -1,9 +1,7 @@
 using System.Net;
 using System.Net.Sockets;
-using HaelpMi.Core.Diagnostics;
 using HaelpMi.Core.Models;
 using HaelpMi.Core.Networking.Protocol;
-using HaelpMi.Core.Security;
 using HaelpMi.Core.Storage;
 
 namespace HaelpMi.Core.Networking;
@@ -22,12 +20,6 @@ public sealed class PeerConfigVersionInfo
     public required int ConfigVersion { get; init; }
 }
 
-/// <summary>Siehe <see cref="DiscoveryService.AdminPeerContactObserved"/>.</summary>
-public sealed class AdminPeerContactInfo
-{
-    public required DeviceEntry Peer { get; init; }
-}
-
 /// <summary>
 /// UDP boot-call discovery (Phase 1 5.5/FR-21/22/23, Teil 2 Abschnitt 9): one socket
 /// bound to <see cref="AppConstants.DiscoveryUdpPort"/> both sends the once-per-startup
@@ -39,16 +31,9 @@ public sealed class AdminPeerContactInfo
 /// different id than ours is dropped in <see cref="HandleDatagramAsync"/> before it
 /// touches the device list at all (Teil 2, Abschnitt 6 - customer/group isolation).
 ///
-/// A plain limited broadcast (255.255.255.255) only reaches the default-route subnet,
-/// matching the spec's accepted "same subnet/VLAN only" constraint. Multi-VLAN-Bridge-Seed
-/// (Nutzerwunsch 13.08.2026, erweitert 15.08.2026 auf mehrere Adressen): if
-/// <see cref="_bridgeSeedAddressProvider"/> resolves to one or more addresses (typically
-/// Admin-Geräte in routed-but-not-broadcast-reachable segments), <see cref="AnnounceAsync"/>
-/// additionally unicasts the same boot-call to each of them - the receiving
-/// <see cref="HandleDatagramAsync"/> doesn't distinguish unicast from broadcast origin, so
-/// this "just works" as a bootstrap contact. Once that first contact stands, the existing
-/// gossip (<c>KnownDeviceSummary</c> in a Reply) carries the rest of the device list across
-/// the bridge on its own - none of the seed devices themselves need to stay up afterwards.
+/// Known limitation carried over from 5.5: a plain limited broadcast (255.255.255.255)
+/// only reaches the default-route subnet, matching the spec's accepted "same
+/// subnet/VLAN only" constraint - segmented networks fall back to manual entries.
 /// </summary>
 public sealed class DiscoveryService : IAsyncDisposable
 {
@@ -57,8 +42,6 @@ public sealed class DiscoveryService : IAsyncDisposable
     private readonly DeviceStore _deviceStore = new();
     private readonly SemaphoreSlim _storeLock = new(1, 1);
     private readonly Action<string>? _audit;
-    private readonly Func<IReadOnlyCollection<string>>? _bridgeSeedAddressProvider;
-    private readonly Func<string?>? _adminRolePrivateKeyProvider;
     private UdpClient? _socket;
     private CancellationTokenSource? _cts;
     private Task? _receiveLoop;
@@ -84,57 +67,12 @@ public sealed class DiscoveryService : IAsyncDisposable
     /// </summary>
     public event EventHandler<PeerConfigVersionInfo>? PeerConfigVersionObserved;
 
-    /// <summary>
-    /// Raised whenever a boot-call directly (nicht per Gossip gelernt) einen Peer offenbart,
-    /// der wie wir selbst Role.Admin ist (Nutzerwunsch 15.08.2026: Admin&lt;-&gt;Admin-Mesh-
-    /// Abgleich fürs Audit-Log, siehe AuditSyncService.ReconcileWithAdminPeerAsync) - kein
-    /// neuer Kanal, nur ein weiterer Hook auf den ohnehin stattfindenden Boot-Call-Kontakt.
-    /// Feuert bewusst nur für den direkt kontaktierten Peer, nicht für gossip-gelernte
-    /// Geräte - deren IP-Adresse kann veraltet/unerreichbar sein, und das Event feuert
-    /// ohnehin erneut, sobald dieses Gerät selbst direkten Kontakt aufnimmt.
-    ///
-    /// Admin-Rollen-Kryptoverifikation (Nutzerwunsch 17.08.2026): feuert bewusst weiterhin
-    /// auf der rohen Selbstauskunft <c>Role.Admin</c>, NICHT erst nach erfolgreicher
-    /// Signaturprüfung - genau das brauchen sowohl AuditSyncService.
-    /// ReconcileWithAdminPeerAsync als auch der neue AdminRoleKeySyncService (der Dienst,
-    /// der den Migrationspfad überhaupt erst in Gang setzt: zwei Admin-Geräte ohne jeden
-    /// Schlüssel könnten sich sonst nie kennenlernen, um sich einen zu geben - klassisches
-    /// Henne-Ei-Problem, wenn man hier stattdessen AdminVerified verlangen würde). Die
-    /// eigentliche Härtung sitzt tiefer: EditLockService/ConfigSyncService/AuditSyncService
-    /// selbst prüfen AdminVerified, bevor sie einer Anfrage vertrauen oder ein Geheimnis
-    /// herausgeben (siehe dortige Klassen sowie AdminRoleKeySyncService, das die
-    /// Schlüsselweitergabe zusätzlich hart an einen verschlüsselten SecureEnvelope-Kanal
-    /// bindet statt an diese Selbstauskunft allein).
-    /// </summary>
-    public event EventHandler<AdminPeerContactInfo>? AdminPeerContactObserved;
-
     /// <param name="discoveryPort">Overridable only for tests - production always uses <see cref="AppConstants.DiscoveryUdpPort"/> so every device agrees on one port.</param>
-    /// <param name="bridgeSeedAddressProvider">
-    /// Multi-VLAN-Bridge-Seed (siehe Klassenkommentar): liefert bei jedem Announce-Aufruf
-    /// die aktuell konfigurierten Bootstrap-Adressen (leer = keine, Normalfall). Ein Func
-    /// statt eines festen Werts, weil der Aufrufer (HaelpMi.Agent) sie hot-reload-fähig aus
-    /// SharedConfig lesen soll, nicht einmalig beim Konstruieren einfrieren darf.
-    /// </param>
-    /// <param name="adminRolePrivateKeyProvider">
-    /// Admin-Rollen-Kryptoverifikation (Nutzerwunsch 17.08.2026): liefert den eigenen
-    /// effektiven privaten Schlüssel (Installer- ODER Migrationspfad, siehe
-    /// Security.AdminRoleTrustStore), mit dem <see cref="BuildMessage"/> jeden ausgehenden
-    /// Boot-Call signiert - null/nicht gesetzt = kein Admin-Gerät bzw. noch keine
-    /// Signierfähigkeit, Announces bleiben dann unsigniert (kompatibel, siehe
-    /// BootCallMessage-Klassendoku).
-    /// </param>
-    public DiscoveryService(
-        Func<LiveIdentity> identityProvider,
-        Action<string>? audit = null,
-        int? discoveryPort = null,
-        Func<IReadOnlyCollection<string>>? bridgeSeedAddressProvider = null,
-        Func<string?>? adminRolePrivateKeyProvider = null)
+    public DiscoveryService(Func<LiveIdentity> identityProvider, Action<string>? audit = null, int? discoveryPort = null)
     {
         _identityProvider = identityProvider;
         _audit = audit;
         _discoveryPort = discoveryPort ?? AppConstants.DiscoveryUdpPort;
-        _bridgeSeedAddressProvider = bridgeSeedAddressProvider;
-        _adminRolePrivateKeyProvider = adminRolePrivateKeyProvider;
     }
 
     /// <summary>Binds the socket and starts the background receive loop. Call once at Agent startup.</summary>
@@ -168,84 +106,11 @@ public sealed class DiscoveryService : IAsyncDisposable
         var payload = NetworkSerializer.ToUtf8Json(message);
         var broadcastEndpoint = new IPEndPoint(IPAddress.Broadcast, _discoveryPort);
         await _socket.SendAsync(payload, payload.Length, broadcastEndpoint).WaitAsync(ct);
-        TestLogger.LogAction(TestLogEventType.MessageSent, TestLogLevel.Info, TestLogDirection.Send,
-            message.DeviceId, detail: "BootCallAnnounce");
-
-        await SendToBridgeSeedsAsync(payload, ct);
-    }
-
-    /// <summary>
-    /// Multi-VLAN-Bridge-Seed (Klassenkommentar): zusätzlicher Unicast desselben Announce-
-    /// Payloads an jede konfigurierte Bootstrap-Adresse jenseits des eigenen Broadcast-
-    /// Bereichs. Bewusst best-effort und komplett getrennt vom obigen Broadcast-Send in
-    /// AnnounceAsync, und pro Adresse einzeln isoliert - eine falsche/nicht (mehr)
-    /// erreichbare Adresse (DNS-Fehler, Timeout, falsch getippt) darf weder die normale
-    /// lokale Discovery beeinträchtigen noch die übrigen konfigurierten Bridge-Seeds
-    /// blockieren.
-    /// </summary>
-    private async Task SendToBridgeSeedsAsync(byte[] payload, CancellationToken ct)
-    {
-        var seedAddresses = _bridgeSeedAddressProvider?.Invoke();
-        if (seedAddresses is null || seedAddresses.Count == 0 || _socket is null)
-        {
-            return;
-        }
-
-        foreach (var seedAddress in seedAddresses)
-        {
-            if (string.IsNullOrWhiteSpace(seedAddress))
-            {
-                continue;
-            }
-
-            try
-            {
-                // IP direkt (Normalfall bei einer festen Standort-zu-Standort-Route) oder
-                // Hostname (falls das Kundennetz DNS über die VPN-Verbindung anbietet) -
-                // beides erlaubt, ohne dass der Admin im Dashboard zwischen beiden
-                // unterscheiden muss.
-                var resolved = IPAddress.TryParse(seedAddress, out var parsed)
-                    ? parsed
-                    : (await Dns.GetHostAddressesAsync(seedAddress, ct)).FirstOrDefault();
-                if (resolved is null)
-                {
-                    continue;
-                }
-
-                var seedEndpoint = new IPEndPoint(resolved, _discoveryPort);
-                await _socket.SendAsync(payload, payload.Length, seedEndpoint).WaitAsync(ct);
-            }
-            catch (Exception)
-            {
-                // best-effort pro Adresse - siehe Methodenkommentar; kein Audit-Log-Eintrag
-                // nötig, das würde bei einer dauerhaft falsch konfigurierten Adresse nur bei
-                // jedem Announce erneut spammen, ohne dass der Admin etwas Neues erfährt.
-            }
-        }
     }
 
     private BootCallMessage BuildMessage(MessageKind kind, IReadOnlyList<KnownDeviceSummary>? knownDevices = null)
     {
         var identity = _identityProvider();
-        // LAN-Verschlüsselung (CLAUDE.md "Lizenz & Secrets"): jeder eigene Boot-Call meldet
-        // die eigene Protokollversion + den öffentlichen Geräte-Identitätsschlüssel - reine
-        // Selbstauskunft, die der Empfänger nur bei diesem direkten Kontakt pint (siehe
-        // HandleDatagramAsync), nie über Gossip weitergegeben (KnownDeviceSummary trägt
-        // dieses Feld bewusst nicht).
-        var deviceIdentity = DeviceIdentityStore.LoadOrCreate();
-
-        // Admin-Rollen-Kryptoverifikation (Nutzerwunsch 17.08.2026): TrySign liefert null
-        // für jedes Nicht-Admin-Gerät und für ein Admin-Gerät ohne (noch) verfügbaren
-        // privaten Schlüssel - beides einfach "unsigniert versenden", kein Fehlerfall.
-        // identity.AdminRolePublicKeyBase64 ist für ein signierfähiges Admin-Gerät IMMER
-        // exakt der zum verwendeten privaten Schlüssel passende öffentliche Teil (siehe
-        // AdminRoleTrustStore.SaveOwnKey/EnsureSelfGeneratedKeyIfNeeded: der eigene
-        // Schlüssel wird dort stets zusammen mit der eigenen Gruppenschlüssel-Vorstellung
-        // gesetzt) - kein zweiter Provider nötig.
-        var sentAtUtc = DateTimeOffset.UtcNow;
-        var adminRoleSignature = AdminRoleSigner.TrySign(
-            identity.Role, identity.CustomerGroupId, _adminRolePrivateKeyProvider?.Invoke(), identity.DeviceId, sentAtUtc);
-
         return new BootCallMessage(
             kind,
             identity.CustomerGroupId,
@@ -259,12 +124,8 @@ public sealed class DiscoveryService : IAsyncDisposable
             AppConstants.AlarmTcpPort,
             identity.ProgramVersion,
             identity.ConfigVersion,
-            sentAtUtc,
-            knownDevices,
-            ProtocolVersion: AppConstants.CurrentProtocolVersion,
-            DeviceIdentityPublicKeyBase64: deviceIdentity.PublicKeyBase64,
-            AdminRoleSignatureBase64: adminRoleSignature,
-            AdminRolePublicKeyBase64: adminRoleSignature is null ? null : identity.AdminRolePublicKeyBase64);
+            DateTimeOffset.UtcNow,
+            knownDevices);
     }
 
     private async Task ReceiveLoopAsync(UdpClient socket, CancellationToken ct)
@@ -314,11 +175,6 @@ public sealed class DiscoveryService : IAsyncDisposable
     {
         if (result.Buffer.Length > MaxDatagramBytes)
         {
-            // Unverfänglich zu loggen: verrät nichts über eine fremde Kundengruppe, nur dass
-            // irgendein zu großes/nicht auswertbares UDP-Paket ankam (siehe Klassenkommentar
-            // CustomerGroupFilter zur Abgrenzung, was NICHT geloggt werden darf).
-            TestLogger.LogAction(TestLogEventType.ActionSkipped, TestLogLevel.Info, TestLogDirection.Local,
-                _identityProvider().DeviceId, detail: "Datagramm verworfen (zu gross)");
             return; // untrusted network input (CLAUDE.md): reject oversized datagrams before even parsing
         }
 
@@ -329,8 +185,6 @@ public sealed class DiscoveryService : IAsyncDisposable
         }
         catch (Exception)
         {
-            TestLogger.LogAction(TestLogEventType.ActionSkipped, TestLogLevel.Info, TestLogDirection.Local,
-                _identityProvider().DeviceId, detail: "Datagramm verworfen (kaputt)");
             return; // malformed datagram - ignore, no partial trust in an admin-less network (NFR-6)
         }
 
@@ -353,84 +207,16 @@ public sealed class DiscoveryService : IAsyncDisposable
 
         var remoteIp = result.RemoteEndPoint.Address.ToString();
         DeviceEntry updated;
-        var learnedNewDevice = false;
-        // Für die TestLogger-Zeilen NACH dem Lock gesammelt (Item 30) - keine Log-I/O
-        // während _storeLock gehalten wird, bei potenziell mehreren hundert Gossip-Einträgen.
-        var newlyLearnedGossipDeviceIds = new List<Guid>();
-
-        // Admin-Rollen-Kryptoverifikation (Nutzerwunsch 17.08.2026): nur bei DIREKTEM
-        // Kontakt geprüft, nie im Gossip-Loop unten (gleiches Prinzip wie beim
-        // Geräte-Identitätspin). TOFU-Erstlernen: kennt dieses Gerät noch KEINEN
-        // Gruppenschlüssel (ownIdentity.AdminRolePublicKeyBase64 null), aber der Peer
-        // behauptet Role.Admin und liefert einen mitsamt gültiger Signatur, wird dessen
-        // Schlüssel als Gruppenschlüssel gepinnt (Security.AdminRoleTrustStore -
-        // Migrationspfad). Kennt es bereits einen, muss der gemeldete exakt
-        // übereinstimmen - ein abweichender wird verworfen + auditiert statt stillschweigend
-        // übernommen (identisches Prinzip wie beim Geräte-Identitätspin).
-        var adminVerified = false;
-        if (message.Role == Role.Admin && !string.IsNullOrEmpty(message.AdminRolePublicKeyBase64))
-        {
-            var pinnedGroupKey = ownIdentity.AdminRolePublicKeyBase64;
-            if (string.IsNullOrEmpty(pinnedGroupKey))
-            {
-                if (AdminRoleVerifier.Verify(message.AdminRolePublicKeyBase64, message.CustomerGroupId, message.DeviceId, message.SentAtUtc, message.AdminRoleSignatureBase64, DateTimeOffset.UtcNow))
-                {
-                    AdminRoleTrustStore.PinGroupPublicKeyIfUnset(message.AdminRolePublicKeyBase64);
-                    adminVerified = true;
-                }
-            }
-            else if (pinnedGroupKey == message.AdminRolePublicKeyBase64)
-            {
-                adminVerified = AdminRoleVerifier.Verify(pinnedGroupKey, message.CustomerGroupId, message.DeviceId, message.SentAtUtc, message.AdminRoleSignatureBase64, DateTimeOffset.UtcNow);
-            }
-            else
-            {
-                _audit?.Invoke($"admin-role-key-mismatch deviceId={message.DeviceId} - gepinnter Gruppenschluessel weicht ab, Behauptung abgelehnt");
-                TestLogger.LogAction(TestLogEventType.ActionSkipped, TestLogLevel.Warn, TestLogDirection.Local,
-                    ownIdentity.DeviceId, remoteDeviceId: message.DeviceId, detail: "admin-role-key-mismatch");
-            }
-        }
 
         await _storeLock.WaitAsync(ct);
         try
         {
             var devices = _deviceStore.Load();
-            var isNewPrimaryDevice = devices.All(d => d.DeviceId != message.DeviceId);
-
-            // LAN-Verschlüsselung (CLAUDE.md "Lizenz & Secrets"): Trust-on-First-Use, nur
-            // bei DIESEM direkten Kontakt geprüft/gepinnt, nie im Gossip-Loop unten (siehe
-            // DeviceUpsertInfo-Klassendoku). Meldet dieselbe DeviceId einen ANDEREN Schlüssel
-            // als beim letzten direkten Kontakt gepinnt, wird der neue NICHT übernommen -
-            // möglicher Klon-/Kompromittierungshinweis, landet im Audit-Log statt still
-            // akzeptiert zu werden.
-            var existingBeforeUpsert = devices.FirstOrDefault(d => d.DeviceId == message.DeviceId);
-            var reportedKey = message.DeviceIdentityPublicKeyBase64;
-            string? pinnedKeyToApply = null;
-            if (!string.IsNullOrEmpty(reportedKey))
-            {
-                var existingPinnedKey = existingBeforeUpsert?.PinnedDeviceIdentityPublicKeyBase64;
-                if (existingPinnedKey is null || existingPinnedKey == reportedKey)
-                {
-                    pinnedKeyToApply = reportedKey;
-                }
-                else
-                {
-                    _audit?.Invoke($"device-identity-key-changed deviceId={message.DeviceId} - alter Pin beibehalten, neuer Schluessel abgelehnt");
-                    TestLogger.LogAction(TestLogEventType.ActionSkipped, TestLogLevel.Warn, TestLogDirection.Local,
-                        ownIdentity.DeviceId, remoteDeviceId: message.DeviceId, detail: "device-identity-key-changed");
-                }
-            }
-
             var info = new DeviceUpsertInfo(
                 message.ComputerName, message.User, message.RoomName, message.RoomNumber,
-                message.Role, message.IsRemoteSession, remoteIp, message.TcpPort,
-                ObservedProtocolVersion: message.ProtocolVersion,
-                PinnedDeviceIdentityPublicKeyBase64: pinnedKeyToApply,
-                ProgramVersion: message.ProgramVersion,
-                AdminVerified: adminVerified);
+                message.Role, message.IsRemoteSession, remoteIp, message.TcpPort);
             DeviceStore.Upsert(devices, message.DeviceId, info, DateTimeOffset.UtcNow);
             updated = devices.First(d => d.DeviceId == message.DeviceId);
-            learnedNewDevice = isNewPrimaryDevice;
 
             // Gossip (Nutzerwunsch 05.08.2026): eine Reply kann die komplette Geräteliste
             // des Antwortenden mitbringen - so lernen wir auch von Geräten, die gerade
@@ -445,16 +231,9 @@ public sealed class DiscoveryService : IAsyncDisposable
                         continue;
                     }
 
-                    if (devices.All(d => d.DeviceId != known.DeviceId))
-                    {
-                        learnedNewDevice = true;
-                        newlyLearnedGossipDeviceIds.Add(known.DeviceId);
-                    }
-
                     var knownInfo = new DeviceUpsertInfo(
                         known.ComputerName, known.User, known.RoomName, known.RoomNumber,
-                        known.Role, false, known.IpAddress, known.TcpPort, known.LastSeenUtc,
-                        ProgramVersion: known.ProgramVersion);
+                        known.Role, false, known.IpAddress, known.TcpPort);
                     DeviceStore.Upsert(devices, known.DeviceId, knownInfo, DateTimeOffset.UtcNow);
                 }
             }
@@ -467,25 +246,7 @@ public sealed class DiscoveryService : IAsyncDisposable
         }
 
         _audit?.Invoke($"discovery {message.Kind} deviceId={message.DeviceId}");
-        TestLogger.LogAction(TestLogEventType.StatusChanged, TestLogLevel.Info, TestLogDirection.Local,
-            ownIdentity.DeviceId, remoteDeviceId: message.DeviceId, detail: "Geraet online/aktualisiert");
-        foreach (var gossipedDeviceId in newlyLearnedGossipDeviceIds)
-        {
-            TestLogger.LogAction(TestLogEventType.StatusChanged, TestLogLevel.Info, TestLogDirection.Local,
-                ownIdentity.DeviceId, remoteDeviceId: gossipedDeviceId, detail: $"via Gossip von {message.DeviceId} gelernt");
-        }
         DeviceUpdated?.Invoke(this, updated);
-
-        if (learnedNewDevice)
-        {
-            // Multi-VLAN-Bridge-Seed-Folgefix (Nutzerwunsch 13.08.2026): ohne das hier
-            // erführen bereits laufende lokale Peers von einem neu über die Brücke gelernten
-            // Fremdsubnetz-Gerät erst bei ihrem eigenen nächsten Boot (kein Heartbeat) oder
-            // einem manuellen "Erneut suchen" - dieselbe Fehlerklasse wie der
-            // PeerConfigVersionObserved-Fix vom 11.08.2026. Best-effort, eigener Re-Announce
-            // löst wieder ganz normal Replies+Gossip bei den lokalen Nachbarn aus.
-            _ = ReAnnounceBestEffortAsync(ct);
-        }
 
         if (message.ProgramVersion != ownIdentity.ProgramVersion)
         {
@@ -506,28 +267,9 @@ public sealed class DiscoveryService : IAsyncDisposable
             });
         }
 
-        if (message.Role == Role.Admin && ownIdentity.Role == Role.Admin)
-        {
-            AdminPeerContactObserved?.Invoke(this, new AdminPeerContactInfo { Peer = updated });
-        }
-
         if (message.Kind == MessageKind.Announce)
         {
             await ReplyDirectlyAsync(result.RemoteEndPoint, message.DeviceId, ct);
-        }
-    }
-
-    private async Task ReAnnounceBestEffortAsync(CancellationToken ct)
-    {
-        try
-        {
-            await AnnounceAsync(ct);
-        }
-        catch (Exception)
-        {
-            // best-effort, wie ReceiveLoopAsync's Toleranz für einen einzelnen fehlgeschlagenen
-            // Schritt - der nächste eigene Boot bzw. ein manuelles "Erneut suchen" bleibt der
-            // Fallback, falls ausgerechnet dieser eine Re-Announce scheitert.
         }
     }
 
@@ -558,8 +300,6 @@ public sealed class DiscoveryService : IAsyncDisposable
             // source endpoint (rather than re-assuming our own port) is simply correct UDP
             // request/reply behavior and is what makes this independently testable.
             await _socket.SendAsync(payload, payload.Length, remoteEndpoint).WaitAsync(ct);
-            TestLogger.LogAction(TestLogEventType.MessageSent, TestLogLevel.Info, TestLogDirection.Send,
-                reply.DeviceId, remoteDeviceId: announcerDeviceId, detail: "BootCallReply");
         }
         catch (SocketException)
         {
@@ -583,7 +323,7 @@ public sealed class DiscoveryService : IAsyncDisposable
 
         return devices
             .Where(d => d.DeviceId != excludeDeviceId)
-            .Select(d => new KnownDeviceSummary(d.DeviceId, d.ComputerName, d.User, d.RoomName, d.RoomNumber, d.Role, d.IpAddress, d.TcpPort, d.LastSeenUtc, d.LastKnownProgramVersion))
+            .Select(d => new KnownDeviceSummary(d.DeviceId, d.ComputerName, d.User, d.RoomName, d.RoomNumber, d.Role, d.IpAddress, d.TcpPort))
             .ToList();
     }
 

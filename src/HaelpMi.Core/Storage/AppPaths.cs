@@ -32,34 +32,9 @@ public static class AppPaths
 
     public static string DevicesFilePath => Path.Combine(RootFolder, "devices.json");
 
-    /// <summary>
-    /// Geräte-Identitätsschlüsselpaar (Ed25519, siehe Security.DeviceIdentityStore) - der
-    /// private Schlüssel darin ist DPAPI-LocalMachine-geschützt, nicht CurrentUser (siehe
-    /// dortige Klassendoku). Bewusst unter RootFolder wie settings.json/devices.json, nicht
-    /// AppContext.BaseDirectory wie deployment.json: das ist Geräte-Laufzeitzustand, kein
-    /// vom Installer verbindlich vorgegebener Wert.
-    /// </summary>
-    public static string DeviceIdentityFilePath => Path.Combine(RootFolder, "device-identity.json");
-
-    /// <summary>
-    /// Migrationspfad für die Admin-Rollen-Signatur (Ed25519, siehe
-    /// Security.AdminRoleTrustStore) auf Bestandsgeräten ohne Installer-eingebetteten
-    /// Schlüssel (siehe DeploymentInfo.AdminRolePrivateKeyBase64) - laufzeit-erzeugt oder
-    /// von einem Admin-Peer übernommen, DPAPI-LocalMachine-geschützt wie
-    /// DeviceIdentityFilePath, gleicher Grund (mehrere Windows-Konten teilen ein Gerät).
-    /// </summary>
-    public static string AdminRoleTrustFilePath => Path.Combine(RootFolder, "admin-role-trust.json");
-
     public static string SharedConfigFilePath => Path.Combine(RootFolder, "shared-config.json");
 
     public static string ConfigHistoryFilePath => Path.Combine(RootFolder, "config-history.json");
-
-    /// <summary>
-    /// Anders als deployment.json bewusst unter RootFolder statt AppContext.BaseDirectory:
-    /// eine Lizenz muss bei Verlängerung ohne Neuinstallation ersetzbar sein - ein Admin
-    /// legt einfach eine neue license.json hierher, statt neu zu installieren.
-    /// </summary>
-    public static string LicenseFilePath => Path.Combine(RootFolder, "license.json");
 
     /// <summary>
     /// Written by the installer (from the Install-Creator's payload) into the install

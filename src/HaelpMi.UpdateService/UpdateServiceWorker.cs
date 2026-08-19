@@ -220,18 +220,6 @@ public sealed class UpdateServiceWorker : BackgroundService
     // Swap eines laufenden .exe unvermeidbar, wird aber durch den vorherigen
     // Test-Port-Lauf (StartTest) minimiert - ConfirmSwap wird nur nach bereits
     // bestandenem lokalem Selbsttest + Peer-Bestätigung aufgerufen (Agent-Seite), nie blind.
-    //
-    // Flaw 26 (v0.39.x, Fehlerbericht "Silent-Update-Prozessersatz" - Meldung 'HälpMi läuft
-    // bereits' nach einem Update, alte Version lief unbemerkt weiter): vorher wurde hier per
-    // Prozess-NAME gekillt (traf im schlimmsten Fall den eigenen wartenden Aufrufer statt
-    // gezielt die eine Produktivinstanz), ohne das tatsächliche Prozessende abzuwarten, und
-    // "Erfolg" wurde allein aus geglückten Datei-Operationen abgeleitet - nie daraus, dass am
-    // Ende wirklich eine neue, die Einzelinstanz-Sperre haltende Instanz lief. Beides jetzt
-    // behoben: gezieltes Beenden per PID + Abwarten (KillAndWaitAsync), und eine echte
-    // Erfolgsbestätigung der neuen Instanz (ConfirmSignal-Port, siehe HaelpMi.Agent
-    // App.xaml.cs) BEVOR die Altversion endgültig gelöscht wird. Schlägt die Bestätigung
-    // fehl, wird der Datei-Swap zurückgerollt und die alte Version erneut gestartet, statt
-    // das Gerät ohne jeden laufenden Agent zurückzulassen.
     private async Task<UpdateServiceResponse> ConfirmSwapAsync(UpdateServiceRequest request, CancellationToken ct)
     {
         var newVersionDir = VersionDir(request.Version);
@@ -241,24 +229,7 @@ public sealed class UpdateServiceWorker : BackgroundService
         }
 
         StopTrackedTestProcess(request.Version);
-
-        if (request.CallerProcessId is { } callerPid)
-        {
-            if (!await KillAndWaitAsync(callerPid, TimeSpan.FromSeconds(10)))
-            {
-                return new UpdateServiceResponse(false,
-                    $"Alte Instanz (PID {callerPid}) konnte nicht innerhalb von 10s beendet werden - Swap abgebrochen, nichts verändert.");
-            }
-        }
-        else
-        {
-            // Rückfall für einen Aufrufer auf einem Stand vor diesem Fix (kennt
-            // CallerProcessId noch nicht) - altes, namensbasiertes Verhalten statt den
-            // Request hart abzulehnen. Kein Zielort für die neue Verifikation unten, siehe
-            // dortigen Kommentar.
-            KillProcessByName("HaelpMi.Agent");
-        }
-
+        KillProcessByName("HaelpMi.Agent");
         KillProcessByName("HaelpMi.Config");
         await Task.Delay(500, ct); // Windows gibt Datei-Handles nach Prozessende nicht immer sofort frei
 
@@ -269,167 +240,38 @@ public sealed class UpdateServiceWorker : BackgroundService
         }
         Directory.CreateDirectory(previousDir);
 
-        var excludeList = SwapDirectoryMover.BuildAppRootMoveExcludeList();
-        SwapDirectoryMover.MoveAllEntries(AppRoot, previousDir, exclude: excludeList);
+        SwapDirectoryMover.MoveAllEntries(AppRoot, previousDir, exclude: SwapDirectoryMover.BuildAppRootMoveExcludeList());
         SwapDirectoryMover.MoveAllEntries(newVersionDir, AppRoot, exclude: Array.Empty<string>());
 
         var newAgentPath = Path.Combine(AppRoot, "HaelpMi.Agent.exe");
-        if (!File.Exists(newAgentPath))
+        if (File.Exists(newAgentPath))
         {
-            _logger.LogError("HaelpMi.Agent.exe fehlt nach dem Datei-Swap fuer Version {Version} - Swap wird zurueckgerollt.", request.Version);
-            RollbackSwappedFiles(previousDir, newVersionDir, excludeList);
-            RestartAgentBestEffort();
-            return new UpdateServiceResponse(false, "HaelpMi.Agent.exe fehlt nach dem Datei-Swap - zurückgerollt, alte Version erneut gestartet.");
-        }
-
-        // Selbstheilungs-Erweiterung 11.08.2026 (Fehlerbericht "Autostart nicht
-        // eingerichtet"): dieser Dienst läuft als LocalSystem - die einzige Stelle im
-        // gesamten Update-Rollout, an der eine Registrierung mit Principal-GroupId
-        // (BUILTIN\Users) garantiert nicht an fehlenden Windows-Adminrechten scheitert
-        // (siehe AutostartRegistrar-Kommentar und installer/HaelpMiCommon.iss.inc). Für
-        // Geräte, die VOR dem installer-seitigen Root-Cause-Fix installiert wurden (und
-        // sich nur per Swap-Update aktualisieren, nie erneut über den Installer laufen -
-        // CLAUDE.md "Programm-Updates laufen ausschließlich über die Swap-Pipeline"),
-        // ist das die einzige Gelegenheit, einen kaputten/fehlenden Autostart-Eintrag
-        // je noch elevated zu reparieren. Best-effort, kein Abbruch bei Fehlschlag -
-        // der Agent versucht es beim eigenen Start ohnehin zusätzlich (unelevated) und
-        // meldet einen verbleibenden Fehlschlag per Tray-Sprechblase an den Admin. Bleibt
-        // unabhängig vom Bestätigungsschritt unten stehen - der registrierte Pfad ändert
-        // sich bei einem Rollback nicht (derselbe Dateiname, nur ein anderer Inhalt dahinter).
-        if (!AutostartRegistrar.EnsureRegistered(newAgentPath, out var autostartError))
-        {
-            _logger.LogWarning("Autostart-Registrierung nach Swap-Update fehlgeschlagen: {Error}", autostartError);
-        }
-
-        // Flaw 26: neue Instanz mit einem Bestätigungs-Port starten - nur die tatsächlich
-        // gewinnende (die Einzelinstanz-Sperre haltende) Instanz antwortet je darauf, siehe
-        // App.xaml.cs. Verliert sie das Mutex-Rennen gegen eine noch nicht ganz beendete
-        // Altinstanz, meldet sie sich nie und PingAsync läuft in den Timeout.
-        var confirmPort = UpdateTestInstancePing.GetEphemeralPort();
-        Process? started;
-        try
-        {
-            started = Process.Start(new ProcessStartInfo(newAgentPath) { UseShellExecute = true, ArgumentList = { $"--update-confirm-port={confirmPort}" } });
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Neue Instanz fuer Version {Version} konnte nicht gestartet werden.", request.Version);
-            started = null;
-        }
-
-        var confirmed = started is not null && await UpdateTestInstancePing.PingAsync(confirmPort, TimeSpan.FromSeconds(20));
-        if (!confirmed)
-        {
-            _logger.LogError(
-                "Neue Instanz fuer Version {Version} hat sich nicht als aktiv gemeldet (Einzelinstanz-Kollision oder Absturz) - Swap wird zurueckgerollt.",
-                request.Version);
-
-            try
+            // Selbstheilungs-Erweiterung 11.08.2026 (Fehlerbericht "Autostart nicht
+            // eingerichtet"): dieser Dienst läuft als LocalSystem - die einzige Stelle im
+            // gesamten Update-Rollout, an der eine Registrierung mit Principal-GroupId
+            // (BUILTIN\Users) garantiert nicht an fehlenden Windows-Adminrechten scheitert
+            // (siehe AutostartRegistrar-Kommentar und installer/HaelpMiCommon.iss.inc). Für
+            // Geräte, die VOR dem installer-seitigen Root-Cause-Fix installiert wurden (und
+            // sich nur per Swap-Update aktualisieren, nie erneut über den Installer laufen -
+            // CLAUDE.md "Programm-Updates laufen ausschließlich über die Swap-Pipeline"),
+            // ist das die einzige Gelegenheit, einen kaputten/fehlenden Autostart-Eintrag
+            // je noch elevated zu reparieren. Best-effort, kein Abbruch bei Fehlschlag -
+            // der Agent versucht es beim eigenen Start ohnehin zusätzlich (unelevated) und
+            // meldet einen verbleibenden Fehlschlag per Tray-Sprechblase an den Admin.
+            if (!AutostartRegistrar.EnsureRegistered(newAgentPath, out var autostartError))
             {
-                if (started is not null && !started.HasExited)
-                {
-                    started.Kill(entireProcessTree: true);
-                }
-            }
-            catch (Exception)
-            {
-                // best-effort - falls sie sich doch noch selbst beendet hat oder kein Zugriff mehr besteht
+                _logger.LogWarning("Autostart-Registrierung nach Swap-Update fehlgeschlagen: {Error}", autostartError);
             }
 
-            RollbackSwappedFiles(previousDir, newVersionDir, excludeList);
-            RestartAgentBestEffort();
-            return new UpdateServiceResponse(false,
-                "Neue Instanz hat sich nicht als aktiv gemeldet - Swap zurückgerollt, alte Version erneut gestartet.");
+            Process.Start(new ProcessStartInfo(newAgentPath) { UseShellExecute = true });
         }
 
-        // Deinstallation der Altversion - erst NACH bestätigtem Erfolg löschen, damit ein
-        // Fehler mittendrin die Altversion nicht schon vernichtet hätte.
+        // Deinstallation der Altversion - erst NACH erfolgreichem Verschieben löschen,
+        // damit ein Fehler mittendrin die Altversion nicht schon vernichtet hätte.
         Directory.Delete(previousDir, true);
         Directory.Delete(newVersionDir, true);
 
         return new UpdateServiceResponse(true);
-    }
-
-    /// <summary>
-    /// Rollt einen Datei-Swap zurück: aktueller (nicht bestätigter) AppRoot-Inhalt wandert
-    /// zur Diagnose zurück ins Versionsverzeichnis, die alte Version aus <c>_previous</c>
-    /// kommt zurück nach AppRoot. Best-effort mit Log statt Exception - ein Fehler hier
-    /// träfe ohnehin schon einen Dienst, der gerade selbst mitten in einem Fehlerfall steckt.
-    /// </summary>
-    private void RollbackSwappedFiles(string previousDir, string newVersionDir, string[] excludeList)
-    {
-        try
-        {
-            if (Directory.Exists(newVersionDir))
-            {
-                Directory.Delete(newVersionDir, true);
-            }
-            Directory.CreateDirectory(newVersionDir);
-            SwapDirectoryMover.MoveAllEntries(AppRoot, newVersionDir, exclude: excludeList);
-            SwapDirectoryMover.MoveAllEntries(previousDir, AppRoot, exclude: Array.Empty<string>());
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Rollback nach fehlgeschlagenem Swap konnte nicht vollstaendig durchgefuehrt werden - AppRoot moeglicherweise in inkonsistentem Zustand.");
-        }
-    }
-
-    /// <summary>Startet die (nach einem Rollback wiederhergestellte) Version unter AppRoot neu - sonst liefe nach einem gescheiterten Swap gar kein Agent mehr auf diesem Gerät.</summary>
-    private void RestartAgentBestEffort()
-    {
-        try
-        {
-            var restoredAgentPath = Path.Combine(AppRoot, "HaelpMi.Agent.exe");
-            if (File.Exists(restoredAgentPath))
-            {
-                Process.Start(new ProcessStartInfo(restoredAgentPath) { UseShellExecute = true });
-            }
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Alte Version konnte nach einem Rollback nicht neu gestartet werden.");
-        }
-    }
-
-    /// <summary>
-    /// Beendet den Prozess mit <paramref name="processId"/> gezielt (statt per Namensmatch)
-    /// und wartet dessen tatsächliches Ende ab - Kernstück des Flaw-26-Fixes. Liefert true
-    /// auch, wenn der Prozess zwischen Aufruf und <c>GetProcessById</c> schon von selbst
-    /// beendet war (kein Fehlerfall).
-    /// </summary>
-    private static async Task<bool> KillAndWaitAsync(int processId, TimeSpan timeout)
-    {
-        Process process;
-        try
-        {
-            process = Process.GetProcessById(processId);
-        }
-        catch (ArgumentException)
-        {
-            return true; // bereits beendet
-        }
-
-        try
-        {
-            try
-            {
-                if (!process.HasExited)
-                {
-                    process.Kill(entireProcessTree: true);
-                }
-            }
-            catch (Exception)
-            {
-                // ggf. zwischen HasExited-Check und Kill() schon beendet - unten per
-                // WaitForExit ohnehin verifiziert, kein stiller Erfolg ohne echte Prüfung.
-            }
-
-            return await Task.Run(() => process.WaitForExit((int)timeout.TotalMilliseconds));
-        }
-        finally
-        {
-            process.Dispose();
-        }
     }
 
     private UpdateServiceResponse Rollback(UpdateServiceRequest request)

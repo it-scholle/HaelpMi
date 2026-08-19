@@ -1,4 +1,3 @@
-using HaelpMi.Core.Diagnostics;
 using HaelpMi.Core.Models;
 using HaelpMi.Core.Networking;
 using HaelpMi.Core.Networking.Protocol;
@@ -56,32 +55,10 @@ public sealed class RepeatingAlarmSession : IDisposable
     public AlarmProfile Profile { get; }
     public IReadOnlyList<DeviceEntry> Targets { get; }
 
-    /// <summary>Dieses Geräts eigene Geräte-ID - für TestLogger-Korrelation (SenderStatusWindow kennt _ownIdentity sonst nicht).</summary>
-    public Guid OwnDeviceId => _ownIdentity.DeviceId;
-
-    /// <summary>Testmodus-Toggle (Nutzerwunsch 13.08.2026): reicht ins Wire-Format (<see cref="AlarmRequestMessage.IsTest"/>) durch und steuert die Sender-/Empfänger-UI-Kennzeichnung.</summary>
-    public bool IsTest { get; }
-
     private readonly AlarmSender _alarmSender;
     private readonly AlarmFeedbackChannel _feedbackChannel;
     private readonly LiveIdentity _ownIdentity;
     private readonly CancellationTokenSource _stopCts = new();
-
-    // Bugfix 17.08.2026 (Fehlerbericht "Empfangen 0 von N bleibt dauerhaft hängen", Flaw 6):
-    // vorher wurde _stopCts.Token direkt als ct an _alarmSender.SendAsync durchgereicht -
-    // derselbe Token, den OnMyWayReceived unten beim Erreichen des Schwellwerts sofort
-    // cancelt. Eine schnelle "Ich komme"-Antwort (Standard-Schwellwert 1) brach dadurch die
-    // noch offene(n) Ack-Wartephase(n) DERSELBEN, gerade laufenden Sendewelle ab, bevor sie
-    // echte Acks natürlich einsammeln konnte - ein Ziel zählte dann als "nicht empfangen",
-    // obwohl die Zustellung (sonst gäbe es kein "Ich komme") längst stattgefunden hatte.
-    // Da danach keine weitere Welle mehr lief, blieb der so verfälschte Zähler dauerhaft
-    // stehen. Fix: eigener Token nur für den ECHTEN, manuellen Abbrechen-Pfad (Cancel()) -
-    // der Schwellwert-Auto-Stop cancelt weiterhin nur _stopCts (stoppt die nächste Welle/
-    // den Delay-Loop), lässt die gerade laufende Ack-Sammlung aber bis zu ihrem echten
-    // AlarmAckTimeout auslaufen. Der bestehende Cancel-Test (SendingTests.cs,
-    // "...ReturnsQuickly_EvenWhileSendIsStillPendingAgainstAnUnresponsiveTarget") bleibt
-    // davon unberührt, weil Cancel() beide Tokens cancelt.
-    private readonly CancellationTokenSource _manualCancelCts = new();
     private readonly HashSet<Guid> _onTheWayResponderIds = new();
     private readonly List<string> _onTheWayNames = new();
     private readonly DateTimeOffset _startedAtUtc;
@@ -103,8 +80,7 @@ public sealed class RepeatingAlarmSession : IDisposable
         LiveIdentity ownIdentity,
         AlarmSender alarmSender,
         AlarmFeedbackChannel feedbackChannel,
-        DateTimeOffset startedAtUtc,
-        bool isTest = false)
+        DateTimeOffset startedAtUtc)
     {
         Profile = profile;
         Targets = targets;
@@ -112,7 +88,6 @@ public sealed class RepeatingAlarmSession : IDisposable
         _alarmSender = alarmSender;
         _feedbackChannel = feedbackChannel;
         _startedAtUtc = startedAtUtc;
-        IsTest = isTest;
         _feedbackChannel.OnMyWayReceived += OnMyWayReceived;
     }
 
@@ -127,13 +102,8 @@ public sealed class RepeatingAlarmSession : IDisposable
                     break;
                 }
 
-                var result = await _alarmSender.SendAsync(Profile, AlarmSessionId, _ownIdentity, Targets, isTest: IsTest, ct: _manualCancelCts.Token);
+                var result = await _alarmSender.SendAsync(Profile, AlarmSessionId, _ownIdentity, Targets, ct: _stopCts.Token);
                 _lastAckedCount = result.AckedCount;
-                // Genau die Stelle des v0.35.3-Bugs ("Empfangen-Zaehler bleibt bei schneller
-                // Ich-komme-Antwort faelschlich 0") - eine kuenftige Regression zeigt sich hier
-                // als AckedCount, das nicht mit den vorangegangenen AckReceived-Zeilen zusammenpasst.
-                TestLogger.LogAction(TestLogEventType.StatusChanged, TestLogLevel.Info, TestLogDirection.Local,
-                    _ownIdentity.DeviceId, AlarmSessionId, detail: $"AckedCount={result.AckedCount}/{Targets.Count}");
                 await RaiseAndRelayAsync(stillSending: true);
 
                 try
@@ -170,8 +140,6 @@ public sealed class RepeatingAlarmSession : IDisposable
             : _onTheWayResponderIds.Count >= Profile.ResponseThreshold
                 ? AlarmStopReason.ThresholdReached
                 : AlarmStopReason.MaxDuration;
-        TestLogger.LogAction(TestLogEventType.StatusChanged, TestLogLevel.Info, TestLogDirection.Local,
-            _ownIdentity.DeviceId, AlarmSessionId, detail: $"StopReason={StopReason}");
 
         await RaiseAndRelayAsync(stillSending: false);
         Finished?.Invoke(this, EventArgs.Empty);
@@ -191,13 +159,7 @@ public sealed class RepeatingAlarmSession : IDisposable
     /// <summary>Manual "Abbrechen" (FR-50).</summary>
     public void Cancel()
     {
-        TestLogger.LogAction(TestLogEventType.StatusChanged, TestLogLevel.Info, TestLogDirection.Local,
-            _ownIdentity.DeviceId, AlarmSessionId, detail: "Cancel() aufgerufen");
         _cancelledByUser = true;
-        // Beide Tokens: _manualCancelCts bricht eine gerade laufende Ack-Wartephase sofort ab
-        // (siehe Feldkommentar) - ein echter Nutzer-Abbruch soll weiterhin sofort greifen,
-        // anders als der Schwellwert-Auto-Stop unten in OnMyWayReceived.
-        _manualCancelCts.Cancel();
         _stopCts.Cancel();
     }
 
@@ -258,27 +220,11 @@ public sealed class RepeatingAlarmSession : IDisposable
             _ownIdentity.CustomerGroupId, Profile.Id, AlarmSessionId,
             Targets.Count, _lastAckedCount, status.OnTheWayNames, stillSending, DateTimeOffset.UtcNow);
         await _feedbackChannel.RelayStatusAsync(Targets, relay);
-
-        // Nur beim terminalen Relay (stillSending=false) - der aktive Zwischenstand-Relay
-        // (stillSending=true) ist kein Stopp-Ereignis. StopReason ist zu diesem Zeitpunkt
-        // schon gesetzt (siehe RunAsync, direkt vor dem einzigen stillSending:false-Aufruf;
-        // ein später via OnMyWayReceived ausgelöster Nachlauf-Relay sieht denselben, dann
-        // schon final gesetzten Wert). Sender-seitig ist StopReason lokal bekannt, deshalb
-        // hier bewusst CancelSent statt eines generischen Events, wenn es sich tatsächlich um
-        // einen Abbruch handelt (siehe TestLogger-Instrumentierungsplan Flaw 20 für die
-        // Begründung, warum der Empfänger das NICHT symmetrisch als CancelReceived loggen kann).
-        if (!stillSending)
-        {
-            var eventType = StopReason == AlarmStopReason.Cancelled ? TestLogEventType.CancelSent : TestLogEventType.MessageSent;
-            TestLogger.LogAction(eventType, TestLogLevel.Info, TestLogDirection.Send,
-                _ownIdentity.DeviceId, AlarmSessionId, detail: $"StatusRelay StopReason={StopReason}");
-        }
     }
 
     public void Dispose()
     {
         _feedbackChannel.OnMyWayReceived -= OnMyWayReceived;
         _stopCts.Dispose();
-        _manualCancelCts.Dispose();
     }
 }

@@ -87,24 +87,6 @@
         <Setter Property="FontWeight" Value="SemiBold" />
     </Style>
 
-    <!-- Nutzerwunsch 16.08.2026 ("Admin-Installer erstellen"/"Update erstellen" sollen dasselbe
-         Farbschema haben, grau wenn nicht klickbar, blau wenn klickbar): anders als
-         AccentButtonStyle (immer blau, im deaktivierten Zustand nur über die Opacity-Trigger
-         der Basis-Vorlage abgedunkelt) wechselt hier die Hintergrund-/Textfarbe selbst mit
-         IsEnabled - ein nur abgedunkeltes Blau bietet bei einem echten Pflicht-Zustand (z. B.
-         fehlender Update-Schlüssel) zu wenig Kontrast zu "wirklich klickbar". -->
-    <Style x:Key="PrimaryActionButtonStyle" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
-        <Setter Property="FontWeight" Value="SemiBold" />
-        <Setter Property="Background" Value="{StaticResource SecondaryButtonBrush}" />
-        <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
-        <Style.Triggers>
-            <Trigger Property="IsEnabled" Value="True">
-                <Setter Property="Background" Value="{StaticResource AccentBrush}" />
-                <Setter Property="Foreground" Value="White" />
-            </Trigger>
-        </Style.Triggers>
-    </Style>
-
     <Style TargetType="TextBox">
         <Setter Property="Background" Value="{StaticResource CardBackgroundBrush}" />
         <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />

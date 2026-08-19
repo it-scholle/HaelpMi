@@ -6,7 +6,6 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Windows;
 using System.Windows.Controls;
-using HaelpMi.UpdateSigner;
 
 namespace HaelpMi.InstallCreator;
 
@@ -21,44 +20,14 @@ namespace HaelpMi.InstallCreator;
 /// </summary>
 public partial class MainWindow : Window
 {
-    // Update-Schlüssel-Zustand (Nutzerwunsch 13.08.2026, "Update-Ei"): ausschließlich im
-    // Arbeitsspeicher dieses Programmlaufs, nie auf der Platte - siehe VaultwardenClient.
-    private VaultwardenClient? _vaultwardenClient;
-    private string? _vaultSessionKey;
-    private byte[]? _updatePrivateKeyBytes;
-
-    // Separater Test-Key (Nutzerwunsch 16.08.2026): eigene Vaultwarden-Notiz
-    // (VaultwardenClient.UpdateTestPrivateKeyItemName), sonst 1:1 identisch gehandhabt wie
-    // _updatePrivateKeyBytes - nur eben ausschließlich für Test-Installer-Builds genutzt.
-    private byte[]? _updateTestPrivateKeyBytes;
-
-    // Admin-Installer/Update-Paket/Update erstellen dürfen nie gleichzeitig laufen (siehe
-    // SetBusy) UND brauchen alle drei zwingend einen geladenen Schlüssel (Nutzerwunsch
-    // 16.08.2026) - ein Feld statt eines Methodenparameters, weil UpdateBuildButtonsEnabledState
-    // auch außerhalb von SetBusy aufgerufen wird (Schlüssel geladen/erzeugt, Test-Installer
-    // umgeschaltet) und dabei den zuletzt gesetzten Busy-Zustand kennen muss.
-    private bool _isBusy;
-
-    private readonly string _productVersion;
-
-    // Fensterbreite folgt dem Reiter-Zustand (Nutzerkorrektur 15.08.2026, sechste Runde): nicht
-    // nur der Inhalt, das ganze Fenster ist eingeklappt schmal - siehe
-    // UpdateWindowWidthForTabState und den Kommentar am Fensteranfang in MainWindow.xaml.
-    private const double CollapsedWindowWidth = 540;
-    private const double ExpandedWindowWidth = 1000;
-
     public MainWindow()
     {
         InitializeComponent();
 
         // Kein ProjectReference auf HaelpMi.Core (siehe .csproj), daher hier lokal statt
         // LiveIdentityFactory.CurrentProgramVersion.
-        _productVersion = Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "0.0.0";
-        VersionText.Text = $"v{_productVersion}";
-
-        var settings = InstallCreatorSettings.Load();
-        VaultwardenServerBox.Text = settings.VaultwardenServerUrl;
-        VaultwardenEmailBox.Text = settings.VaultwardenEmail;
+        var version = Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "0.0.0";
+        VersionText.Text = $"v{version}";
     }
 
     private void GeneratePasswordButton_Click(object sender, RoutedEventArgs e) =>
@@ -260,425 +229,6 @@ public partial class MainWindow : Window
         }
     }
 
-    // --- Vaultwarden / Update-Signatur (Nutzerwunsch 13.08.2026, "Update-Ei") ---------------
-
-    // Reiter-Umschaltung nach tomedo-Vorbild (Nutzerwunsch 14.08.2026, vierte Runde):
-    // Vaultwarden-Karte und Protokoll teilen sich eine Zelle, es ist immer höchstens eins von
-    // beiden sichtbar - Öffnen des einen klappt das andere automatisch ein. Erneutes Klicken auf
-    // den gerade aktiven Reiter klappt ihn wieder ein (dann ist der Inhaltsbereich leer, genau
-    // wie im tomedo-Referenzbild). Fokus aufs Master-Passwort-Feld passiert beim Öffnen der
-    // Vaultwarden-Karte, weil sie vorher gar nicht sichtbar ist.
-    private void VaultwardenTabButton_Click(object sender, RoutedEventArgs e)
-    {
-        var show = VaultwardenPanel.Visibility != Visibility.Visible;
-        VaultwardenPanel.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
-        LogPanel.Visibility = Visibility.Collapsed;
-        UpdateWindowWidthForTabState();
-
-        // Fokus nur, wenn diese Sitzung noch nicht entsperrt hat (Nutzerkorrektur 15.08.2026,
-        // fünfte Runde) - VaultwardenLockedPanel/VaultwardenUnlockedPanel behalten ihren
-        // Zustand automatisch übers Ein-/Ausklappen des Reiters hinweg, ein Fokusversuch auf
-        // das dann versteckte Passwortfeld wäre unnötig (harmloses No-op, aber unsauber).
-        if (show && VaultwardenLockedPanel.Visibility == Visibility.Visible)
-        {
-            VaultwardenPasswordBox.Focus();
-        }
-    }
-
-    // Nicht nur der Inhalt, das ganze Fenster klappt mit ein (Nutzerkorrektur 15.08.2026, sechste
-    // Runde) - siehe Kommentar am Fensteranfang in MainWindow.xaml. Left wird um die halbe
-    // Breitendifferenz verschoben, damit das Fenster beim Wachsen/Schrumpfen horizontal zentriert
-    // bleibt statt nur nach rechts zu wandern.
-    private void UpdateWindowWidthForTabState()
-    {
-        var anyPanelOpen = VaultwardenPanel.Visibility == Visibility.Visible || LogPanel.Visibility == Visibility.Visible;
-        var targetWidth = anyPanelOpen ? ExpandedWindowWidth : CollapsedWindowWidth;
-        if (targetWidth == Width)
-        {
-            return;
-        }
-
-        Left -= (targetWidth - Width) / 2;
-        Width = targetWidth;
-    }
-
-    // Grundeinstellungen (Server-URL/E-Mail) hinter dem Zahnrad - reines Ein-/Ausblenden,
-    // unabhängig vom gesperrt/entsperrt-Zustand darunter (Nutzerwunsch 15.08.2026, fünfte Runde).
-    private void VaultwardenSettingsToggle_Click(object sender, RoutedEventArgs e)
-    {
-        VaultwardenBasicSettingsPanel.Visibility = VaultwardenBasicSettingsPanel.Visibility == Visibility.Visible
-            ? Visibility.Collapsed
-            : Visibility.Visible;
-    }
-
-    private void LogsTabButton_Click(object sender, RoutedEventArgs e)
-    {
-        var show = LogPanel.Visibility != Visibility.Visible;
-        LogPanel.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
-        VaultwardenPanel.Visibility = Visibility.Collapsed;
-        UpdateWindowWidthForTabState();
-    }
-
-    private async void VaultwardenUnlockButton_Click(object sender, RoutedEventArgs e)
-    {
-        var serverUrl = VaultwardenServerBox.Text.Trim();
-        var email = VaultwardenEmailBox.Text.Trim();
-        var password = VaultwardenPasswordBox.Password;
-
-        if (serverUrl.Length == 0 || email.Length == 0 || password.Length == 0)
-        {
-            VaultwardenLockedStatusText.Text = "Server-URL, E-Mail und Master-Passwort ausfüllen.";
-            return;
-        }
-
-        _vaultwardenClient ??= VaultwardenClient.TryCreate();
-        if (_vaultwardenClient is null)
-        {
-            VaultwardenLockedStatusText.Text = "bw.exe (Bitwarden-CLI) nicht im PATH gefunden - Update-Signierung ohne sie nicht möglich.";
-            Log("Fehler: bw.exe nicht gefunden.");
-            return;
-        }
-
-        VaultwardenUnlockButton.IsEnabled = false;
-        var originalButtonText = VaultwardenUnlockButton.Content;
-        VaultwardenUnlockButton.Content = "Verbindet...";
-        try
-        {
-            var unlock = await _vaultwardenClient.UnlockAsync(serverUrl, email, password);
-            // Passwort wird in keinem Fall weiter gebraucht/gemerkt - unabhängig vom Ausgang leeren.
-            VaultwardenPasswordBox.Password = string.Empty;
-
-            if (!unlock.Ok)
-            {
-                VaultwardenLockedStatusText.Text = $"Fehlgeschlagen: {unlock.Error}";
-                Log($"Vaultwarden-Entsperren fehlgeschlagen: {unlock.Error}");
-                return;
-            }
-
-            _vaultSessionKey = unlock.SessionKey;
-            new InstallCreatorSettings { VaultwardenServerUrl = serverUrl, VaultwardenEmail = email }.Save();
-            Log("Vaultwarden entsperrt.");
-
-            // Ab hier "entsperrt" (Nutzerwunsch 15.08.2026, fünfte Runde) - unabhängig davon,
-            // ob schon ein Schlüssel existiert; das Status-Icon unten zeigt das getrennt an.
-            VaultwardenLockedPanel.Visibility = Visibility.Collapsed;
-            VaultwardenUnlockedPanel.Visibility = Visibility.Visible;
-
-            // Beide Schlüssel werden bei jedem Entsperren geladen (Nutzerwunsch 16.08.2026:
-            // "beide werden bei Boot/Passworteingabe geladen") - unabhängig davon, ob der
-            // gerade angehakte Test-Installer-Zustand den einen oder anderen überhaupt braucht.
-            await LoadKeyStatusAsync(VaultwardenClient.UpdatePrivateKeyItemName, isTest: false);
-            await LoadKeyStatusAsync(VaultwardenClient.UpdateTestPrivateKeyItemName, isTest: true);
-
-            GenerateUpdateKeyButton.IsEnabled = true;
-            GenerateTestUpdateKeyButton.IsEnabled = true;
-            UpdateBuildButtonsEnabledState();
-        }
-        catch (Exception ex)
-        {
-            Log($"Unerwarteter Fehler beim Vaultwarden-Zugriff: {ex.Message}");
-            CrashLogger.Log("VaultwardenUnlockButton_Click", ex);
-            VaultwardenLockedStatusText.Text = "Unerwarteter Fehler - siehe Protokoll.";
-        }
-        finally
-        {
-            VaultwardenUnlockButton.IsEnabled = true;
-            VaultwardenUnlockButton.Content = originalButtonText;
-        }
-    }
-
-    /// <summary>Lädt eine der beiden Schlüssel-Notizen und spiegelt das Ergebnis in Feld +
-    /// Status-Icon/-Text der jeweils passenden UI-Zeile (Produktiv oder Test).</summary>
-    private async Task LoadKeyStatusAsync(string itemName, bool isTest)
-    {
-        var existingKey = await _vaultwardenClient!.TryGetUpdatePrivateKeyAsync(_vaultSessionKey!, itemName);
-        var keyBytes = existingKey is not null ? Convert.FromBase64String(existingKey) : null;
-
-        if (isTest)
-        {
-            _updateTestPrivateKeyBytes = keyBytes;
-            TestKeyPresentIcon.Visibility = keyBytes is not null ? Visibility.Visible : Visibility.Collapsed;
-            TestKeyMissingIcon.Visibility = keyBytes is not null ? Visibility.Collapsed : Visibility.Visible;
-            VaultwardenTestStatusText.Text = keyBytes is not null
-                ? "Testschlüssel aus Vaultwarden geladen."
-                : "Noch kein Test-Key vorhanden - Rotier-Knopf nutzen.";
-        }
-        else
-        {
-            _updatePrivateKeyBytes = keyBytes;
-            KeyPresentIcon.Visibility = keyBytes is not null ? Visibility.Visible : Visibility.Collapsed;
-            KeyMissingIcon.Visibility = keyBytes is not null ? Visibility.Collapsed : Visibility.Visible;
-            VaultwardenStatusText.Text = keyBytes is not null
-                ? "Schlüssel aus Vaultwarden geladen."
-                : "Noch kein Schlüssel vorhanden - Rotier-Knopf nutzen.";
-        }
-
-        if (keyBytes is not null)
-        {
-            Log(isTest ? "Test-Signaturschlüssel aus Vaultwarden geladen." : "Update-Signaturschlüssel aus Vaultwarden geladen.");
-        }
-    }
-
-    private async void GenerateUpdateKeyButton_Click(object sender, RoutedEventArgs e) =>
-        await RegenerateKeyAsync(VaultwardenClient.UpdatePrivateKeyItemName, isTest: false);
-
-    private async void GenerateTestUpdateKeyButton_Click(object sender, RoutedEventArgs e) =>
-        await RegenerateKeyAsync(VaultwardenClient.UpdateTestPrivateKeyItemName, isTest: true);
-
-    /// <summary>Gemeinsame Rotier-Logik für Produktiv- UND Test-Schlüssel (Nutzerwunsch
-    /// 16.08.2026: "1zu1 gleiche Schaltfläche wie 'Neuer Schlüssel', nur für 'Neuen Test-Key
-    /// erzeugen'") - Archivieren-vor-Überschreiben/Rollback-Verhalten bleibt exakt wie bisher,
-    /// nur welche Notiz/welches Feld/welche Status-UI betroffen ist, hängt von
-    /// <paramref name="isTest"/> ab.</summary>
-    private async Task RegenerateKeyAsync(string itemName, bool isTest)
-    {
-        if (_vaultwardenClient is null || _vaultSessionKey is null)
-        {
-            return; // Buttons sind ohne entsperrte Session ohnehin deaktiviert
-        }
-
-        var keyLabel = isTest ? "Test-Schlüssel" : "Schlüssel";
-        var currentKeyBytes = isTest ? _updateTestPrivateKeyBytes : _updatePrivateKeyBytes;
-        var statusText = isTest ? VaultwardenTestStatusText : VaultwardenStatusText;
-        var presentIcon = isTest ? TestKeyPresentIcon : KeyPresentIcon;
-        var missingIcon = isTest ? TestKeyMissingIcon : KeyMissingIcon;
-        var button = isTest ? GenerateTestUpdateKeyButton : GenerateUpdateKeyButton;
-
-        if (currentKeyBytes is not null)
-        {
-            var confirm = System.Windows.MessageBox.Show(
-                $"Es liegt bereits ein {keyLabel} in Vaultwarden. Der alte Schlüssel wird nicht gelöscht, " +
-                "sondern unter einem neuen Namen (\"...-deprecated-<Zeitstempel>\") archiviert - die Notiz " +
-                "selbst bleibt vollständig erhalten und lässt sich in Vaultwarden jederzeit nachlesen. " +
-                "Trotzdem macht ein neuer Schlüssel alle bisher ausgelieferten öffentlichen Schlüssel " +
-                $"ungültig - Geräte, die den alten eingebettet haben, können künftige Updates dann nicht " +
-                $"mehr verifizieren, bis sie den neuen (manuell) erhalten. Wirklich einen neuen {keyLabel} erzeugen?",
-                "HälpMi Install-Creator", MessageBoxButton.YesNo, MessageBoxImage.Warning);
-            if (confirm != MessageBoxResult.Yes)
-            {
-                return;
-            }
-        }
-
-        // Beide Rotier-Knöpfe sperren, nicht nur den geklickten - bw.exe ist ein einzelner
-        // externer Prozess pro Aufruf, ein gleichzeitiger zweiter Lauf (Klick auf den jeweils
-        // anderen Knopf mitten in diesem hier) könnte sich sonst mit diesem Ablauf überschneiden.
-        GenerateUpdateKeyButton.IsEnabled = false;
-        GenerateTestUpdateKeyButton.IsEnabled = false;
-        try
-        {
-            // Unbedingt archivieren, nicht ans lokale Feld gekoppelt (Nutzerwunsch 15.08.2026,
-            // fünfte Runde) - falls seit dem Entsperren dieser Sitzung schon anderswo ein
-            // Schlüssel unter dem Standardnamen angelegt wurde, den diese Sitzung lokal noch
-            // nicht kennt, verhindert das eine zweite Notiz mit demselben Namen. Kein
-            // bestehender Schlüssel = no-op (Ok=true, DeprecatedName=null).
-            var archive = await _vaultwardenClient.ArchiveExistingKeyIfPresentAsync(_vaultSessionKey, itemName);
-            if (!archive.Ok)
-            {
-                Log($"Fehler: alter {keyLabel} konnte nicht archiviert werden - neuer {keyLabel} wird NICHT erzeugt.");
-                statusText.Text = "Archivierung fehlgeschlagen - siehe Protokoll. Alter Schlüssel bleibt unverändert.";
-                return;
-            }
-            if (archive.DeprecatedName is not null)
-            {
-                Log($"Alter {keyLabel} archiviert unter \"{archive.DeprecatedName}\".");
-            }
-
-            var keyPair = UpdateSigningOperations.GenerateKeyPair();
-            var pushed = await _vaultwardenClient.CreateUpdatePrivateKeyNoteAsync(_vaultSessionKey, itemName, Convert.ToBase64String(keyPair.PrivateKey));
-            if (!pushed)
-            {
-                Log($"Fehler: Neuer {keyLabel} konnte nicht in Vaultwarden gespeichert werden.");
-                if (archive.DeprecatedName is not null)
-                {
-                    var restored = await _vaultwardenClient.RestoreArchivedKeyAsync(_vaultSessionKey, archive.DeprecatedName, itemName);
-                    Log(restored
-                        ? "Rollback erfolgreich - alter Schlüssel liegt wieder unter dem Standardnamen."
-                        : $"Rollback fehlgeschlagen - alter Schlüssel liegt weiterhin unter \"{archive.DeprecatedName}\", bitte manuell in Vaultwarden zurückbenennen.");
-                }
-                statusText.Text = "Schlüsselerzeugung fehlgeschlagen - siehe Protokoll.";
-                return;
-            }
-
-            if (isTest)
-            {
-                _updateTestPrivateKeyBytes = keyPair.PrivateKey;
-            }
-            else
-            {
-                _updatePrivateKeyBytes = keyPair.PrivateKey;
-            }
-            var publicKeyBase64 = Convert.ToBase64String(keyPair.PublicKey);
-
-            Log($"Neuer {(isTest ? "Test-Signaturschlüssel" : "Update-Signaturschlüssel")} erzeugt und in Vaultwarden gespeichert.");
-            if (!isTest)
-            {
-                // Der Test-Key braucht keinen Eintrag in UpdateSignaturePublicKey.cs - der
-                // öffentliche Teil wird pro Build aus dem privaten Schlüssel abgeleitet und
-                // direkt in deployment.json geschrieben (siehe BuildAdminInstallerAsync),
-                // nicht als kompilierter Fallback im Repo gepflegt.
-                Log($"OEFFENTLICHER Schlüssel (in HaelpMi.Core/Updates/UpdateSignaturePublicKey.cs eintragen): {publicKeyBase64}");
-                TryCopyToClipboard(publicKeyBase64);
-            }
-
-            presentIcon.Visibility = Visibility.Visible;
-            missingIcon.Visibility = Visibility.Collapsed;
-            statusText.Text = isTest
-                ? "Neuer Test-Key gespeichert."
-                : "Neuer Schlüssel gespeichert. Öffentlicher Schlüssel wurde kopiert - bitte manuell in UpdateSignaturePublicKey.cs eintragen.";
-            UpdateBuildButtonsEnabledState();
-        }
-        catch (Exception ex)
-        {
-            Log($"Unerwarteter Fehler bei der Schlüsselerzeugung: {ex.Message}");
-            CrashLogger.Log("RegenerateKeyAsync", ex);
-        }
-        finally
-        {
-            GenerateUpdateKeyButton.IsEnabled = true;
-            GenerateTestUpdateKeyButton.IsEnabled = true;
-        }
-    }
-
-    // Bewusst kein Retry/Rückmeldung über MessageBox hier wie bei CopyPasswordButton_Click -
-    // das dortige aufwendige Retry-Muster ist für ein Passwort gedacht, das der Nutzer aktiv
-    // weitergeben will; hier reicht best-effort, der Wert steht ohnehin auch im Protokoll.
-    private static void TryCopyToClipboard(string text)
-    {
-        try
-        {
-            System.Windows.Forms.Clipboard.SetDataObject(text, copy: true, retryTimes: 10, retryDelay: 100);
-        }
-        catch (System.Runtime.InteropServices.ExternalException)
-        {
-            // best-effort - der Wert steht zusätzlich im Protokoll, siehe Aufrufer
-        }
-    }
-
-    private async void CreateUpdateBootstrapperButton_Click(object sender, RoutedEventArgs e)
-    {
-        if (_updatePrivateKeyBytes is null)
-        {
-            return; // Button ist ohne geladenen Schlüssel ohnehin deaktiviert
-        }
-
-        SetBusy(true);
-        CreateUpdateBootstrapperButton.IsEnabled = false;
-        try
-        {
-            Log("--- Update wird erstellt ---");
-            var outputExePath = await BuildUpdateBootstrapperAsync();
-            if (outputExePath is not null)
-            {
-                Log("Diese eine Datei geht an den Admin - Doppelklick dort aktualisiert die Maschine sofort selbst " +
-                    "und macht die Version im \"Updates\"-Tab des Dashboards zur Freigabe verfügbar.");
-                ShowUpdateSuccessToast(outputExePath);
-            }
-        }
-        catch (Exception ex)
-        {
-            Log($"Unerwarteter Fehler: {ex.Message}");
-            CrashLogger.Log("CreateUpdateBootstrapperButton_Click", ex);
-            System.Windows.MessageBox.Show($"Update-Erstellung fehlgeschlagen:{Environment.NewLine}{ex.Message}",
-                "HälpMi Install-Creator", MessageBoxButton.OK, MessageBoxImage.Error);
-        }
-        finally
-        {
-            SetBusy(false);
-            CreateUpdateBootstrapperButton.IsEnabled = _updatePrivateKeyBytes is not null;
-        }
-    }
-
-    /// <summary>
-    /// Baut die einzelne, eigenständig lauffähige Self-Bootstrap-Update-Datei (Nutzerwunsch
-    /// 16.08.2026) - signiertes Paket + veröffentlichtes HaelpMi.UpdateBootstrapper an eine
-    /// Datei angehängt (siehe UpdatePackageBuilder.AppendUpdatePackage). Gibt den fertigen
-    /// Dateipfad zurück (oder null bei einem Fehler, bereits geloggt).
-    ///
-    /// Bewusst getrennt vom Klick-Handler und ohne jeden UI-Zugriff außer Log(...): eine
-    /// spätere Auto-Publish-Erweiterung (Nutzerwunsch, noch nicht umgesetzt - "Update-Paket
-    /// automatisch per hinterlegter Mail an alle hinterlegten Kunden verschicken") kann
-    /// diese Methode direkt aufrufen, ohne einen Button-Klick zu simulieren. Der
-    /// Rückgabewert (fertiger, deterministisch benannter Dateipfad unter installer/Output/)
-    /// ist bereits genau das, was ein künftiger Versand-Schritt bräuchte - hier absichtlich
-    /// noch kein Kundenregister/Mailversand/SMTP eingebaut, nur der Weg dahin nicht verbaut.
-    /// </summary>
-    private async Task<string?> BuildUpdateBootstrapperAsync()
-    {
-        var installerDir = FindInstallerDirectory();
-
-        if (!await RefreshPayloadAsync(installerDir))
-        {
-            Log("Payload-Aktualisierung fehlgeschlagen - Update wird nicht erstellt.");
-            return null;
-        }
-
-        var payloadDir = Path.Combine(installerDir, "payload");
-        var result = UpdatePackageBuilder.Build(payloadDir, _productVersion, _updatePrivateKeyBytes!);
-        Log($"Update-Paket für Version {_productVersion} signiert.");
-
-        var repoRoot = Directory.GetParent(installerDir)?.FullName;
-        if (repoRoot is null)
-        {
-            Log("Fehler: Repo-Wurzel (oberhalb von installer/) konnte nicht bestimmt werden.");
-            return null;
-        }
-
-        var bootstrapperProject = Path.Combine(repoRoot, "src", "HaelpMi.UpdateBootstrapper", "HaelpMi.UpdateBootstrapper.csproj");
-        if (!File.Exists(bootstrapperProject))
-        {
-            Log($"Fehler: {bootstrapperProject} nicht gefunden.");
-            return null;
-        }
-
-        // Immer frisch veröffentlichen statt eine frühere Kopie wiederzuverwenden - gleiches
-        // Prinzip wie RefreshPayloadAsync (Bugfix 11.08.2026: ein tagealter, still
-        // veralteter Payload darf nie stillschweigend weiterverwendet werden).
-        var publishDir = Path.Combine(installerDir, "UpdateBootstrapperPublish");
-        if (Directory.Exists(publishDir))
-        {
-            Directory.Delete(publishDir, true);
-        }
-
-        Log("Update-Bootstrap-Werkzeug wird veröffentlicht (Single-File, self-contained)...");
-        var exitCode = await RunProcessAsync("dotnet", repoRoot, args =>
-        {
-            args.Add("publish");
-            args.Add(bootstrapperProject);
-            args.Add("-c");
-            args.Add("Release");
-            args.Add("-r");
-            args.Add("win-x64");
-            args.Add("-p:Platform=x64");
-            args.Add("--self-contained");
-            args.Add("true");
-            args.Add("-p:PublishSingleFile=true");
-            args.Add("-o");
-            args.Add(publishDir);
-        }, "[dotnet publish] ");
-
-        if (exitCode != 0)
-        {
-            Log($"Fehler: dotnet publish für HaelpMi.UpdateBootstrapper fehlgeschlagen (Exitcode {exitCode}).");
-            return null;
-        }
-
-        var genericExePath = Path.Combine(publishDir, "HaelpMi.UpdateBootstrapper.exe");
-        if (!File.Exists(genericExePath))
-        {
-            Log($"Fehler: {genericExePath} fehlt nach dem Publish.");
-            return null;
-        }
-
-        var outputDir = Path.Combine(installerDir, "Output");
-        Directory.CreateDirectory(outputDir);
-        var outputExePath = Path.Combine(outputDir, $"HaelpMi-Update-{_productVersion}.exe");
-        UpdatePackageBuilder.AppendUpdatePackage(genericExePath, outputExePath, result);
-        Log($"Update erstellt: {outputExePath}");
-
-        return outputExePath;
-    }
-
     private async void BuildAdminButton_Click(object sender, RoutedEventArgs e)
     {
         if (!TryValidate(out var error))
@@ -688,17 +238,6 @@ public partial class MainWindow : Window
         }
 
         var customerGroupId = Guid.NewGuid(); // FR-49: fest für dieses Admin-Installer-Paket und jeden späteren daraus exportierten User-Installer
-        // LAN-Verschlüsselung (siehe CLAUDE.md "Lizenz & Secrets", SecureEnvelopeCodec):
-        // gruppenweiter symmetrischer Schlüssel, an derselben Stelle wie customerGroupId
-        // erzeugt und über denselben Weg (deployment.json in beiden Installer-Varianten)
-        // eingebettet - nie über das Netzwerk übertragen, nie hier geloggt.
-        var groupKeyBase64 = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
-        // Admin-Rollen-Signatur (Nutzerwunsch 17.08.2026, viertes Schlüsselpaar, CLAUDE.md
-        // "Lizenz & Secrets"): pro Kunden-Gruppe neu, an derselben Stelle wie
-        // customerGroupId/groupKeyBase64 erzeugt (jeder Klick auf "Installer erstellen"
-        // mintet ohnehin eine komplett neue, unabhängige Kundengruppe - kein Rebuild-für-
-        // denselben-Kunden-Fall in diesem Tool, siehe customerGroupId-Kommentar oben).
-        var adminRoleKeyPair = AdminRoleKeyGenerator.GenerateKeyPair();
         var password = PasswordBox.Password;
         var isTestInstaller = TestInstallerCheckBox.IsChecked == true;
         var customerNameOrTestLabel = CustomerNameBox.Text.Trim();
@@ -706,7 +245,7 @@ public partial class MainWindow : Window
         SetBusy(true);
         try
         {
-            await BuildAdminInstallerAsync(customerGroupId, groupKeyBase64, adminRoleKeyPair, isTestInstaller, password, customerNameOrTestLabel);
+            await BuildAdminInstallerAsync(customerGroupId, isTestInstaller, password, customerNameOrTestLabel);
         }
         catch (Exception ex)
         {
@@ -727,24 +266,8 @@ public partial class MainWindow : Window
     private bool TryValidate(out string error)
     {
         var isTest = TestInstallerCheckBox.IsChecked == true;
-
-        // P1-Lockerung 19.08.2026 (Nutzerwunsch, Test-Installer-Builds ohne Vaultwarden-
-        // Zugriff moeglich machen): der zwingende Schluessel-Zwang von 16.08.2026 gilt ab
-        // jetzt nur noch fuer den PRODUKTIV-Zweig unten - ein Test-Installer baut auch ohne
-        // geladenen Test-Key, dann eben ohne eingebettetes Self-Bootstrap-Update-Paket (siehe
-        // BuildAdminInstallerAsync, gleiches Verhalten wie vor dem 16.08.2026-Wechsel, jetzt
-        // aber bewusst auf Test-Builds begrenzt statt generell). Ein echter Kunden-/
-        // Produktiv-Installer bleibt weiterhin zwingend auf einen echten Schluessel angewiesen
-        // - das Sicherheitsnetz unten deckt das ab, falls IsEnabled auf BuildAdminButton
-        // (siehe UpdateBuildButtonsEnabledState) veraltet sein sollte.
         if (!isTest)
         {
-            if (_updatePrivateKeyBytes is null)
-            {
-                error = "Kein Update-Schlüssel geladen - der Admin-Installer kann ohne ihn nicht gebaut werden (siehe \"Vaultwarden\"-Reiter rechts).";
-                return false;
-            }
-
             if (string.IsNullOrWhiteSpace(CustomerNameBox.Text))
             {
                 error = "Kundenname ist bei einem Produktiv-Installer Pflicht.";
@@ -764,45 +287,15 @@ public partial class MainWindow : Window
 
     private void SetBusy(bool busy)
     {
-        _isBusy = busy;
+        BuildAdminButton.IsEnabled = !busy;
         TestInstallerCheckBox.IsEnabled = !busy;
         CustomerNameBox.IsEnabled = !busy;
-        UpdateBuildButtonsEnabledState();
     }
 
-    /// <summary>
-    /// Zentrale Grau/Blau-Logik für beide Build-Knöpfe (Nutzerwunsch 16.08.2026: "grau
-    /// wenn nicht klickbar, blau wenn klickbar", siehe PrimaryActionButtonStyle in
-    /// ModernStyles.xaml) - aufgerufen von SetBusy, nach jedem Laden/Erzeugen eines
-    /// Schlüssels und beim Umschalten von TestInstallerCheckBox, weil BuildAdminButton je
-    /// nach dessen Zustand einen ANDEREN Schlüssel braucht (Test-Key vs. Produktiv-Key).
-    /// CreateUpdateBootstrapperButton baut immer ein echtes Produktiv-Update, unabhängig
-    /// vom Test-Installer-Häkchen - braucht daher immer den Produktiv-Schlüssel.
-    /// </summary>
-    private void UpdateBuildButtonsEnabledState()
-    {
-        var isTest = TestInstallerCheckBox.IsChecked == true;
-
-        // P1-Lockerung 19.08.2026 (siehe TryValidate): Test-Build ist immer klickbar,
-        // unabhaengig vom Test-Key - Produktiv-Build bleibt wie zuvor gesperrt ohne
-        // geladenen Schluessel.
-        BuildAdminButton.IsEnabled = !_isBusy && (isTest || _updatePrivateKeyBytes is not null);
-        // CreateUpdateBootstrapperButton greift auf denselben installer/payload/-Ordner zu
-        // wie RefreshPayloadAsync - während eines Baus (egal welcher der beiden Aktionen)
-        // darf der andere Weg nicht gleichzeitig hineinschreiben.
-        CreateUpdateBootstrapperButton.IsEnabled = !_isBusy && _updatePrivateKeyBytes is not null;
-    }
-
-    private void TestInstallerCheckBox_Click(object sender, RoutedEventArgs e) => UpdateBuildButtonsEnabledState();
-
-    private async Task BuildAdminInstallerAsync(Guid customerGroupId, string groupKeyBase64, AdminRoleKeyGenerator.KeyPair adminRoleKeyPair, bool isTestInstaller, string password, string customerNameOrTestLabel)
+    private async Task BuildAdminInstallerAsync(Guid customerGroupId, bool isTestInstaller, string password, string customerNameOrTestLabel)
     {
         Log("--- Installer werden erstellt ---");
         Log($"Kunden-Gruppen-ID: {customerGroupId}");
-        Log("Gruppenschlüssel (LAN-Verschlüsselung) wurde erzeugt."); // Wert selbst landet nie im Log, siehe Kommentar bei der Erzeugung
-        // Nur der öffentliche Teil landet im Protokoll - der private Teil wird nie geloggt,
-        // nie zwischengelagert (siehe AdminRoleKeyGenerator-Klassendoku).
-        Log($"Admin-Rollen-Schlüssel erzeugt (öffentlicher Teil: {adminRoleKeyPair.PublicKeyBase64}).");
         Log($"Test-Installer: {(isTestInstaller ? "ja" : "nein")}");
         if (isTestInstaller && customerNameOrTestLabel.Length > 0)
         {
@@ -842,43 +335,6 @@ public partial class MainWindow : Window
             return;
         }
 
-        // Startpaket-Einbettung (bis 15.08.2026 hinter der "Update-Ei"-Checkbox, seit
-        // 16.08.2026 immer automatisch - Nutzerwunsch: kostet nichts, wenn es immer dabei
-        // ist). NACH RefreshPayloadAsync (frischer Payload-Ordner), VOR dem
-        // User-Installer-ISCC-Lauf unten - der kopiert "payload\*" 1:1 in beide Installer,
-        // update-seed/ muss also schon drinstehen, bevor ISCC läuft.
-        //
-        // P1-Lockerung 19.08.2026 (siehe TryValidate-Kommentar): fehlender Schlüssel ist ab
-        // jetzt nur noch für Produktiv-Installer ein Abbruchgrund (TryValidate hat das schon
-        // vorher sichergestellt, dieser Fall ist hier für isTestInstaller also nie erreichbar).
-        // Ein Test-Installer OHNE geladenen Test-Key baut trotzdem, nur ohne eingebettetes
-        // Self-Bootstrap-Update-Paket - updatePublicKeyBase64 bleibt dann null, das ISCC-Define
-        // wird unten schlicht weggelassen (deployment.json bekommt ein leeres Feld, exakt wie
-        // bei einem alten Installer-Stand ohne dieses Feld behandelt, siehe
-        // DeploymentInfo.UpdatePublicKeyBase64-Kommentar - kompilierter Fallback-Key gilt dann).
-        var signingKey = isTestInstaller ? _updateTestPrivateKeyBytes : _updatePrivateKeyBytes;
-        string? updatePublicKeyBase64 = null;
-        if (signingKey is null)
-        {
-            Log("Kein Test-Key geladen - Update-Paket wird NICHT eingebettet (Test-Installer-Debug-Build, kein Auto-Update-Seeding). " +
-                "Betrifft nur diesen Test-Build - ein Produktiv-Installer bräuchte weiterhin zwingend einen echten Schlüssel.");
-        }
-        else
-        {
-            Log($"Update-Paket wird für diesen Build signiert und eingebettet ({(isTestInstaller ? "Test-Key" : "Produktiv-Schlüssel")})...");
-            var payloadDir = Path.Combine(installerDir, "payload");
-            var eggResult = UpdatePackageBuilder.Build(payloadDir, _productVersion, signingKey);
-            UpdatePackageBuilder.WriteToPayloadSeed(installerDir, eggResult);
-            Log($"Update-Paket: Version {_productVersion} signiert, landet in payload/update-seed/.");
-
-            // Der zum Signierschlüssel passende öffentliche Schlüssel wird aus ihm abgeleitet
-            // (Ed25519: der öffentliche Teil ist aus dem privaten deterministisch berechenbar,
-            // siehe UpdateSigningOperations.DerivePublicKey) und unten per ISCC-Define in
-            // deployment.json JEDER aus diesem Lauf gebauten Installation eingebettet - jede
-            // Installation kennt/vertraut dadurch nur dem für sie relevanten Schlüssel.
-            updatePublicKeyBase64 = Convert.ToBase64String(UpdateSigningOperations.DerivePublicKey(signingKey));
-        }
-
         // Nutzer-Wunsch 04.08.2026: der User-Installer wird nicht mehr auf dem
         // Kundenrechner live nachgebaut (siehe HaelpMiCommon.iss.inc-Kommentar), sondern
         // hier EINMALIG fertig kompiliert und danach als bereits fertige Datei in den
@@ -892,16 +348,7 @@ public partial class MainWindow : Window
         var userExitCode = await RunIsccAsync(isccPath, installerDir, userScriptPath, args =>
         {
             args.Add($"/DCustomerGroupId={customerGroupId}");
-            args.Add($"/DGroupKeyBase64={groupKeyBase64}");
             args.Add($"/DIsTestInstaller={(isTestInstaller ? "true" : "false")}");
-            if (updatePublicKeyBase64 is not null)
-            {
-                args.Add($"/DUpdatePublicKeyBase64={updatePublicKeyBase64}");
-            }
-            // Öffentlicher Admin-Rollen-Schlüssel geht in BEIDE Installer-Varianten - jedes
-            // Gerät, Admin wie User, muss Admin-Behauptungen anderer Geräte prüfen können.
-            // Der private Teil geht bewusst NICHT hierher (nur unten, Admin-Installer).
-            args.Add($"/DAdminRolePublicKeyBase64={adminRoleKeyPair.PublicKeyBase64}");
             args.Add($"/O{userPayloadDir}");
             args.Add("/FHaelpMi-User-Setup");
         });
@@ -920,16 +367,7 @@ public partial class MainWindow : Window
         var adminExitCode = await RunIsccAsync(isccPath, installerDir, adminScriptPath, args =>
         {
             args.Add($"/DCustomerGroupId={customerGroupId}");
-            args.Add($"/DGroupKeyBase64={groupKeyBase64}");
             args.Add($"/DIsTestInstaller={(isTestInstaller ? "true" : "false")}");
-            if (updatePublicKeyBase64 is not null)
-            {
-                args.Add($"/DUpdatePublicKeyBase64={updatePublicKeyBase64}");
-            }
-            args.Add($"/DAdminRolePublicKeyBase64={adminRoleKeyPair.PublicKeyBase64}");
-            // Privater Teil NUR hier - gleiches Muster wie InstallerPassword unten (nur der
-            // Admin-Installer bekommt ihn übergeben, nie der User-Installer-Aufruf oben).
-            args.Add($"/DAdminRolePrivateKeyBase64={adminRoleKeyPair.PrivateKeyBase64}");
             if (!string.IsNullOrEmpty(password))
             {
                 args.Add($"/DInstallerPassword={password}");
@@ -1083,7 +521,6 @@ public partial class MainWindow : Window
             // bleibt zusätzlich im Hauptfenster stehen, falls der Toast übersehen wurde
             // (siehe MainWindow.xaml, LastBuildPanel).
             _lastBuiltInstallerPath = newestExe.FullName;
-            LastBuildTitleText.Text = "Admin-Installer erstellt";
             LastBuildFileText.Text = newestExe.Name + " liegt bereit für den Sysadmin.";
             LastBuildPanel.Visibility = Visibility.Visible;
 
@@ -1091,27 +528,6 @@ public partial class MainWindow : Window
                 "Admin-Installer erstellt",
                 newestExe.Name + " liegt bereit für den Sysadmin.",
                 newestExe.FullName);
-            toast.Show();
-        }
-        catch (Exception)
-        {
-            // best-effort - das Protokoll oben hat die Erfolgsmeldung bereits geloggt
-        }
-    }
-
-    // Gleiches Panel/Toast-Muster wie ShowSuccessToast oben, nur ohne "neueste .exe im
-    // Ordner suchen" - beim Update-Erstellen kennen wir den fertigen Pfad schon exakt.
-    private void ShowUpdateSuccessToast(string exePath)
-    {
-        try
-        {
-            _lastBuiltInstallerPath = exePath;
-            var fileName = Path.GetFileName(exePath);
-            LastBuildTitleText.Text = "Update erstellt";
-            LastBuildFileText.Text = fileName + " liegt bereit für den Admin.";
-            LastBuildPanel.Visibility = Visibility.Visible;
-
-            var toast = new BuildSuccessToastWindow("Update erstellt", fileName + " liegt bereit für den Admin.", exePath);
             toast.Show();
         }
         catch (Exception)

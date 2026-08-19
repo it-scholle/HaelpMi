@@ -28,29 +28,6 @@ public enum MessageKind
 /// Antwortende hängt seine eigene Geräteliste an, damit der neu startende Announcer auch
 /// von Geräten erfährt, die gerade offline sind. Optional/nullable, damit alte Announces
 /// (die dieses Feld nie setzen) unverändert kompatibel bleiben.
-///
-/// <see cref="ProtocolVersion"/>/<see cref="DeviceIdentityPublicKeyBase64"/>
-/// (LAN-Verschlüsselung, siehe CLAUDE.md "Lizenz &amp; Secrets" und SecureEnvelopeCodec):
-/// additive, nullable Felder, die einem Peer über den ohnehin stattfindenden Boot-Call-
-/// Austausch bekannt werden, ohne einen eigenen Verhandlungs-Roundtrip zu brauchen. Ein
-/// altes, vor-verschlüsselungsfähiges Gerät lässt beide Felder beim Deserialisieren
-/// einfach weg (System.Text.Json füllt <c>null</c>) - genau deshalb bewusst
-/// <c>int?</c> statt eines defaultenden <c>int</c>: "Feld fehlt" (alter Peer) muss von
-/// "Feld ist 0" unterscheidbar bleiben. <see cref="DeviceIdentityPublicKeyBase64"/> wird
-/// NUR bei direktem Boot-Call-Kontakt gepinnt (siehe DiscoveryService), nie aus einem
-/// gossip-gelernten <see cref="KnownDeviceSummary"/>-Eintrag - deshalb steht das Feld
-/// bewusst nur hier, nicht auf KnownDeviceSummary.
-///
-/// <see cref="AdminRoleSignatureBase64"/>/<see cref="AdminRolePublicKeyBase64"/>
-/// (Admin-Rollen-Kryptoverifikation, Nutzerwunsch 17.08.2026): nur gesetzt, wenn der
-/// Absender ein Admin-Gerät MIT verfügbarem privaten Schlüssel ist (siehe
-/// Security.AdminRoleSigner.TrySign) - signiert (CustomerGroupId, DeviceId, SentAtUtc)
-/// dieser Nachricht. <see cref="AdminRolePublicKeyBase64"/> wird immer mitgeschickt, wenn
-/// signiert wurde (auch wenn der Empfänger den Gruppenschlüssel schon kennt) - trägt die
-/// TOFU-Erstlernphase für Geräte, die ihn noch nicht gepinnt haben (siehe
-/// Security.AdminRoleTrustStore). Beide optional/nullable wie KnownDevices, alte
-/// Announces ohne Signatur bleiben kompatibel (gelten dann einfach als nicht verifiziert,
-/// siehe DeviceEntry.AdminVerified).
 /// </summary>
 public sealed record BootCallMessage(
     MessageKind Kind,
@@ -66,8 +43,4 @@ public sealed record BootCallMessage(
     string ProgramVersion,
     int ConfigVersion,
     DateTimeOffset SentAtUtc,
-    IReadOnlyList<KnownDeviceSummary>? KnownDevices = null,
-    int? ProtocolVersion = null,
-    string? DeviceIdentityPublicKeyBase64 = null,
-    string? AdminRoleSignatureBase64 = null,
-    string? AdminRolePublicKeyBase64 = null);
+    IReadOnlyList<KnownDeviceSummary>? KnownDevices = null);

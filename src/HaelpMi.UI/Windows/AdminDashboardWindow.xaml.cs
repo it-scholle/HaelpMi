@@ -81,10 +81,6 @@ public partial class AdminDashboardWindow : Window
     // deshalb reicht hier ein bool statt eines Guid?, ob der Lock gerade gehalten wird.
     private bool _heldUpdateRolloutLock;
 
-    // Netzwerk-Tab (Nutzerwunsch 13.08.2026, Multi-VLAN-Bridge-Seed): gleiches Prinzip wie
-    // beim Updates-Tab oben - genau ein Datensatz (AppConstants.NetworkBridgeScopeId).
-    private bool _heldNetworkBridgeLock;
-
     // Unterdrückt die Auto-Speichern-Handler unten, während LoadGroupDetail/
     // LoadProfileDetail selbst Felder befüllen (z. B. GroupNameBox.Text setzen löst sonst
     // GroupNameBox_LostFocus aus, obwohl der Nutzer nichts geändert hat). GroupDevicesList
@@ -275,12 +271,6 @@ public partial class AdminDashboardWindow : Window
         {
             _context.ReleaseLock(EditScopeKind.UpdateRollout, AppConstants.UpdateRolloutScopeId);
             _heldUpdateRolloutLock = false;
-        }
-
-        if (_heldNetworkBridgeLock)
-        {
-            _context.ReleaseLock(EditScopeKind.NetworkBridge, AppConstants.NetworkBridgeScopeId);
-            _heldNetworkBridgeLock = false;
         }
     }
 
@@ -1334,29 +1324,11 @@ public partial class AdminDashboardWindow : Window
             _heldUpdateRolloutLock = false;
         }
 
-        // Netzwerk-Tab (Nutzerwunsch 13.08.2026, Multi-VLAN-Bridge-Seed): exakt dasselbe
-        // Reserviert-pro-Tab-Prinzip wie beim Updates-Tab direkt darüber - siehe dortigen
-        // Klassenkommentar/EditScope.cs, weshalb ein eigener EditScopeKind statt Wiederver-
-        // wendung von UpdateRollout.
-        var isNetworkTabNow = ReferenceEquals(MainTabControl.SelectedItem, NetworkTabItem);
-        if (_heldNetworkBridgeLock && !isNetworkTabNow)
+        if (!isUpdatesTabNow)
         {
-            _context.ReleaseLock(EditScopeKind.NetworkBridge, AppConstants.NetworkBridgeScopeId);
-            _heldNetworkBridgeLock = false;
+            return;
         }
 
-        if (isUpdatesTabNow)
-        {
-            await AcquireUpdatesTabLockAsync();
-        }
-        else if (isNetworkTabNow)
-        {
-            await AcquireNetworkTabLockAsync();
-        }
-    }
-
-    private async Task AcquireUpdatesTabLockAsync()
-    {
         UpdatesPanel.IsEnabled = false;
         UpdatesStatusText.Text = "Wird zur Bearbeitung reserviert...";
         try
@@ -1394,43 +1366,6 @@ public partial class AdminDashboardWindow : Window
         }
     }
 
-    private async Task AcquireNetworkTabLockAsync()
-    {
-        NetworkPanel.IsEnabled = false;
-        NetworkStatusText.Text = "Wird zur Bearbeitung reserviert...";
-        try
-        {
-            var result = await _context.AcquireLock(EditScopeKind.NetworkBridge, AppConstants.NetworkBridgeScopeId);
-            if (!ReferenceEquals(MainTabControl.SelectedItem, NetworkTabItem))
-            {
-                if (result.Outcome == EditLockAcquireOutcome.Granted)
-                {
-                    _context.ReleaseLock(EditScopeKind.NetworkBridge, AppConstants.NetworkBridgeScopeId);
-                }
-                return;
-            }
-
-            if (result.Outcome != EditLockAcquireOutcome.Granted)
-            {
-                NetworkStatusText.Text = result.Outcome == EditLockAcquireOutcome.DeniedByHolder
-                    ? $"Wird gerade von {result.HolderComputerName} ({result.HolderUser}) bearbeitet - nur Ansicht."
-                    : "Konnte nicht exklusiv reserviert werden - bitte Tab erneut wählen.";
-                LoadNetworkTab();
-                return;
-            }
-
-            _heldNetworkBridgeLock = true;
-            NetworkStatusText.Text = string.Empty;
-            LoadNetworkTab();
-            NetworkPanel.IsEnabled = true;
-        }
-        catch (Exception ex)
-        {
-            NetworkStatusText.Text = "Reservierung fehlgeschlagen - siehe Fehlermeldung.";
-            ActionErrorHandler.Show(this, "Netzwerk-Tab zur Bearbeitung reservieren", ex);
-        }
-    }
-
     private void LoadUpdatesTab()
     {
         _isLoadingDetail = true;
@@ -1448,7 +1383,8 @@ public partial class AdminDashboardWindow : Window
             var rollout = _config.UpdateRollout;
             ApprovedVersionText.Text = string.IsNullOrWhiteSpace(rollout.ApprovedVersion)
                 ? "Kein aktiver Rollout."
-                : $"Version {rollout.ApprovedVersion} freigegeben - verbreitet sich automatisch von Gerät zu Gerät weiter.";
+                : $"Version {rollout.ApprovedVersion}, freigegeben für {rollout.ApprovedDeviceQuota} von {_deviceChoices.Count} Geräten.";
+            QuotaBox.Text = rollout.ApprovedDeviceQuota.ToString();
         }
         finally
         {
@@ -1464,9 +1400,69 @@ public partial class AdminDashboardWindow : Window
             return;
         }
 
-        await SaveUpdateRolloutFieldAsync("Version freigegeben", _config.UpdateRollout.ApprovedVersion, version, cfg =>
+        await SaveUpdateRolloutFieldAsync("Version freigegeben (Stufe 1)", _config.UpdateRollout.ApprovedVersion, version, cfg =>
         {
             cfg.UpdateRollout.ApprovedVersion = version;
+            cfg.UpdateRollout.ApprovedDeviceQuota = 1;
+        });
+    }
+
+    private void QuotaBox_LostFocus(object sender, RoutedEventArgs e)
+    {
+        if (_isLoadingDetail)
+        {
+            return;
+        }
+
+        if (!int.TryParse(QuotaBox.Text.Trim(), out var newQuota) || newQuota < 0)
+        {
+            UpdatesStatusText.Text = "Kontingent muss eine ganze Zahl ≥ 0 sein - nicht gespeichert.";
+            return;
+        }
+
+        if (newQuota == _config.UpdateRollout.ApprovedDeviceQuota)
+        {
+            return;
+        }
+
+        _ = SaveUpdateRolloutFieldAsync("Freigabekontingent", _config.UpdateRollout.ApprovedDeviceQuota.ToString(), newQuota.ToString(), cfg =>
+        {
+            cfg.UpdateRollout.ApprovedDeviceQuota = newQuota;
+        });
+    }
+
+    // Nutzerwunsch: "Admin gibt Freigabestufen frei (z. B. 1 -> 2 -> 4 -> 8 Geräte)"
+    // (Anweisungen/claude-code-prompt-teil2-admin-update.md, Abschnitt 11) - Verdopplung
+    // gedeckelt auf die Gesamtzahl bekannter Geräte, ein größeres Kontingent hätte ohnehin
+    // keine zusätzliche Wirkung (UpdateOrchestrator.IsMyTurn).
+    private async void NextStageButton_Click(object sender, RoutedEventArgs e)
+    {
+        var current = _config.UpdateRollout.ApprovedDeviceQuota;
+        var deviceCount = Math.Max(1, _deviceChoices.Count);
+        var next = Math.Min(current <= 0 ? 1 : current * 2, deviceCount);
+        if (next == current)
+        {
+            return;
+        }
+
+        await SaveUpdateRolloutFieldAsync("Freigabekontingent - nächste Stufe", current.ToString(), next.ToString(), cfg =>
+        {
+            cfg.UpdateRollout.ApprovedDeviceQuota = next;
+        });
+    }
+
+    private async void StopRolloutButton_Click(object sender, RoutedEventArgs e)
+    {
+        var oldVersion = _config.UpdateRollout.ApprovedVersion;
+        if (string.IsNullOrWhiteSpace(oldVersion))
+        {
+            return; // schon kein aktiver Rollout
+        }
+
+        await SaveUpdateRolloutFieldAsync("Rollout gestoppt", oldVersion, null, cfg =>
+        {
+            cfg.UpdateRollout.ApprovedVersion = null;
+            cfg.UpdateRollout.ApprovedDeviceQuota = 0;
         });
     }
 
@@ -1486,123 +1482,19 @@ public partial class AdminDashboardWindow : Window
         }
     }
 
-    // ------------------------------------------------------------------- Netzwerk ---
-    // Nutzerwunsch 13.08.2026 (Multi-VLAN-Bridge-Seed): "Admin als so eine Art erster
-    // Peer" für Discovery über geroutete, aber nicht per Broadcast erreichbare Subnetze/
-    // VLANs hinweg (siehe DiscoveryService-Klassenkommentar). Seit 15.08.2026 eine Liste
-    // statt eines Einzelwerts (mehrere Bridge-Geräte möglich) plus "Automatisch erkennen"
-    // für die lokalen IPv4-Adressen dieses Geräts (Vorschlag + 1-Klick-Übernahme, kein
-    // stillschweigendes Vorausfüllen - siehe LocalNetworkAddressDetector). Speichern bei
-    // explizitem Hinzufügen/Entfernen statt Save-on-Blur, gleiches Reserviert-pro-Tab-
-    // Prinzip wie beim Updates-Tab.
-
-    private void LoadNetworkTab()
+    private async void UndoUpdatesButton_Click(object sender, RoutedEventArgs e)
     {
-        _isLoadingDetail = true;
         try
         {
-            NetworkBridgeAddressesList.ItemsSource = null;
-            NetworkBridgeAddressesList.ItemsSource = _config.BridgeSeedAddresses;
-            NetworkBridgeNewAddressBox.Clear();
-            DetectedAddressCandidatesPanel.Items.Clear();
-        }
-        finally
-        {
-            _isLoadingDetail = false;
-        }
-    }
-
-    private async void AddNetworkBridgeAddressButton_Click(object sender, RoutedEventArgs e) =>
-        await AddNetworkBridgeAddressAsync(NetworkBridgeNewAddressBox.Text);
-
-    private async void NetworkBridgeNewAddressBox_KeyDown(object sender, KeyEventArgs e)
-    {
-        if (e.Key == Key.Enter)
-        {
-            await AddNetworkBridgeAddressAsync(NetworkBridgeNewAddressBox.Text);
-        }
-    }
-
-    private async Task AddNetworkBridgeAddressAsync(string rawValue)
-    {
-        var trimmed = rawValue.Trim();
-        if (string.IsNullOrEmpty(trimmed) || _config.BridgeSeedAddresses.Contains(trimmed))
-        {
-            return; // leer oder schon vorhanden - Duplikate beim manuellen wie beim per-Klick-Hinzufügen stillschweigend überspringen
-        }
-
-        var updated = _config.BridgeSeedAddresses.Append(trimmed).ToList();
-        await SaveNetworkBridgeAddressesAsync(updated);
-    }
-
-    private async void RemoveNetworkBridgeAddressButton_Click(object sender, RoutedEventArgs e)
-    {
-        if (NetworkBridgeAddressesList.SelectedItem is not string selected)
-        {
-            NetworkStatusText.Text = "Bitte zuerst eine Adresse in der Liste auswählen.";
-            return;
-        }
-
-        var updated = _config.BridgeSeedAddresses.Where(a => a != selected).ToList();
-        await SaveNetworkBridgeAddressesAsync(updated);
-    }
-
-    // Nutzerwunsch 15.08.2026: nur Vorschlag, keine Silent-Auto-Übernahme - bei mehreren
-    // NICs/VPN-Adaptern könnte sonst unbemerkt die falsche Adresse übernommen werden.
-    private void DetectLocalAddressesButton_Click(object sender, RoutedEventArgs e)
-    {
-        DetectedAddressCandidatesPanel.Items.Clear();
-        IReadOnlyList<string> candidates;
-        try
-        {
-            candidates = LocalNetworkAddressDetector.GetCandidateAddresses();
-        }
-        catch (Exception ex)
-        {
-            NetworkStatusText.Text = "Erkennung fehlgeschlagen - siehe Fehlermeldung.";
-            ActionErrorHandler.Show(this, "Lokale Adressen erkennen", ex);
-            return;
-        }
-
-        if (candidates.Count == 0)
-        {
-            NetworkStatusText.Text = "Keine passende lokale Netzwerkadresse gefunden.";
-            return;
-        }
-
-        foreach (var candidate in candidates)
-        {
-            var alreadyAdded = _config.BridgeSeedAddresses.Contains(candidate);
-            var button = new Button
-            {
-                Content = alreadyAdded ? $"{candidate} (bereits in der Liste)" : $"+ {candidate}",
-                Margin = new Thickness(0, 0, 0, 4),
-                Padding = new Thickness(10, 4, 10, 4),
-                HorizontalAlignment = HorizontalAlignment.Left,
-                IsEnabled = !alreadyAdded,
-            };
-            button.Click += async (_, _) => await AddNetworkBridgeAddressAsync(candidate);
-            DetectedAddressCandidatesPanel.Items.Add(button);
-        }
-    }
-
-    private async Task SaveNetworkBridgeAddressesAsync(List<string> updated)
-    {
-        var oldDisplay = _config.BridgeSeedAddresses.Count > 0 ? string.Join(", ", _config.BridgeSeedAddresses) : "(keine)";
-        var newDisplay = updated.Count > 0 ? string.Join(", ", updated) : "(keine)";
-
-        try
-        {
-            await PublishAsync(cfg => { cfg.BridgeSeedAddresses = updated; return cfg; },
-                EditScopeKind.NetworkBridge, AppConstants.NetworkBridgeScopeId, "Bridge-Seed-Adressen", oldDisplay, newDisplay);
+            var ok = await _context.Undo(EditScopeKind.UpdateRollout, AppConstants.UpdateRolloutScopeId);
+            UpdatesStatusText.Text = ok ? "Letzte Änderung rückgängig gemacht." : "Keine Änderung zum Rückgängigmachen vorhanden.";
             ReloadAll();
-            LoadNetworkTab();
-            NetworkStatusText.Text = "Gespeichert und an alle Geräte verteilt.";
+            LoadUpdatesTab();
         }
         catch (Exception ex)
         {
-            NetworkStatusText.Text = "Fehlgeschlagen - siehe Fehlermeldung.";
-            ActionErrorHandler.Show(this, "Bridge-Seed-Adressen speichern", ex);
+            UpdatesStatusText.Text = "Fehlgeschlagen - siehe Fehlermeldung.";
+            ActionErrorHandler.Show(this, "Update-Rollout-Änderung rückgängig machen", ex);
         }
     }
 }

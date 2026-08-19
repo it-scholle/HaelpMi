@@ -8,11 +8,9 @@ using HaelpMi.Core.Autostart;
 using HaelpMi.Core.Diagnostics;
 using HaelpMi.Core.Interop;
 using HaelpMi.Core.Ipc;
-using HaelpMi.Core.Licensing;
 using HaelpMi.Core.Models;
 using HaelpMi.Core.Networking;
 using HaelpMi.Core.Runtime;
-using HaelpMi.Core.Security;
 using HaelpMi.Core.Storage;
 using HaelpMi.Core.Updates;
 
@@ -54,42 +52,19 @@ public partial class App : System.Windows.Application
     // einzuschränken.
     private const string SingleInstanceMutexName = "Local\\HaelpMi.Agent.SingleInstance";
 
-    // Aktivierungs-Signal (Nutzerwunsch 18.08.2026, Startmenü-Eintrag "HälpMi starten" -
-    // siehe installer/HaelpMiCommon.iss.inc [Icons]): der Agent hat kein eigenes Fenster,
-    // "nach vorne holen" wie bei HaelpMi.Config/App.xaml.cs (dortiges Vorbild für dieses
-    // Muster) entfällt daher technisch - stattdessen zeigt die schon laufende Instanz beim
-    // Signal eine Tray-Sprechblase, die zweite Instanz beendet sich wie bisher sofort.
-    private const string ActivateEventName = "Local\\HaelpMi.Agent.ActivateRequest";
-
     private readonly SettingsStore _settingsStore = new();
     private readonly SharedConfigStore _sharedConfigStore = new();
     private readonly DeviceStore _deviceStore = new();
-    // Nicht readonly, gleiches Muster wie _settings/_deployment unten (null! + Zuweisung in
-    // OnStartup): braucht BuildIdentity(), also _settings/_deployment, die erst dort geladen
-    // werden - kann daher kein Feld-Initialisierer sein. Lazy Device-Id-Provider (wie bei
-    // DiscoveryService/ConfigSyncService) statt eines fixen Werts, siehe AuditLog-Klassendoku.
-    private AuditLog _auditLog = null!;
-
-    private AuditSyncService? _auditSyncService;
-    private AdminRoleKeySyncService? _adminRoleKeySync;
+    private readonly AuditLog _auditLog = new();
 
     private Mutex? _singleInstanceMutex;
     private bool _ownsSingleInstanceMutex;
-    private EventWaitHandle? _activateEvent;
 
     private OwnSettings _settings = null!;
     private DeploymentInfo _deployment = null!;
 
     private DiscoveryService? _discovery;
     private AlarmTcpListener? _listener;
-    // Fast-User-Switching-Fix 17.08.2026 (s. AlarmRelayServer/AlarmRelayClient-Klassendoku):
-    // genau eines der beiden ist gesetzt, nie beide - Primary hostet _relayServer, Satellite
-    // hält _relayClient. _alarmRoleBackoffRandom ist bewusst ein Feld statt eine lokale
-    // Variable je Aufruf, damit aufeinanderfolgende Übernahmeversuche (selten, aber möglich bei
-    // mehreren Sitzungswechseln kurz hintereinander) nicht alle mit demselben Startwert seeden.
-    private AlarmRelayServer? _relayServer;
-    private AlarmRelayClient? _relayClient;
-    private readonly Random _alarmRoleBackoffRandom = new();
     private AlarmFeedbackChannel? _feedbackChannel;
     private ConfigSyncService? _configSync;
     private UpdatePackageDistributionService? _updateDistribution;
@@ -100,22 +75,9 @@ public partial class App : System.Windows.Application
     private bool _autostartRegistered = true; // true = kein Registrierungsversuch nötig (unerwarteter leerer executablePath) oder erfolgreich
     private string? _autostartError;
 
-    private LicenseChecker? _licenseChecker;
-    private System.Threading.Timer? _licenseCheckTimer;
-
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
-
-        // Diagnose-Instrumentierung, siehe StartupTimingLog-Klassendoku - temporär für die
-        // Untersuchung "Selbsttest nach Admin-Installation verzögert".
-        StartupTimingLog.Mark(nameof(HaelpMi.Agent), "OnStartup entered");
-        // Additiv zu StartupTimingLog (siehe dortige/TestLogger-Klassendoku: overhead-arme
-        // Messung bleibt bestehen, TestLogger ergänzt nur die geräteübergreifende
-        // Korrelierbarkeit). Guid.Empty hier bewusst: _settings/_deployment sind an dieser
-        // Stelle noch nicht geladen, der Meilenstein selbst ist der Punkt, nicht die Geräte-ID.
-        TestLogger.LogAction(TestLogEventType.StartupMilestone, TestLogLevel.Info, TestLogDirection.Local,
-            Guid.Empty, detail: "OnStartup entered");
 
         CrashLogger.InstallProcessWideHooks(nameof(HaelpMi.Agent));
         DispatcherUnhandledException += (_, args) =>
@@ -162,68 +124,15 @@ public partial class App : System.Windows.Application
         if (!createdNew)
         {
             // Schon eine Produktivinstanz in dieser Sitzung aktiv (siehe Feldkommentar oben) -
-            // beenden statt um TCP-Ports und den Autostart-Task-Eintrag zu konkurrieren. Vorher
-            // best-effort die laufende Instanz signalisieren (Nutzerwunsch 18.08.2026, "HälpMi
-            // starten"-Verknüpfung): ohne Rückmeldung sah ein Klick bei bereits laufendem Agent
-            // aus wie "macht nichts" - gleiches try/catch-Muster wie in
-            // HaelpMi.Config/App.xaml.cs (dortiger Kommentar zum selben Fall).
-            try
-            {
-                using var existingActivateEvent = EventWaitHandle.OpenExisting(ActivateEventName);
-                existingActivateEvent.Set();
-            }
-            catch (WaitHandleCannotBeOpenedException)
-            {
-                // Die andere Instanz ist zwischen Mutex-Check und hier bereits beendet, oder
-                // steckt noch vor dem Anlegen ihres eigenen Events (siehe Kommentar unten) -
-                // dann gibt es nichts zu signalisieren, einfach beenden.
-            }
-
+            // beenden statt um TCP-Ports und den Autostart-Task-Eintrag zu konkurrieren.
             Shutdown();
             return;
-        }
-
-        // Sofort nach Mutex-Erwerb, noch vor dem (etwas dauernden) Laden von Settings/Deployment
-        // unten - ein Klick auf "HälpMi starten" kurz nach dem eigenen Prozessstart soll nicht
-        // in die Lücke fallen (gleiche Reihenfolge-Überlegung wie in HaelpMi.Config/App.xaml.cs).
-        _activateEvent = new EventWaitHandle(false, EventResetMode.AutoReset, ActivateEventName);
-        new Thread(WaitForActivationRequests) { IsBackground = true }.Start();
-
-        // Flaw 26 (v0.39.x): direkt nach dem gewonnenen Mutex-Rennen, aus demselben Grund wie
-        // das Aktivierungs-Event oben - nur die Instanz, die diesen Punkt tatsächlich erreicht
-        // (createdNew=true), antwortet je auf diesen Port. Eine zweite, per ConfirmSwap
-        // gestartete Instanz, die das Mutex-Rennen gegen eine noch nicht ganz beendete
-        // Altinstanz verliert, beendet sich vorher (Zeile 182 oben) und meldet sich nie - der
-        // wartende UpdateServiceWorker sieht das als Timeout und rollt den Swap zurück, statt
-        // "Erfolg" allein aus geglückten Datei-Operationen abzuleiten.
-        var confirmPort = ParseUpdateConfirmPort(e.Args);
-        if (confirmPort is not null)
-        {
-            _ = AnswerUpdateConfirmationBestEffortAsync(confirmPort.Value);
         }
 
         try
         {
             _deployment = DeploymentInfoStore.Load();
             _settings = _settingsStore.Load();
-            // Erst jetzt sinnvoll konstruierbar (BuildIdentity() braucht _settings/_deployment,
-            // siehe Feld-Kommentar oben) - die Lambda wird ohnehin erst beim ersten
-            // tatsächlichen Append()-Aufruf ausgewertet, aber das Feld selbst muss vorher
-            // zugewiesen sein (readonly).
-            _auditLog = new AuditLog(() => BuildIdentity().DeviceId);
-
-            // P1-Notfall-Schalter (19.08.2026, siehe EncryptionDebugSwitch-Klassendoku):
-            // laut sichtbar machen, nicht still - sowohl im Audit-Log (überlebt einen
-            // Neustart, landet auf Z:) als auch in der Konsole, falls jemand den Agent
-            // gerade interaktiv beobachtet.
-            if (EncryptionDebugSwitch.IsDisabled)
-            {
-                const string warning = "!!! DISABLE_ENCRYPTION_DEBUG_ONLY=1 aktiv - LAN-Verschlüsselung ausgeschaltet, NUR für P1-Diagnose, vor Produktiveinsatz zwingend entfernen !!!";
-                Console.WriteLine(warning);
-                _auditLog.Append(warning);
-                TestLogger.LogAction(TestLogEventType.StartupMilestone, TestLogLevel.Warn, TestLogDirection.Local,
-                    BuildIdentity().DeviceId, detail: "Verschlüsselung per Debug-Flag deaktiviert");
-            }
         }
         catch (Exception ex) when (ex is InvalidOperationException or System.Text.Json.JsonException or IOException)
         {
@@ -247,59 +156,6 @@ public partial class App : System.Windows.Application
         const string prefix = "--update-test-port=";
         var arg = args.FirstOrDefault(a => a.StartsWith(prefix, StringComparison.Ordinal));
         return arg is not null && int.TryParse(arg[prefix.Length..], out var port) ? port : null;
-    }
-
-    // Flaw 26: separat von ParseUpdateTestPort, weil beide Modi unterschiedlich sind - der
-    // Testport (oben) läuft in einer isolierten Testinstanz PARALLEL zur Produktivinstanz
-    // (RunUpdateSelfTestAndExit, kein Fenster, keine Einzelinstanz-Sperre), der Confirm-Port
-    // hier läuft in der neuen PRODUKTIV-Instanz selbst mit, ohne deren normalen Start zu
-    // verändern.
-    private static int? ParseUpdateConfirmPort(string[] args)
-    {
-        const string prefix = "--update-confirm-port=";
-        var arg = args.FirstOrDefault(a => a.StartsWith(prefix, StringComparison.Ordinal));
-        return arg is not null && int.TryParse(arg[prefix.Length..], out var port) ? port : null;
-    }
-
-    /// <summary>
-    /// Flaw 26: beantwortet einen einzelnen Verbindungsversuch von UpdateServiceWorker.
-    /// ConfirmSwapAsync mit "OK" - reiner Erfolgsnachweis "diese Instanz lebt und hat die
-    /// Einzelinstanz-Sperre bekommen", kein Datenaustausch. Läuft bewusst NICHT blockierend
-    /// (Fire-and-forget aus OnStartup) und mit kurzem Timeout: der normale Start
-    /// (StartBackgroundServices, Settings laden, Discovery/Alarm-Listener etc.) darf davon
-    /// nie abhängen oder verzögert werden - ein Update-Bestätigungsschritt ist ein seltener
-    /// Sonderfall, kein Teil des normalen Boot-Wegs.
-    /// </summary>
-    private static async Task AnswerUpdateConfirmationBestEffortAsync(int confirmPort)
-    {
-        TcpListener? listener = null;
-        try
-        {
-            listener = new TcpListener(IPAddress.Loopback, confirmPort);
-            listener.Start();
-
-            var acceptTask = listener.AcceptTcpClientAsync();
-            var completed = await Task.WhenAny(acceptTask, Task.Delay(TimeSpan.FromSeconds(15)));
-            if (completed != acceptTask)
-            {
-                return; // niemand hat innerhalb der Frist angefragt - der Aufrufer wertet das als Timeout/Fehlschlag
-            }
-
-            using var client = acceptTask.Result;
-            using var stream = client.GetStream();
-            var okBytes = System.Text.Encoding.UTF8.GetBytes("OK\n");
-            await stream.WriteAsync(okBytes);
-        }
-        catch (Exception)
-        {
-            // Best-effort wie der Rest der Update-Diagnose-Pfade - ein Fehler hier darf den
-            // normalen Produktivbetrieb dieser (erfolgreich gestarteten!) Instanz nie stören,
-            // der Aufrufer sieht im schlimmsten Fall nur einen Timeout statt einer Bestätigung.
-        }
-        finally
-        {
-            listener?.Stop();
-        }
     }
 
     // Separater Helfer statt Inline-Check (gleiches Muster wie ParseUpdateTestPort oben).
@@ -372,52 +228,7 @@ public partial class App : System.Windows.Application
         Shutdown(ok ? 0 : 1);
     }
 
-    // Läuft auf einem eigenen Hintergrund-Thread für die gesamte Prozesslaufzeit (kein
-    // async/await hier - WaitOne() blockiert absichtlich, es gibt sonst nichts zu tun). Eine
-    // zweite gestartete Instanz (Klick auf "HälpMi starten" bei bereits laufendem Agent)
-    // signalisiert über dieses Event statt selbst etwas anzuzeigen (siehe OnStartup oben) -
-    // gleiches Grundmuster wie WaitForActivationRequests in HaelpMi.Config/App.xaml.cs, hier
-    // auf ein einzelnes Signal reduziert (der Agent kennt kein zweites Aktivierungsziel wie
-    // Config's Dashboard-Sonderfall).
-    private void WaitForActivationRequests()
-    {
-        while (true)
-        {
-            _activateEvent!.WaitOne();
-            // Kann in der kurzen Lücke zwischen Event-Erzeugung und InitializeTrayIcon() (spät
-            // in StartBackgroundServices()) noch null sein - dann verpufft dieses eine Signal
-            // einfach, ein erneuter Klick trifft danach ein bereits vorhandenes Tray-Icon.
-            Dispatcher.BeginInvoke(() => _trayIcon?.ShowBalloonTip(
-                5000,
-                "HälpMi läuft bereits",
-                "HälpMi ist schon aktiv (Tray-Symbol unten rechts) - ein zweiter Prozess wurde nicht gestartet.",
-                System.Windows.Forms.ToolTipIcon.Info));
-        }
-    }
-
-    // Bugfix 17.08.2026 (Fehlerbericht "neu beigetretenes Gerät bekommt keine Config, bis
-    // der Admin neu startet"): vorher `LiveIdentityFactory.Create(_settings, _deployment)`
-    // mit dem gecachten Feld _settings, das nur einmal bei OnStartup geladen wird (Zeile
-    // unten bei _settingsStore.Load()). ConfigSyncService.ApplyToSelf (eigene, separate
-    // SettingsStore-Instanz) schreibt eine neu per Hot-Reload übernommene ConfigVersion auf
-    // die Platte, aktualisiert aber nie dieses App-lokale Feld - jeder eigene Boot-Call
-    // meldete Peers danach für den Rest der Prozesslaufzeit die VERALTETE ConfigVersion.
-    // Ein neu beigetretenes Gerät verglich sich dadurch nie als "älter" als ein längst
-    // aktualisiertes, aber schon vorher laufendes Peer-Gerät und zog sich die Config nie -
-    // erst ein Neustart (der _settings frisch lädt) meldete wieder die korrekte Version.
-    // Fix: immer frisch von der Platte lesen, wie es SettingsStore-Aufrufer im Rest der
-    // Codebasis ohnehin schon tun (ConfigSyncService, RegisterHotkeysFromConfig etc.) - eine
-    // kleine JSON-Datei, kein spürbarer Zusatzaufwand pro Boot-Call/Announce.
-    private LiveIdentity BuildIdentity() => LiveIdentityFactory.Create(_settingsStore.Load(), _deployment);
-
-    /// <summary>
-    /// Admin-Rollen-Kryptoverifikation (Nutzerwunsch 17.08.2026): effektiver eigener
-    /// privater Schlüssel - Installer (deployment.json) hat immer Vorrang vor dem
-    /// laufzeit-eigenen Migrationspfad (AdminRoleTrustStore, siehe dortige Klassendoku).
-    /// Von DiscoveryService (Signieren des eigenen Boot-Calls) UND AdminRoleKeySyncService
-    /// (Anbieten des eigenen Schlüssels an einen bedürftigen Admin-Peer) genutzt.
-    /// </summary>
-    private string? AdminRolePrivateKeyProvider() => _deployment.AdminRolePrivateKeyBase64 ?? AdminRoleTrustStore.Load().OwnPrivateKeyBase64;
+    private LiveIdentity BuildIdentity() => LiveIdentityFactory.Create(_settings, _deployment);
 
     private void StartBackgroundServices()
     {
@@ -444,13 +255,7 @@ public partial class App : System.Windows.Application
         _ipcServer.On(IpcCommandType.Rebroadcast, HandleRebroadcastRequestAsync);
         _ipcServer.On(IpcCommandType.SearchAgain, HandleSearchAgainRequestAsync);
         _ipcServer.On(IpcCommandType.SelfTest, HandleSelfTestRequestAsync);
-        _ipcServer.On(IpcCommandType.ArmTestMode, HandleArmTestModeRequestAsync);
-        _ipcServer.On(IpcCommandType.DisarmTestMode, HandleDisarmTestModeRequestAsync);
-        _ipcServer.On(IpcCommandType.TestModeStatus, HandleTestModeStatusRequestAsync);
         _ipcServer.Start();
-        StartupTimingLog.Mark(nameof(HaelpMi.Agent), "IpcServer.Start() done");
-        TestLogger.LogAction(TestLogEventType.StartupMilestone, TestLogLevel.Info, TestLogDirection.Local,
-            BuildIdentity().DeviceId, detail: "IpcServer.Start() done");
 
         var executablePath = Environment.ProcessPath ?? Process.GetCurrentProcess().MainModule?.FileName ?? string.Empty;
         if (!string.IsNullOrEmpty(executablePath))
@@ -475,93 +280,22 @@ public partial class App : System.Windows.Application
                 _auditLog.Append($"Autostart-Registrierung fehlgeschlagen: {_autostartError}");
             }
         }
-        StartupTimingLog.Mark(nameof(HaelpMi.Agent), "AutostartRegistrar.EnsureRegistered done (misst schtasks.exe-Laufzeit)");
-        TestLogger.LogAction(TestLogEventType.StartupMilestone, TestLogLevel.Info, TestLogDirection.Local,
-            BuildIdentity().DeviceId, detail: "AutostartRegistrar.EnsureRegistered done");
 
-        // Nutzerwunsch 14./15.08.2026 (revisionssicheres Audit-Log): Sendeseite läuft auf
-        // JEDEM Gerät unabhängig von der Rolle (jedes Gerät hat ein eigenes AuditLog),
-        // Empfangsseite (StartListening) dagegen nur, wenn dieses Gerät selbst Role.Admin
-        // ist - gleiches Rollen-Gating wie beim Dashboard-Tray-Menüpunkt weiter unten
-        // (InitializeTrayIcon), nur hier für den 24/7-Agent-Prozess statt das kurzlebige
-        // Config.exe. Bewusst NICHT wie ConfigSyncService/EditLockService nur im
-        // Config.exe-Dashboard-Prozess gestartet: ein Admin-Gerät soll Pushes auch
-        // annehmen können, wenn das Dashboard-Fenster gerade gar nicht offen ist.
-        _auditSyncService = new AuditSyncService(BuildIdentity, _auditLog, _auditLog.Append, groupKeyProvider: () => _deployment.EffectiveGroupKeyBase64);
-        if (_deployment.Role == Role.Admin)
-        {
-            _auditSyncService.StartListening();
-        }
-
-        _feedbackChannel = new AlarmFeedbackChannel(BuildIdentity, _auditLog.Append, groupKeyProvider: () => _deployment.EffectiveGroupKeyBase64);
+        _feedbackChannel = new AlarmFeedbackChannel(BuildIdentity, _auditLog.Append);
         _feedbackChannel.Start();
 
-        _coordinator = new AlarmFlowCoordinator(BuildIdentity, () => _settings, _sharedConfigStore.LoadOrCreate, _feedbackChannel, _auditLog, _auditSyncService, groupKeyProvider: () => _deployment.EffectiveGroupKeyBase64);
-        StartupTimingLog.Mark(nameof(HaelpMi.Agent), "_coordinator zugewiesen (Selbsttest waere ab hier IPC-seitig bedienbar)");
-        TestLogger.LogAction(TestLogEventType.StartupMilestone, TestLogLevel.Info, TestLogDirection.Local,
-            BuildIdentity().DeviceId, detail: "_coordinator zugewiesen");
+        _coordinator = new AlarmFlowCoordinator(BuildIdentity, () => _settings, _sharedConfigStore.LoadOrCreate, _feedbackChannel);
 
-        // Multi-VLAN-Bridge-Seed (Nutzerwunsch 13.08.2026, Liste seit 15.08.2026): kommt
-        // ausschließlich aus SharedConfig, hot-reload-editierbar im Admin-Dashboard
-        // (Netzwerk-Tab). Den früheren deployment.json-Startwert (Install-Creator-Feld) gibt
-        // es seit 15.08.2026 nicht mehr - der Admin pflegt die Bridge-Adressen vollständig
-        // im Dashboard, ein Installer-Neubau nur für eine IP-Änderung war unnötiger Umweg.
-        //
-        // Bugfix 17.08.2026 (derselbe Fehlerbericht wie bei BuildIdentity() oben):
-        // StartListening()/AnnounceAsync() standen bisher HIER, vor der Konstruktion von
-        // _configSync und vor dem Verdrahten von PeerConfigVersionObserved/
-        // AdminPeerContactObserved weiter unten. Auf einem echten LAN kann die Antwort auf
-        // den eigenen allerersten Announce (von einem bereits laufenden Peer) den
-        // ReceiveLoop erreichen, noch während diese synchrone Methode weiter unten mit
-        // weiteren Socket-Binds beschäftigt ist - das jeweilige Event feuert dann ohne
-        // Subscriber ins Leere und ist unwiederbringlich verloren. Reihenfolge jetzt:
-        // erst ALLE Discovery-Event-Handler verdrahten, dann StartListening()/AnnounceAsync()
-        // ganz am Ende dieses Blocks.
-        _discovery = new DiscoveryService(BuildIdentity, _auditLog.Append,
-            bridgeSeedAddressProvider: () => _sharedConfigStore.LoadOrCreate().BridgeSeedAddresses,
-            adminRolePrivateKeyProvider: AdminRolePrivateKeyProvider);
+        _discovery = new DiscoveryService(BuildIdentity, _auditLog.Append);
+        _discovery.StartListening();
+        _ = _discovery.AnnounceAsync();
 
-        // Admin-Rollen-Kryptoverifikation, Migrationspfad (Nutzerwunsch 17.08.2026): läuft
-        // wie AuditSyncService auf jedem Gerät (Sendeseite/Anfragen an Peers ist harmlos für
-        // ein User-Gerät, da AdminPeerContactObserved dort ohnehin nie feuert), Empfangsseite
-        // nur bei Role.Admin gestartet.
-        _adminRoleKeySync = new AdminRoleKeySyncService(
-            BuildIdentity,
-            AdminRolePrivateKeyProvider,
-            isOwnKeyReplaceableProvider: () => string.IsNullOrEmpty(_deployment.AdminRolePublicKeyBase64),
-            groupKeyProvider: () => _deployment.EffectiveGroupKeyBase64,
-            audit: _auditLog.Append);
-        if (_deployment.Role == Role.Admin)
-        {
-            _adminRoleKeySync.Start();
-        }
+        _listener = new AlarmTcpListener(BuildIdentity, _auditLog.Append);
+        _listener.AlarmReceived += (_, args) => _coordinator.HandleIncomingAlarmRequest(args);
+        _listener.Start();
 
-        _listener = new AlarmTcpListener(BuildIdentity, _auditLog.Append, groupKeyProvider: () => _deployment.EffectiveGroupKeyBase64);
-        _listener.AlarmReceived += OnAlarmReceived;
-        // Fast-User-Switching-Fix 17.08.2026: statt direkt _listener.Start() aufzurufen und den
-        // Rückgabewert zu ignorieren, entscheidet dieser Aufruf, ob diese Sitzung Primary
-        // (bindet den Port direkt) oder Satellite (hängt sich an eine andere Sitzungsinstanz
-        // an) wird - s. TryBecomePrimaryOrSatellite/AlarmRelayServer-Klassendoku.
-        TryBecomePrimaryOrSatellite();
-        StartupTimingLog.Mark(nameof(HaelpMi.Agent), "TryBecomePrimaryOrSatellite() done (Selbsttest-Empfang waere ab hier moeglich)");
-        TestLogger.LogAction(TestLogEventType.StartupMilestone, TestLogLevel.Info, TestLogDirection.Local,
-            BuildIdentity().DeviceId, detail: "TryBecomePrimaryOrSatellite() done");
-
-        _configSync = new ConfigSyncService(BuildIdentity, _deviceStore.Load, _auditLog.Append, groupKeyProvider: () => _deployment.EffectiveGroupKeyBase64);
-        _configSync.ConfigApplied += (_, _) =>
-        {
-            RegisterHotkeysFromConfig();
-
-            // Bugfix 17.08.2026 (Fehlerbericht "neu beigetretenes Gerät bekommt keine
-            // Config, bis der Admin neu startet"): sobald WIR selbst per Hot-Reload eine
-            // neuere Config übernommen haben, sofort erneut ankündigen, statt auf den
-            // nächsten fremden Boot-Call zu warten - erreicht bereits online lauschende
-            // Peers zeitnah, statt dass sie erst bei ihrem eigenen nächsten Boot davon
-            // erfahren. BuildIdentity() liest die ConfigVersion jetzt ohnehin bei jedem
-            // Aufruf frisch von der Platte (siehe Kommentar dort) - dieser Re-Announce
-            // beschleunigt die Zustellung nur zusätzlich, behebt den Bug aber nicht allein.
-            _ = _discovery.AnnounceAsync();
-        };
+        _configSync = new ConfigSyncService(BuildIdentity, _deviceStore.Load, _auditLog.Append);
+        _configSync.ConfigApplied += (_, _) => RegisterHotkeysFromConfig();
         _configSync.Start();
 
         // Bugfix 11.08.2026 (Fehlerbericht "frisch installierte Geräte bleiben ohne
@@ -572,44 +306,13 @@ public partial class App : System.Windows.Application
         // zusätzlich einen Config-Pull-Trigger, symmetrisch für beide Seiten des Austauschs.
         _discovery.PeerConfigVersionObserved += _configSync.OnPeerConfigVersionObserved;
 
-        // Nutzerwunsch 15.08.2026: Admin<->Admin-Mesh-Abgleich hängt am ohnehin
-        // stattfindenden Boot-Call-Kontakt (siehe DiscoveryService.AdminPeerContactObserved-
-        // Klassendoku) - das Event feuert dort ohnehin nur, wenn BEIDE Seiten Role.Admin
-        // sind, ein Anhängen auf einem User-Gerät ist also harmlos (Handler wird nie
-        // aufgerufen), keine zusätzliche Rollenprüfung hier nötig.
-        _discovery.AdminPeerContactObserved += _auditSyncService.OnAdminPeerContactObserved;
-
-        // Admin-Rollen-Kryptoverifikation, Migrationspfad (Nutzerwunsch 17.08.2026):
-        // gleicher Anschlusspunkt, gleiche Begründung wie beim Audit-Mesh-Abgleich direkt
-        // darüber - siehe AdminRoleKeySyncService-Klassendoku für den Ablauf.
-        _discovery.AdminPeerContactObserved += _adminRoleKeySync.OnAdminPeerContactObserved;
-
-        _discovery.StartListening();
-        _ = _discovery.AnnounceAsync();
-
-        // Eigener Boot-Push (Nutzerwunsch 14.08.2026): mit dem beim letzten Beenden
-        // gespeicherten Geräte-/Zustellstand, ohne auf die (fire-and-forget) Antworten des
-        // gerade abgesetzten Announce oben zu warten - der nächste eigene Trigger (nächster
-        // Alarm oder nächster Boot) holt jeden inzwischen neu erreichbaren Admin ab, kein
-        // zusätzlicher Aufwand nötig, um exakt diesen einen Moment zu treffen.
-        _ = _auditSyncService.PushPendingAsync(_deviceStore.Load());
-
         var cacheStore = new UpdatePackageCacheStore();
-        // Nutzerwunsch 16.08.2026 ("separater Test-Key für Test-Installer"): diese
-        // Installation vertraut nur dem öffentlichen Schlüssel, den der Install-Creator ihr
-        // selbst mitgegeben hat (deployment.json) - Test- und Produktiv-Installationen
-        // können sich dadurch beim Signaturcheck nie gegenseitig beeinflussen. Fehlt das
-        // Feld (alter Installer-Stand), bleibt es beim kompilierten Fallback (null hier).
-        var updatePublicKeyOverride = string.IsNullOrEmpty(_deployment.UpdatePublicKeyBase64)
-            ? null
-            : Convert.FromBase64String(_deployment.UpdatePublicKeyBase64);
-
         // Nutzerwunsch 09.08.2026: "vollautomatisch, sobald der Admin sich selbst aktualisiert
         // hat" - der Installer bringt dafür ein signiertes update-seed\ mit (siehe
         // UpdateSeedImporter). Vor dem Start von _updateDistribution, damit ein frisch
         // importiertes Paket ab der allerersten Anfrage eines Peers bedient werden kann.
-        UpdateSeedImporter.TryImport(cacheStore, LiveIdentityFactory.CurrentProgramVersion, _auditLog.Append, publicKeyOverride: updatePublicKeyOverride);
-        _updateDistribution = new UpdatePackageDistributionService(BuildIdentity, cacheStore, _auditLog.Append, updatePublicKeyOverride);
+        UpdateSeedImporter.TryImport(cacheStore, LiveIdentityFactory.CurrentProgramVersion, _auditLog.Append);
+        _updateDistribution = new UpdatePackageDistributionService(BuildIdentity, cacheStore, _auditLog.Append);
         _updateDistribution.Start();
 
         var orchestrator = new UpdateOrchestrator(
@@ -640,91 +343,6 @@ public partial class App : System.Windows.Application
                 "HälpMi startet nach einem Geräteneustart NICHT automatisch (Task-Planer-Registrierung fehlgeschlagen, vermutlich durch eine Richtlinie blockiert). Bitte den Systemadministrator informieren - Details im lokalen Protokoll.",
                 System.Windows.Forms.ToolTipIcon.Warning);
         }
-
-        // Lizenz-Prüfung (Soft-Expiry, CLAUDE.md "Lizenz & Secrets"): rein lokal, kein
-        // Netzwerkverkehr (das Heartbeat-/Polling-Verbot betrifft nur Netzwerkverkehr),
-        // deshalb unabhängig von allem oben. Nur der Agent führt sie aus (siehe
-        // LicenseChecker-Klassendoku: einziger AuditLog-Schreiber pro Gerät) und nur für
-        // Admin-Rollen - ein User-Gerät instanziiert LicenseChecker gar nicht erst.
-        if (_deployment.Role == Role.Admin)
-        {
-            _licenseChecker = new LicenseChecker(_settingsStore, _auditLog.Append);
-            RunLicenseCheck();
-            _licenseCheckTimer = new System.Threading.Timer(_ => RunLicenseCheck(), null, AppConstants.LicenseCheckInterval, AppConstants.LicenseCheckInterval);
-        }
-    }
-
-    // Fast-User-Switching-Fix 17.08.2026 (s. AlarmRelayServer/AlarmRelayClient-Klassendoku für
-    // den vollen Hintergrund): entscheidet, ob diese Sitzung den exklusiven Alarm-Port selbst
-    // bekommt (Primary) oder sich stattdessen an eine bereits laufende Primary-Instanz in einer
-    // anderen Sitzung anhängt (Satellite). Läuft beim ersten Start UND jedes Mal erneut, wenn
-    // eine bestehende Satellite-Verbindung abreißt (Primary-Sitzung hat sich abgemeldet) -
-    // dadurch übernimmt automatisch eine der verbleibenden Sitzungen, ohne dass ein Admin
-    // eingreifen oder ein neuer Anmeldevorgang abgewartet werden muss.
-    private void TryBecomePrimaryOrSatellite()
-    {
-        if (_listener!.Start())
-        {
-            _ = _relayClient?.DisposeAsync(); // war zuvor Satellite - als frisch gewordene Primary nicht mehr gebraucht
-            _relayClient = null;
-            _relayServer = new AlarmRelayServer();
-            _relayServer.Start();
-            return;
-        }
-
-        _relayServer = null;
-        _relayClient = new AlarmRelayClient();
-        _relayClient.AlarmRelayed += (_, args) => _coordinator!.HandleIncomingAlarmRequest(args);
-        _relayClient.ConnectionLost += (_, _) => _ = RetryAlarmRoleAfterBackoffAsync();
-        _relayClient.Start();
-    }
-
-    // Kein Netzwerkverkehr, kein Polling im Leerlauf (CLAUDE.md) - läuft nur EINMALIG als
-    // Reaktion auf ein tatsächliches ConnectionLost-Ereignis, nicht wiederholt im Hintergrund.
-    private async Task RetryAlarmRoleAfterBackoffAsync()
-    {
-        try
-        {
-            // Gleiches Zufalls-Backoff-Muster wie beim bestehenden Edit-Lock-Kollisionsschutz
-            // (CLAUDE.md, Teil 2 Abschnitt 5) - vermeidet, dass mehrere im selben Moment frei
-            // gewordene Satellites gleichzeitig um den Port konkurrieren.
-            var (minMs, maxMs) = AppConstants.EditLockCollisionBackoff;
-            await Task.Delay(_alarmRoleBackoffRandom.Next(minMs, maxMs));
-            TryBecomePrimaryOrSatellite();
-        }
-        catch (Exception ex)
-        {
-            CrashLogger.Log(nameof(HaelpMi.Agent), "Alarm-Relay-Uebernahme fehlgeschlagen", ex);
-        }
-    }
-
-    private void OnAlarmReceived(object? sender, AlarmReceivedEventArgs args)
-    {
-        _coordinator!.HandleIncomingAlarmRequest(args);
-
-        // Nur gesetzt, wenn diese Instanz Primary ist (s. TryBecomePrimaryOrSatellite) - reicht
-        // den Alarm zusätzlich an alle Satellites in anderen Sitzungen weiter.
-        if (_relayServer is not null)
-        {
-            _ = _relayServer.BroadcastAsync(args.Request, args.SenderAddress.ToString());
-        }
-    }
-
-    // Läuft beim Timer-Tick auf einem ThreadPool-Thread, nicht dem UI-Thread, der
-    // _trayIcon besitzt - deshalb Dispatcher.BeginInvoke für die eigentliche Anzeige.
-    // Komplett fire-and-forget: nie awaited, nie mit dem Alarm-Pfad sequenziert (siehe
-    // LicenseChecker/LicenseFileLoader - beide fangen jede Ausnahme selbst ab).
-    private void RunLicenseCheck()
-    {
-        var (result, shouldNotify) = _licenseChecker!.CheckOnce(DateOnly.FromDateTime(DateTime.UtcNow));
-        if (!shouldNotify)
-        {
-            return;
-        }
-
-        var (title, body, severe) = LicenseMessages.BuildAdminNotice(result);
-        Dispatcher.BeginInvoke(() => _trayIcon?.ShowBalloonTip(
-            10000, title, body, severe ? System.Windows.Forms.ToolTipIcon.Error : System.Windows.Forms.ToolTipIcon.Warning));
     }
 
     // Nutzerwunsch 05.08.2026: Tray-Icon zum Öffnen von Konfiguration/Dashboard - siehe
@@ -759,11 +377,6 @@ public partial class App : System.Windows.Application
             ContextMenuStrip = menu,
         };
         _trayIcon.DoubleClick += (_, _) => OpenConfigOrDashboard();
-
-        // Nächstliegendes Äquivalent zu "erstes sichtbares Fenster" - der Agent-Prozess hat
-        // im Normalfall kein MainWindow (ShutdownMode="OnExplicitShutdown", kein StartupUri).
-        TestLogger.LogAction(TestLogEventType.StartupMilestone, TestLogLevel.Info, TestLogDirection.Local,
-            BuildIdentity().DeviceId, detail: "Tray-Icon sichtbar");
     }
 
     // Startet HaelpMi.Config.exe genau wie der Start-Menü-Eintrag - öffnet je nach Rolle
@@ -843,7 +456,6 @@ public partial class App : System.Windows.Application
 
     private async Task<IpcResponse> HandleSelfTestRequestAsync()
     {
-        StartupTimingLog.Mark(nameof(HaelpMi.Agent), "IPC SelfTest-Request empfangen");
         var config = _sharedConfigStore.LoadOrCreate();
         var profile = config.AlarmProfiles.FirstOrDefault();
         if (profile is null)
@@ -852,32 +464,8 @@ public partial class App : System.Windows.Application
         }
 
         var ok = await _coordinator!.SendSelfTestAsync(profile);
-        StartupTimingLog.Mark(nameof(HaelpMi.Agent), $"IPC SelfTest-Request beantwortet (ok={ok})");
         return new IpcResponse(ok);
     }
-
-    private Task<IpcResponse> HandleArmTestModeRequestAsync()
-    {
-        _coordinator!.ArmTestModeOnce();
-        _auditLog.Append("testmodus scharfgeschaltet - gilt fuer den naechsten Hotkey-Alarm");
-        return Task.FromResult(new IpcResponse(true, Remaining: AppConstants.TestModeTimeout));
-    }
-
-    private Task<IpcResponse> HandleDisarmTestModeRequestAsync()
-    {
-        // Nur protokollieren, wenn tatsächlich noch etwas scharf war - ein Disarm auf einen
-        // längst abgelaufenen/nie scharfgeschalteten Zustand ist kein meldenswertes Ereignis.
-        if (_coordinator!.TestModeRemaining is not null)
-        {
-            _auditLog.Append("testmodus manuell deaktiviert");
-        }
-
-        _coordinator!.DisarmTestMode();
-        return Task.FromResult(new IpcResponse(true));
-    }
-
-    private Task<IpcResponse> HandleTestModeStatusRequestAsync() =>
-        Task.FromResult(new IpcResponse(true, Remaining: _coordinator!.TestModeRemaining));
 
     protected override void OnExit(ExitEventArgs e)
     {
@@ -890,20 +478,13 @@ public partial class App : System.Windows.Application
             _trayIcon.Dispose();
         }
 
-        _licenseCheckTimer?.Dispose();
         _hotkey?.Dispose();
-        _ = _relayServer?.DisposeAsync();
-        _ = _relayClient?.DisposeAsync();
         _ = _listener?.DisposeAsync();
         _ = _feedbackChannel?.DisposeAsync();
         _ = _configSync?.DisposeAsync();
         _ = _updateDistribution?.DisposeAsync();
-        _ = _auditSyncService?.DisposeAsync();
-        _ = _adminRoleKeySync?.DisposeAsync();
         _ = _discovery?.DisposeAsync();
         _ = _ipcServer?.DisposeAsync();
-
-        _activateEvent?.Dispose();
 
         if (_ownsSingleInstanceMutex)
         {

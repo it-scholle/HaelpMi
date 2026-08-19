@@ -1,5 +1,3 @@
-using HaelpMi.Core.Security;
-
 namespace HaelpMi.Core.Models;
 
 /// <summary>
@@ -27,73 +25,4 @@ public sealed class DeploymentInfo
     /// branches on it at runtime beyond that.
     /// </summary>
     public bool IsTestInstaller { get; set; }
-
-    // Multi-VLAN-Bootstrap-Seed (Nutzerwunsch 13.08.2026) hatte hier von 13.-15.08.2026 einen
-    // Startwert namens BridgeSeedAddress - entfernt (Nutzerwunsch 15.08.2026): mit der
-    // admin-editierbaren, hot-reload-verteilten Liste in SharedConfig.BridgeSeedAddresses
-    // war der Install-Creator-Startwert überflüssig geworden (der Admin pflegt die
-    // Bridge-Adressen jetzt vollständig im Dashboard, kein Installer-Neubau nötig). Alte
-    // deployment.json-Dateien mit dem jetzt unbekannten Feld werden beim Deserialisieren
-    // einfach ignoriert (System.Text.Json), kein Migrationsschritt nötig.
-
-    /// <summary>
-    /// Gruppenweiter symmetrischer Schlüssel (256 Bit, Base64) für SecureEnvelope
-    /// (LAN-Verschlüsselung, siehe CLAUDE.md "Lizenz &amp; Secrets" und
-    /// SecureEnvelopeCodec) - vom Install-Creator an derselben Stelle wie
-    /// CustomerGroupId erzeugt und über denselben Verteilweg (deployment.json in beiden
-    /// Installer-Varianten) eingebettet, nie über das Netzwerk übertragen. Nullable/leer
-    /// bei alten Installer-Ständen aus der Zeit vor diesem Feld - wird dann exakt wie
-    /// "Peer/wir selbst nicht verschlüsselungsfähig" behandelt (siehe
-    /// SecureEnvelopeCodec.Seal/TryOpen), kein Fehler.
-    /// </summary>
-    public string? GroupKeyBase64 { get; set; }
-
-    /// <summary>
-    /// P1-Notfall-Schalter (19.08.2026, siehe <see cref="EncryptionDebugSwitch"/>): alle
-    /// sieben SecureEnvelope-Aufrufer lesen ab jetzt DIESE Property statt direkt
-    /// <see cref="GroupKeyBase64"/> - mit gesetzter Umgebungsvariable
-    /// <c>DISABLE_ENCRYPTION_DEBUG_ONLY=1</c> liefert sie immer <c>null</c>, unabhängig vom
-    /// tatsächlich installierten Schlüssel, und lässt so jeden Aufrufer auf sein bestehendes
-    /// Klartext-Fallback zurückfallen. Temporäres Diagnose-Mittel, siehe dortige Klassendoku
-    /// für den offenen Punkt "vor Produktiveinsatz zwingend wieder entfernen".
-    /// </summary>
-    public string? EffectiveGroupKeyBase64 => EncryptionDebugSwitch.IsDisabled ? null : GroupKeyBase64;
-
-    /// <summary>
-    /// Öffentlicher Ed25519-Schlüssel (Base64) zur Update-Signaturprüfung DIESER
-    /// Installation - vom Install-Creator aus genau dem privaten Schlüssel abgeleitet
-    /// (<see cref="Updates.UpdateSignaturePublicKey"/> bleibt der kompilierte Fallback für
-    /// alte Installer-Stände ohne dieses Feld), mit dem der eingebettete Startpaket-
-    /// signiert wurde (Nutzerwunsch 16.08.2026, "separater Test-Key für Test-Installer"):
-    /// Test-Installer-Builds bekommen hier den öffentlichen Teil des Test-Schlüssels,
-    /// Produktiv-Installer den des Produktiv-Schlüssels - jede Installation kennt und
-    /// vertraut dadurch ausschließlich dem für sie relevanten Schlüssel, Test- und
-    /// Produktiv-Kreise können sich beim Signaturcheck nie gegenseitig beeinflussen.
-    /// Nullable/leer bei alten Installer-Ständen aus der Zeit vor diesem Feld - dann gilt
-    /// weiterhin der kompilierte Fallback.
-    /// </summary>
-    public string? UpdatePublicKeyBase64 { get; set; }
-
-    /// <summary>
-    /// Viertes kryptografisches Schlüsselpaar (Ed25519, Admin-Rollen-Signatur, CLAUDE.md
-    /// "Lizenz &amp; Secrets", Nutzerwunsch 17.08.2026) - **pro Kunden-Gruppe**, nicht
-    /// global: Install-Creator erzeugt es bei einer Neuinstallation, direkt neben
-    /// <see cref="CustomerGroupId"/> (Wiederverwendung bei einem Rebuild derselben Gruppe,
-    /// siehe dortige Klassendoku). Der öffentliche Schlüssel steckt in BEIDEN
-    /// Installer-Varianten (jedes Gerät muss Admin-Behauptungen anderer Geräte prüfen
-    /// können). Nullable/leer bei Installer-Ständen aus der Zeit vor diesem Feld - siehe
-    /// Security.AdminRoleTrustStore für den Migrationspfad, der diese Lücke für
-    /// Bestandsgeräte zur Laufzeit schließt.
-    /// </summary>
-    public string? AdminRolePublicKeyBase64 { get; set; }
-
-    /// <summary>
-    /// Nur im Admin-Installer gesetzt, bleibt <c>null</c> im User-Installer - ein
-    /// User-Gerät kann damit selbst nie eine gültige Admin-Behauptung erzeugen. Klartext-
-    /// Base64, wie <see cref="CustomerGroupId"/> - DPAPI wäre an die Build-Maschine
-    /// gebunden und funktioniert nicht Build-Maschine → Kundenrechner hinweg (anders als
-    /// der laufzeit-eigene Migrationspfad in AdminRoleTrustStore, der DPAPI sehr wohl
-    /// nutzt - der dort erzeugte/übernommene Schlüssel bleibt auf dem Zielrechner).
-    /// </summary>
-    public string? AdminRolePrivateKeyBase64 { get; set; }
 }

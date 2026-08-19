@@ -11,17 +11,8 @@ public enum IpcCommandType
     Rebroadcast,
     SearchAgain,
     SelfTest,
-
-    /// <summary>Testmodus-Toggle im Konfigurator scharfschalten (Nutzerwunsch 13.08.2026, One-Shot mit Timeout).</summary>
-    ArmTestMode,
-
-    /// <summary>Manuelles Wieder-Ausschalten - reiner UX-Komfort, siehe TestModeArmState-Klassendoku.</summary>
-    DisarmTestMode,
-
-    /// <summary>Aktuellen Testmodus-Countdown abfragen (Re-Sync beim Öffnen/Fokussieren des Konfigurators).</summary>
-    TestModeStatus,
 }
 
 public sealed record IpcRequest(IpcCommandType Command);
 
-public sealed record IpcResponse(bool Success, string? Error = null, TimeSpan? Remaining = null);
+public sealed record IpcResponse(bool Success, string? Error = null);

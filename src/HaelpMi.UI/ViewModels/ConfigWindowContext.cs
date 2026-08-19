@@ -45,15 +45,6 @@ public sealed class ConfigWindowContext
     /// </summary>
     public required Func<Task<bool>> RequestSelfTest { get; init; }
 
-    /// <summary>Testmodus-Toggle scharfschalten (Nutzerwunsch 13.08.2026): One-Shot für den nächsten Hotkey-Alarm, siehe TestModeArmState-Klassendoku.</summary>
-    public required Func<Task<bool>> RequestArmTestMode { get; init; }
-
-    /// <summary>Manuelles Wieder-Ausschalten - reiner UX-Komfort, keine Sicherheitsfunktion (der 2-Minuten-Timeout gilt unabhängig davon).</summary>
-    public required Func<Task<bool>> RequestDisarmTestMode { get; init; }
-
-    /// <summary>Aktuellen Testmodus-Countdown abfragen (Re-Sync beim Öffnen/Fokussieren) - null, falls gerade nicht scharf.</summary>
-    public required Func<Task<TimeSpan?>> RequestTestModeStatus { get; init; }
-
     /// <summary>
     /// Opens the Admin-Dashboard (FR-33: nur für Role.Admin relevant). Null on a User-role
     /// device - ConfigWindow hides the button entirely rather than showing a disabled one.

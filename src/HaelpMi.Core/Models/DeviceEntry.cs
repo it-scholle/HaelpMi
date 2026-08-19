@@ -56,44 +56,4 @@ public sealed class DeviceEntry
     public bool IsNew { get; set; } = true;
 
     public DateTimeOffset LastSeenUtc { get; set; }
-
-    /// <summary>
-    /// LAN-Verschlüsselung (siehe CLAUDE.md "Lizenz &amp; Secrets", SecureEnvelopeCodec):
-    /// höchste Boot-Call-Protokollversion, die dieses Gerät bei DIREKTEM Kontakt gemeldet
-    /// hat (nie aus Gossip übernommen - siehe DiscoveryService.HandleDatagramAsync, gleiches
-    /// Prinzip wie AdminVerified). <c>null</c> = noch nie direkter Kontakt, oder ein alter,
-    /// vor-verschlüsselungsfähiger Stand - beides führt zum selben Klartext-Fallback beim
-    /// Senden (siehe PeerCryptoCapability).
-    /// </summary>
-    public int? ProtocolVersion { get; set; }
-
-    /// <summary>
-    /// Trust-on-First-Use-gepinnter Ed25519-Geräte-Identitätsschlüssel dieses Geräts,
-    /// ausschließlich bei direktem Boot-Call-Kontakt gesetzt (siehe DiscoveryService).
-    /// Meldet ein späterer direkter Kontakt für dieselbe DeviceId einen ANDEREN Schlüssel,
-    /// wird der neue NICHT übernommen (mögliches Klon-/Kompromittierungs-Signal) - der Pin
-    /// bleibt beim zuerst gesehenen Wert, der Vorfall landet im Audit-Log.
-    /// </summary>
-    public string? PinnedDeviceIdentityPublicKeyBase64 { get; set; }
-
-    /// <summary>
-    /// Zuletzt per Boot-Call oder Gossip (<see cref="Networking.Protocol.KnownDeviceSummary"/>)
-    /// gemeldete <see cref="LiveIdentity.ProgramVersion"/> dieses Peers (Nutzerwunsch
-    /// 16.08.2026, Wellen-Rollout). Leer = noch nie beobachtet. Rein informativ/lokal
-    /// geschätzt wie der gesamte Geräte-Cache - kein zentraler, verlässlicher Zähler, siehe
-    /// <c>UpdateOrchestrator.IsMyTurn</c>, der einzige Verwender.
-    /// </summary>
-    public string LastKnownProgramVersion { get; set; } = string.Empty;
-
-    /// <summary>
-    /// Admin-Rollen-Kryptoverifikation (Nutzerwunsch 17.08.2026): nur <c>true</c>, wenn der
-    /// letzte DIREKTE Boot-Call-Kontakt mit diesem Gerät eine gültig signierte
-    /// Admin-Rollen-Behauptung trug (siehe Security.AdminRoleVerifier) - anders als
-    /// <see cref="Role"/> selbst (unauthentifizierte Selbstauskunft) ist das die
-    /// tatsächliche Vertrauensgrundlage für Netzwerk-Entscheidungen (EditLock-Antwort,
-    /// Config-Sync-Herkunft, Audit-Sync-Push-Ziele/Digest-Antworten). Wird nie über Gossip
-    /// gesetzt/zurückgesetzt - nur direkter Kontakt darf diesen Wert ändern, gleiches
-    /// Prinzip wie <see cref="ProtocolVersion"/>/<see cref="PinnedDeviceIdentityPublicKeyBase64"/>.
-    /// </summary>
-    public bool AdminVerified { get; set; }
 }

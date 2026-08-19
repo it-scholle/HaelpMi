@@ -131,44 +131,6 @@ public class StorageTests
     }
 
     [Fact]
-    public void Upsert_SetsLastKnownProgramVersion_OnNewDevice()
-    {
-        var devices = new List<DeviceEntry>();
-        var deviceId = Guid.NewGuid();
-        var info = MakeInfo("PC", "User", "Raum", "1", "192.168.1.40") with { ProgramVersion = "0.31.0" };
-
-        DeviceStore.Upsert(devices, deviceId, info, DateTimeOffset.UtcNow);
-
-        Assert.Equal("0.31.0", devices[0].LastKnownProgramVersion);
-    }
-
-    [Fact]
-    public void Upsert_UpdatesLastKnownProgramVersion_OnExistingDevice()
-    {
-        var deviceId = Guid.NewGuid();
-        var devices = new List<DeviceEntry> { new() { DeviceId = deviceId, LastKnownProgramVersion = "0.29.1" } };
-        var info = MakeInfo("PC", "User", "Raum", "1", "192.168.1.40") with { ProgramVersion = "0.31.0" };
-
-        DeviceStore.Upsert(devices, deviceId, info, DateTimeOffset.UtcNow);
-
-        Assert.Equal("0.31.0", devices[0].LastKnownProgramVersion);
-    }
-
-    [Fact]
-    public void Upsert_WithUnknownProgramVersion_DoesNotOverwriteAnAlreadyKnownVersion()
-    {
-        // Ein Aufrufer, der die Programmversion gar nicht kennt (leer), darf einen schon
-        // bekannten Wert nicht rückwärts auf "unbekannt" zurücksetzen - das Wellen-Rollout-
-        // Gate (UpdateOrchestrator.IsMyTurn) verlässt sich darauf.
-        var deviceId = Guid.NewGuid();
-        var devices = new List<DeviceEntry> { new() { DeviceId = deviceId, LastKnownProgramVersion = "0.29.1" } };
-
-        DeviceStore.Upsert(devices, deviceId, MakeInfo("PC", "User", "Raum", "1", "192.168.1.40"), DateTimeOffset.UtcNow);
-
-        Assert.Equal("0.29.1", devices[0].LastKnownProgramVersion);
-    }
-
-    [Fact]
     public void AcknowledgeNewState_ClearsIsNew()
     {
         var deviceId = Guid.NewGuid();
@@ -247,48 +209,5 @@ public class StorageTests
         var config = store.LoadOrCreate();
 
         Assert.Single(config.DeviceGroups);
-    }
-
-    [Fact]
-    public void SharedConfigStore_LoadOrCreate_MigratesLegacySingleBridgeSeedAddress_IntoNewList()
-    {
-        // Prio 0.1 (15.08.2026): altes Format vor v0.28.0 (cf6b252) von Hand geschrieben, da
-        // SharedConfig das Feld "BridgeSeedAddress" (Singular) nicht mehr kennt und es daher
-        // nicht mehr über store.Save() erzeugt werden kann.
-        using var scope = new TestAppDataScope();
-        Directory.CreateDirectory(Path.GetDirectoryName(AppPaths.SharedConfigFilePath)!);
-        File.WriteAllText(AppPaths.SharedConfigFilePath, """{"ConfigVersion":1,"BridgeSeedAddress":"10.0.5.3"}""");
-        var store = new SharedConfigStore();
-
-        var config = store.LoadOrCreate();
-
-        Assert.Equal(new[] { "10.0.5.3" }, config.BridgeSeedAddresses);
-    }
-
-    [Fact]
-    public void SharedConfigStore_LoadOrCreate_DoesNotOverwriteBridgeSeedAddresses_WhenAlreadyPopulated()
-    {
-        // Der Admin hat seit dem Update auf v0.28.0 schon einmal im neuen Format gespeichert -
-        // ein zufällig noch in der Datei stehender alter Schlüssel darf die neue Liste dann
-        // nicht mehr anfassen.
-        using var scope = new TestAppDataScope();
-        Directory.CreateDirectory(Path.GetDirectoryName(AppPaths.SharedConfigFilePath)!);
-        File.WriteAllText(AppPaths.SharedConfigFilePath, """{"ConfigVersion":2,"BridgeSeedAddress":"10.0.5.3","BridgeSeedAddresses":["10.0.9.9"]}""");
-        var store = new SharedConfigStore();
-
-        var config = store.LoadOrCreate();
-
-        Assert.Equal(new[] { "10.0.9.9" }, config.BridgeSeedAddresses);
-    }
-
-    [Fact]
-    public void SharedConfigStore_LoadOrCreate_LeavesBridgeSeedAddressesEmpty_WhenNoLegacyKeyPresent()
-    {
-        using var scope = new TestAppDataScope();
-        var store = new SharedConfigStore();
-
-        var config = store.LoadOrCreate();
-
-        Assert.Empty(config.BridgeSeedAddresses);
     }
 }

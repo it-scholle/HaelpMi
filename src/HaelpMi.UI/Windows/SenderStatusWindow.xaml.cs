@@ -1,6 +1,5 @@
 using System.Windows;
 using System.Windows.Threading;
-using HaelpMi.Core.Diagnostics;
 using HaelpMi.Core.Models;
 using HaelpMi.Core.Sending;
 
@@ -26,16 +25,6 @@ public partial class SenderStatusWindow : Window
         InitializeComponent();
         _session = session;
         ProfileText.Text = profileName;
-
-        // Testmodus-Toggle: aus der Session selbst gelesen statt als eigener Parameter -
-        // RepeatingAlarmSession.IsTest trägt die Information bereits (kein Sinn, sie ein
-        // zweites Mal durchzureichen).
-        if (_session.IsTest)
-        {
-            TestModeBadgeText.Visibility = Visibility.Visible;
-            RootBorder.BorderBrush = (System.Windows.Media.Brush)FindResource("SuccessBrush");
-            RootBorder.BorderThickness = new Thickness(2);
-        }
 
         _session.StatusChanged += Session_StatusChanged;
         _session.Finished += Session_Finished;
@@ -72,9 +61,6 @@ public partial class SenderStatusWindow : Window
         {
             CancelButton.IsEnabled = false;
             StatusText.Text = "Alarm beendet";
-            TestLogger.LogAction(TestLogEventType.StatusChanged, TestLogLevel.Info, TestLogDirection.Local,
-                _session.OwnDeviceId, _session.AlarmSessionId,
-                detail: $"Finished, StopReason={_session.StopReason}, Fenster schließt {(_session.StopReason == AlarmStopReason.Cancelled ? "sofort" : "nach Auto-Close-Timer")}");
 
             if (_session.StopReason == AlarmStopReason.Cancelled)
             {
@@ -99,13 +85,6 @@ public partial class SenderStatusWindow : Window
 
         OnTheWayList.ItemsSource = status.OnTheWayNames;
         OnTheWayHeaderText.Visibility = status.OnTheWayNames.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
-
-        // Schließt den Kreis Netzwerk->UI (v0.35.3-Bugfix-Kontext): eine AckedCount-Zeile aus
-        // RepeatingAlarmSession ohne folgende UI-Zeile mit demselben Wert würde eine
-        // Anzeige-Bindungslücke sichtbar machen.
-        TestLogger.LogAction(TestLogEventType.StatusChanged, TestLogLevel.Info, TestLogDirection.Local,
-            _session.OwnDeviceId, _session.AlarmSessionId,
-            detail: $"UI aktualisiert: Empfangen {status.AckedCount} von {status.TargetCount}");
     }
 
     private void PositionInCorner()
@@ -119,22 +98,7 @@ public partial class SenderStatusWindow : Window
         Top = workArea.Bottom - ActualHeight - margin - verticalOffset;
     }
 
-    // Bugfix 17.08.2026 (Fehlerbericht "UI friert beim Abbrechen ein"): Cancel() darf nicht
-    // mehr direkt auf dem UI-Thread laufen - CancellationTokenSource.Cancel() arbeitet alle
-    // verlinkten Abbruch-Callbacks (Socket-Teardown der noch offenen Ziel-Sends, siehe
-    // AlarmSender.SendToOneAsync) synchron INLINE auf dem aufrufenden Thread ab, ohne eigenes
-    // Timeout. Bei einer trägen/nicht antwortenden Gegenstelle blockierte das bisher den
-    // einzigen WPF-Dispatcher-Thread unvorhersehbar lange - und damit die gesamte App, nicht
-    // nur dieses Fenster. Task.Run verlagert die Abbruch-Kaskade dorthin, wo sie ohnehin
-    // thematisch hingehört (Hintergrund-Netzwerk-Cleanup).
-    private void CancelButton_Click(object sender, RoutedEventArgs e)
-    {
-        // Erste Zeile der Abbrechen-Kette (Flaw-18-Hang-Diagnose): die letzte geloggte Zeile
-        // vor einem Freeze zeigt exakt, wo der Ablauf hängen geblieben ist.
-        TestLogger.LogAction(TestLogEventType.StatusChanged, TestLogLevel.Info, TestLogDirection.Local,
-            _session.OwnDeviceId, _session.AlarmSessionId, detail: "Abbrechen-Klick");
-        _ = Task.Run(_session.Cancel);
-    }
+    private void CancelButton_Click(object sender, RoutedEventArgs e) => _session.Cancel();
 
     private void CloseBannerButton_Click(object sender, RoutedEventArgs e) => Close();
 }
