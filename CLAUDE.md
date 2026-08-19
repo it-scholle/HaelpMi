@@ -19,6 +19,10 @@ stillschweigend zu ignorieren.
   CLAUDE.md gewinnt, weil sie die aktuellere, dauerhafte Regel ist.
 - `docs/WORKFLOW.md` — konkretisiert die Abschnitte "Versionierung", "Tests" und "Status-Updates"
   unten (Git-Mechanik im Detail: Branch/Rebase-Ablauf, Versionsnummer-Kollisionen, Tabellenvorlage).
+- `docs/WARTEZEIT-KONZEPT.md` — Analyse/Konzeptdokument (ergänzt 19.08.2026, Antwort auf die
+  wiederholt aufgefallenen Wartezeiten Flaw 12/13/15/16) mit vollständigem Wartezeiten-Inventar,
+  Klassifizierung und Zielwerten. Die dortige Design-Richtlinie ("Fenster/Prozess zuerst, Daten
+  danach", Parallelisierung als Normalfall) gilt ab sofort für neue Lade-/Wartevorgänge.
 
 ## Tech-Stack
 - .NET 8, C#, WPF
