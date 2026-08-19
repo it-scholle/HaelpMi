@@ -107,15 +107,19 @@ build_start=$(date +%s)
 # killen (reines Entwickler-Werkzeug, siehe Speicher install-creator-idle-process-kill-ok).
 taskkill //IM HaelpMi.InstallCreator.exe //F >/dev/null 2>&1 || true
 
-# --no-incremental (seit 19.08.2026, gleicher Fehlerbericht wie beim Hash-Fix oben): ohne das
-# Flag kann ein inkrementeller Build die vorhandenen bin/obj-Ausgaben unverändert
+# bin/obj vorher löschen (seit 19.08.2026, gleicher Fehlerbericht wie beim Hash-Fix oben, Fix
+# selbst korrigiert - "dotnet publish --no-incremental" existiert nicht, nur bei "dotnet build"):
+# ohne das kann ein inkrementeller Build die vorhandenen bin/obj-Ausgaben unverändert
 # wiederverwenden - der anschließende Publish-Copy nach $tools_dir übernimmt (Standardverhalten
 # von File.Copy) den ALTEN Zeitstempel der Quelle statt "jetzt" zu setzen, was die
-# Zeitstempel-Prüfung unten unabhängig vom eigentlichen Build-Ergebnis fehlschlagen ließ.
-# Erzwingt einen vollständigen Rebuild, damit die Ausgabedateien garantiert nach $build_start
-# entstehen - etwas langsamer, aber das läuft ohnehin nur bei Commits, die genau diese Pfade
-# berühren.
-if ! dotnet publish "$csproj" -c Release -r win-x64 -p:Platform=x64 --self-contained true -p:PublishReadyToRun=true --no-incremental -o "$tools_dir"; then
+# Zeitstempel-Prüfung unten unabhängig vom eigentlichen Build-Ergebnis fehlschlagen ließ. Ein
+# leeres bin/obj erzwingt einen vollständigen Rebuild, damit die Ausgabedateien garantiert
+# nach $build_start entstehen - etwas langsamer, aber das läuft ohnehin nur bei Commits, die
+# genau diese Pfade berühren.
+rm -rf "$source_root/src/HaelpMi.InstallCreator/bin" "$source_root/src/HaelpMi.InstallCreator/obj" \
+       "$source_root/src/HaelpMi.UpdateSigner/bin" "$source_root/src/HaelpMi.UpdateSigner/obj"
+
+if ! dotnet publish "$csproj" -c Release -r win-x64 -p:Platform=x64 --self-contained true -p:PublishReadyToRun=true -o "$tools_dir"; then
     echo "Pre-Commit-Hook: Rebuild von tools/InstallCreator fehlgeschlagen - Commit wird trotzdem nicht blockiert," >&2
     echo "da tools/InstallCreator/ ohnehin nur eine gitignorete Bequemlichkeitskopie ist. Bitte manuell nachbauen." >&2
     exit 0
