@@ -148,8 +148,20 @@ public sealed class AlarmFlowCoordinator
         }
     }
 
-    /// <summary>"Testalarm an mich selbst senden" (FR-27): a single-wave send to our own listener via loopback, not a full repeating session.</summary>
-    public async Task<bool> SendSelfTestAsync(AlarmProfile profile)
+    /// <summary>
+    /// "Testalarm an mich selbst senden" (FR-27). Läuft seit Nutzerwunsch 20.08.2026 durch
+    /// exakt dieselbe Pipeline wie ein echter Alarm (<see cref="RepeatingAlarmSession"/> +
+    /// <see cref="SenderStatusWindow"/> mit "gesendet"-Banner und funktionierendem
+    /// Abbrechen-Button), nur mit sich selbst als einzigem Ziel - vorher war das ein
+    /// isolierter Einzel-Versand ohne jede Rückmeldeschleife: kein Sender-seitiger Listener
+    /// nahm die eigene "Ich komme"-Antwort entgegen und relayte sie zurück, wodurch das
+    /// Empfänger-Popup nach Klick auf "Ich komme" nie schließbar wurde (Fehlerbericht
+    /// "Selbsttest lässt sich nach Ich komme nicht schließen") und auch kein Sender-Banner
+    /// erschien. Der Schwellwert wird dabei IMMER auf 1 erzwungen, unabhängig vom im Profil
+    /// hinterlegten Wert - bei einem Selbsttest kann ohnehin nur man selbst antworten, ein
+    /// höherer, für echte Alarme gedachter Schwellwert wäre hier nie erreichbar.
+    /// </summary>
+    public Task<bool> SendSelfTestAsync(AlarmProfile profile)
     {
         var identity = _identityProvider();
         var selfTarget = new DeviceEntry
@@ -163,7 +175,36 @@ public sealed class AlarmFlowCoordinator
             TcpPort = AppConstants.AlarmTcpPort,
         };
 
-        var result = await _sender.SendAsync(profile, Guid.NewGuid(), identity, new[] { selfTarget });
-        return result.AckedCount > 0;
+        var selfTestProfile = new AlarmProfile
+        {
+            Id = profile.Id,
+            Name = profile.Name,
+            Text = profile.Text,
+            Hotkey = profile.Hotkey,
+            ResponseThreshold = 1,
+            RecipientAssignments = profile.RecipientAssignments,
+        };
+
+        var session = new RepeatingAlarmSession(selfTestProfile, new[] { selfTarget }, identity, _sender, _feedbackChannel, DateTimeOffset.UtcNow);
+
+        // Der Rückgabewert dieser Methode war schon immer nur "kam der allererste Versand
+        // an" (IPC-Antwort ans ConfigWindow, siehe HandleSelfTestRequestAsync) - das bleibt
+        // unverändert, auch wenn die Session danach im Hintergrund weiterläuft.
+        var firstStatus = new TaskCompletionSource<bool>();
+        void OnFirstStatus(object? _, AlarmSessionStatus status)
+        {
+            session.StatusChanged -= OnFirstStatus;
+            firstStatus.TrySetResult(status.AckedCount > 0);
+        }
+        session.StatusChanged += OnFirstStatus;
+
+        System.Windows.Application.Current.Dispatcher.Invoke(() =>
+        {
+            var window = new SenderStatusWindow(session, $"{profile.Name} (Selbsttest)");
+            window.Show();
+        });
+
+        _ = RunSessionAsync(session);
+        return firstStatus.Task;
     }
 }
