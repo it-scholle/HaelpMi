@@ -111,6 +111,16 @@ stillschweigend zu ignorieren.
   (`git config core.hooksPath .githooks` — gilt repo-weit für alle Worktrees, nicht nur den
   einen Checkout, in dem der Befehl lief): `docs/WORKFLOW.md` Abschnitt
   "Install-Creator-Rebuild-Hook".
+- **Bugfix 19.08.2026:** der Hook ermittelt Build-Quelle (`src/HaelpMi.InstallCreator/...`) und
+  Build-Ziel (`tools/InstallCreator/`) seit diesem Datum über zwei getrennte Pfade statt einer
+  gemeinsamen Variable - vorher konnte ein auf altem/detached Stand hängengebliebener
+  Haupt-Checkout dazu führen, dass lautlos aus veraltetem Code gebaut wurde, obwohl der
+  tatsächlich committete Stand (Worktree oder main) längst aktuell war. Quelle wird jetzt immer
+  frisch über `git rev-parse --show-toplevel` (den gerade committenden Checkout) ermittelt, Ziel
+  bleibt wie zuvor über den eigenen Hook-Skriptpfad am Haupt-Checkout. Eine Verifikation nach dem
+  Build (Hash- und Zeitstempel-Abgleich) bricht den Commit hart ab, statt je wieder still ein
+  falsches Artefakt zu erzeugen. Details: `docs/WORKFLOW.md` Abschnitt
+  "Install-Creator-Rebuild-Hook".
 - **Frühere Fassung dieses Abschnitts (bis 16.08.2026) verlangte zusätzlich, dass jede
   Claude-Code-Sitzung nach eigenen Änderungen an `src/HaelpMi.InstallCreator` manuell neu baut —
   das ist mit dem Hook entfallen, keine Session muss sich das mehr merken.** Grund für die

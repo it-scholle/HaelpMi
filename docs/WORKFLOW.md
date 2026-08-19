@@ -91,6 +91,21 @@ seinen Zielpfad über den eigenen Skriptpfad (`$0`), nicht über `git rev-parse 
 gelöschte Kopie getroffen — genau das ist der tatsächlichen Startmenü-Verknüpfung des Nutzers
 nie zugutegekommen, bis dieser Bugfix landete).
 
+**Bugfix 19.08.2026 (Fehlerbericht "Build aus veraltetem Haupt-Checkout trotz aktuellem
+main"):** der Bugfix vom 17.08.2026 hatte den `$0`-Pfad fälschlich auch für die Build-**Quelle**
+verwendet, nicht nur fürs Ziel — blieb der Haupt-Checkout dadurch auf einem alten/detached Stand
+hängen (`main` selbst korrekt aktuell, das Arbeitsverzeichnis des Haupt-Checkouts nicht), baute
+`dotnet publish` lautlos aus dem veralteten Code, unabhängig vom tatsächlich committeten Stand.
+Quelle und Ziel werden seither strikt getrennt ermittelt: die Quelle über einen frischen
+`git rev-parse --show-toplevel` (liefert zuverlässig den gerade committenden Checkout, egal ob
+Haupt-Checkout oder Worktree), das Ziel unverändert über `$0`. Zusätzlich verifiziert der Hook
+nach dem Build per Hash- und Zeitstempel-Abgleich, dass das Artefakt wirklich aus dem geprüften
+Quellstand stammt, und bricht den Commit hart ab statt still ein falsches Artefakt zu
+hinterlassen, falls das je wieder auseinanderläuft. Kein Fallback über ein regelmäßiges
+Synchronhalten des Haupt-Checkouts nötig — `dotnet publish` ist an keinen bestimmten
+Checkout-Pfad gebunden, die Indirektion über einen separaten Quell-Checkout entfällt dadurch
+komplett statt nur seltener aufzutreten.
+
 Aktivierung einmalig pro lokalem Repository-Klon (Hooks sind nicht automatisch aktiv):
 
 ```
