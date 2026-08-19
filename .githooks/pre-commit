@@ -77,11 +77,26 @@ fi
 
 # Hash über die beobachteten Pfade unter $verify_root - dient als Nachweis nach dem Build, dass
 # wirklich aus diesem Stand gebaut wurde und sich die Quelle währenddessen nicht verändert hat.
+#
+# Bugfix 19.08.2026 (Fehlerbericht "Commit bricht reproduzierbar mit Hash-Mismatch bzw.
+# 'exe nicht neuer als Build-Start' ab, obwohl sich am Quellcode nichts ändert"): der find
+# erfasste bisher auch die gitignoreten bin/obj-Verzeichnisse unter den beiden Projekten -
+# genau die Pfade, die der direkt danach laufende dotnet-publish-Aufruf selbst beschreibt.
+# Der Vorher/Nachher-Hash unterschied sich dadurch praktisch immer (Build-Artefakte, nicht
+# Quellcode), was den Commit fälschlich als "Quelle hat sich während des Builds verändert"
+# abbrach. Beim Retry (Hook-Empfehlung) war obj/bin dann schon aktuell, dotnet publish ließ
+# die bereits korrekte Zieldatei unangetastet stehen (deren mtime blieb auf dem Stand des
+# ersten, fälschlich verworfenen Laufs) - das ließ den nachfolgenden Frische-Check ebenfalls
+# scheitern. bin/obj sind wie überall im Projekt (.gitignore) reine Build-Ausgabe, kein
+# Quellstand - -path '*/bin/*' -prune / '*/obj/*' -prune schließt sie von der Hash-Bildung
+# aus, ohne die eigentliche Schutzabsicht (echte Quelländerung während des Builds erkennen)
+# zu schwächen.
 hash_watched_paths() {
     (
         cd "$verify_root" || exit 1
         find src/HaelpMi.InstallCreator src/HaelpMi.UpdateSigner Directory.Build.props \
-            -type f 2>/dev/null | sort | xargs -r sha256sum 2>/dev/null | sha256sum | cut -d' ' -f1
+            \( -path '*/bin/*' -o -path '*/obj/*' \) -prune -o -type f -print 2>/dev/null \
+            | sort | xargs -r sha256sum 2>/dev/null | sha256sum | cut -d' ' -f1
     )
 }
 
