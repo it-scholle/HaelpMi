@@ -13,7 +13,7 @@
 #define MyAppName "HälpMi"
 ; Alpha: 0.x until release, per city/product decision - Version 1.0.0 is reserved for
 ; the actual release. Bump the third number for ordinary fixes, second for a feature.
-#define MyAppVersion "0.16.4"
+#define MyAppVersion "0.16.5"
 #define MyAppPublisher "HälpMi contributors"
 #define MyAgentExeName "HaelpMi.Agent.exe"
 #define MyConfigExeName "HaelpMi.Config.exe"
@@ -93,19 +93,14 @@ Name: "{group}\HälpMi Konfiguration"; Filename: "{app}\{#MyConfigExeName}"
 Name: "{group}\{cm:UninstallProgram,HälpMi}"; Filename: "{uninstallexe}"
 
 [Run]
-; Abschnitt 11: der Update-Dienst läuft als Windows-Dienst (LocalSystem statt nur
-; LocalService, weil er Dateien unter {app}/Program Files verschieben und andere Prozesse
-; beenden können muss - siehe HaelpMi.UpdateService/UpdateServiceWorker.cs). Stop+Delete
-; vor Create, damit ein erneuter Installer-Lauf (Update/Reparatur) idempotent bleibt,
-; statt an einem bereits existierenden Dienstnamen zu scheitern - gleiches Prinzip wie
-; EnsureFirewallRules unten (löschen ohne Fehlerprüfung, dann neu anlegen).
-; RunOnceId ist ausschließlich für [UninstallRun] gültig (ISCC lehnt es hier ab) - in
-; [Run] führt Setup jeden Eintrag ohnehin genau einmal pro Installationslauf aus.
-Filename: "sc.exe"; Parameters: "stop HaelpMiUpdateService"; Flags: runhidden
-Filename: "sc.exe"; Parameters: "delete HaelpMiUpdateService"; Flags: runhidden
-Filename: "sc.exe"; Parameters: "create HaelpMiUpdateService binPath= ""{app}\HaelpMi.UpdateService.exe"" start= auto obj= LocalSystem DisplayName= ""HälpMi Update-Dienst"""; Flags: runhidden
-Filename: "sc.exe"; Parameters: "description HaelpMiUpdateService ""Installiert/testet/uebernimmt signierte HaelpMi-Programm-Updates (Abschnitt 11). Laeuft ausschliesslich dafuer mit erhoehten Rechten - die eigentliche App bleibt rechtelos."""; Flags: runhidden
-Filename: "sc.exe"; Parameters: "start HaelpMiUpdateService"; Flags: runhidden
+; Nutzerwunsch 20.08.2026 ("die 16 soll das Update-Ei und die Update-Pipeline komplett
+; ignorieren, nur manueller Installer und manuelle Updates"): der Windows-Dienst
+; HaelpMiUpdateService (Abschnitt 11) wird auf diesem Vorstellungsversion-Branch bewusst
+; NICHT mehr angelegt/gestartet - HaelpMi.UpdateService.exe liegt seit dieser Änderung gar
+; nicht mehr im Payload (siehe HaelpMi.InstallCreator/MainWindow.xaml.cs PayloadProjects
+; und HaelpMi.iss-Kopfkommentar), ein sc.exe create dagegen wäre ein von Anfang an
+; kaputter Dienst. Ein Update dieses Demo-Standes läuft ausschließlich manuell: neuer
+; Installer-Lauf pro Gerät.
 
 ; Bugfix 11.08.2026 (Fehlerbericht "Autostart nicht eingerichtet", auf einem normalen
 ; Win11-Rechner reproduziert): der Agent-Start unten läuft mit Absicht "runasoriginaluser"
@@ -142,13 +137,6 @@ Filename: "{app}\{#MyConfigExeName}"; Parameters: "--open-dashboard"; Descriptio
 #else
 Filename: "{app}\{#MyConfigExeName}"; Description: "HälpMi Konfiguration öffnen - hier siehst du deine Hotkeys und wen sie im Alarmfall erreichen"; Flags: nowait postinstall runasoriginaluser
 #endif
-
-[UninstallRun]
-; Abschnitt 11: der Update-Dienst wird von der App selbst installiert/gestartet (siehe
-; [Run] oben), muss beim Deinstallieren aber genauso wieder verschwinden wie der
-; Autostart-Task des Agents (Pflichtenheft 6. - keine Leichen im System zurücklassen).
-Filename: "sc.exe"; Parameters: "stop HaelpMiUpdateService"; Flags: runhidden; RunOnceId: "HaelpMiStopUpdateServiceOnUninstall"
-Filename: "sc.exe"; Parameters: "delete HaelpMiUpdateService"; Flags: runhidden; RunOnceId: "HaelpMiDeleteUpdateServiceOnUninstall"
 
 #ifdef HaelpMiAdminInstall
 [UninstallRun]
@@ -519,13 +507,15 @@ end;
 //
 // Entdeckt 04.08.2026: Agent war hier nicht das einzige, was seine eigenen Dateien
 // gesperrt hält. HaelpMi.Config.exe (falls das Dashboard/Konfigurationsfenster gerade
-// offen ist) und der Windows-Dienst HaelpMiUpdateService (läuft immer, start=auto)
-// halten ihre jeweiligen Dateien - inklusive gemeinsam genutzter DLLs wie
-// PresentationNative_cor3.dll - ebenfalls gesperrt, solange sie laufen. Ohne das hier
+// offen ist) hält seine Dateien - inklusive gemeinsam genutzter DLLs wie
+// PresentationNative_cor3.dll - ebenfalls gesperrt, solange es läuft. Ohne das hier
 // zeigt [Files] beim Kopieren einen "Datei kann nicht ersetzt werden"-Dialog, den ein
 // Installer nie zeigen sollte - alles, was die eigenen Dateien sperren könnte, muss VOR
-// [Files] beendet sein, nicht erst im [Run]-Abschnitt danach (der Dienst-Stop dort war zu
-// spät, [Files] war zu dem Zeitpunkt schon gelaufen).
+// [Files] beendet sein, nicht erst im [Run]-Abschnitt danach.
+//
+// Nutzerwunsch 20.08.2026: der frühere dritte Punkt hier (Windows-Dienst
+// HaelpMiUpdateService stoppen) ist entfallen - dieser Branch installiert/startet den
+// Dienst gar nicht mehr (siehe [Run] oben), es gibt also nichts mehr zu stoppen.
 procedure CurStepChanged(CurStep: TSetupStep);
 var
   ResultCode: Integer;
@@ -534,11 +524,6 @@ begin
   begin
     Exec('taskkill.exe', '/IM {#MyAgentExeName} /F', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
     Exec('taskkill.exe', '/IM {#MyConfigExeName} /F', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
-    Exec('sc.exe', 'stop HaelpMiUpdateService', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
-    // sc.exe stop kehrt zurück, sobald der Stop-Befehl an den SCM übergeben ist - nicht
-    // erst, wenn der Dienstprozess seine Dateien tatsächlich freigegeben hat. Gleiches
-    // Muster wie in UpdateServiceWorker.ConfirmSwapAsync ("Windows gibt Datei-Handles nach
-    // Prozessende nicht immer sofort frei").
     Sleep(500);
   end;
 

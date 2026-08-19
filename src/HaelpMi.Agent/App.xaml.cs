@@ -12,7 +12,6 @@ using HaelpMi.Core.Models;
 using HaelpMi.Core.Networking;
 using HaelpMi.Core.Runtime;
 using HaelpMi.Core.Storage;
-using HaelpMi.Core.Updates;
 
 namespace HaelpMi.Agent;
 
@@ -67,7 +66,6 @@ public partial class App : System.Windows.Application
     private AlarmTcpListener? _listener;
     private AlarmFeedbackChannel? _feedbackChannel;
     private ConfigSyncService? _configSync;
-    private UpdatePackageDistributionService? _updateDistribution;
     private GlobalHotkey? _hotkey;
     private IpcServer? _ipcServer;
     private AlarmFlowCoordinator? _coordinator;
@@ -322,25 +320,17 @@ public partial class App : System.Windows.Application
         // zusätzlich einen Config-Pull-Trigger, symmetrisch für beide Seiten des Austauschs.
         _discovery.PeerConfigVersionObserved += _configSync.OnPeerConfigVersionObserved;
 
-        var cacheStore = new UpdatePackageCacheStore();
-        // Nutzerwunsch 09.08.2026: "vollautomatisch, sobald der Admin sich selbst aktualisiert
-        // hat" - der Installer bringt dafür ein signiertes update-seed\ mit (siehe
-        // UpdateSeedImporter). Vor dem Start von _updateDistribution, damit ein frisch
-        // importiertes Paket ab der allerersten Anfrage eines Peers bedient werden kann.
-        UpdateSeedImporter.TryImport(cacheStore, LiveIdentityFactory.CurrentProgramVersion, _auditLog.Append);
-        _updateDistribution = new UpdatePackageDistributionService(BuildIdentity, cacheStore, _auditLog.Append);
-        _updateDistribution.Start();
-
-        var orchestrator = new UpdateOrchestrator(
-            BuildIdentity,
-            _deviceStore.Load,
-            _sharedConfigStore.LoadOrCreate,
-            _updateDistribution,
-            cacheStore,
-            new UpdateServiceIpcClient(),
-            new UpdateLockoutStore(),
-            _auditLog.Append);
-        _discovery.PeerVersionObserved += orchestrator.OnPeerVersionObserved;
+        // Nutzerwunsch 20.08.2026 ("die 16 soll das Update-Ei und die Update-Pipeline
+        // komplett ignorieren, nur manueller Installer und manuelle Updates"): die
+        // gesamte automatische Update-Verteilung/-Orchestrierung (UpdatePackageDistribution
+        // Service, UpdateSeedImporter, UpdateOrchestrator, Boot-Call-Programmversions-
+        // Abgleich über PeerVersionObserved) läuft auf diesem Vorstellungsversion-Branch
+        // absichtlich nicht mehr mit - weder gebaut/verteilt (Install-Creator/RefreshPayload
+        // Async lässt HaelpMi.UpdateService seither aus, siehe dort) noch hier zur Laufzeit
+        // gestartet. Ein Update dieses Demo-Standes läuft ausschließlich manuell: neuer
+        // Installer-Lauf pro Gerät. HaelpMi.UpdateService/UpdateSigner-Quellcode bleibt im
+        // Repo (bewusst nicht gelöscht, keine unnötig invasive Änderung), wird für diesen
+        // Branch nur nirgends mehr eingebunden/gestartet.
 
         _hotkey = new GlobalHotkey();
         _hotkey.ProfilePressed += OnProfileHotkeyPressed;
@@ -498,7 +488,6 @@ public partial class App : System.Windows.Application
         _ = _listener?.DisposeAsync();
         _ = _feedbackChannel?.DisposeAsync();
         _ = _configSync?.DisposeAsync();
-        _ = _updateDistribution?.DisposeAsync();
         _ = _discovery?.DisposeAsync();
         _ = _ipcServer?.DisposeAsync();
 

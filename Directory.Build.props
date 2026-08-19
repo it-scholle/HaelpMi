@@ -13,6 +13,17 @@
          Toolchain des Installers - beide Werte müssen bei jedem Versionssprung von Hand
          synchron gehalten werden (gleiches Prinzip wie bei den Port-Konstanten, siehe
          Kommentar dort in HaelpMiCommon.iss.inc). -->
-    <Version>0.16.4</Version>
+    <Version>0.16.5</Version>
+
+    <!-- Nutzerwunsch 20.08.2026 ("alles außer de kann weg, ich brauche keine anderen
+         Sprachen bisher") - ohne dieses Property bündelt jede self-contained-Publish-
+         Ausgabe automatisch Satellite-Resource-DLLs (Fehlermeldungstexte der .NET/WPF-
+         Runtime selbst, nicht unser eigener Code - wir haben keine eigenen .resx-Dateien)
+         für rund ein Dutzend Sprachen (cs/es/fr/it/ja/ko/pl/pt-BR/ru/tr/zh-Hans/zh-Hant/...)
+         in eigene Unterordner - das waren die vielen Sprachordner im Payload/Installer, die
+         hier aufgefallen sind. MSBuild liest Directory.Build.props für jedes Projekt
+         automatisch (wie bei <Version> oben), eine Sprache reicht daher an dieser einen
+         Stelle für alle Projekte. -->
+    <SatelliteResourceLanguages>de</SatelliteResourceLanguages>
   </PropertyGroup>
 </Project>

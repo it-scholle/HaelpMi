@@ -18,8 +18,14 @@
 ; verbindliche, zuletzt geprüfte Fassung dieser Befehle):
 ;   dotnet publish src\HaelpMi.Agent\HaelpMi.Agent.csproj  -c Release -r win-x64 -p:Platform=x64 --self-contained true -p:PublishReadyToRun=true -o installer\payload
 ;   dotnet publish src\HaelpMi.Config\HaelpMi.Config.csproj -c Release -r win-x64 -p:Platform=x64 --self-contained true -p:PublishReadyToRun=true -o installer\payload
-;   dotnet publish src\HaelpMi.UpdateService\HaelpMi.UpdateService.csproj -c Release -r win-x64 -p:Platform=x64 --self-contained true -p:PublishReadyToRun=true -o installer\payload
 ; then compile this script with ISCC.exe (Inno Setup 6 or 7).
+;
+; Nutzerwunsch 20.08.2026 ("die 16 soll das Update-Ei und die Update-Pipeline komplett
+; ignorieren, nur manueller Installer und manuelle Updates"): HaelpMi.UpdateService wird
+; auf diesem Vorstellungsversion-Branch bewusst NICHT mehr mitpubliziert/installiert - kein
+; Windows-Dienst, keine automatische Update-Verteilung (siehe HaelpMiCommon.iss.inc
+; [Run]/[UninstallRun] und HaelpMi.Agent/App.xaml.cs StartBackgroundServices). Ein Update
+; dieses Demo-Standes läuft ausschließlich manuell: neuer Installer-Lauf pro Gerät.
 ;
 ; Bugfix 11.08.2026: dieser Payload-Schritt ging bisher an nichts gekoppelt - ISCC kompiliert
 ; keinen Code, es kopiert nur, was im payload-Ordner liegt, und lief klaglos auch mit

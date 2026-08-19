@@ -401,15 +401,20 @@ public partial class MainWindow : Window
         }
     }
 
-    // installer/HaelpMi.iss (Kopfkommentar) dokumentiert dieselben drei Befehle als
-    // manuellen Schritt für alle, die ohne Install-Creator direkt per ISCC bauen (z. B.
-    // schnelles lokales Testen, siehe BUILD-UND-INSTALLATION.md) - hier laufen sie
-    // automatisch vor jedem Install-Creator-Build mit.
+    // installer/HaelpMi.iss (Kopfkommentar) dokumentiert dieselben Befehle als manuellen
+    // Schritt für alle, die ohne Install-Creator direkt per ISCC bauen (z. B. schnelles
+    // lokales Testen, siehe BUILD-UND-INSTALLATION.md) - hier laufen sie automatisch vor
+    // jedem Install-Creator-Build mit.
+    //
+    // Nutzerwunsch 20.08.2026 ("die 16 soll das Update-Ei und die Update-Pipeline komplett
+    // ignorieren, nur manueller Installer und manuelle Updates"): HaelpMi.UpdateService
+    // wird auf diesem Vorstellungsversion-Branch bewusst nicht mehr publiziert/eingebettet
+    // - kein Windows-Dienst, keine automatische Update-Verteilung (siehe auch
+    // HaelpMiCommon.iss.inc [Run] und HaelpMi.Agent/App.xaml.cs StartBackgroundServices).
     private static readonly string[] PayloadProjects =
     {
         Path.Combine("src", "HaelpMi.Agent", "HaelpMi.Agent.csproj"),
         Path.Combine("src", "HaelpMi.Config", "HaelpMi.Config.csproj"),
-        Path.Combine("src", "HaelpMi.UpdateService", "HaelpMi.UpdateService.csproj"),
     };
 
     private async Task<bool> RefreshPayloadAsync(string installerDir)
