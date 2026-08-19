@@ -377,6 +377,23 @@ public partial class App : System.Windows.Application
         _editLock ??= new EditLockService(IdentityProvider);
         _editLock.Start();
 
+        var ipcClient = new IpcClient();
+
+        // Nutzerwunsch 20.08.2026 ("fliegender Configaustausch" bei jeder gravierenden
+        // Änderung): PublishAsync/UndoLastChangeAsync broadcasten zwar schon ihr eigenes,
+        // dediziertes Config-Sync-Announce (ConfigSyncService.AnnounceAsync) - der lokal auf
+        // demselben Gerät laufende Agent-Prozess ignoriert das aber als eigenes Echo
+        // (identische Geräte-ID, siehe ConfigSyncService.HandleAnnounceAsync), lädt seine
+        // gecachten Settings also nie automatisch neu und würde bei seinem eigenen nächsten
+        // Boot-Call noch die alte ConfigVersion melden. Der schon bestehende Rebroadcast-
+        // IPC-Befehl (sonst nur der manuelle "Neu ausstrahlen"-Knopf) lässt den Agent seine
+        // Settings neu laden und seinen ganz normalen Discovery-Announce (führt die
+        // ConfigVersion ohnehin schon mit) erneut ausstrahlen - andere Geräte lernen die
+        // neue Version dadurch vom Admin-Gerät, statt auf dessen nächsten Boot-Call zu
+        // warten. Fire-and-forget, damit das sofortige Speichern bei Feld-Blur nicht auf
+        // einen zusätzlichen Netzwerk-Roundtrip wartet.
+        void NotifyLocalAgentOfConfigChange() => _ = ipcClient.SendAsync(IpcCommandType.Rebroadcast, TimeSpan.FromSeconds(10));
+
         var context = new AdminDashboardContext
         {
             LoadConfig = sharedConfigStore.LoadOrCreate,
@@ -398,9 +415,19 @@ public partial class App : System.Windows.Application
             {
                 var updated = await _configSync.PublishAsync(mutate, scopeKind, scopeId, field, oldValue, newValue);
                 _editLock.TouchActivity(scopeKind, scopeId); // Abschnitt 5: Auto-Freigabe erst nach 10 Min. OHNE Edit-Aktivität
+                NotifyLocalAgentOfConfigChange();
                 return updated;
             },
-            Undo = (scopeKind, scopeId) => _configSync.UndoLastChangeAsync(scopeKind, scopeId),
+            Undo = async (scopeKind, scopeId) =>
+            {
+                var undone = await _configSync.UndoLastChangeAsync(scopeKind, scopeId);
+                if (undone)
+                {
+                    NotifyLocalAgentOfConfigChange();
+                }
+
+                return undone;
+            },
             AcquireLock = (scopeKind, scopeId) =>
             {
                 var identity = IdentityProvider();

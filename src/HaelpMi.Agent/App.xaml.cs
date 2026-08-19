@@ -295,7 +295,23 @@ public partial class App : System.Windows.Application
         _listener.Start();
 
         _configSync = new ConfigSyncService(BuildIdentity, _deviceStore.Load, _auditLog.Append);
-        _configSync.ConfigApplied += (_, _) => RegisterHotkeysFromConfig();
+        _configSync.ConfigApplied += (_, _) =>
+        {
+            RegisterHotkeysFromConfig();
+
+            // Nutzerwunsch 20.08.2026 ("fliegender Configaustausch"): sobald dieses Gerät
+            // eine neue Config übernommen hat (egal ob per dediziertem Config-Sync-Announce
+            // oder per Boot-Call-Nachzieh-Pull, siehe PeerConfigVersionObserved-Verdrahtung
+            // unten), sofort den ganz normalen Discovery-Announce erneut ausstrahlen - der
+            // führt identity.ConfigVersion ohnehin schon mit (DiscoveryService.BuildMessage).
+            // Andere Geräte, die das ursprüngliche Announce verpasst haben (offline, gerade
+            // erst gestartet, ...), lernen die neue Version dadurch von UNS statt erst beim
+            // eigenen nächsten Boot-Call zu warten - PeerConfigVersionObserved löst bei
+            // ihnen denselben Pull aus wie ein regulärer Boot-Call. Macht aus dem einzelnen
+            // Config-Sync-Broadcast eine Welle, die sich Gerät für Gerät weiterträgt, statt
+            // nur die zufällig zum Zeitpunkt der Änderung online gewesenen zu erreichen.
+            _ = _discovery!.AnnounceAsync();
+        };
         _configSync.Start();
 
         // Bugfix 11.08.2026 (Fehlerbericht "frisch installierte Geräte bleiben ohne
