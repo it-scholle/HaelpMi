@@ -28,6 +28,13 @@ public partial class MainWindow : Window
         // LiveIdentityFactory.CurrentProgramVersion.
         var version = Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "0.0.0";
         VersionText.Text = $"v{version}";
+
+        // Nutzerwunsch 20.08.2026: Standardname für Testinstallationen ist immer
+        // "TG<Version>" (z. B. "TG0.16.3") - Test-Installer ist ohnehin der Standardzustand
+        // (TestInstallerCheckBox.IsChecked="True" in der XAML), dieses Feld dient in diesem
+        // Zustand als Test-Bezeichnung (siehe BuildAdminInstallerAsync). Bleibt ein normaler
+        // Textvorschlag, der Nutzer kann ihn wie bisher jederzeit überschreiben.
+        CustomerNameBox.Text = $"TG{version}";
     }
 
     private void GeneratePasswordButton_Click(object sender, RoutedEventArgs e) =>
