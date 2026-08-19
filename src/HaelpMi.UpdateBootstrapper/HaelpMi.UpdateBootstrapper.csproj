@@ -9,24 +9,33 @@
     <AssemblyName>HaelpMi.UpdateBootstrapper</AssemblyName>
     <Platforms>x64;ARM64</Platforms>
     <InvariantGlobalization>true</InvariantGlobalization>
+    <UseWPF>true</UseWPF>
   </PropertyGroup>
 
-  <!-- Nutzerwunsch 16.08.2026 (Self-Bootstrap-Update): reine Konsolen-.exe, kein WPF/
-       WinForms - läuft einmalig auf einer bereits installierten HälpMi-Maschine, ein
-       Sysadmin doppelklickt sie, Fortschritt als Text reicht, kein GUI nötig
-       (CLAUDE.md "kein Over-Engineering"). Install-Creator ("Update erstellen") hängt das
-       eigentliche signierte Update-Paket an eine EINMAL veröffentlichte generische
-       Kopie dieser .exe an - siehe EmbeddedPackage.cs für das Format. -->
-
-  <!-- ProjectReference auf HaelpMi.Core (anders als HaelpMi.InstallCreator, siehe dessen
-       .csproj-Kommentar zur bewussten Trennung): dieses Tool spricht die ECHTEN Laufzeit-
-       Protokolle (Named-Pipe-IPC zum UpdateService, Cache-Dateilayout, Signaturprüfung) -
-       das hier nachzubauen statt wiederzuverwenden wäre genau das Protokoll-Drift-Risiko,
-       vor dem UpdatePackageBuilder.TryWriteToLocalDeviceCache warnt (dort bewusst
-       dupliziert, weil es nur ein Ordnername-Literal ist; hier wäre es komplette IPC-/
-       Crypto-Logik). -->
+  <!-- Korrigiert 19.08.2026 (Flaw 14 - "Updater öffnet bei Fehlschlag Konsole statt
+       App-UI"): der Nutzerwunsch 16.08.2026 ("reine Konsolen-.exe, kein WPF/WinForms")
+       galt für den Normalfall - Fortschritt als Konsolentext reicht dort weiterhin, kein
+       dauerhaftes GUI nötig (CLAUDE.md "kein Over-Engineering"). Bei einem tatsächlichen
+       Install/Test/Swap-Fehlschlag reicht das aber nicht: ein Sysadmin, der einmalig
+       doppelklickt, soll nicht mit einer rohen Konsolenausgabe als einziger Rückmeldung
+       dastehen. UseWPF/ProjectReference auf HaelpMi.UI dienen NUR diesem Fehlerfall
+       (UpdateFailureWindow, von Program.cs nur bei Fehlschlag aufgerufen) - die Konsole
+       bleibt Haupt-Ausgabe für Fortschritt/Diagnose, OutputType bleibt bewusst "Exe"
+       (Konsolen-Subsystem, kein "WinExe") statt reinem GUI-Programm. -->
   <ItemGroup>
+    <!-- ProjectReference auf HaelpMi.Core (anders als HaelpMi.InstallCreator, siehe dessen
+         .csproj-Kommentar zur bewussten Trennung): dieses Tool spricht die ECHTEN Laufzeit-
+         Protokolle (Named-Pipe-IPC zum UpdateService, Cache-Dateilayout, Signaturprüfung) -
+         das hier nachzubauen statt wiederzuverwenden wäre genau das Protokoll-Drift-Risiko,
+         vor dem UpdatePackageBuilder.TryWriteToLocalDeviceCache warnt (dort bewusst
+         dupliziert, weil es nur ein Ordnername-Literal ist; hier wäre es komplette IPC-/
+         Crypto-Logik). -->
     <ProjectReference Include="..\HaelpMi.Core\HaelpMi.Core.csproj" />
+    <!-- ProjectReference auf HaelpMi.UI (seit 19.08.2026, siehe Kommentar oben): nur für
+         ModernStyles.xaml + Fensterkonventionen des UpdateFailureWindow - dieselbe
+         Style-Ressource wie AlarmPopupWindow/LicenseWarningToastWindow, statt eigener
+         Ad-hoc-Farben hier ein zweites Mal einzuführen. -->
+    <ProjectReference Include="..\HaelpMi.UI\HaelpMi.UI.csproj" />
   </ItemGroup>
 
 </Project>

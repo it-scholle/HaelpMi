@@ -1,9 +1,13 @@
+using System.IO;
 using System.Text.Json;
 using HaelpMi.Core.Ipc;
 using HaelpMi.Core.Storage;
 using HaelpMi.Core.Updates;
 
 namespace HaelpMi.UpdateBootstrapper;
+
+// System.IO explizit - siehe Kommentar in EmbeddedPackage.cs (UseWPF laesst es aus
+// ImplicitUsings weg, "Path" wird hier ausschliesslich als System.IO.Path gebraucht).
 
 /// <summary>
 /// Self-Bootstrap-Update (Nutzerwunsch 16.08.2026): schließt die Lücke, dass bisher IMMER
@@ -35,41 +39,59 @@ namespace HaelpMi.UpdateBootstrapper;
 /// </summary>
 internal static class Program
 {
+    // [STAThread] (seit 19.08.2026, Flaw 14): UpdateFailureWindow braucht einen STA-Thread,
+    // wie jedes WPF-Fenster. Funktioniert unverändert mit einem async Main - die Konsole
+    // bleibt trotzdem die primäre Ausgabe für den Normalfall, siehe csproj-Kommentar.
+    [STAThread]
     private static async Task<int> Main()
     {
         Console.WriteLine("HälpMi Update-Bootstrap");
         Console.WriteLine("========================");
         Console.WriteLine();
 
-        bool success;
+        BootstrapFailure? failure;
         try
         {
-            success = await RunAsync();
+            failure = await RunAsync();
         }
         catch (Exception ex)
         {
             Console.WriteLine();
             Console.WriteLine($"Unerwarteter Fehler: {ex.Message}");
-            success = false;
+            failure = new BootstrapFailure("Unerwarteter Fehler", ex.Message);
         }
 
         Console.WriteLine();
-        Console.WriteLine(success
-            ? "Fertig. Taste drücken zum Schließen..."
-            : "Abgebrochen (siehe Fehlermeldung oben). Taste drücken zum Schließen...");
-        Console.ReadKey(intercept: true);
-        return success ? 0 : 1;
+        if (failure is null)
+        {
+            // Erfolgsfall unverändert (Flaw 14 betrifft nur den Fehlerfall) - Konsolentext
+            // bleibt hier bewusst die einzige Rückmeldung, kein zusätzliches Fenster nötig.
+            Console.WriteLine("Fertig. Taste drücken zum Schließen...");
+            Console.ReadKey(intercept: true);
+            return 0;
+        }
+
+        Console.WriteLine("Abgebrochen (siehe Fehlermeldung oben). Details auch im Fenster.");
+        // Primäre Nutzer-Ansicht bei Fehlschlag ist jetzt dieses Fenster statt der rohen
+        // Konsolenausgabe (Flaw 14) - die Konsole bleibt für Diagnose sichtbar im
+        // Hintergrund, blockiert aber nicht mehr auf einen Tastendruck.
+        new UpdateFailureWindow(failure.Step, failure.Message, failure.Hint).ShowDialog();
+        return 1;
     }
 
-    private static async Task<bool> RunAsync()
+    /// <summary>Ein fehlgeschlagener Schritt der Bootstrap-Kette, für Konsole UND UpdateFailureWindow.</summary>
+    private sealed record BootstrapFailure(string Step, string Message, string? Hint = null);
+
+    private static async Task<BootstrapFailure?> RunAsync()
     {
         Console.WriteLine("Eingebettetes Update-Paket wird gelesen...");
         var extracted = EmbeddedPackage.TryExtract();
         if (extracted is null)
         {
-            Console.WriteLine("Fehler: Diese Datei enthält kein eingebettetes Update-Paket - bitte über " +
-                "Install-Creator > \"Update erstellen\" bauen, nicht die rohe .exe verwenden.");
-            return false;
+            const string message = "Diese Datei enthält kein eingebettetes Update-Paket.";
+            const string hint = "Bitte über Install-Creator > \"Update erstellen\" bauen, nicht die rohe .exe verwenden.";
+            Console.WriteLine($"Fehler: {message} {hint}");
+            return new BootstrapFailure("Update-Paket lesen", message, hint);
         }
 
         var (manifestJson, packageZip) = extracted.Value;
@@ -86,16 +108,18 @@ internal static class Program
 
         if (manifest is null)
         {
-            Console.WriteLine("Fehler: eingebettetes manifest.json ist beschädigt.");
-            return false;
+            const string message = "Eingebettetes manifest.json ist beschädigt.";
+            Console.WriteLine($"Fehler: {message}");
+            return new BootstrapFailure("Update-Paket lesen", message);
         }
 
         Console.WriteLine($"Version im Paket: {manifest.Version}");
         Console.WriteLine("Signatur wird geprüft...");
         if (!UpdatePackageVerifier.Verify(packageZip, manifest))
         {
-            Console.WriteLine("Fehler: Signaturprüfung fehlgeschlagen - Paket wird NICHT installiert.");
-            return false;
+            const string message = "Signaturprüfung fehlgeschlagen - Paket wird NICHT installiert.";
+            Console.WriteLine($"Fehler: {message}");
+            return new BootstrapFailure("Signaturprüfung", message);
         }
         Console.WriteLine("Signatur OK.");
 
@@ -111,8 +135,9 @@ internal static class Program
         if (!install.Success)
         {
             Console.WriteLine($"Fehler bei der Installation: {install.Error}");
-            Console.WriteLine("Läuft der HälpMi-Update-Dienst auf dieser Maschine? Ist HälpMi hier überhaupt installiert?");
-            return false;
+            const string hint = "Läuft der HälpMi-Update-Dienst auf dieser Maschine? Ist HälpMi hier überhaupt installiert?";
+            Console.WriteLine(hint);
+            return new BootstrapFailure("Installation", install.Error ?? "unbekannter Fehler", hint);
         }
 
         Console.WriteLine("Teste die neue Version testweise auf einem separaten Port (parallel zur laufenden Version)...");
@@ -122,14 +147,15 @@ internal static class Program
         {
             Console.WriteLine($"Fehler beim Selbsttest-Start: {startTest.Error}");
             await client.SendAsync(new UpdateServiceRequest(UpdateServiceCommandType.Rollback, manifest.Version));
-            return false;
+            return new BootstrapFailure("Selbsttest-Start", startTest.Error ?? "unbekannter Fehler");
         }
 
         if (!await UpdateTestInstancePing.PingAsync(testPort))
         {
-            Console.WriteLine("Fehler: Selbsttest der neuen Version hat nicht rechtzeitig geantwortet.");
+            const string message = "Selbsttest der neuen Version hat nicht rechtzeitig geantwortet.";
+            Console.WriteLine($"Fehler: {message}");
             await client.SendAsync(new UpdateServiceRequest(UpdateServiceCommandType.Rollback, manifest.Version));
-            return false;
+            return new BootstrapFailure("Selbsttest", message);
         }
         Console.WriteLine("Selbsttest OK.");
 
@@ -138,13 +164,13 @@ internal static class Program
         if (!swap.Success)
         {
             Console.WriteLine($"Fehler bei der Übernahme: {swap.Error}");
-            return false;
+            return new BootstrapFailure("Übernahme", swap.Error ?? "unbekannter Fehler");
         }
 
         Console.WriteLine();
         Console.WriteLine($"Diese Maschine läuft jetzt auf Version {manifest.Version}.");
         Console.WriteLine("Nächster Schritt: im Admin-Dashboard, Reiter \"Updates\", diese Version einmal freigeben -");
         Console.WriteLine("ab dann verbreitet sie sich automatisch in Wellen an alle anderen erreichbaren Geräte weiter.");
-        return true;
+        return null;
     }
 }

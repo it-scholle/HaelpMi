@@ -77,11 +77,21 @@ fi
 
 # Hash über die beobachteten Pfade unter $verify_root - dient als Nachweis nach dem Build, dass
 # wirklich aus diesem Stand gebaut wurde und sich die Quelle währenddessen nicht verändert hat.
+#
+# Bugfix 19.08.2026 (Fehlerbericht "Hash-Mismatch/'nicht neuer als Build-Start' bei praktisch
+# jedem Commit, der Directory.Build.props anfasst"): bin/ und obj/ unter
+# src/HaelpMi.InstallCreator bzw. src/HaelpMi.UpdateSigner wurden bisher mitgehasht, obwohl es
+# reine Build-Ausgaben sind (gitignored, kein Quellcode) - genau der dotnet-publish-Aufruf ein
+# paar Zeilen weiter unten schreibt selbst laufend neue Dateien dort hinein, während er läuft.
+# pre_hash/post_hash unterschieden sich dadurch fast immer, unabhängig davon, ob sich die
+# eigentliche Quelle während des Builds verändert hat - der Vergleich prüfte damit im Kern nur
+# noch sich selbst. -prune schließt beide Verzeichnisse jetzt aus der Hash-Basis aus.
 hash_watched_paths() {
     (
         cd "$verify_root" || exit 1
         find src/HaelpMi.InstallCreator src/HaelpMi.UpdateSigner Directory.Build.props \
-            -type f 2>/dev/null | sort | xargs -r sha256sum 2>/dev/null | sha256sum | cut -d' ' -f1
+            \( -name bin -o -name obj \) -prune -o -type f -print 2>/dev/null \
+            | sort | xargs -r sha256sum 2>/dev/null | sha256sum | cut -d' ' -f1
     )
 }
 
@@ -97,7 +107,15 @@ build_start=$(date +%s)
 # killen (reines Entwickler-Werkzeug, siehe Speicher install-creator-idle-process-kill-ok).
 taskkill //IM HaelpMi.InstallCreator.exe //F >/dev/null 2>&1 || true
 
-if ! dotnet publish "$csproj" -c Release -r win-x64 -p:Platform=x64 --self-contained true -p:PublishReadyToRun=true -o "$tools_dir"; then
+# --no-incremental (seit 19.08.2026, gleicher Fehlerbericht wie beim Hash-Fix oben): ohne das
+# Flag kann ein inkrementeller Build die vorhandenen bin/obj-Ausgaben unverändert
+# wiederverwenden - der anschließende Publish-Copy nach $tools_dir übernimmt (Standardverhalten
+# von File.Copy) den ALTEN Zeitstempel der Quelle statt "jetzt" zu setzen, was die
+# Zeitstempel-Prüfung unten unabhängig vom eigentlichen Build-Ergebnis fehlschlagen ließ.
+# Erzwingt einen vollständigen Rebuild, damit die Ausgabedateien garantiert nach $build_start
+# entstehen - etwas langsamer, aber das läuft ohnehin nur bei Commits, die genau diese Pfade
+# berühren.
+if ! dotnet publish "$csproj" -c Release -r win-x64 -p:Platform=x64 --self-contained true -p:PublishReadyToRun=true --no-incremental -o "$tools_dir"; then
     echo "Pre-Commit-Hook: Rebuild von tools/InstallCreator fehlgeschlagen - Commit wird trotzdem nicht blockiert," >&2
     echo "da tools/InstallCreator/ ohnehin nur eine gitignorete Bequemlichkeitskopie ist. Bitte manuell nachbauen." >&2
     exit 0

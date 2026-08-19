@@ -1,6 +1,12 @@
+using System.IO;
 using System.Text;
 
 namespace HaelpMi.UpdateBootstrapper;
+
+// System.IO explizit (seit 19.08.2026, UseWPF=true fuer UpdateFailureWindow, Flaw 14): der
+// .NET-SDK-Satz an ImplicitUsings laesst System.IO bei UseWPF bewusst weg, weil "Path" sonst
+// mit System.Windows.Shapes.Path kollidieren koennte - hier unproblematisch, diese Datei
+// nutzt keine WPF-Typen.
 
 /// <summary>
 /// Liest das Update-Paket, das Install-Creator ("Update erstellen") an das Ende dieser
