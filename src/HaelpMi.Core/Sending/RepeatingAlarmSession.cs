@@ -1,3 +1,4 @@
+using HaelpMi.Core.Diagnostics;
 using HaelpMi.Core.Models;
 using HaelpMi.Core.Networking;
 using HaelpMi.Core.Networking.Protocol;
@@ -54,6 +55,9 @@ public sealed class RepeatingAlarmSession : IDisposable
     public Guid AlarmSessionId { get; } = Guid.NewGuid();
     public AlarmProfile Profile { get; }
     public IReadOnlyList<DeviceEntry> Targets { get; }
+
+    /// <summary>Dieses Geräts eigene Geräte-ID - für TestLogger-Korrelation (SenderStatusWindow kennt _ownIdentity sonst nicht).</summary>
+    public Guid OwnDeviceId => _ownIdentity.DeviceId;
 
     /// <summary>Testmodus-Toggle (Nutzerwunsch 13.08.2026): reicht ins Wire-Format (<see cref="AlarmRequestMessage.IsTest"/>) durch und steuert die Sender-/Empfänger-UI-Kennzeichnung.</summary>
     public bool IsTest { get; }
@@ -125,6 +129,11 @@ public sealed class RepeatingAlarmSession : IDisposable
 
                 var result = await _alarmSender.SendAsync(Profile, AlarmSessionId, _ownIdentity, Targets, isTest: IsTest, ct: _manualCancelCts.Token);
                 _lastAckedCount = result.AckedCount;
+                // Genau die Stelle des v0.35.3-Bugs ("Empfangen-Zaehler bleibt bei schneller
+                // Ich-komme-Antwort faelschlich 0") - eine kuenftige Regression zeigt sich hier
+                // als AckedCount, das nicht mit den vorangegangenen AckReceived-Zeilen zusammenpasst.
+                TestLogger.LogAction(TestLogEventType.StatusChanged, TestLogLevel.Info, TestLogDirection.Local,
+                    _ownIdentity.DeviceId, AlarmSessionId, detail: $"AckedCount={result.AckedCount}/{Targets.Count}");
                 await RaiseAndRelayAsync(stillSending: true);
 
                 try
@@ -161,6 +170,8 @@ public sealed class RepeatingAlarmSession : IDisposable
             : _onTheWayResponderIds.Count >= Profile.ResponseThreshold
                 ? AlarmStopReason.ThresholdReached
                 : AlarmStopReason.MaxDuration;
+        TestLogger.LogAction(TestLogEventType.StatusChanged, TestLogLevel.Info, TestLogDirection.Local,
+            _ownIdentity.DeviceId, AlarmSessionId, detail: $"StopReason={StopReason}");
 
         await RaiseAndRelayAsync(stillSending: false);
         Finished?.Invoke(this, EventArgs.Empty);
@@ -180,6 +191,8 @@ public sealed class RepeatingAlarmSession : IDisposable
     /// <summary>Manual "Abbrechen" (FR-50).</summary>
     public void Cancel()
     {
+        TestLogger.LogAction(TestLogEventType.StatusChanged, TestLogLevel.Info, TestLogDirection.Local,
+            _ownIdentity.DeviceId, AlarmSessionId, detail: "Cancel() aufgerufen");
         _cancelledByUser = true;
         // Beide Tokens: _manualCancelCts bricht eine gerade laufende Ack-Wartephase sofort ab
         // (siehe Feldkommentar) - ein echter Nutzer-Abbruch soll weiterhin sofort greifen,
@@ -245,6 +258,21 @@ public sealed class RepeatingAlarmSession : IDisposable
             _ownIdentity.CustomerGroupId, Profile.Id, AlarmSessionId,
             Targets.Count, _lastAckedCount, status.OnTheWayNames, stillSending, DateTimeOffset.UtcNow);
         await _feedbackChannel.RelayStatusAsync(Targets, relay);
+
+        // Nur beim terminalen Relay (stillSending=false) - der aktive Zwischenstand-Relay
+        // (stillSending=true) ist kein Stopp-Ereignis. StopReason ist zu diesem Zeitpunkt
+        // schon gesetzt (siehe RunAsync, direkt vor dem einzigen stillSending:false-Aufruf;
+        // ein später via OnMyWayReceived ausgelöster Nachlauf-Relay sieht denselben, dann
+        // schon final gesetzten Wert). Sender-seitig ist StopReason lokal bekannt, deshalb
+        // hier bewusst CancelSent statt eines generischen Events, wenn es sich tatsächlich um
+        // einen Abbruch handelt (siehe TestLogger-Instrumentierungsplan Flaw 20 für die
+        // Begründung, warum der Empfänger das NICHT symmetrisch als CancelReceived loggen kann).
+        if (!stillSending)
+        {
+            var eventType = StopReason == AlarmStopReason.Cancelled ? TestLogEventType.CancelSent : TestLogEventType.MessageSent;
+            TestLogger.LogAction(eventType, TestLogLevel.Info, TestLogDirection.Send,
+                _ownIdentity.DeviceId, AlarmSessionId, detail: $"StatusRelay StopReason={StopReason}");
+        }
     }
 
     public void Dispose()

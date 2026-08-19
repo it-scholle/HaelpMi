@@ -214,6 +214,8 @@ public partial class App : System.Windows.Application
         var configWindow = new ConfigWindow(context);
         MainWindow = configWindow;
         configWindow.Show();
+        TestLogger.LogAction(TestLogEventType.StartupMilestone, TestLogLevel.Info, TestLogDirection.Local,
+            settings.DeviceId, detail: "ConfigWindow sichtbar");
         licenseToast?.Show();
     }
 
@@ -449,6 +451,8 @@ public partial class App : System.Windows.Application
         window.Closed += (_, _) => _dashboardWindow = null;
         MainWindow = window;
         window.Show();
+        TestLogger.LogAction(TestLogEventType.StartupMilestone, TestLogLevel.Info, TestLogDirection.Local,
+            IdentityProvider().DeviceId, detail: "AdminDashboardWindow sichtbar");
         return Task.FromResult(true);
     }
 

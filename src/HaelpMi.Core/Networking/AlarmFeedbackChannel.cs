@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Sockets;
+using HaelpMi.Core.Diagnostics;
 using HaelpMi.Core.Models;
 using HaelpMi.Core.Networking.Protocol;
 using HaelpMi.Core.Security;
@@ -209,6 +210,14 @@ public sealed class AlarmFeedbackChannel : IAsyncDisposable
                     var relay = NetworkSerializer.FromJsonLine<AlarmStatusRelayMessage>(envelope.PayloadJson);
                     if (relay is not null && CustomerGroupFilter.Matches(relay.CustomerGroupId, identity.CustomerGroupId))
                     {
+                        // Bewusst MessageReceived statt CancelReceived: AlarmStatusRelayMessage
+                        // trägt kein Feld, das Abbruch von Schwellwert/Timeout unterscheidet
+                        // (alle drei senden SenderStillSending=false identisch) - siehe
+                        // RepeatingAlarmSession.RaiseAndRelayAsync für die sender-seitige
+                        // Gegenstelle, die den Grund lokal kennt. Kein SenderDeviceId-Feld im
+                        // Protokoll, deshalb remoteDeviceId hier bewusst null.
+                        TestLogger.LogAction(TestLogEventType.MessageReceived, TestLogLevel.Info, TestLogDirection.Receive,
+                            identity.DeviceId, relay.AlarmSessionId, detail: $"StatusRelay stillSending={relay.SenderStillSending}");
                         StatusRelayReceived?.Invoke(this, relay);
                     }
                     break;

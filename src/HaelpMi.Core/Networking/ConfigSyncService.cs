@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Sockets;
+using HaelpMi.Core.Diagnostics;
 using HaelpMi.Core.Models;
 using HaelpMi.Core.Networking.Protocol;
 using HaelpMi.Core.Security;
@@ -172,6 +173,8 @@ public sealed class ConfigSyncService : IAsyncDisposable
         var payload = NetworkSerializer.ToUtf8Json(announce);
         var broadcastEndpoint = new IPEndPoint(IPAddress.Broadcast, AppConstants.ConfigSyncUdpPort);
         await _udpSocket.SendAsync(payload, payload.Length, broadcastEndpoint).WaitAsync(ct);
+        TestLogger.LogAction(TestLogEventType.MessageSent, TestLogLevel.Info, TestLogDirection.Send,
+            identity.DeviceId, detail: $"ConfigSyncAnnounce v{configVersion}");
     }
 
     private void ApplyToSelf(SharedConfig config)
@@ -190,6 +193,8 @@ public sealed class ConfigSyncService : IAsyncDisposable
         }
 
         _settingsStore.Save(settings);
+        TestLogger.LogAction(TestLogEventType.StatusChanged, TestLogLevel.Info, TestLogDirection.Local,
+            settings.DeviceId, detail: $"ConfigApplied v{config.ConfigVersion}");
         ConfigApplied?.Invoke(this, config);
     }
 
@@ -252,6 +257,8 @@ public sealed class ConfigSyncService : IAsyncDisposable
             return; // our own broadcast looping back
         }
 
+        TestLogger.LogAction(TestLogEventType.MessageReceived, TestLogLevel.Info, TestLogDirection.Receive,
+            identity.DeviceId, remoteDeviceId: announce.OriginDeviceId, detail: $"ConfigSyncAnnounce v{announce.ConfigVersion}");
         await EvaluateAndPullAsync(announce.OriginDeviceId, announce.ConfigVersion, ct);
     }
 
@@ -273,6 +280,8 @@ public sealed class ConfigSyncService : IAsyncDisposable
         var settings = _settingsStore.Load();
         if (remoteConfigVersion <= settings.AppliedConfigVersion)
         {
+            TestLogger.LogAction(TestLogEventType.ActionSkipped, TestLogLevel.Info, TestLogDirection.Local,
+                settings.DeviceId, remoteDeviceId: originDeviceId, detail: $"veraltete/gleiche Version v{remoteConfigVersion} <= v{settings.AppliedConfigVersion}");
             return; // already current or stale - nothing to do
         }
 
@@ -280,6 +289,8 @@ public sealed class ConfigSyncService : IAsyncDisposable
         if (originDevice is null)
         {
             _audit?.Invoke($"configsync: newer version reported by unknown device={originDeviceId} - awaiting discovery");
+            TestLogger.LogAction(TestLogEventType.ActionSkipped, TestLogLevel.Warn, TestLogDirection.Local,
+                settings.DeviceId, remoteDeviceId: originDeviceId, detail: "Ursprungsgeraet unbekannt, wartet auf Discovery");
             return; // will be retried on the next announce/boot-call once we've learned this device
         }
 
@@ -292,6 +303,8 @@ public sealed class ConfigSyncService : IAsyncDisposable
         if (originDevice.Role != Role.Admin || !originDevice.AdminVerified)
         {
             _audit?.Invoke($"configsync: announce von nicht verifiziertem absender={originDeviceId} ignoriert");
+            TestLogger.LogAction(TestLogEventType.ActionSkipped, TestLogLevel.Warn, TestLogDirection.Local,
+                settings.DeviceId, remoteDeviceId: originDeviceId, detail: "Ursprung nicht Admin/nicht verifiziert");
             return;
         }
 
@@ -362,6 +375,8 @@ public sealed class ConfigSyncService : IAsyncDisposable
             var payload = NetworkSerializer.Encoding.GetBytes(requestLine);
             await stream.WriteAsync(payload, timeoutCts.Token);
             await stream.FlushAsync(timeoutCts.Token);
+            TestLogger.LogAction(TestLogEventType.MessageSent, TestLogLevel.Info, TestLogDirection.Send,
+                identity.DeviceId, remoteDeviceId: originDevice.DeviceId, detail: "ConfigSyncPullRequest");
 
             var line = await BoundedLineReader.ReadLineAsync(stream, timeoutCts.Token);
             if (line is null)
@@ -371,16 +386,25 @@ public sealed class ConfigSyncService : IAsyncDisposable
 
             // Antwortformat spiegelt das Anfrageformat (siehe AlarmTcpListener-Klassendoku
             // für dasselbe Prinzip).
+            SharedConfig? config;
             if (SecureEnvelopeCodec.TryParse(line, out var responseEnvelope) && responseEnvelope is not null)
             {
                 var response = SecureEnvelopeCodec.TryOpen<ConfigSyncPullResponseMessage>(responseEnvelope, groupKeyBase64, originDevice.PinnedDeviceIdentityPublicKeyBase64, DateTimeOffset.UtcNow);
-                return response?.Config;
+                config = response?.Config;
             }
             else
             {
                 var response = NetworkSerializer.FromJsonLine<ConfigSyncPullResponseMessage>(line);
-                return response?.Config;
+                config = response?.Config;
             }
+
+            if (config is not null)
+            {
+                TestLogger.LogAction(TestLogEventType.MessageReceived, TestLogLevel.Info, TestLogDirection.Receive,
+                    identity.DeviceId, remoteDeviceId: originDevice.DeviceId, detail: "ConfigSyncPullResponse");
+            }
+
+            return config;
         }
         catch (Exception)
         {
@@ -459,6 +483,9 @@ public sealed class ConfigSyncService : IAsyncDisposable
                 }
             }
 
+            TestLogger.LogAction(TestLogEventType.MessageReceived, TestLogLevel.Info, TestLogDirection.Receive,
+                identity.DeviceId, remoteDeviceId: request.RequesterDeviceId, detail: "ConfigSyncPullRequest");
+
             var config = _configStore.LoadOrCreate();
             var response = new ConfigSyncPullResponseMessage(identity.CustomerGroupId, config);
 
@@ -478,6 +505,8 @@ public sealed class ConfigSyncService : IAsyncDisposable
             var responseBytes = NetworkSerializer.Encoding.GetBytes(responseLine);
             await stream.WriteAsync(responseBytes, ct);
             await stream.FlushAsync(ct);
+            TestLogger.LogAction(TestLogEventType.MessageSent, TestLogLevel.Info, TestLogDirection.Send,
+                identity.DeviceId, remoteDeviceId: request.RequesterDeviceId, detail: "ConfigSyncPullResponse");
         }
         catch (Exception)
         {

@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Sockets;
+using HaelpMi.Core.Diagnostics;
 using HaelpMi.Core.Models;
 using HaelpMi.Core.Networking.Protocol;
 using HaelpMi.Core.Security;
@@ -167,6 +168,8 @@ public sealed class DiscoveryService : IAsyncDisposable
         var payload = NetworkSerializer.ToUtf8Json(message);
         var broadcastEndpoint = new IPEndPoint(IPAddress.Broadcast, _discoveryPort);
         await _socket.SendAsync(payload, payload.Length, broadcastEndpoint).WaitAsync(ct);
+        TestLogger.LogAction(TestLogEventType.MessageSent, TestLogLevel.Info, TestLogDirection.Send,
+            message.DeviceId, detail: "BootCallAnnounce");
 
         await SendToBridgeSeedsAsync(payload, ct);
     }
@@ -311,6 +314,11 @@ public sealed class DiscoveryService : IAsyncDisposable
     {
         if (result.Buffer.Length > MaxDatagramBytes)
         {
+            // Unverfänglich zu loggen: verrät nichts über eine fremde Kundengruppe, nur dass
+            // irgendein zu großes/nicht auswertbares UDP-Paket ankam (siehe Klassenkommentar
+            // CustomerGroupFilter zur Abgrenzung, was NICHT geloggt werden darf).
+            TestLogger.LogAction(TestLogEventType.ActionSkipped, TestLogLevel.Info, TestLogDirection.Local,
+                _identityProvider().DeviceId, detail: "Datagramm verworfen (zu gross)");
             return; // untrusted network input (CLAUDE.md): reject oversized datagrams before even parsing
         }
 
@@ -321,6 +329,8 @@ public sealed class DiscoveryService : IAsyncDisposable
         }
         catch (Exception)
         {
+            TestLogger.LogAction(TestLogEventType.ActionSkipped, TestLogLevel.Info, TestLogDirection.Local,
+                _identityProvider().DeviceId, detail: "Datagramm verworfen (kaputt)");
             return; // malformed datagram - ignore, no partial trust in an admin-less network (NFR-6)
         }
 
@@ -344,6 +354,9 @@ public sealed class DiscoveryService : IAsyncDisposable
         var remoteIp = result.RemoteEndPoint.Address.ToString();
         DeviceEntry updated;
         var learnedNewDevice = false;
+        // Für die TestLogger-Zeilen NACH dem Lock gesammelt (Item 30) - keine Log-I/O
+        // während _storeLock gehalten wird, bei potenziell mehreren hundert Gossip-Einträgen.
+        var newlyLearnedGossipDeviceIds = new List<Guid>();
 
         // Admin-Rollen-Kryptoverifikation (Nutzerwunsch 17.08.2026): nur bei DIREKTEM
         // Kontakt geprüft, nie im Gossip-Loop unten (gleiches Prinzip wie beim
@@ -373,6 +386,8 @@ public sealed class DiscoveryService : IAsyncDisposable
             else
             {
                 _audit?.Invoke($"admin-role-key-mismatch deviceId={message.DeviceId} - gepinnter Gruppenschluessel weicht ab, Behauptung abgelehnt");
+                TestLogger.LogAction(TestLogEventType.ActionSkipped, TestLogLevel.Warn, TestLogDirection.Local,
+                    ownIdentity.DeviceId, remoteDeviceId: message.DeviceId, detail: "admin-role-key-mismatch");
             }
         }
 
@@ -401,6 +416,8 @@ public sealed class DiscoveryService : IAsyncDisposable
                 else
                 {
                     _audit?.Invoke($"device-identity-key-changed deviceId={message.DeviceId} - alter Pin beibehalten, neuer Schluessel abgelehnt");
+                    TestLogger.LogAction(TestLogEventType.ActionSkipped, TestLogLevel.Warn, TestLogDirection.Local,
+                        ownIdentity.DeviceId, remoteDeviceId: message.DeviceId, detail: "device-identity-key-changed");
                 }
             }
 
@@ -431,6 +448,7 @@ public sealed class DiscoveryService : IAsyncDisposable
                     if (devices.All(d => d.DeviceId != known.DeviceId))
                     {
                         learnedNewDevice = true;
+                        newlyLearnedGossipDeviceIds.Add(known.DeviceId);
                     }
 
                     var knownInfo = new DeviceUpsertInfo(
@@ -449,6 +467,13 @@ public sealed class DiscoveryService : IAsyncDisposable
         }
 
         _audit?.Invoke($"discovery {message.Kind} deviceId={message.DeviceId}");
+        TestLogger.LogAction(TestLogEventType.StatusChanged, TestLogLevel.Info, TestLogDirection.Local,
+            ownIdentity.DeviceId, remoteDeviceId: message.DeviceId, detail: "Geraet online/aktualisiert");
+        foreach (var gossipedDeviceId in newlyLearnedGossipDeviceIds)
+        {
+            TestLogger.LogAction(TestLogEventType.StatusChanged, TestLogLevel.Info, TestLogDirection.Local,
+                ownIdentity.DeviceId, remoteDeviceId: gossipedDeviceId, detail: $"via Gossip von {message.DeviceId} gelernt");
+        }
         DeviceUpdated?.Invoke(this, updated);
 
         if (learnedNewDevice)
@@ -533,6 +558,8 @@ public sealed class DiscoveryService : IAsyncDisposable
             // source endpoint (rather than re-assuming our own port) is simply correct UDP
             // request/reply behavior and is what makes this independently testable.
             await _socket.SendAsync(payload, payload.Length, remoteEndpoint).WaitAsync(ct);
+            TestLogger.LogAction(TestLogEventType.MessageSent, TestLogLevel.Info, TestLogDirection.Send,
+                reply.DeviceId, remoteDeviceId: announcerDeviceId, detail: "BootCallReply");
         }
         catch (SocketException)
         {

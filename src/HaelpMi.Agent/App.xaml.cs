@@ -110,6 +110,12 @@ public partial class App : System.Windows.Application
         // Diagnose-Instrumentierung, siehe StartupTimingLog-Klassendoku - temporär für die
         // Untersuchung "Selbsttest nach Admin-Installation verzögert".
         StartupTimingLog.Mark(nameof(HaelpMi.Agent), "OnStartup entered");
+        // Additiv zu StartupTimingLog (siehe dortige/TestLogger-Klassendoku: overhead-arme
+        // Messung bleibt bestehen, TestLogger ergänzt nur die geräteübergreifende
+        // Korrelierbarkeit). Guid.Empty hier bewusst: _settings/_deployment sind an dieser
+        // Stelle noch nicht geladen, der Meilenstein selbst ist der Punkt, nicht die Geräte-ID.
+        TestLogger.LogAction(TestLogEventType.StartupMilestone, TestLogLevel.Info, TestLogDirection.Local,
+            Guid.Empty, detail: "OnStartup entered");
 
         CrashLogger.InstallProcessWideHooks(nameof(HaelpMi.Agent));
         DispatcherUnhandledException += (_, args) =>
@@ -364,6 +370,8 @@ public partial class App : System.Windows.Application
         _ipcServer.On(IpcCommandType.TestModeStatus, HandleTestModeStatusRequestAsync);
         _ipcServer.Start();
         StartupTimingLog.Mark(nameof(HaelpMi.Agent), "IpcServer.Start() done");
+        TestLogger.LogAction(TestLogEventType.StartupMilestone, TestLogLevel.Info, TestLogDirection.Local,
+            BuildIdentity().DeviceId, detail: "IpcServer.Start() done");
 
         var executablePath = Environment.ProcessPath ?? Process.GetCurrentProcess().MainModule?.FileName ?? string.Empty;
         if (!string.IsNullOrEmpty(executablePath))
@@ -389,6 +397,8 @@ public partial class App : System.Windows.Application
             }
         }
         StartupTimingLog.Mark(nameof(HaelpMi.Agent), "AutostartRegistrar.EnsureRegistered done (misst schtasks.exe-Laufzeit)");
+        TestLogger.LogAction(TestLogEventType.StartupMilestone, TestLogLevel.Info, TestLogDirection.Local,
+            BuildIdentity().DeviceId, detail: "AutostartRegistrar.EnsureRegistered done");
 
         // Nutzerwunsch 14./15.08.2026 (revisionssicheres Audit-Log): Sendeseite läuft auf
         // JEDEM Gerät unabhängig von der Rolle (jedes Gerät hat ein eigenes AuditLog),
@@ -409,6 +419,8 @@ public partial class App : System.Windows.Application
 
         _coordinator = new AlarmFlowCoordinator(BuildIdentity, () => _settings, _sharedConfigStore.LoadOrCreate, _feedbackChannel, _auditLog, _auditSyncService, groupKeyProvider: () => _deployment.GroupKeyBase64);
         StartupTimingLog.Mark(nameof(HaelpMi.Agent), "_coordinator zugewiesen (Selbsttest waere ab hier IPC-seitig bedienbar)");
+        TestLogger.LogAction(TestLogEventType.StartupMilestone, TestLogLevel.Info, TestLogDirection.Local,
+            BuildIdentity().DeviceId, detail: "_coordinator zugewiesen");
 
         // Multi-VLAN-Bridge-Seed (Nutzerwunsch 13.08.2026, Liste seit 15.08.2026): kommt
         // ausschließlich aus SharedConfig, hot-reload-editierbar im Admin-Dashboard
@@ -453,6 +465,8 @@ public partial class App : System.Windows.Application
         // an) wird - s. TryBecomePrimaryOrSatellite/AlarmRelayServer-Klassendoku.
         TryBecomePrimaryOrSatellite();
         StartupTimingLog.Mark(nameof(HaelpMi.Agent), "TryBecomePrimaryOrSatellite() done (Selbsttest-Empfang waere ab hier moeglich)");
+        TestLogger.LogAction(TestLogEventType.StartupMilestone, TestLogLevel.Info, TestLogDirection.Local,
+            BuildIdentity().DeviceId, detail: "TryBecomePrimaryOrSatellite() done");
 
         _configSync = new ConfigSyncService(BuildIdentity, _deviceStore.Load, _auditLog.Append, groupKeyProvider: () => _deployment.GroupKeyBase64);
         _configSync.ConfigApplied += (_, _) =>
@@ -666,6 +680,11 @@ public partial class App : System.Windows.Application
             ContextMenuStrip = menu,
         };
         _trayIcon.DoubleClick += (_, _) => OpenConfigOrDashboard();
+
+        // Nächstliegendes Äquivalent zu "erstes sichtbares Fenster" - der Agent-Prozess hat
+        // im Normalfall kein MainWindow (ShutdownMode="OnExplicitShutdown", kein StartupUri).
+        TestLogger.LogAction(TestLogEventType.StartupMilestone, TestLogLevel.Info, TestLogDirection.Local,
+            BuildIdentity().DeviceId, detail: "Tray-Icon sichtbar");
     }
 
     // Startet HaelpMi.Config.exe genau wie der Start-Menü-Eintrag - öffnet je nach Rolle

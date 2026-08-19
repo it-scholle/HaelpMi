@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Sockets;
+using HaelpMi.Core.Diagnostics;
 using HaelpMi.Core.Models;
 using HaelpMi.Core.Networking.Protocol;
 using HaelpMi.Core.Security;
@@ -191,6 +192,8 @@ public sealed class AlarmTcpListener : IAsyncDisposable
             }
 
             _audit?.Invoke($"alarm received from deviceId={request.SenderDeviceId} isTest={request.IsTest}");
+            TestLogger.LogAction(TestLogEventType.MessageReceived, TestLogLevel.Info, TestLogDirection.Receive,
+                identity.DeviceId, request.AlarmSessionId, request.SenderDeviceId, "AlarmRequest");
             AlarmReceived?.Invoke(this, new AlarmReceivedEventArgs { Request = request, SenderAddress = senderAddress });
 
             var ack = new AlarmAckMessage(request.CustomerGroupId, request.AlarmProfileId, request.AlarmSessionId, identity.DeviceId, DateTimeOffset.UtcNow);
@@ -211,6 +214,8 @@ public sealed class AlarmTcpListener : IAsyncDisposable
             var ackBytes = NetworkSerializer.Encoding.GetBytes(ackLine);
             await stream.WriteAsync(ackBytes, ct);
             await stream.FlushAsync(ct);
+            TestLogger.LogAction(TestLogEventType.AckSent, TestLogLevel.Info, TestLogDirection.Send,
+                identity.DeviceId, request.AlarmSessionId, request.SenderDeviceId);
         }
         catch (Exception)
         {

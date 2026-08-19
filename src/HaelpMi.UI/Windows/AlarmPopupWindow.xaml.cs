@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Interop;
 using System.Windows.Threading;
+using HaelpMi.Core.Diagnostics;
 using HaelpMi.Core.Interop;
 using HaelpMi.Core.Models;
 
@@ -28,6 +29,7 @@ public partial class AlarmPopupWindow : Window
 
     private readonly IDisposable _screensaverGuard;
     private readonly int _responseThreshold;
+    private readonly Guid _localDeviceId;
     private readonly DispatcherTimer _autoCloseTimer;
     private DateTimeOffset _lastSignalUtc;
     private bool _thresholdReached;
@@ -50,12 +52,14 @@ public partial class AlarmPopupWindow : Window
         Guid alarmProfileId,
         Guid alarmSessionId,
         DateTimeOffset sentAtUtc,
+        Guid localDeviceId,
         bool isTest = false)
     {
         InitializeComponent();
 
         AlarmProfileId = alarmProfileId;
         AlarmSessionId = alarmSessionId;
+        _localDeviceId = localDeviceId;
         _responseThreshold = Math.Max(1, responseThreshold);
         _lastSignalUtc = sentAtUtc;
 
@@ -100,6 +104,13 @@ public partial class AlarmPopupWindow : Window
             System.Threading.Interlocked.Decrement(ref _openCount);
             _autoCloseTimer.Stop();
             _screensaverGuard.Dispose();
+            // Grund direkt aus den beiden bestehenden Flags abgeleitet (kein separater
+            // "manuell"-Fall: der Schließen-Button ist erst ab _thresholdReached aktiv, siehe
+            // OnClosing) - genau diese Unterscheidung macht im Log sichtbar, OB und WARUM sich
+            // ein Empfänger-Popup nach einem Abbruch schließt (Flaw 17).
+            var reason = _autoClosing ? "Idle-Timeout(60s)" : "Schwellwert";
+            TestLogger.LogAction(TestLogEventType.PopupClosed, TestLogLevel.Info, TestLogDirection.Local,
+                _localDeviceId, AlarmSessionId, detail: $"Grund={reason}");
         };
     }
 

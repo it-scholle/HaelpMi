@@ -1,13 +1,21 @@
+using System.Net;
+using System.Net.Sockets;
 using System.Text.Json;
 using HaelpMi.Core.Diagnostics;
+using HaelpMi.Core.Models;
+using HaelpMi.Core.Networking;
+using HaelpMi.Core.Networking.Protocol;
+using HaelpMi.Core.Sending;
 using HaelpMi.Core.Storage;
 using Xunit;
 
 namespace HaelpMi.Core.Tests;
 
 /// <summary>
-/// Covers das strukturierte Test-Aktionsprotokoll (Flaw 19): Gate (Installationsart + Log-
-/// Level), Schema/Korrelation, Nicht-Blockieren bei Schreibfehlern, Rotation.
+/// Covers das strukturierte Test-Aktionsprotokoll: Gate (Installationsart + Log-Level,
+/// Flaw 19), Schema/Korrelation, Nicht-Blockieren bei Schreibfehlern, Rotation, sowie
+/// (<see cref="LogAction_RealAlarmSendReceiveRoundTrip_ProducesCorrelatableLines"/>) die
+/// tatsächliche Instrumentierung der Kommunikationsschicht (Flaw 20).
 /// </summary>
 public class TestLoggerTests
 {
@@ -162,6 +170,64 @@ public class TestLoggerTests
 
         Assert.False(File.Exists(oldFile));
         Assert.True(File.Exists(Path.Combine(AppPaths.RootFolder, TodayFileName())));
+    }
+
+    /// <summary>
+    /// Flaw 20: ein echter TCP-Sende-/Empfangs-/Ack-Durchlauf (AlarmSender -&gt; AlarmTcpListener,
+    /// wie AlarmFlowCoordinatorTests.SendSelfTestAsync_MarksOutgoingRequestAsTest, hier aber
+    /// direkt über die Bausteine statt über den Coordinator) muss mindestens AlarmActivated
+    /// (hier simuliert durch den direkten SendAsync-Aufruf), MessageSent, MessageReceived,
+    /// AckSent, AckReceived mit DERSELBEN CorrelationId erzeugen - das ist die Kernzusage aus
+    /// Flaw 20 Punkt 2 ("Ablauf ausschließlich aus dem Log rekonstruierbar").
+    /// </summary>
+    [Fact]
+    public async Task LogAction_RealAlarmSendReceiveRoundTrip_ProducesCorrelatableLines()
+    {
+        using var appData = new TestAppDataScope();
+        using var sharedLog = SharedLogPaths.ForceLocalFallbackForTests();
+        using var testInstall = TestLogger.ForceIsTestInstallerForTests(true);
+        TestLogger.MinLevel = TestLogLevel.Info;
+
+        var senderDeviceId = Guid.NewGuid();
+        var receiverDeviceId = Guid.NewGuid();
+        var senderIdentity = new LiveIdentity(Guid.NewGuid(), senderDeviceId, "Sender-PC", "Frau Test", "Zimmer", "1", Role.User, false, "0.0.0", 0);
+        var receiverIdentity = new LiveIdentity(senderIdentity.CustomerGroupId, receiverDeviceId, "Empf-PC", "Herr Novak", "Raum", "2", Role.User, false, "0.0.0", 0);
+
+        var freePort = GetFreeTcpPort();
+        var listener = new AlarmTcpListener(() => receiverIdentity);
+        listener.Start(freePort);
+        try
+        {
+            var target = new DeviceEntry { DeviceId = receiverDeviceId, IpAddress = "127.0.0.1", TcpPort = freePort };
+            var profile = new AlarmProfile { Text = "Testalarm", ResponseThreshold = 1 };
+            var alarmSessionId = Guid.NewGuid();
+
+            var result = await new AlarmSender().SendAsync(profile, alarmSessionId, senderIdentity, new[] { target });
+            Assert.Equal(1, result.AckedCount);
+
+            var path = Path.Combine(AppPaths.RootFolder, TodayFileName());
+            var lines = File.ReadAllLines(path);
+            var entries = lines.Select(l => JsonSerializer.Deserialize<TestLogEntryForAsserts>(l, JsonOptions)!).ToList();
+            var forThisAlarm = entries.Where(e => e.CorrelationId == alarmSessionId).ToList();
+
+            Assert.Contains(forThisAlarm, e => e.EventType == "MessageSent" && e.Direction == "Send");
+            Assert.Contains(forThisAlarm, e => e.EventType == "MessageReceived" && e.Direction == "Receive");
+            Assert.Contains(forThisAlarm, e => e.EventType == "AckSent" && e.Direction == "Send");
+            Assert.Contains(forThisAlarm, e => e.EventType == "AckReceived" && e.Direction == "Receive");
+        }
+        finally
+        {
+            await listener.DisposeAsync();
+        }
+    }
+
+    private static int GetFreeTcpPort()
+    {
+        var l = new TcpListener(IPAddress.Loopback, 0);
+        l.Start();
+        var port = ((IPEndPoint)l.LocalEndpoint).Port;
+        l.Stop();
+        return port;
     }
 
     // Nur zum Deserialisieren in Tests - Feldnamen müssen zu TestLogEntry passen, das selbst

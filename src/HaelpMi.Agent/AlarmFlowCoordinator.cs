@@ -67,6 +67,7 @@ public sealed class AlarmFlowCoordinator
     {
         StartupTimingLog.Mark(nameof(HaelpMi.Agent), $"AlarmReceived (isTest={args.Request.IsTest}) - Popup/Sound wird jetzt ausgeloest");
         var request = args.Request;
+        var identity = _identityProvider();
         var settings = _settingsProvider();
         var soundOption = IncomingSoundCatalog.Resolve(settings.IncomingSoundId);
 
@@ -98,6 +99,7 @@ public sealed class AlarmFlowCoordinator
                 request.AlarmProfileId,
                 request.AlarmSessionId,
                 request.SentAtUtc,
+                identity.DeviceId,
                 request.IsTest);
 
             popup.OnMyWayRequested += (_, _) => _ = ReportOnMyWayAsync(request, args);
@@ -105,9 +107,20 @@ public sealed class AlarmFlowCoordinator
 
             _openPopups[request.AlarmSessionId] = popup;
             popup.Show();
+            TestLogger.LogAction(TestLogEventType.PopupShown, TestLogLevel.Info, TestLogDirection.Local,
+                identity.DeviceId, request.AlarmSessionId, request.SenderDeviceId, $"isTest={request.IsTest}");
         });
 
-        _ = _audioPlayer.PlayOnAllActiveDevicesAsync(soundOption);
+        // SoundPlayed/SoundStopped statt eines Signaturwechsels an MultiDeviceAlarmPlayer -
+        // die Wiedergabe bleibt fire-and-forget, ContinueWith loggt nur das (asynchrone) Ende
+        // mit, ohne den Aufrufer zu blockieren (siehe Klassendoku: markiert das Ende der
+        // Verarbeitung, relevant für die v0.35.2-Verzögerungsuntersuchung).
+        TestLogger.LogAction(TestLogEventType.SoundPlayed, TestLogLevel.Info, TestLogDirection.Local,
+            identity.DeviceId, request.AlarmSessionId, request.SenderDeviceId);
+        _ = _audioPlayer.PlayOnAllActiveDevicesAsync(soundOption).ContinueWith(
+            _ => TestLogger.LogAction(TestLogEventType.SoundStopped, TestLogLevel.Info, TestLogDirection.Local,
+                identity.DeviceId, request.AlarmSessionId, request.SenderDeviceId),
+            TaskScheduler.Default);
     }
 
     /// <summary>Every aggregated status update from the sender (FR-51): keeps a still-open receiver popup's threshold gate current.</summary>
@@ -121,7 +134,17 @@ public sealed class AlarmFlowCoordinator
         // Bugfix 17.08.2026: BeginInvoke statt Invoke, gleiche Begründung wie in
         // HandleIncomingAlarmRequest oben - auch dieser Aufruf kommt aus dem TCP-Accept-
         // Hintergrundthread und braucht das Ergebnis nirgends synchron.
-        System.Windows.Application.Current.Dispatcher.BeginInvoke(() => popup.UpdateOnTheWayCount(relay.OnTheWayUserNames.Count));
+        System.Windows.Application.Current.Dispatcher.BeginInvoke(() =>
+        {
+            popup.UpdateOnTheWayCount(relay.OnTheWayUserNames.Count);
+            // Bewusst hier, NICHT als "CancelReceived": das Wire-Format unterscheidet nicht
+            // zwischen bewusstem Abbruch, Schwellwert-Erreichen und Timeout (alle senden
+            // identisch stillSending=false) - siehe TestLogger-Instrumentierungsplan Flaw 20.
+            // Dass auf diese Zeile hier bewusst KEINE PopupClosed-Zeile folgt (es passiert
+            // sonst nichts), ist selbst die Diagnose-Grundlage für Flaw 17.
+            TestLogger.LogAction(TestLogEventType.StatusChanged, TestLogLevel.Info, TestLogDirection.Local,
+                _identityProvider().DeviceId, relay.AlarmSessionId, detail: "OnTheWayCount aktualisiert");
+        });
     }
 
     private async Task ReportOnMyWayAsync(AlarmRequestMessage request, AlarmReceivedEventArgs args)
@@ -163,6 +186,8 @@ public sealed class AlarmFlowCoordinator
         }
 
         var session = new RepeatingAlarmSession(profile, targets, identity, _sender, _feedbackChannel, DateTimeOffset.UtcNow, isTest);
+        TestLogger.LogAction(TestLogEventType.AlarmActivated, TestLogLevel.Info, TestLogDirection.Local,
+            identity.DeviceId, session.AlarmSessionId, detail: $"Profil={profile.Name}, Ziele={targets.Count}");
         try
         {
             System.Windows.Application.Current.Dispatcher.Invoke(() =>
@@ -264,6 +289,12 @@ public sealed class AlarmFlowCoordinator
         // TESTMODUS-Kennzeichnung zeigte - und SenderStatusWindow (unten neu ergänzt) hätte ohne
         // dieses Flag ebenfalls fälschlich wie ein echter Alarm ausgesehen.
         var session = new RepeatingAlarmSession(selfTestProfile, new[] { selfTarget }, identity, _sender, _feedbackChannel, DateTimeOffset.UtcNow, isTest: true);
+        // Alle nachfolgenden Schritte (Senden/Empfangen/Ack/Popup/Sound) laufen über dieselbe
+        // reale Alarm-Pipeline per Loopback und sind bereits durch die dortige Instrumentierung
+        // abgedeckt - dieselbe AlarmSessionId als CorrelationId macht den kompletten
+        // Selbsttest-Ablauf im Log nachvollziehbar, ohne einen eigenen Codepfad zu brauchen.
+        TestLogger.LogAction(TestLogEventType.SelfTestStarted, TestLogLevel.Info, TestLogDirection.Local,
+            identity.DeviceId, session.AlarmSessionId, detail: profile.Name);
 
         // Fehlerbericht "Sende-Bubble erscheint nicht" (18.08.2026): SendSelfTestAsync hat noch
         // nie eine SenderStatusWindow-Bubble gezeigt (anders als TriggerAlarmProfile) - seit dem

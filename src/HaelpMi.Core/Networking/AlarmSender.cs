@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Sockets;
+using HaelpMi.Core.Diagnostics;
 using HaelpMi.Core.Models;
 using HaelpMi.Core.Networking.Protocol;
 using HaelpMi.Core.Security;
@@ -101,6 +102,9 @@ public sealed class AlarmSender
                 return false;
             }
 
+            TestLogger.LogAction(TestLogEventType.MessageSent, TestLogLevel.Info, TestLogDirection.Send,
+                request.SenderDeviceId, request.AlarmSessionId, target.DeviceId, "AlarmRequest");
+
             using var client = new TcpClient();
             using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
             timeoutCts.CancelAfter(AppConstants.AlarmAckTimeout);
@@ -156,12 +160,21 @@ public sealed class AlarmSender
                 ack = NetworkSerializer.FromJsonLine<AlarmAckMessage>(line);
             }
 
-            return ack is not null && ack.AlarmProfileId == request.AlarmProfileId && ack.AlarmSessionId == request.AlarmSessionId;
+            var validAck = ack is not null && ack.AlarmProfileId == request.AlarmProfileId && ack.AlarmSessionId == request.AlarmSessionId;
+            if (validAck)
+            {
+                TestLogger.LogAction(TestLogEventType.AckReceived, TestLogLevel.Info, TestLogDirection.Receive,
+                    request.SenderDeviceId, request.AlarmSessionId, target.DeviceId);
+            }
+
+            return validAck;
         }
-        catch (Exception)
+        catch (Exception ex)
         {
             // Unreachable/offline target, refused connection, timeout, etc. - counts as
             // "not (yet) acked" rather than failing the whole send (5.6 known challenge).
+            TestLogger.LogAction(TestLogEventType.MessageSent, TestLogLevel.Warn, TestLogDirection.Send,
+                request.SenderDeviceId, request.AlarmSessionId, target.DeviceId, ex.GetType().Name);
             return false;
         }
     }

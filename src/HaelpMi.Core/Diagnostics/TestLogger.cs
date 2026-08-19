@@ -27,6 +27,7 @@ public enum TestLogEventType
     SelfTestStarted,
     MessageSent,
     MessageReceived,
+    AckSent,
     AckReceived,
     CancelSent,
     CancelReceived,
@@ -41,6 +42,16 @@ public enum TestLogEventType
     PopupClosed,
     SoundPlayed,
     SoundStopped,
+
+    // Flaw-20-Ergänzungen (Instrumentierung der Kommunikationsschicht):
+    // ActionSkipped - generischer Ausschluss-/Skip-Grund (z.B. Config-Sync/Discovery-
+    // Exclusions). Bewusst NIE für CustomerGroupFilter-Ablehnungen verwendet (siehe
+    // CustomerGroupFilter-Klassendoku: zwei unabhängige Installationen im selben Netz
+    // dürfen sich nie gegenseitig entdecken, auch nicht über eine lokale Log-Zeile).
+    // StartupMilestone - App-Start-Meilensteine, additiv zu StartupTimingLog (siehe dort,
+    // bleibt für die laufende Verzögerungsuntersuchung bewusst overhead-arm bestehen).
+    ActionSkipped,
+    StartupMilestone,
 }
 
 /// <summary>Eine einzelne JSONL-Zeile - siehe <see cref="TestLogger"/>-Klassendoku für die Feldbedeutung.</summary>
@@ -57,10 +68,11 @@ internal sealed record TestLogEntry(
 
 /// <summary>
 /// Zentrales, leichtgewichtiges Test-Aktionsprotokoll (Nutzerwunsch: "im Testmodus wird JEDE
-/// relevante Aktion strukturiert protokolliert"). Liefert nur das Framework/die API - die
-/// eigentliche Instrumentierung der Kommunikationsschicht (Aufrufe aus AlarmFlowCoordinator,
-/// EditLockService, ConfigSyncService, AuditSyncService, AlarmPopupWindow, AlarmToneGenerator
-/// usw.) folgt separat (Flaw 20).
+/// relevante Aktion strukturiert protokolliert"). Flaw 19 lieferte nur das Framework/die API;
+/// Flaw 20 hat die eigentliche Instrumentierung der Kommunikationsschicht ergänzt (Aufrufe aus
+/// AlarmFlowCoordinator, AlarmSender/AlarmTcpListener, RepeatingAlarmSession,
+/// AlarmFeedbackChannel, ConfigSyncService, DiscoveryService, AlarmPopupWindow,
+/// SenderStatusWindow, App.xaml.cs u.a. - siehe deren jeweilige TestLogger.LogAction-Aufrufe).
 ///
 /// Gating läuft über zwei unabhängige Schwellen:
 /// 1. <see cref="MinLevel"/> (Nutzerwunsch: "als Logging-Level einbauen") - Standard
