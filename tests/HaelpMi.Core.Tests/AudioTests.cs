@@ -13,6 +13,12 @@ namespace HaelpMi.Core.Tests;
 /// mindestens ein aktives Wiedergabegerät (WASAPI Render/Active) auf dem Testrechner, um
 /// aussagekräftig zu sein - auf CI-Maschinen ganz ohne Audiogerät ist ein leerer Durchlauf
 /// (kein Play, kein Hang) ebenfalls ein gültiges, wenn auch weniger scharfes Ergebnis.
+///
+/// Nutzerwunsch 20.08.2026: läuft seit hier mit <c>silent: true</c> - derselbe echte
+/// WASAPI-Pfad (Geräte, Mute/Lautstärke, WasapiOut, Timeout-Sicherheitsnetz) bleibt
+/// vollständig unter Test, nur die abgespielte Nutzlast ist stumm. Grund: genau dieser Test
+/// war es, der unregelmäßig und ungefragt hörbar auf einer Session-VM piepte (siehe
+/// CLAUDE.md-Abschnitt "Tests").
 /// </summary>
 public class AudioTests
 {
@@ -31,7 +37,7 @@ public class AudioTests
         var player = new MultiDeviceAlarmPlayer(messages.Add);
         var option = IncomingSoundCatalog.Resolve(IncomingSoundCatalog.DefaultId);
 
-        var playTask = player.PlayOnAllActiveDevicesAsync(option);
+        var playTask = player.PlayOnAllActiveDevicesAsync(option, silent: true);
 
         var exception = await Record.ExceptionAsync(() => playTask.WaitAsync(TimeSpan.FromSeconds(15)));
 

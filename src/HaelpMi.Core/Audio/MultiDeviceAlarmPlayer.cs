@@ -28,7 +28,15 @@ public sealed class MultiDeviceAlarmPlayer
         _audit = audit;
     }
 
-    public async Task PlayOnAllActiveDevicesAsync(IncomingSoundCatalog.Option option, CancellationToken ct = default)
+    /// <param name="silent">
+    /// Testschalter (Nutzerwunsch 20.08.2026, siehe AudioTests.cs): spielt eine stille
+    /// Nutzlast exakt gleicher Länge/Format statt des echten Tons ab - Gerätesuche,
+    /// Mute/Lautstärke-Umschaltung, WasapiOut-Init/Play/Dispose und das 10s-Sicherheitsnetz
+    /// unten laufen dabei unverändert über die echte WASAPI-Pipeline (ein Mock hätte den
+    /// 07.08.2026 gemeldeten Hänger nie gefangen, siehe Klassenkommentar dort) - nur hörbar
+    /// ist danach nichts mehr. Default false, damit reale Alarme unverändert bleiben.
+    /// </param>
+    public async Task PlayOnAllActiveDevicesAsync(IncomingSoundCatalog.Option option, CancellationToken ct = default, bool silent = false)
     {
         var floatBuffer = AlarmToneGenerator.Render(option);
         var format = AlarmToneGenerator.Format;
@@ -47,7 +55,12 @@ public sealed class MultiDeviceAlarmPlayer
         // IWaveProvider zu geben umgeht NAudios SampleToWaveProvider komplett - live
         // verifiziert: identischer Ton, sauberer Abschluss, kein Hänger mehr.
         var buffer = new byte[floatBuffer.Length * sizeof(float)];
-        Buffer.BlockCopy(floatBuffer, 0, buffer, 0, buffer.Length);
+        if (!silent)
+        {
+            Buffer.BlockCopy(floatBuffer, 0, buffer, 0, buffer.Length);
+        }
+        // silent=true: buffer bleibt beim .NET-Array-Default (alles Null-Bytes) - stille
+        // Amplitude in exakt derselben Länge/Format, kein gesonderter Zweig nötig.
 
         using var enumerator = new MMDeviceEnumerator();
         var devices = enumerator.EnumerateAudioEndPoints(DataFlow.Render, DeviceState.Active).ToList();
