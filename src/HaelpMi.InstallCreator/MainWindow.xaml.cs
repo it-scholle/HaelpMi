@@ -728,23 +728,23 @@ public partial class MainWindow : Window
     {
         var isTest = TestInstallerCheckBox.IsChecked == true;
 
-        // Nutzerwunsch 16.08.2026: Admin-Installer braucht jetzt zwingend einen geladenen
-        // Schlüssel, auch im Test - Test-Installer nutzt dafür den separaten Test-Key statt
-        // des Produktiv-Schlüssels (siehe BuildAdminInstallerAsync). IsEnabled auf
-        // BuildAdminButton (siehe UpdateBuildButtonsEnabledState) deckt den Normalfall schon
-        // über die Grau/Blau-Färbung ab - diese Prüfung ist das Sicherheitsnetz, falls der
-        // Klick trotzdem durchkommt (z. B. veralteter IsEnabled-Zustand).
-        var requiredKeyLoaded = isTest ? _updateTestPrivateKeyBytes is not null : _updatePrivateKeyBytes is not null;
-        if (!requiredKeyLoaded)
-        {
-            error = isTest
-                ? "Kein Test-Key geladen - ein Test-Installer kann ohne ihn nicht gebaut werden (siehe \"Vaultwarden\"-Reiter rechts)."
-                : "Kein Update-Schlüssel geladen - der Admin-Installer kann ohne ihn nicht gebaut werden (siehe \"Vaultwarden\"-Reiter rechts).";
-            return false;
-        }
-
+        // P1-Lockerung 19.08.2026 (Nutzerwunsch, Test-Installer-Builds ohne Vaultwarden-
+        // Zugriff moeglich machen): der zwingende Schluessel-Zwang von 16.08.2026 gilt ab
+        // jetzt nur noch fuer den PRODUKTIV-Zweig unten - ein Test-Installer baut auch ohne
+        // geladenen Test-Key, dann eben ohne eingebettetes Self-Bootstrap-Update-Paket (siehe
+        // BuildAdminInstallerAsync, gleiches Verhalten wie vor dem 16.08.2026-Wechsel, jetzt
+        // aber bewusst auf Test-Builds begrenzt statt generell). Ein echter Kunden-/
+        // Produktiv-Installer bleibt weiterhin zwingend auf einen echten Schluessel angewiesen
+        // - das Sicherheitsnetz unten deckt das ab, falls IsEnabled auf BuildAdminButton
+        // (siehe UpdateBuildButtonsEnabledState) veraltet sein sollte.
         if (!isTest)
         {
+            if (_updatePrivateKeyBytes is null)
+            {
+                error = "Kein Update-Schlüssel geladen - der Admin-Installer kann ohne ihn nicht gebaut werden (siehe \"Vaultwarden\"-Reiter rechts).";
+                return false;
+            }
+
             if (string.IsNullOrWhiteSpace(CustomerNameBox.Text))
             {
                 error = "Kundenname ist bei einem Produktiv-Installer Pflicht.";
@@ -782,9 +782,11 @@ public partial class MainWindow : Window
     private void UpdateBuildButtonsEnabledState()
     {
         var isTest = TestInstallerCheckBox.IsChecked == true;
-        var requiredKeyLoaded = isTest ? _updateTestPrivateKeyBytes is not null : _updatePrivateKeyBytes is not null;
 
-        BuildAdminButton.IsEnabled = !_isBusy && requiredKeyLoaded;
+        // P1-Lockerung 19.08.2026 (siehe TryValidate): Test-Build ist immer klickbar,
+        // unabhaengig vom Test-Key - Produktiv-Build bleibt wie zuvor gesperrt ohne
+        // geladenen Schluessel.
+        BuildAdminButton.IsEnabled = !_isBusy && (isTest || _updatePrivateKeyBytes is not null);
         // CreateUpdateBootstrapperButton greift auf denselben installer/payload/-Ordner zu
         // wie RefreshPayloadAsync - während eines Baus (egal welcher der beiden Aktionen)
         // darf der andere Weg nicht gleichzeitig hineinschreiben.
@@ -846,30 +848,36 @@ public partial class MainWindow : Window
         // User-Installer-ISCC-Lauf unten - der kopiert "payload\*" 1:1 in beide Installer,
         // update-seed/ muss also schon drinstehen, bevor ISCC läuft.
         //
-        // Nutzerwunsch 16.08.2026: kein Soft-Skip mehr - Admin-Installer braucht jetzt
-        // zwingend einen geladenen Schlüssel (siehe TryValidate, hat das schon vorher
-        // sichergestellt). Test-Installer signiert mit dem separaten Test-Key statt dem
-        // Produktiv-Schlüssel, damit Test- und Produktiv-Kreise beim Signaturcheck nie
-        // ineinanderlaufen können (siehe DeploymentInfo.UpdatePublicKeyBase64-Kommentar).
+        // P1-Lockerung 19.08.2026 (siehe TryValidate-Kommentar): fehlender Schlüssel ist ab
+        // jetzt nur noch für Produktiv-Installer ein Abbruchgrund (TryValidate hat das schon
+        // vorher sichergestellt, dieser Fall ist hier für isTestInstaller also nie erreichbar).
+        // Ein Test-Installer OHNE geladenen Test-Key baut trotzdem, nur ohne eingebettetes
+        // Self-Bootstrap-Update-Paket - updatePublicKeyBase64 bleibt dann null, das ISCC-Define
+        // wird unten schlicht weggelassen (deployment.json bekommt ein leeres Feld, exakt wie
+        // bei einem alten Installer-Stand ohne dieses Feld behandelt, siehe
+        // DeploymentInfo.UpdatePublicKeyBase64-Kommentar - kompilierter Fallback-Key gilt dann).
         var signingKey = isTestInstaller ? _updateTestPrivateKeyBytes : _updatePrivateKeyBytes;
+        string? updatePublicKeyBase64 = null;
         if (signingKey is null)
         {
-            Log($"Fehler: kein {(isTestInstaller ? "Test-Key" : "Update-Schlüssel")} geladen - Installer wird nicht gebaut.");
-            return;
+            Log("Kein Test-Key geladen - Update-Paket wird NICHT eingebettet (Test-Installer-Debug-Build, kein Auto-Update-Seeding). " +
+                "Betrifft nur diesen Test-Build - ein Produktiv-Installer bräuchte weiterhin zwingend einen echten Schlüssel.");
         }
+        else
+        {
+            Log($"Update-Paket wird für diesen Build signiert und eingebettet ({(isTestInstaller ? "Test-Key" : "Produktiv-Schlüssel")})...");
+            var payloadDir = Path.Combine(installerDir, "payload");
+            var eggResult = UpdatePackageBuilder.Build(payloadDir, _productVersion, signingKey);
+            UpdatePackageBuilder.WriteToPayloadSeed(installerDir, eggResult);
+            Log($"Update-Paket: Version {_productVersion} signiert, landet in payload/update-seed/.");
 
-        Log($"Update-Paket wird für diesen Build signiert und eingebettet ({(isTestInstaller ? "Test-Key" : "Produktiv-Schlüssel")})...");
-        var payloadDir = Path.Combine(installerDir, "payload");
-        var eggResult = UpdatePackageBuilder.Build(payloadDir, _productVersion, signingKey);
-        UpdatePackageBuilder.WriteToPayloadSeed(installerDir, eggResult);
-        Log($"Update-Paket: Version {_productVersion} signiert, landet in payload/update-seed/.");
-
-        // Der zum Signierschlüssel passende öffentliche Schlüssel wird aus ihm abgeleitet
-        // (Ed25519: der öffentliche Teil ist aus dem privaten deterministisch berechenbar,
-        // siehe UpdateSigningOperations.DerivePublicKey) und unten per ISCC-Define in
-        // deployment.json JEDER aus diesem Lauf gebauten Installation eingebettet - jede
-        // Installation kennt/vertraut dadurch nur dem für sie relevanten Schlüssel.
-        var updatePublicKeyBase64 = Convert.ToBase64String(UpdateSigningOperations.DerivePublicKey(signingKey));
+            // Der zum Signierschlüssel passende öffentliche Schlüssel wird aus ihm abgeleitet
+            // (Ed25519: der öffentliche Teil ist aus dem privaten deterministisch berechenbar,
+            // siehe UpdateSigningOperations.DerivePublicKey) und unten per ISCC-Define in
+            // deployment.json JEDER aus diesem Lauf gebauten Installation eingebettet - jede
+            // Installation kennt/vertraut dadurch nur dem für sie relevanten Schlüssel.
+            updatePublicKeyBase64 = Convert.ToBase64String(UpdateSigningOperations.DerivePublicKey(signingKey));
+        }
 
         // Nutzer-Wunsch 04.08.2026: der User-Installer wird nicht mehr auf dem
         // Kundenrechner live nachgebaut (siehe HaelpMiCommon.iss.inc-Kommentar), sondern
@@ -886,7 +894,10 @@ public partial class MainWindow : Window
             args.Add($"/DCustomerGroupId={customerGroupId}");
             args.Add($"/DGroupKeyBase64={groupKeyBase64}");
             args.Add($"/DIsTestInstaller={(isTestInstaller ? "true" : "false")}");
-            args.Add($"/DUpdatePublicKeyBase64={updatePublicKeyBase64}");
+            if (updatePublicKeyBase64 is not null)
+            {
+                args.Add($"/DUpdatePublicKeyBase64={updatePublicKeyBase64}");
+            }
             // Öffentlicher Admin-Rollen-Schlüssel geht in BEIDE Installer-Varianten - jedes
             // Gerät, Admin wie User, muss Admin-Behauptungen anderer Geräte prüfen können.
             // Der private Teil geht bewusst NICHT hierher (nur unten, Admin-Installer).
@@ -911,7 +922,10 @@ public partial class MainWindow : Window
             args.Add($"/DCustomerGroupId={customerGroupId}");
             args.Add($"/DGroupKeyBase64={groupKeyBase64}");
             args.Add($"/DIsTestInstaller={(isTestInstaller ? "true" : "false")}");
-            args.Add($"/DUpdatePublicKeyBase64={updatePublicKeyBase64}");
+            if (updatePublicKeyBase64 is not null)
+            {
+                args.Add($"/DUpdatePublicKeyBase64={updatePublicKeyBase64}");
+            }
             args.Add($"/DAdminRolePublicKeyBase64={adminRoleKeyPair.PublicKeyBase64}");
             // Privater Teil NUR hier - gleiches Muster wie InstallerPassword unten (nur der
             // Admin-Installer bekommt ihn übergeben, nie der User-Installer-Aufruf oben).
