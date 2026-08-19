@@ -9,6 +9,7 @@ using HaelpMi.Core.Licensing;
 using HaelpMi.Core.Models;
 using HaelpMi.Core.Networking;
 using HaelpMi.Core.Runtime;
+using HaelpMi.Core.Security;
 using HaelpMi.Core.Storage;
 using HaelpMi.UI.ViewModels;
 using HaelpMi.UI.Windows;
@@ -150,6 +151,18 @@ public partial class App : System.Windows.Application
         _settingsStore = settingsStore;
         _deployment = deployment;
         _deviceStore = new DeviceStore();
+
+        // P1-Notfall-Schalter (19.08.2026, siehe EncryptionDebugSwitch-Klassendoku): laut
+        // sichtbar machen, nicht still. Config.exe schreibt kein eigenes AuditLog (der Agent
+        // ist der einzige Schreiber, siehe Kommentar unten bei der Lizenzprüfung) - Konsole
+        // + TestLogger sind hier die verfügbaren Kanäle.
+        if (EncryptionDebugSwitch.IsDisabled)
+        {
+            const string warning = "!!! DISABLE_ENCRYPTION_DEBUG_ONLY=1 aktiv - LAN-Verschlüsselung ausgeschaltet, NUR für P1-Diagnose, vor Produktiveinsatz zwingend entfernen !!!";
+            Console.WriteLine(warning);
+            TestLogger.LogAction(TestLogEventType.StartupMilestone, TestLogLevel.Warn, TestLogDirection.Local,
+                settings.DeviceId, detail: "Verschlüsselung per Debug-Flag deaktiviert");
+        }
 
         // Lizenz-Prüfung (Soft-Expiry, CLAUDE.md "Lizenz & Secrets"): leichte, nicht
         // gedrosselte, nicht audit-loggende Variante (Config läuft ohnehin nur on-demand,
@@ -404,7 +417,7 @@ public partial class App : System.Windows.Application
         var sharedConfigStore = new SharedConfigStore();
         LiveIdentity IdentityProvider() => LiveIdentityFactory.Create(settingsStore.Load(), deployment);
 
-        _configSync ??= new ConfigSyncService(IdentityProvider, deviceStore.Load, groupKeyProvider: () => deployment.GroupKeyBase64);
+        _configSync ??= new ConfigSyncService(IdentityProvider, deviceStore.Load, groupKeyProvider: () => deployment.EffectiveGroupKeyBase64);
         _configSync.Start();
         _editLock ??= new EditLockService(IdentityProvider, deviceListProvider: deviceStore.Load);
         _editLock.Start();

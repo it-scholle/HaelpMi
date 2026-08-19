@@ -1,3 +1,5 @@
+using HaelpMi.Core.Security;
+
 namespace HaelpMi.Core.Models;
 
 /// <summary>
@@ -45,6 +47,17 @@ public sealed class DeploymentInfo
     /// SecureEnvelopeCodec.Seal/TryOpen), kein Fehler.
     /// </summary>
     public string? GroupKeyBase64 { get; set; }
+
+    /// <summary>
+    /// P1-Notfall-Schalter (19.08.2026, siehe <see cref="EncryptionDebugSwitch"/>): alle
+    /// sieben SecureEnvelope-Aufrufer lesen ab jetzt DIESE Property statt direkt
+    /// <see cref="GroupKeyBase64"/> - mit gesetzter Umgebungsvariable
+    /// <c>DISABLE_ENCRYPTION_DEBUG_ONLY=1</c> liefert sie immer <c>null</c>, unabhängig vom
+    /// tatsächlich installierten Schlüssel, und lässt so jeden Aufrufer auf sein bestehendes
+    /// Klartext-Fallback zurückfallen. Temporäres Diagnose-Mittel, siehe dortige Klassendoku
+    /// für den offenen Punkt "vor Produktiveinsatz zwingend wieder entfernen".
+    /// </summary>
+    public string? EffectiveGroupKeyBase64 => EncryptionDebugSwitch.IsDisabled ? null : GroupKeyBase64;
 
     /// <summary>
     /// Öffentlicher Ed25519-Schlüssel (Base64) zur Update-Signaturprüfung DIESER

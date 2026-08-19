@@ -211,6 +211,19 @@ public partial class App : System.Windows.Application
             // tatsächlichen Append()-Aufruf ausgewertet, aber das Feld selbst muss vorher
             // zugewiesen sein (readonly).
             _auditLog = new AuditLog(() => BuildIdentity().DeviceId);
+
+            // P1-Notfall-Schalter (19.08.2026, siehe EncryptionDebugSwitch-Klassendoku):
+            // laut sichtbar machen, nicht still - sowohl im Audit-Log (überlebt einen
+            // Neustart, landet auf Z:) als auch in der Konsole, falls jemand den Agent
+            // gerade interaktiv beobachtet.
+            if (EncryptionDebugSwitch.IsDisabled)
+            {
+                const string warning = "!!! DISABLE_ENCRYPTION_DEBUG_ONLY=1 aktiv - LAN-Verschlüsselung ausgeschaltet, NUR für P1-Diagnose, vor Produktiveinsatz zwingend entfernen !!!";
+                Console.WriteLine(warning);
+                _auditLog.Append(warning);
+                TestLogger.LogAction(TestLogEventType.StartupMilestone, TestLogLevel.Warn, TestLogDirection.Local,
+                    BuildIdentity().DeviceId, detail: "Verschlüsselung per Debug-Flag deaktiviert");
+            }
         }
         catch (Exception ex) when (ex is InvalidOperationException or System.Text.Json.JsonException or IOException)
         {
@@ -474,16 +487,16 @@ public partial class App : System.Windows.Application
         // Config.exe. Bewusst NICHT wie ConfigSyncService/EditLockService nur im
         // Config.exe-Dashboard-Prozess gestartet: ein Admin-Gerät soll Pushes auch
         // annehmen können, wenn das Dashboard-Fenster gerade gar nicht offen ist.
-        _auditSyncService = new AuditSyncService(BuildIdentity, _auditLog, _auditLog.Append, groupKeyProvider: () => _deployment.GroupKeyBase64);
+        _auditSyncService = new AuditSyncService(BuildIdentity, _auditLog, _auditLog.Append, groupKeyProvider: () => _deployment.EffectiveGroupKeyBase64);
         if (_deployment.Role == Role.Admin)
         {
             _auditSyncService.StartListening();
         }
 
-        _feedbackChannel = new AlarmFeedbackChannel(BuildIdentity, _auditLog.Append, groupKeyProvider: () => _deployment.GroupKeyBase64);
+        _feedbackChannel = new AlarmFeedbackChannel(BuildIdentity, _auditLog.Append, groupKeyProvider: () => _deployment.EffectiveGroupKeyBase64);
         _feedbackChannel.Start();
 
-        _coordinator = new AlarmFlowCoordinator(BuildIdentity, () => _settings, _sharedConfigStore.LoadOrCreate, _feedbackChannel, _auditLog, _auditSyncService, groupKeyProvider: () => _deployment.GroupKeyBase64);
+        _coordinator = new AlarmFlowCoordinator(BuildIdentity, () => _settings, _sharedConfigStore.LoadOrCreate, _feedbackChannel, _auditLog, _auditSyncService, groupKeyProvider: () => _deployment.EffectiveGroupKeyBase64);
         StartupTimingLog.Mark(nameof(HaelpMi.Agent), "_coordinator zugewiesen (Selbsttest waere ab hier IPC-seitig bedienbar)");
         TestLogger.LogAction(TestLogEventType.StartupMilestone, TestLogLevel.Info, TestLogDirection.Local,
             BuildIdentity().DeviceId, detail: "_coordinator zugewiesen");
@@ -516,14 +529,14 @@ public partial class App : System.Windows.Application
             BuildIdentity,
             AdminRolePrivateKeyProvider,
             isOwnKeyReplaceableProvider: () => string.IsNullOrEmpty(_deployment.AdminRolePublicKeyBase64),
-            groupKeyProvider: () => _deployment.GroupKeyBase64,
+            groupKeyProvider: () => _deployment.EffectiveGroupKeyBase64,
             audit: _auditLog.Append);
         if (_deployment.Role == Role.Admin)
         {
             _adminRoleKeySync.Start();
         }
 
-        _listener = new AlarmTcpListener(BuildIdentity, _auditLog.Append, groupKeyProvider: () => _deployment.GroupKeyBase64);
+        _listener = new AlarmTcpListener(BuildIdentity, _auditLog.Append, groupKeyProvider: () => _deployment.EffectiveGroupKeyBase64);
         _listener.AlarmReceived += OnAlarmReceived;
         // Fast-User-Switching-Fix 17.08.2026: statt direkt _listener.Start() aufzurufen und den
         // Rückgabewert zu ignorieren, entscheidet dieser Aufruf, ob diese Sitzung Primary
@@ -534,7 +547,7 @@ public partial class App : System.Windows.Application
         TestLogger.LogAction(TestLogEventType.StartupMilestone, TestLogLevel.Info, TestLogDirection.Local,
             BuildIdentity().DeviceId, detail: "TryBecomePrimaryOrSatellite() done");
 
-        _configSync = new ConfigSyncService(BuildIdentity, _deviceStore.Load, _auditLog.Append, groupKeyProvider: () => _deployment.GroupKeyBase64);
+        _configSync = new ConfigSyncService(BuildIdentity, _deviceStore.Load, _auditLog.Append, groupKeyProvider: () => _deployment.EffectiveGroupKeyBase64);
         _configSync.ConfigApplied += (_, _) =>
         {
             RegisterHotkeysFromConfig();
