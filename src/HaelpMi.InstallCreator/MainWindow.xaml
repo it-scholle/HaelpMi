@@ -37,9 +37,9 @@
                     BorderThickness="1" CornerRadius="12" Padding="16" Margin="0,16,0,16">
                 <StackPanel>
                     <CheckBox x:Name="TestInstallerCheckBox" IsChecked="True" Margin="0,0,0,16"
-                              Content="Test-Installer (kein Passwort nötig - für internes Testen, niemals an einen Kunden ausliefern)" />
+                              Content="Test-Installer" />
 
-                    <TextBlock Text="Kundenname (Pflicht bei Produktiv-Installer; bei Test-Installer optionale Bezeichnung z. B. &quot;Testgruppe 3&quot;)"
+                    <TextBlock Text="Kundenname"
                                FontWeight="SemiBold" TextWrapping="Wrap" FontSize="12" />
                     <TextBox x:Name="CustomerNameBox" Margin="0,6,0,16" />
 
@@ -124,16 +124,6 @@
                             </Grid>
                         </Button>
                     </Grid>
-                    <TextBlock Margin="0,0,0,0" Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" TextWrapping="Wrap"
-                               Text="Wird nirgends zentral gespeichert (kein Log, keine Datei) - nach dem Schließen dieses Fensters ist es nicht mehr abrufbar. Rechtzeitig kopieren/weitergeben." />
-                    <!-- Nutzerfrage 06.08.2026: gilt bewusst NUR für den Admin-Installer (der App-
-                         Admin-Rolle vergibt), nicht für den eingebetteten User-Installer - der wird
-                         ohnehin erst NACH einer erfolgreichen Admin-Installation über "User-
-                         Installer exportieren" im Dashboard erzeugt/verteilt, ein zusätzliches
-                         Passwort dort bringt keinen Sicherheitsgewinn, nur Verteil-Reibung
-                         (Passwort müsste an jeden Endnutzer mitgegeben werden). -->
-                    <TextBlock Margin="0,4,0,0" Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" TextWrapping="Wrap"
-                               Text="Gilt nur für den Admin-Installer. Der User-Installer bleibt immer passwortfrei - er wird erst nach erfolgreicher Admin-Installation im Dashboard erzeugt und an bereits vertrautem Weg verteilt." />
                 </StackPanel>
             </Border>
 
@@ -164,6 +154,11 @@
                      FontFamily="Consolas" FontSize="11" Background="#F4F6F6" />
         </DockPanel>
 
-        <TextBlock x:Name="VersionText" Grid.Column="2" Style="{StaticResource VersionWatermarkStyle}" />
+        <!-- Nutzerwunsch 20.08.2026: aus der rechten Protokoll-Spalte in die linke Spalte
+             (unten rechts) verschoben - Grid.Column="0" ohne eigene Zeilendefinition nimmt
+             dieselbe volle Höhe wie die dortige StackPanel-Zelle ein, VerticalAlignment=Bottom
+             kombiniert mit dem HorizontalAlignment=Right aus VersionWatermarkStyle setzt den
+             Text damit in die untere rechte Ecke der linken Spalte. -->
+        <TextBlock x:Name="VersionText" Grid.Column="0" VerticalAlignment="Bottom" Style="{StaticResource VersionWatermarkStyle}" />
     </Grid>
 </Window>
