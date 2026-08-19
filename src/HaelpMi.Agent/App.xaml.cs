@@ -189,6 +189,19 @@ public partial class App : System.Windows.Application
         _activateEvent = new EventWaitHandle(false, EventResetMode.AutoReset, ActivateEventName);
         new Thread(WaitForActivationRequests) { IsBackground = true }.Start();
 
+        // Flaw 26 (v0.39.x): direkt nach dem gewonnenen Mutex-Rennen, aus demselben Grund wie
+        // das Aktivierungs-Event oben - nur die Instanz, die diesen Punkt tatsächlich erreicht
+        // (createdNew=true), antwortet je auf diesen Port. Eine zweite, per ConfirmSwap
+        // gestartete Instanz, die das Mutex-Rennen gegen eine noch nicht ganz beendete
+        // Altinstanz verliert, beendet sich vorher (Zeile 182 oben) und meldet sich nie - der
+        // wartende UpdateServiceWorker sieht das als Timeout und rollt den Swap zurück, statt
+        // "Erfolg" allein aus geglückten Datei-Operationen abzuleiten.
+        var confirmPort = ParseUpdateConfirmPort(e.Args);
+        if (confirmPort is not null)
+        {
+            _ = AnswerUpdateConfirmationBestEffortAsync(confirmPort.Value);
+        }
+
         try
         {
             _deployment = DeploymentInfoStore.Load();
@@ -221,6 +234,59 @@ public partial class App : System.Windows.Application
         const string prefix = "--update-test-port=";
         var arg = args.FirstOrDefault(a => a.StartsWith(prefix, StringComparison.Ordinal));
         return arg is not null && int.TryParse(arg[prefix.Length..], out var port) ? port : null;
+    }
+
+    // Flaw 26: separat von ParseUpdateTestPort, weil beide Modi unterschiedlich sind - der
+    // Testport (oben) läuft in einer isolierten Testinstanz PARALLEL zur Produktivinstanz
+    // (RunUpdateSelfTestAndExit, kein Fenster, keine Einzelinstanz-Sperre), der Confirm-Port
+    // hier läuft in der neuen PRODUKTIV-Instanz selbst mit, ohne deren normalen Start zu
+    // verändern.
+    private static int? ParseUpdateConfirmPort(string[] args)
+    {
+        const string prefix = "--update-confirm-port=";
+        var arg = args.FirstOrDefault(a => a.StartsWith(prefix, StringComparison.Ordinal));
+        return arg is not null && int.TryParse(arg[prefix.Length..], out var port) ? port : null;
+    }
+
+    /// <summary>
+    /// Flaw 26: beantwortet einen einzelnen Verbindungsversuch von UpdateServiceWorker.
+    /// ConfirmSwapAsync mit "OK" - reiner Erfolgsnachweis "diese Instanz lebt und hat die
+    /// Einzelinstanz-Sperre bekommen", kein Datenaustausch. Läuft bewusst NICHT blockierend
+    /// (Fire-and-forget aus OnStartup) und mit kurzem Timeout: der normale Start
+    /// (StartBackgroundServices, Settings laden, Discovery/Alarm-Listener etc.) darf davon
+    /// nie abhängen oder verzögert werden - ein Update-Bestätigungsschritt ist ein seltener
+    /// Sonderfall, kein Teil des normalen Boot-Wegs.
+    /// </summary>
+    private static async Task AnswerUpdateConfirmationBestEffortAsync(int confirmPort)
+    {
+        TcpListener? listener = null;
+        try
+        {
+            listener = new TcpListener(IPAddress.Loopback, confirmPort);
+            listener.Start();
+
+            var acceptTask = listener.AcceptTcpClientAsync();
+            var completed = await Task.WhenAny(acceptTask, Task.Delay(TimeSpan.FromSeconds(15)));
+            if (completed != acceptTask)
+            {
+                return; // niemand hat innerhalb der Frist angefragt - der Aufrufer wertet das als Timeout/Fehlschlag
+            }
+
+            using var client = acceptTask.Result;
+            using var stream = client.GetStream();
+            var okBytes = System.Text.Encoding.UTF8.GetBytes("OK\n");
+            await stream.WriteAsync(okBytes);
+        }
+        catch (Exception)
+        {
+            // Best-effort wie der Rest der Update-Diagnose-Pfade - ein Fehler hier darf den
+            // normalen Produktivbetrieb dieser (erfolgreich gestarteten!) Instanz nie stören,
+            // der Aufrufer sieht im schlimmsten Fall nur einen Timeout statt einer Bestätigung.
+        }
+        finally
+        {
+            listener?.Stop();
+        }
     }
 
     // Separater Helfer statt Inline-Check (gleiches Muster wie ParseUpdateTestPort oben).

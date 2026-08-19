@@ -236,11 +236,20 @@ public sealed class UpdateOrchestrator
             return false;
         }
 
-        var swap = await _updateServiceClient.SendAsync(new UpdateServiceRequest(UpdateServiceCommandType.ConfirmSwap, info.ProgramVersion), TimeSpan.FromMinutes(2));
+        // Flaw 26 (v0.39.x): eigene PID mitschicken, damit UpdateServiceWorker gezielt DIESEN
+        // Prozess beendet (und dessen tatsächliches Ende abwartet), statt blind nach Namen zu
+        // killen - siehe UpdateServiceRequest.CallerProcessId-Klassendoku.
+        var swap = await _updateServiceClient.SendAsync(
+            new UpdateServiceRequest(UpdateServiceCommandType.ConfirmSwap, info.ProgramVersion, CallerProcessId: Environment.ProcessId),
+            TimeSpan.FromMinutes(2));
         if (!swap.Success)
         {
             _audit?.Invoke($"update swap fehlgeschlagen: {swap.Error}");
-            return false; // kein automatisches Rollback mehr an dieser Stelle möglich, siehe UpdateServiceWorker.ConfirmSwapAsync
+            // Anders als der vorherige Kommentar hier noch behauptete: UpdateServiceWorker
+            // rollt einen gescheiterten Swap seit Flaw 26 selbst zurück (Datei-Rückschub +
+            // Neustart der alten Version) - dieser Rückgabewert bedeutet nur noch "kein
+            // Erfolg", nicht mehr zwangsläufig "Gerät jetzt in undefiniertem Zustand".
+            return false;
         }
 
         _audit?.Invoke($"update erfolgreich, läuft jetzt auf version={info.ProgramVersion}");

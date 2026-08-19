@@ -26,6 +26,14 @@ public sealed record UpdateServiceRequest(
     UpdateServiceCommandType Command,
     string Version,
     string? PackageZipPath = null,
-    int? TestPort = null);
+    int? TestPort = null,
+    // Flaw 26 (v0.39.x): nur bei ConfirmSwap gesetzt - die eigene Prozess-ID des
+    // aufrufenden Produktiv-Agents. Ersetzt das vorherige "alle HaelpMi.Agent nach Namen
+    // killen" (das u.a. den eigenen wartenden Aufrufer treffen konnte, ohne dass irgendwer
+    // je geprüft hätte, ob der Kill überhaupt durchschlug) durch ein gezieltes Beenden mit
+    // abgewartetem Prozessende. Null = Aufrufer noch auf einem Stand vor diesem Fix (oder
+    // ein anderer Aufrufer als der Agent selbst) - UpdateServiceWorker fällt dann auf das
+    // alte, namensbasierte Verhalten zurück statt den Request abzulehnen.
+    int? CallerProcessId = null);
 
 public sealed record UpdateServiceResponse(bool Success, string? Error = null);

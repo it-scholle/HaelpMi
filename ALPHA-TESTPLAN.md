@@ -269,6 +269,34 @@ Teil, den ich am wenigsten selbst verifizieren konnte.
       `{app}\versions\`, Dienst-Status) so gut wie möglich notieren/Screenshot und mir
       zurückmelden, das ist genau die Art Fehler, die ich vorab nicht sehen konnte.
 
+### Test 9a: Flaw 26 - Prozessersatz nach dem Swap tatsächlich verifizieren
+
+Regressionstest für den Fehlerbericht "'HälpMi läuft bereits' nach einem Update, alte
+Version lief unbemerkt mit altem Code weiter, Neustart/'erneut suchen' änderten nichts"
+(v0.39.2). Deckt genau das ab, was Test 9 oben bisher nicht geprüft hat: nicht nur "hat
+der Swap irgendetwas gemeldet", sondern "läuft am Ende wirklich der neue Code, nicht nur
+liegen neue Dateien auf der Platte".
+
+- [ ] Update wie in Test 9 auslösen, dabei den Taskmanager offen halten und die PID der
+      `HaelpMi.Agent.exe` **vor** dem Update notieren
+- [ ] Direkt nach dem gemeldeten Update-Erfolg per Taskmanager ("Details"-Tab, Pfad-Spalte
+      einblenden) prüfen: läuft jetzt eine **neue** PID, deren Pfad ins normale
+      Installationsverzeichnis zeigt (nicht mehr unter `{app}\versions\...`)? Zu keinem
+      Zeitpunkt dürfen zwei `HaelpMi.Agent.exe`-Prozesse gleichzeitig sichtbar sein
+      (kurz danach pollen, z. B. `Get-Process HaelpMi.Agent` alle 200 ms für 10s)
+- [ ] Im Admin-Dashboard NICHT nur die eigene Versionsanzeige ansehen (die zeigt immer nur
+      sich selbst, siehe Root-Cause-Notiz oben) - stattdessen die tatsächlich laufende
+      Version direkt beim Agent-Prozess verifizieren (Taskmanager-Dateiversion des
+      `HaelpMi.Agent.exe` unter der neuen PID)
+- [ ] **Absichtlicher Fehlschlagstest:** vor dem Update die alte `HaelpMi.Agent.exe` per
+      Taskmanager "Task beenden" hart abschießen, während sie gerade eine Datei geöffnet
+      hält (z. B. Log-Datei-Handle offen lassen, falls einfach herstellbar) - erwartet:
+      entweder sauberer Swap-Erfolg mit neuer PID, oder ein sauberer, protokollierter
+      Rollback (alte Version läuft danach unverändert weiter, kein Gerät ganz ohne Agent)
+      - nie ein stiller "Erfolg" bei tatsächlich weiterlaufender Altversion
+- [ ] Danach Gerät neu starten - Version muss sich gegenüber dem Zustand direkt nach dem
+      Update NICHT mehr ändern (war sie vorher schon korrekt aktualisiert, bleibt sie es)
+
 ## Test 9b: Update-Ei / Vaultwarden (Nutzerwunsch 13.08.2026)
 
 Deckt den in `HaelpMi.InstallCreator` neu hinzugekommenen Weg ab, ein Update-Paket zu
