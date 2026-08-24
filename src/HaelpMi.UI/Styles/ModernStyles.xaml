@@ -233,14 +233,25 @@
                                            ContentTemplateSelector="{TemplateBinding ItemTemplateSelector}"
                                            Margin="{TemplateBinding Padding}"
                                            HorizontalAlignment="Left" VerticalAlignment="Center" />
-                        <Popup x:Name="Popup" Placement="Bottom" AllowsTransparency="True" Focusable="False"
+                        <!-- Bugfix 11.08.2026, Regression 19.08.2026 durch Rücksetzer auf v0.16.0
+                             wieder eingeführt, hier am 24.08.2026 (Issue #1) erneut behoben:
+                             AllowsTransparency="True" erzeugt ein layered Popup-Fenster - ueber RDP/
+                             VM-Grafik ohne Hardwarebeschleunigung (WPF faellt dann auf Software-Rendering
+                             zurueck) ist genau diese Kombination aus layered Fenster + Effect ein bekannter
+                             Ausloeser dafuer, dass der erste Klick auf ein ComboBoxItem nur das Popup
+                             fokussiert/aktiviert statt die Auswahl auszuloesen - auf echter Hardware unauffaellig,
+                             deshalb hier bisher nicht aufgefallen. AllowsTransparency="False" macht das Popup zu
+                             einem normalen (nicht layered) Fenster - deutlich robuster bei Klicks unter RDP/VM.
+                             Preis dafuer: kein Weichzeichner-Schatten mehr (DropShadowEffect braucht Transparenz,
+                             sonst faerbt er die Ecken haesslich ein) und eckige statt runde Ecken (CornerRadius
+                             auf einem nicht-transparenten Popup zeigt sonst abgeschnittene Restecken). Betrifft
+                             alle ComboBoxen der App (gemeinsamer Stil) - bei einem künftigen Rücksetzer/Rebase
+                             auf einen älteren Stand hier zuerst nachsehen, bevor der Bug erneut gemeldet wird. -->
+                        <Popup x:Name="Popup" Placement="Bottom" AllowsTransparency="False" StaysOpen="False" Focusable="False"
                                PopupAnimation="Slide" IsOpen="{TemplateBinding IsDropDownOpen}">
                             <Border Background="{StaticResource CardBackgroundBrush}" BorderBrush="{StaticResource HairlineBrush}"
-                                    BorderThickness="1" CornerRadius="8" Margin="0,4,0,0"
+                                    BorderThickness="1" Margin="0,4,0,0"
                                     MinWidth="{Binding ActualWidth, RelativeSource={RelativeSource TemplatedParent}}">
-                                <Border.Effect>
-                                    <DropShadowEffect BlurRadius="14" ShadowDepth="2" Opacity="0.18" Color="Black" />
-                                </Border.Effect>
                                 <ScrollViewer SnapsToDevicePixels="True" MaxHeight="{TemplateBinding MaxDropDownHeight}">
                                     <ItemsPresenter KeyboardNavigation.DirectionalNavigation="Contained" />
                                 </ScrollViewer>

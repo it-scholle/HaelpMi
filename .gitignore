@@ -20,6 +20,10 @@ out/
 installer/Output/
 installer/payload/
 installer/UserInstallerPayload/
+## Publish-Ausgabe des "Update erstellen"-Knopfs (Self-Bootstrap-Update, siehe CLAUDE.md) -
+## gleiches Prinzip wie installer/payload/ oben, war hier nur versehentlich noch nicht gelistet
+## und dadurch am 24.08.2026 kurzzeitig fälschlich mit eingecheckt (v0.16.6-Vorcommit).
+installer/UpdateBootstrapperPublish/
 ## tools/InstallCreator/* statt tools/InstallCreator/ (Bugfix 11.08.2026): die Verzeichnis-
 ## Form würde git am Abstieg hindern und die Start.cmd/.ps1-Ausnahmen unten wirkungslos
 ## machen - der veröffentlichte exe-Inhalt bleibt weiter ignoriert, nur die beiden
