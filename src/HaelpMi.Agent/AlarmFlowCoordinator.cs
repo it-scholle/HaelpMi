@@ -120,7 +120,7 @@ public sealed class AlarmFlowCoordinator
         var identity = _identityProvider();
         var devices = _deviceStore.Load();
         var groups = _sharedConfigProvider().DeviceGroups;
-        var targets = RecipientResolver.ResolveRecipientsForSender(profile, identity.DeviceId, identity.RoomNumber, devices, groups);
+        var targets = RecipientResolver.ResolveRecipientsForSender(profile, identity.DeviceId, identity.RoomNumber, devices, groups, excludeSender: true);
         if (targets.Count == 0)
         {
             return; // nothing to send, nothing to show (Teil 2, Abschnitt 4: an empty recipient set is a valid, if useless, admin configuration)

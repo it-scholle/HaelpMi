@@ -341,6 +341,113 @@ public class ModelsTests
         Assert.Equal(senderId, result[0].DeviceId);
     }
 
+    // --- Fixes #5 ("Ruft um Hilfe" ging fälschlich auch beim Sender selbst auf, sobald
+    // dessen eigenes Gerät im aufgelösten Empfängerkreis steckte): excludeSender:true ist
+    // der Gegenpol zu den drei IncludesSenderDevice-Tests oben - gleiche drei Auflösungswege
+    // (direkt/Gruppe/Raum), aber mit dem beim tatsächlichen Alarmversand (AlarmFlowCoordinator)
+    // gesetzten Flag, das den Sender unabhängig davon ausschließt, ob er in allDevices steht. ---
+
+    [Fact]
+    public void RecipientResolver_ExcludesSenderDevice_WhenExcludeSenderIsSet_ViaDirectRecipient()
+    {
+        var senderId = Guid.NewGuid();
+        var profile = new AlarmProfile
+        {
+            RecipientAssignments =
+            {
+                new RecipientAssignment
+                {
+                    Sender = new EntityRef(EntityKind.Device, senderId),
+                    Recipients = { new EntityRef(EntityKind.Device, senderId) },
+                },
+            },
+        };
+        var devices = new List<DeviceEntry> { new() { DeviceId = senderId } };
+
+        var result = RecipientResolver.ResolveRecipientsForSender(profile, senderId, "1", devices, new List<DeviceGroup>(), excludeSender: true);
+
+        Assert.Empty(result);
+    }
+
+    [Fact]
+    public void RecipientResolver_ExcludesSenderDevice_WhenExcludeSenderIsSet_ViaItsOwnGroup()
+    {
+        var senderId = Guid.NewGuid();
+        var peerId = Guid.NewGuid();
+        var group = new DeviceGroup { DeviceIds = { senderId, peerId } };
+        var profile = new AlarmProfile
+        {
+            RecipientAssignments =
+            {
+                new RecipientAssignment
+                {
+                    Sender = new EntityRef(EntityKind.Device, senderId),
+                    Recipients = { new EntityRef(EntityKind.Group, group.Id) },
+                },
+            },
+        };
+        var devices = new List<DeviceEntry> { new() { DeviceId = senderId }, new() { DeviceId = peerId } };
+
+        var result = RecipientResolver.ResolveRecipientsForSender(profile, senderId, "1", devices, new List<DeviceGroup> { group }, excludeSender: true);
+
+        Assert.Single(result);
+        Assert.Equal(peerId, result[0].DeviceId);
+    }
+
+    [Fact]
+    public void RecipientResolver_ExcludesSenderDevice_WhenExcludeSenderIsSet_ViaItsOwnRoom()
+    {
+        var senderId = Guid.NewGuid();
+        var peerId = Guid.NewGuid();
+        var profile = new AlarmProfile
+        {
+            RecipientAssignments =
+            {
+                new RecipientAssignment
+                {
+                    Sender = new EntityRef(EntityKind.Device, senderId),
+                    Recipients = { EntityRef.ForRoom("214") },
+                },
+            },
+        };
+        var devices = new List<DeviceEntry>
+        {
+            new() { DeviceId = senderId, RoomNumber = "214" },
+            new() { DeviceId = peerId, RoomNumber = "214" },
+        };
+
+        var result = RecipientResolver.ResolveRecipientsForSender(profile, senderId, "214", devices, new List<DeviceGroup>(), excludeSender: true);
+
+        Assert.Single(result);
+        Assert.Equal(peerId, result[0].DeviceId);
+    }
+
+    [Fact]
+    public void RecipientResolver_ExcludesSenderDevice_WhenExcludeSenderIsSet_ViaAllDevicesGroup()
+    {
+        var senderId = Guid.NewGuid();
+        var peerId = Guid.NewGuid();
+        var profile = new AlarmProfile
+        {
+            RecipientAssignments =
+            {
+                new RecipientAssignment
+                {
+                    Sender = new EntityRef(EntityKind.Device, senderId),
+                    Recipients = { new EntityRef(EntityKind.Group, AppConstants.AllDevicesGroupId) },
+                },
+            },
+        };
+        // Anders als beim bisherigen "Alle"-Test bewusst MIT Sender in allDevices - der
+        // ursprüngliche Bug bestand ja gerade darin, dass sich das nur zufällig nie so ergab.
+        var devices = new List<DeviceEntry> { new() { DeviceId = senderId }, new() { DeviceId = peerId } };
+
+        var result = RecipientResolver.ResolveRecipientsForSender(profile, senderId, "1", devices, new List<DeviceGroup>(), excludeSender: true);
+
+        Assert.Single(result);
+        Assert.Equal(peerId, result[0].DeviceId);
+    }
+
     // --- Nutzerwunsch 09.08.2026: eingebaute "Alle"-Gruppe (AppConstants.AllDevicesGroupId) -
     // Mitgliedschaft kommt live aus den bekannten Geräten, nicht aus DeviceIds/Config-Sync, und
     // funktioniert daher unabhängig davon, ob sie überhaupt in der übergebenen groups-Liste

@@ -17,12 +17,21 @@ namespace HaelpMi.Core.Networking;
 /// </summary>
 public static class RecipientResolver
 {
+    /// <param name="excludeSender">
+    /// Beim tatsächlichen Alarmversand (<c>true</c>) darf der Sender nie zu seinen eigenen
+    /// Empfängern zählen, auch wenn sein Gerät explizit oder über eine Gruppe/einen Raum im
+    /// aufgelösten Empfängerkreis steckt (Fixes #5, war bisher nur für "Alle" ein
+    /// zufälliger Nebeneffekt einer nie das eigene Gerät enthaltenden Geräteliste). Bei
+    /// reiner Anzeige (z. B. "Meine Alarme" in <c>ConfigWindow</c>) bleibt der Standard
+    /// <c>false</c>, dort soll das eigene Gerät als Empfänger sichtbar bleiben.
+    /// </param>
     public static IReadOnlyList<DeviceEntry> ResolveRecipientsForSender(
         AlarmProfile profile,
         Guid senderDeviceId,
         string senderRoomNumber,
         IReadOnlyList<DeviceEntry> allDevices,
-        IReadOnlyList<DeviceGroup> groups)
+        IReadOnlyList<DeviceGroup> groups,
+        bool excludeSender = false)
     {
         var recipientDeviceIds = new HashSet<Guid>();
 
@@ -40,6 +49,11 @@ public static class RecipientResolver
                     recipientDeviceIds.Add(deviceId);
                 }
             }
+        }
+
+        if (excludeSender)
+        {
+            recipientDeviceIds.Remove(senderDeviceId);
         }
 
         return allDevices.Where(d => recipientDeviceIds.Contains(d.DeviceId)).ToList();
