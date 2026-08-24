@@ -52,6 +52,22 @@ Reparaturversuche an diesem Stand.
   ein GitHub-Issue (dem Milestone `release-1.0-MVP` zugeordnet), Umsetzung dann auf einem
   eigenen Branch dagegen — Issue-Erstellung selbst ist eigenständige, vom Nutzer gesteuerte
   Arbeit, keine automatische Session-Aufgabe.
+- **Branch↔Issue-Kopplung (ergänzt 24.08.2026):** Sobald ein Issue existiert, wird der
+  zugehörige Branch direkt aus diesem Issue heraus erstellt (`gh issue develop <nr> --checkout`
+  bzw. der „Create a branch"-Link am Issue), nicht freihändig benannt — macht die Verknüpfung
+  auf GitHub sichtbar. Mit Abschluss (FF-Merge) wird das Issue geschlossen. Achtung: `Fixes #N`
+  in der Commit-Message schließt ein Issue nur automatisch, wenn in den GitHub-**Default-Branch**
+  gemergt wird — das ist aktuell `main`, während für den Neuaufbau nach `release-1.0-MVP`
+  gemergt wird (siehe "Versionslinien-Status" oben). Solange das so ist, schließt das nicht von
+  selbst mit; das Issue wird stattdessen explizit per `gh issue close <nr> --comment "…"`
+  geschlossen, mit Verweis auf Commit/Tag.
+- **Ein Ticket = eine in sich abgeschlossene Einheit (ergänzt 24.08.2026):** Jeder Ticket-Branch
+  landet als eigenständiger, unvermischter Commit (bei mehreren Zwischen-Commits vor dem
+  FF-Merge bei Bedarf zusammengefasst) im Zielbranch — keine unabhängigen Änderungen
+  hineinmischen, auch keine "wenn ich schon dabei bin"-Nebenfixes. Grund: bei einem Rollback um
+  mehrere Versionen muss sich jeder Ticket-Commit einzeln cherry-picken/mergen/rebasen lassen,
+  falls sich z. B. herausstellt, dass nur einer von mehreren nachfolgenden Commits tatsächlich
+  etwas beschädigt hat — vermischte Commits verhindern das.
 
 ## Referenzdokumente
 - `pflichtenheft-lan-alarmierung.md` — Quelle der Wahrheit für die ursprünglichen FR-/NFR-Nummern.
