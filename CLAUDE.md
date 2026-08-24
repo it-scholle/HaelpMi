@@ -11,6 +11,48 @@ Kunden-Rücksprache. Wenn du (Claude Code) auf alten Code, Kommentare oder Tests
 von der reinen Gleichberechtigt-Peer-Architektur ausgehen, markiere sie zur Überarbeitung statt sie
 stillschweigend zu ignorieren.
 
+## Versionslinien-Status (seit 20.08.2026 — Reset nach main-Instabilität)
+
+Der bisherige `main`-Stand (zuletzt v0.39.5) entstand durch zu viel parallele, nie einzeln
+ausreichend gehärtete Feature-Entwicklung (LAN-Verschlüsselung Phase 1–3, kryptografisch
+verifizierte Admin-Rollen, echte Ed25519-Lizenzprüfung, revisionssicheres Audit-Log,
+Wellen-Rollout, Update-Ei, Fast User Switching u. v. m. — alles "bleeding edge", gleichzeitig
+statt seriell entwickelt) und wurde dadurch zu einem fragilen, abstürzenden, auf ~1 GB
+aufgeblähten Installer. Nutzerentscheidung 20.08.2026: kompletter Neustart statt weiterer
+Reparaturversuche an diesem Stand.
+
+- **Neue Hauptversion (aktiv):** der zuvor als `Vorstellungsversion-20.08.26` entwickelte,
+  auf Tag `v0.16.0` zurückgesetzte und bis `v0.16.5` gezielt weiterentwickelte Stand — jetzt
+  `main`. Status **„stable+buggy"**: Grundfunktionen (Alarmversand/-empfang, Selbsttest,
+  Config-Sync/fliegender Configaustausch, Discovery/Boot-Call, Install-Creator/Installer)
+  funktionieren weitestgehend, mit bekannten Einschränkungen — kein Anspruch auf
+  Vollständigkeit oder Produktionsreife.
+- **Alte Version (deprecated, eingefroren):** der bisherige main-Stand bis v0.39.5 bleibt
+  unverändert unter dem Branch `legacy/main-0.39.x` erhalten — **wird nicht
+  weiterentwickelt.** Die dort enthaltenen Features (siehe oben) werden nicht übernommen,
+  sondern bei Bedarf einzeln, von Grund auf, über eigene GitHub-Issues neu entwickelt —
+  seriell statt parallel, um die Instabilität von vorher nicht zu wiederholen. Welche
+  Features das im Detail sind und in welcher Reihenfolge: wird über die GitHub-Issues/das
+  Milestone unten entschieden, nicht hier vorgeschrieben.
+
+### Neuer Branch-/Release-Workflow
+
+- Entwicklung findet ab sofort **ausschließlich auf separaten Branches** statt, niemals
+  direkt auf `main`.
+- `main` wird **nicht mehr automatisch** aktualisiert, sobald Tests grün sind — die im
+  Abschnitt "Versionierung" unten beschriebene Auto-Merge-Regel ist für die Dauer dieses
+  Neuaufbaus **ausdrücklich außer Kraft gesetzt**. Ein Update von `main` erfolgt erst nach
+  expliziter Freigabe durch den Nutzer (er hat den fertigen Stand selbst getestet), nicht
+  automatisch durch eine Session.
+- Aktueller Ziel-Branch für den Neuaufbau: **`release-1.0-MVP`** (von main abgezweigt).
+  Verknüpft mit dem gleichnamigen GitHub-Milestone `release-1.0-MVP` — Issues/PRs für den
+  Neuaufbau werden diesem Milestone zugeordnet (GitHub kennt keine native Branch-Milestone-
+  Verknüpfung; die Zuordnung läuft über die Issues/PRs, die gegen diesen Branch laufen).
+- Entwicklung erfolgt ab jetzt **Issue-getrieben**: jede Aufgabe/jedes Feature bekommt zuerst
+  ein GitHub-Issue (dem Milestone `release-1.0-MVP` zugeordnet), Umsetzung dann auf einem
+  eigenen Branch dagegen — Issue-Erstellung selbst ist eigenständige, vom Nutzer gesteuerte
+  Arbeit, keine automatische Session-Aufgabe.
+
 ## Referenzdokumente
 - `pflichtenheft-lan-alarmierung.md` — Quelle der Wahrheit für die ursprünglichen FR-/NFR-Nummern.
 - `claude-code-prompt-teil1.md` — erster Umsetzungs-Prompt (Grundfunktionen, P2P-Alarm, Screensaver).
@@ -268,6 +310,11 @@ Branch-Namenskonvention: Präfix nach Bump-Grad + kebab-case-Kurzbeschreibung �
 `feature/<kurzbeschreibung>` (MINOR), `fix/<kurzbeschreibung>` (PATCH-Bugfix),
 `chore/<kurzbeschreibung>` (PATCH ohne Verhaltensänderung, z. B. Doku/Refactoring). Beispiel:
 `feature/multi-vlan-bridge-seed`.
+
+**Ausgesetzt seit 20.08.2026 für die Dauer des Neuaufbaus (siehe "Versionslinien-Status"
+oben):** die folgende Auto-Merge-Regel gilt vorerst **nicht** — main-Updates brauchen bis auf
+Weiteres explizite Nutzer-Freigabe statt eines automatischen Merges bei grünen Tests. Der
+Rest des Ablaufs (Branch-Pflicht, Rebase-Mechanik, Tag-Setzen) bleibt unverändert gültig.
 
 **Alle Sessions führen Rebase + `merge --ff-only` nach `main` selbst aus, sobald die passende
 Test-Stufe grün ist — ausnahmslos, ohne Rückfrage, ohne Bestätigungsschritt.** Diese Zeile *ist*
