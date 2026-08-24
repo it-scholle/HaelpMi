@@ -48,6 +48,24 @@ Reparaturversuche an diesem Stand.
   Verknüpft mit dem gleichnamigen GitHub-Milestone `release-1.0-MVP` — Issues/PRs für den
   Neuaufbau werden diesem Milestone zugeordnet (GitHub kennt keine native Branch-Milestone-
   Verknüpfung; die Zuordnung läuft über die Issues/PRs, die gegen diesen Branch laufen).
+- **Rotierender Default-Branch pro Release-Zyklus (ergänzt 24.08.2026):** `main` bleibt der
+  eingefrorene, getestete Stable-Anker (siehe oben — nie direkt entwickelt), ist aber **nicht**
+  durchgängig der GitHub-Default-Branch. Ablauf pro Zyklus:
+  1. Neuer Zyklus zweigt einen Branch `release-X.Y[-Kurzname]` von `main` ab (aktuell:
+     `release-1.0-MVP`).
+  2. Dieser Release-Branch wird für die Dauer des Zyklus zum GitHub-**Default-Branch** —
+     dadurch zielen `gh issue develop`/neue PRs automatisch darauf, und `Fixes #N` schließt
+     Issues beim Merge dorthin wieder automatisch (löst die Einschränkung in der
+     Branch↔Issue-Kopplung unten für die Normalfall-Dauer eines Zyklus).
+  3. Zyklusende (Nutzer hat getestet und gibt frei): FF-Merge Release-Branch → `main`, Tag auf
+     `main`.
+  4. Default-Branch zurück auf `main` (Ruhepunkt) bzw. direkt weiter auf den nächsten frisch
+     abgezweigten `release-X.Y+1` — Default folgt immer dem aktuell aktiven
+     Entwicklungs-Branch, nie einem bereits abgeschlossenen Release-Branch.
+  5. Zurück zu Schritt 1.
+  Der Wechsel des Default-Branch ist ein reines, jederzeit reversibles GitHub-Repo-Setting
+  (`gh repo edit --default-branch <branch>`, erfordert `Administration`-Berechtigung auf dem
+  Token) — keine Auswirkung auf Git-Historie oder bestehende Branches/Tags.
 - Entwicklung erfolgt ab jetzt **Issue-getrieben**: jede Aufgabe/jedes Feature bekommt zuerst
   ein GitHub-Issue (dem Milestone `release-1.0-MVP` zugeordnet), Umsetzung dann auf einem
   eigenen Branch dagegen — Issue-Erstellung selbst ist eigenständige, vom Nutzer gesteuerte
@@ -57,10 +75,12 @@ Reparaturversuche an diesem Stand.
   bzw. der „Create a branch"-Link am Issue), nicht freihändig benannt — macht die Verknüpfung
   auf GitHub sichtbar. Mit Abschluss (FF-Merge) wird das Issue geschlossen. Achtung: `Fixes #N`
   in der Commit-Message schließt ein Issue nur automatisch, wenn in den GitHub-**Default-Branch**
-  gemergt wird — das ist aktuell `main`, während für den Neuaufbau nach `release-1.0-MVP`
-  gemergt wird (siehe "Versionslinien-Status" oben). Solange das so ist, schließt das nicht von
-  selbst mit; das Issue wird stattdessen explizit per `gh issue close <nr> --comment "…"`
-  geschlossen, mit Verweis auf Commit/Tag.
+  gemergt wird — dank des rotierenden Default-Branch (siehe Punkt oben) ist das im
+  Normalfall während eines laufenden Zyklus genau der aktuelle Release-Branch, es passt also.
+  Nur wenn der Default-Branch aus irgendeinem Grund (noch) nicht auf den aktuellen
+  Release-Branch zeigt — z. B. der einmalige Rückstand beim allerersten `release-1.0-MVP`-Fix,
+  bevor der Wechsel vollzogen war — wird stattdessen explizit per
+  `gh issue close <nr> --comment "…"` geschlossen, mit Verweis auf Commit/Tag.
 - **Ein Ticket = eine in sich abgeschlossene Einheit (ergänzt 24.08.2026):** Jeder Ticket-Branch
   landet als eigenständiger, unvermischter Commit (bei mehreren Zwischen-Commits vor dem
   FF-Merge bei Bedarf zusammengefasst) im Zielbranch — keine unabhängigen Änderungen
