@@ -272,8 +272,19 @@ Reparaturversuche an diesem Stand.
   bezüglich Personalrat abzustimmen (siehe offene externe Fragen), nicht eigenmächtig erweitern.
 
 ## Codestil & Sicherheit
-- Kommentare auf Deutsch, sparsam, erklären das *Warum*, nicht das *Was* (Code soll fürs *Was*
-  selbsterklärend sein).
+- **Kommentarregel (verschärft 24.08.2026, Nutzerkorrektur nach v0.16.6):** Kommentare auf
+  Deutsch, so sparsam wie möglich. Ein Kommentar ist nur gerechtfertigt, wenn der Code ohne ihn
+  vermutlich wirr/unsinnig wirkt oder falsch verstanden werden könnte (z. B. eine nicht
+  offensichtliche Workaround-Entscheidung), oder wenn er Parameter erklärt, deren
+  Bedeutung/erwarteter bzw. gewollter Inhalt (Format, gültiger Wertebereich, Einheit) sich nicht
+  schon aus Name/Typ ergibt. Explizit **kein** Kommentar für: (a) das reine *Was* — was der Code
+  ohnehin schon selbsterklärend sagt, nicht in Prosa wiederholen; (b) Änderungs-/
+  Commit-Dokumentation — Datum, Ticketnummer, "Bugfix vom …", wer wann was geändert hat, gehört
+  in die Commit-Message/`git blame`, nicht in den Code. Grund: genau dieses Muster (lange, mit
+  Datum/Ticket versehene "Bugfix …"-Kommentarblöcke, die Commit-Historie im Code duplizieren)
+  hat sich im bisherigen Code eingeschlichen — Aufräumen dafür ist als GitHub-Issue #22
+  (Milestone `release-2.0-Logging/ecnrypted-communication`) vorgemerkt, nicht rückwirkend
+  Teil dieser CLAUDE.md-Änderung.
 - Kein Over-Engineering: keine Abstraktionsschicht, kein Interface, kein Pattern ohne konkreten,
   aktuell existierenden Anwendungsfall in diesem Dokument oder der Pflichtenheft.
   "Könnte man später brauchen" ist kein Grund.

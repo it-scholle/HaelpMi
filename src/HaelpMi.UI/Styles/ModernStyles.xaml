@@ -233,20 +233,11 @@
                                            ContentTemplateSelector="{TemplateBinding ItemTemplateSelector}"
                                            Margin="{TemplateBinding Padding}"
                                            HorizontalAlignment="Left" VerticalAlignment="Center" />
-                        <!-- Bugfix 11.08.2026, Regression 19.08.2026 durch Rücksetzer auf v0.16.0
-                             wieder eingeführt, hier am 24.08.2026 (Issue #1) erneut behoben:
-                             AllowsTransparency="True" erzeugt ein layered Popup-Fenster - ueber RDP/
-                             VM-Grafik ohne Hardwarebeschleunigung (WPF faellt dann auf Software-Rendering
-                             zurueck) ist genau diese Kombination aus layered Fenster + Effect ein bekannter
-                             Ausloeser dafuer, dass der erste Klick auf ein ComboBoxItem nur das Popup
-                             fokussiert/aktiviert statt die Auswahl auszuloesen - auf echter Hardware unauffaellig,
-                             deshalb hier bisher nicht aufgefallen. AllowsTransparency="False" macht das Popup zu
-                             einem normalen (nicht layered) Fenster - deutlich robuster bei Klicks unter RDP/VM.
-                             Preis dafuer: kein Weichzeichner-Schatten mehr (DropShadowEffect braucht Transparenz,
-                             sonst faerbt er die Ecken haesslich ein) und eckige statt runde Ecken (CornerRadius
-                             auf einem nicht-transparenten Popup zeigt sonst abgeschnittene Restecken). Betrifft
-                             alle ComboBoxen der App (gemeinsamer Stil) - bei einem künftigen Rücksetzer/Rebase
-                             auf einen älteren Stand hier zuerst nachsehen, bevor der Bug erneut gemeldet wird. -->
+                        <!-- AllowsTransparency bewusst False (nicht wie sonst bei Popups üblich True) +
+                             StaysOpen False: als layered Fenster (AllowsTransparency=True) verschluckt
+                             dieses Popup unter RDP/VM ohne GPU-Beschleunigung den ersten Klick auf ein
+                             ComboBoxItem, SelectedItem ändert sich dann nicht. Deshalb hier auch kein
+                             CornerRadius/DropShadowEffect auf der Border - beides setzt Transparenz voraus. -->
                         <Popup x:Name="Popup" Placement="Bottom" AllowsTransparency="False" StaysOpen="False" Focusable="False"
                                PopupAnimation="Slide" IsOpen="{TemplateBinding IsDropDownOpen}">
                             <Border Background="{StaticResource CardBackgroundBrush}" BorderBrush="{StaticResource HairlineBrush}"
