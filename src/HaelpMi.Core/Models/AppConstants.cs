@@ -35,8 +35,24 @@ public static class AppConstants
     /// <summary>TCP port for post-trigger alarm feedback ("bin unterwegs" + status relay, Teil 2, Abschnitt 7/8).</summary>
     public const int AlarmFeedbackTcpPort = 51505;
 
-    /// <summary>Name of the local named-pipe used for Config/Admin-Dashboard &lt;-&gt; Agent IPC on the same machine.</summary>
+    /// <summary>
+    /// Basisname des lokalen Named Pipe für Config/Admin-Dashboard &lt;-&gt; Agent IPC auf
+    /// demselben Rechner. Der tatsächlich verwendete Name hängt zusätzlich von der
+    /// Windows-Sitzungs-ID ab (siehe <see cref="Ipc.IpcPipeNaming"/>) - bei Fast User
+    /// Switching läuft pro Sitzung ein eigener Agent, ein fest verdrahteter Name ohne
+    /// Sitzungsbezug würde Config in Sitzung B nicht-deterministisch mit dem Agent in
+    /// Sitzung A statt dem eigenen verbinden (Issue #9).
+    /// </summary>
     public const string IpcPipeName = "HaelpMi.Agent.Ipc";
+
+    /// <summary>
+    /// Name des lokalen, sitzungsübergreifenden Named Pipe, über den die Primary-Agent-
+    /// Instanz (siehe <see cref="Networking.AlarmChannel"/>) empfangene Alarme an
+    /// Satellite-Instanzen in anderen angemeldeten Sitzungen weiterreicht (Issue #9,
+    /// Fast User Switching ohne Logout/Reboot) - bewusst OHNE Sitzungs-ID im Namen,
+    /// anders als <see cref="IpcPipeName"/>: muss von jeder Sitzung aus erreichbar sein.
+    /// </summary>
+    public const string AlarmRelayPipeName = "HaelpMi.Agent.AlarmRelay";
 
     /// <summary>Name of the local named-pipe used for Agent &lt;-&gt; Update-Dienst IPC on the same machine (Teil 2, Abschnitt 11).</summary>
     public const string UpdateServiceIpcPipeName = "HaelpMi.UpdateService.Ipc";

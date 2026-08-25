@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.IO.Pipes;
 using HaelpMi.Core.Models;
 using HaelpMi.Core.Networking.Protocol;
@@ -8,11 +9,14 @@ namespace HaelpMi.Core.Ipc;
 /// Hosted by HaelpMi.Agent: a local named-pipe request/response server so
 /// HaelpMi.Config - a separate process, deliberately (FR-16) - can ask the Agent to
 /// re-broadcast, search again, or run a self-test, since the Agent is the process that
-/// actually owns the UDP/TCP sockets (5.2).
+/// actually owns the UDP/TCP sockets (5.2). Pipe-Name ist sitzungsgebunden (siehe
+/// <see cref="IpcPipeNaming"/>), damit Config bei Fast User Switching immer den Agent der
+/// eigenen Sitzung erreicht, nicht den einer anderen (Issue #9).
 /// </summary>
 public sealed class IpcServer : IAsyncDisposable
 {
     private readonly Dictionary<IpcCommandType, Func<Task<IpcResponse>>> _handlers = new();
+    private readonly string _pipeName = IpcPipeNaming.BuildSessionScopedPipeName(Process.GetCurrentProcess().SessionId);
     private CancellationTokenSource? _cts;
     private Task? _acceptLoop;
 
@@ -39,7 +43,7 @@ public sealed class IpcServer : IAsyncDisposable
         while (!ct.IsCancellationRequested)
         {
             var server = new NamedPipeServerStream(
-                AppConstants.IpcPipeName, PipeDirection.InOut, maxNumberOfServerInstances: 10,
+                _pipeName, PipeDirection.InOut, maxNumberOfServerInstances: 10,
                 PipeTransmissionMode.Byte, PipeOptions.Asynchronous);
 
             try

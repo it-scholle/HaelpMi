@@ -63,7 +63,7 @@ public partial class App : System.Windows.Application
     private DeploymentInfo _deployment = null!;
 
     private DiscoveryService? _discovery;
-    private AlarmTcpListener? _listener;
+    private AlarmChannel? _listener;
     private AlarmFeedbackChannel? _feedbackChannel;
     private ConfigSyncService? _configSync;
     private GlobalHotkey? _hotkey;
@@ -288,7 +288,11 @@ public partial class App : System.Windows.Application
         _discovery.StartListening();
         _ = _discovery.AnnounceAsync();
 
-        _listener = new AlarmTcpListener(BuildIdentity, _auditLog.Append);
+        // Issue #9 (Fast User Switching ohne Logout/Reboot): AlarmChannel entscheidet
+        // selbst, ob diese Sitzung den echten TCP-Port hält (Primary) oder als Satellite
+        // über den lokalen Relay-Kanal einer anderen Sitzung mitläuft - für den
+        // Aufrufer hier kein Unterschied, AlarmReceived feuert in beiden Rollen gleich.
+        _listener = new AlarmChannel(BuildIdentity, _auditLog.Append);
         _listener.AlarmReceived += (_, args) => _coordinator.HandleIncomingAlarmRequest(args);
         _listener.Start();
 

@@ -39,11 +39,18 @@ public sealed class AlarmTcpListener : IAsyncDisposable
         _audit = audit;
     }
 
-    public void Start(int port = Models.AppConstants.AlarmTcpPort)
+    /// <returns>
+    /// true, wenn der Port erfolgreich gebunden wurde. false = eine andere Instanz auf
+    /// dieser Maschine hält den Port bereits (Issue #9: bei Fast User Switching normal für
+    /// jede Sitzung außer der zuerst gestarteten Primary - siehe <see cref="AlarmChannel"/>,
+    /// die genau dieses Ergebnis für die Primary/Satellite-Entscheidung braucht) oder ein
+    /// anderer Bind-Fehler.
+    /// </returns>
+    public bool Start(int port = Models.AppConstants.AlarmTcpPort)
     {
         if (_listener is not null)
         {
-            return;
+            return true;
         }
 
         // Bugfix 06.08.2026 ("Dashboard startet nicht" - Crash-Log-Fund): fehlte hier bisher
@@ -62,13 +69,18 @@ public sealed class AlarmTcpListener : IAsyncDisposable
         }
         catch (SocketException)
         {
+            // Seit Issue #9 (Fast User Switching) der Normalfall für jede Sitzung außer der
+            // zuerst gestarteten Primary, nicht mehr zwingend ein Fehler - AlarmChannel
+            // fängt dieses false ab und verbindet stattdessen als Satellite über den
+            // lokalen Relay-Kanal.
             _listener = null;
-            _audit?.Invoke($"AlarmTcpListener konnte Port {port} nicht öffnen (belegt) - Alarme kommen bis zum nächsten Neustart nicht an.");
-            return;
+            _audit?.Invoke($"AlarmTcpListener konnte Port {port} nicht öffnen (belegt) - vermutlich bereits Primary in einer anderen Sitzung.");
+            return false;
         }
 
         _cts = new CancellationTokenSource();
         _acceptLoop = AcceptLoopAsync(_listener, _cts.Token);
+        return true;
     }
 
     private async Task AcceptLoopAsync(TcpListener listener, CancellationToken ct)
