@@ -234,14 +234,19 @@
                                            ContentTemplateSelector="{TemplateBinding ItemTemplateSelector}"
                                            Margin="{TemplateBinding Padding}"
                                            HorizontalAlignment="Left" VerticalAlignment="Center" />
-                        <!-- AllowsTransparency bewusst False (nicht wie sonst bei Popups üblich True) +
-                             StaysOpen False: als layered Fenster (AllowsTransparency=True) verschluckt
-                             dieses Popup unter RDP/VM ohne GPU-Beschleunigung den ersten Klick auf ein
-                             ComboBoxItem, SelectedItem ändert sich dann nicht. Deshalb hier auch kein
-                             CornerRadius/DropShadowEffect auf der Border - beides setzt Transparenz voraus.
-                             PopupNoActivateHelper zusätzlich, weil AllowsTransparency=False allein den
-                             Klick unter RDP/VM nicht immer robust durchreicht - siehe Helper-Kommentar. -->
-                        <Popup x:Name="Popup" Placement="Bottom" AllowsTransparency="False" StaysOpen="False" Focusable="False"
+                        <!-- x:Name bewusst PART_Popup (nicht z. B. "Popup"): ComboBox.OnApplyTemplate sucht
+                             per GetTemplateChild() explizit nach diesem Namen, um seine eigene interne
+                             Popup-Verwaltung (u. a. Schließen bei Auswahl) daran zu hängen - ohne exakten
+                             Namen findet ComboBox das Popup nicht und verlässt sich nur auf die lose
+                             IsDropDownOpen-Bindung. AllowsTransparency bewusst False (nicht wie sonst bei
+                             Popups üblich True) + StaysOpen False: als layered Fenster (AllowsTransparency=
+                             True) verschluckt dieses Popup unter RDP/VM ohne GPU-Beschleunigung den ersten
+                             Klick auf ein ComboBoxItem, SelectedItem ändert sich dann nicht. Deshalb hier
+                             auch kein CornerRadius/DropShadowEffect auf der Border - beides setzt
+                             Transparenz voraus. PopupNoActivateHelper zusätzlich (WS_EX_NOACTIVATE +
+                             expliziter Mouse.Capture), weil AllowsTransparency=False allein den Klick
+                             unter RDP/VM nicht immer robust durchreicht - siehe Helper-Kommentar. -->
+                        <Popup x:Name="PART_Popup" Placement="Bottom" AllowsTransparency="False" StaysOpen="False" Focusable="False"
                                PopupAnimation="Slide" IsOpen="{TemplateBinding IsDropDownOpen}"
                                helpers:PopupNoActivateHelper.Enabled="True">
                             <Border Background="{StaticResource CardBackgroundBrush}" BorderBrush="{StaticResource HairlineBrush}"
