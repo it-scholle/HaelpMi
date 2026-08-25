@@ -1,5 +1,6 @@
 <ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:helpers="clr-namespace:HaelpMi.UI.Helpers">
 
     <!-- Schlankes, helles Farbschema (Nutzerwunsch: "Apple-artig") - ein Akzentton statt
          der bisherigen Vielzahl an Ad-hoc-Hex-Farben je Button. Bestehende, semantisch
@@ -237,9 +238,12 @@
                              StaysOpen False: als layered Fenster (AllowsTransparency=True) verschluckt
                              dieses Popup unter RDP/VM ohne GPU-Beschleunigung den ersten Klick auf ein
                              ComboBoxItem, SelectedItem ändert sich dann nicht. Deshalb hier auch kein
-                             CornerRadius/DropShadowEffect auf der Border - beides setzt Transparenz voraus. -->
+                             CornerRadius/DropShadowEffect auf der Border - beides setzt Transparenz voraus.
+                             PopupNoActivateHelper zusätzlich, weil AllowsTransparency=False allein den
+                             Klick unter RDP/VM nicht immer robust durchreicht - siehe Helper-Kommentar. -->
                         <Popup x:Name="Popup" Placement="Bottom" AllowsTransparency="False" StaysOpen="False" Focusable="False"
-                               PopupAnimation="Slide" IsOpen="{TemplateBinding IsDropDownOpen}">
+                               PopupAnimation="Slide" IsOpen="{TemplateBinding IsDropDownOpen}"
+                               helpers:PopupNoActivateHelper.Enabled="True">
                             <Border Background="{StaticResource CardBackgroundBrush}" BorderBrush="{StaticResource HairlineBrush}"
                                     BorderThickness="1" Margin="0,4,0,0"
                                     MinWidth="{Binding ActualWidth, RelativeSource={RelativeSource TemplatedParent}}">
