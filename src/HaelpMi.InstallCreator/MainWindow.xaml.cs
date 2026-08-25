@@ -347,6 +347,10 @@ public partial class MainWindow : Window
         // hier EINMALIG fertig kompiliert und danach als bereits fertige Datei in den
         // Admin-Installer eingebettet - Reihenfolge ist deshalb zwingend User vor Admin.
         var userPayloadDir = Path.Combine(installerDir, "UserInstallerPayload");
+        if (Directory.Exists(userPayloadDir))
+        {
+            Directory.Delete(userPayloadDir, recursive: true);
+        }
         Directory.CreateDirectory(userPayloadDir);
         Log("Schritt 2/3: User-Installer wird kompiliert (für die Einbettung in den Admin-Installer)...");
         // Nutzerfrage 06.08.2026 ("braucht der User-Installer wirklich ein Passwort?"): nein -
@@ -427,6 +431,15 @@ public partial class MainWindow : Window
         }
 
         var payloadDir = Path.Combine(installerDir, "payload");
+        // Bugfix (Fehlerbericht "Installer 900MB statt ~120MB"): CreateDirectory allein leert
+        // einen bereits existierenden Ordner nicht - Reste aus früheren/fremden Läufen (z. B.
+        // ein hier abgelegtes, längst veraltetes update-seed-Paket) blieben liegen und wurden
+        // vom Inno-Skript ungefiltert mitgenommen (payload\* recursesubdirs). Ab jetzt kann nur
+        // noch im Payload landen, was dieser Lauf tatsächlich selbst erzeugt.
+        if (Directory.Exists(payloadDir))
+        {
+            Directory.Delete(payloadDir, recursive: true);
+        }
         Directory.CreateDirectory(payloadDir);
 
         for (var i = 0; i < PayloadProjects.Length; i++)
