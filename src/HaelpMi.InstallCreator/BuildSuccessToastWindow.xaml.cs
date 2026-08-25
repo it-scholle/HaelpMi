@@ -13,7 +13,7 @@ namespace HaelpMi.InstallCreator;
 /// </summary>
 public partial class BuildSuccessToastWindow : Window
 {
-    private readonly string _filePath;
+    private string _filePath;
     private readonly DispatcherTimer _autoCloseTimer;
 
     public BuildSuccessToastWindow(string title, string subText, string filePath)
@@ -72,6 +72,27 @@ public partial class BuildSuccessToastWindow : Window
 
         _autoCloseTimer.Stop();
         AnimateOutAndClose();
+    }
+
+    private void MoveToMountButton_Click(object sender, RoutedEventArgs e)
+    {
+        _autoCloseTimer.Stop();
+
+        try
+        {
+            _filePath = InstallerMountMover.MoveToMount(_filePath);
+            SubText.Text = "Liegt jetzt auf Z:\\HaelpMi-Installer\\";
+        }
+        catch (Exception ex)
+        {
+            System.Windows.MessageBox.Show($"Verschieben nach Z: fehlgeschlagen:{Environment.NewLine}{ex.Message}",
+                "HälpMi Install-Creator", MessageBoxButton.OK, MessageBoxImage.Error);
+            _autoCloseTimer.Start();
+            return;
+        }
+
+        _autoCloseTimer.Interval = TimeSpan.FromSeconds(2);
+        _autoCloseTimer.Start();
     }
 
     private void CloseButton_Click(object sender, RoutedEventArgs e)

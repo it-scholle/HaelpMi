@@ -141,8 +141,12 @@
                     <TextBlock Text="Admin-Installer erstellt" FontWeight="SemiBold" FontSize="13" />
                     <TextBlock x:Name="LastBuildFileText" Foreground="{StaticResource TextSecondaryBrush}"
                                FontSize="11" TextWrapping="Wrap" Margin="0,4,0,12" />
-                    <Button x:Name="LastBuildShowButton" Content="Anzeigen" HorizontalAlignment="Left"
-                            Padding="14,6" Click="LastBuildShowButton_Click" />
+                    <StackPanel Orientation="Horizontal">
+                        <Button x:Name="LastBuildShowButton" Content="Anzeigen" HorizontalAlignment="Left"
+                                Padding="14,6" Click="LastBuildShowButton_Click" />
+                        <Button x:Name="LastBuildMoveButton" Content="Nach Z: verschieben" HorizontalAlignment="Left"
+                                Padding="14,6" Margin="8,0,0,0" Click="LastBuildMoveButton_Click" />
+                    </StackPanel>
                 </StackPanel>
             </Border>
         </StackPanel>
