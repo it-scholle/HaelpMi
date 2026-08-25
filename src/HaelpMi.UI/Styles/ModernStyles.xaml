@@ -173,6 +173,10 @@
     <Style TargetType="ComboBoxItem">
         <Setter Property="Padding" Value="10,7" />
         <Setter Property="FontFamily" Value="{StaticResource AppFontFamily}" />
+        <!-- Explizit Transparent statt unset: ein Border ohne gezeichneten Hintergrund ist in
+             WPF nur dort hit-test-fähig, wo tatsächlich Inhalt gezeichnet wird (hier der kurze
+             Textinhalt) - Klick/Hover auf den Rest der Zeile (Padding-Fläche) ginge sonst ins Leere. -->
+        <Setter Property="Background" Value="Transparent" />
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="ComboBoxItem">
@@ -181,6 +185,12 @@
                     </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsHighlighted" Value="True">
+                            <Setter TargetName="Bd" Property="Background" Value="{StaticResource SecondaryButtonBrush}" />
+                        </Trigger>
+                        <!-- Zusätzlich zu IsHighlighted: HoverTrackingHelper.IsCursorOver greift dort,
+                             wo IsHighlighted (auf MouseEnter/Leave angewiesen) in VM/RDP-Sitzungen mit
+                             gedrosselten Mausbewegungs-Nachrichten ausbleibt - siehe Helper-Kommentar. -->
+                        <Trigger Property="helpers:HoverTrackingHelper.IsCursorOver" Value="True">
                             <Setter TargetName="Bd" Property="Background" Value="{StaticResource SecondaryButtonBrush}" />
                         </Trigger>
                         <Trigger Property="IsSelected" Value="True">
@@ -248,7 +258,8 @@
                              unter RDP/VM nicht immer robust durchreicht - siehe Helper-Kommentar. -->
                         <Popup x:Name="PART_Popup" Placement="Bottom" AllowsTransparency="False" StaysOpen="False" Focusable="False"
                                PopupAnimation="Slide" IsOpen="{TemplateBinding IsDropDownOpen}"
-                               helpers:PopupNoActivateHelper.Enabled="True">
+                               helpers:PopupNoActivateHelper.Enabled="True"
+                               helpers:HoverTrackingHelper.Enabled="True">
                             <Border Background="{StaticResource CardBackgroundBrush}" BorderBrush="{StaticResource HairlineBrush}"
                                     BorderThickness="1" Margin="0,4,0,0"
                                     MinWidth="{Binding ActualWidth, RelativeSource={RelativeSource TemplatedParent}}">
