@@ -2,6 +2,8 @@ using System.Diagnostics;
 using System.IO;
 using System.Threading;
 using System.Windows;
+using System.Windows.Interop;
+using System.Windows.Media;
 using HaelpMi.Core.Diagnostics;
 using HaelpMi.Core.Interop;
 using HaelpMi.Core.Ipc;
@@ -64,6 +66,15 @@ public partial class App : System.Windows.Application
     // dasselbe etablierte WPF-Muster wie bei einem async Button_Click-Handler.
     protected override async void OnStartup(StartupEventArgs e)
     {
+        // Nutzer-Repro 25.08.2026 (Issue #1): Auswahl selbst funktioniert, aber die
+        // Hover-Vorschau (welcher Eintrag beim Überfahren markiert würde) bleibt in VM/
+        // RDP-Sitzungen ohne echtes Monitor-/Vsync-Signal aus - WPFs Compositor-Thread
+        // bekommt dort keinen Takt für die vielen kleinen Repaints beim Mausbewegen,
+        // größere Repaints (z. B. beim Schließen des Popups) laufen dagegen normal durch.
+        // SoftwareOnly nutzt einen eigenen Rasterizer-Pfad ohne diese Abhängigkeit vom
+        // fehlenden Vsync-Signal - muss vor jeder Fenstererzeugung gesetzt werden.
+        RenderOptions.ProcessRenderMode = RenderMode.SoftwareOnly;
+
         base.OnStartup(e);
 
         CrashLogger.InstallProcessWideHooks(nameof(HaelpMi.Config));
