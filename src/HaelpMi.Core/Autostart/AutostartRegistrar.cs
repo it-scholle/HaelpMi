@@ -8,7 +8,10 @@ namespace HaelpMi.Core.Autostart;
 /// FR-nothing-explicit-but-3.1-implies-it): the Agent calls <see cref="EnsureRegistered"/>
 /// once on its own startup. Deliberately per-user-session (kein SYSTEM-Dienst), um
 /// Session-0-Isolation (5.3) zu vermeiden - ein SYSTEM-Dienst kann keine UI auf dem
-/// interaktiven Desktop zeigen, was das erzwungene Popup (FR-9) zwingend braucht.
+/// interaktiven Desktop zeigen, was das erzwungene Popup (FR-9) zwingend braucht. Der
+/// registrierte Task deckt neben dem normalen Anmelden/Neustart auch Fast User Switching
+/// ohne Logout ab (SessionStateChangeTrigger/ConsoleConnect, siehe BuildTaskXml) - beides
+/// läuft über denselben per-Sitzung-Principal, kein zweiter Mechanismus nötig.
 ///
 /// Uses schtasks.exe via ProcessStartInfo.ArgumentList (no shell involved, so no
 /// command-injection surface) rather than a Task Scheduler COM/NuGet dependency, to
@@ -78,7 +81,20 @@ public static class AutostartRegistrar
                                      && principal.Element(ns + "UserId") is null;
             var commandMatchesCurrentPath = string.Equals(command, executablePath, StringComparison.OrdinalIgnoreCase);
 
-            return hasGroupPrincipal && commandMatchesCurrentPath;
+            // Bugfix 25.08.2026 (Issue #9, "startet nach Nutzerwechsel ohne Logout/Reboot
+            // nicht"): ein Task von VOR diesem Fix hat weder den ConsoleConnect-Trigger noch
+            // Parallel als Instanzrichtlinie - beides muss zusätzlich zutreffen, sonst würde
+            // sich eine bestehende Installation nie selbst reparieren (gleiches Prinzip wie
+            // beim UserId->GroupId-Fix oben).
+            var triggers = doc.Root?.Element(ns + "Triggers");
+            var hasConsoleConnectTrigger = triggers?.Elements(ns + "SessionStateChangeTrigger")
+                .Any(t => string.Equals(t.Element(ns + "StateChange")?.Value, "ConsoleConnect", StringComparison.Ordinal)
+                          && t.Element(ns + "UserId") is null) ?? false;
+            var allowsParallelInstances = string.Equals(
+                doc.Root?.Element(ns + "Settings")?.Element(ns + "MultipleInstancesPolicy")?.Value,
+                "Parallel", StringComparison.Ordinal);
+
+            return hasGroupPrincipal && commandMatchesCurrentPath && hasConsoleConnectTrigger && allowsParallelInstances;
         }
         catch (System.Xml.XmlException)
         {
@@ -179,13 +195,27 @@ public static class AutostartRegistrar
                     new XElement(ns + "Description", "HälpMi Agent - startet automatisch bei jeder Anmeldung, unabhängig davon, welcher Nutzer sich anmeldet.")),
                 new XElement(ns + "Triggers",
                     new XElement(ns + "LogonTrigger",
-                        new XElement(ns + "Enabled", "true"))), // keine <UserId> = jede Anmeldung, nicht nur eines bestimmten Nutzers
+                        new XElement(ns + "Enabled", "true")), // keine <UserId> = jede Anmeldung, nicht nur eines bestimmten Nutzers
+                    // Bugfix 25.08.2026 (Issue #9): LogonTrigger allein feuert bei Fast User
+                    // Switching zu einem zweiten, noch nicht angemeldeten Nutzer unzuverlässig -
+                    // ConsoleConnect ist das dokumentierte Task-Scheduler-Ereignis genau für
+                    // diesen Fall (Wechsel auf einen Desktop per FUS, auch ohne Logout/Reboot).
+                    // Auch hier keine <UserId> = jeder Nutzerwechsel, nicht nur ein bestimmter.
+                    new XElement(ns + "SessionStateChangeTrigger",
+                        new XElement(ns + "Enabled", "true"),
+                        new XElement(ns + "StateChange", "ConsoleConnect"))),
                 new XElement(ns + "Principals",
                     new XElement(ns + "Principal", new XAttribute("id", "Author"),
                         new XElement(ns + "GroupId", BuiltInUsersGroupSid), // Gruppe statt fester Nutzer-SID - läuft in der jeweils eigenen Sitzung
                         new XElement(ns + "RunLevel", "LeastPrivilege"))),
                 new XElement(ns + "Settings",
-                    new XElement(ns + "MultipleInstancesPolicy", "IgnoreNew"),
+                    // Bugfix 25.08.2026 (Issue #9): IgnoreNew zählt Instanzen task-weit, nicht
+                    // pro Sitzung - solange Nutzer A's Instanz läuft, hätte Nutzer B beim
+                    // Wechsel nie eine eigene bekommen. Parallel erlaubt das; die eigentliche
+                    // Dopplung innerhalb EINER Sitzung (falls LogonTrigger und
+                    // SessionStateChangeTrigger für dieselbe Anmeldung beide feuern) verhindert
+                    // ohnehin schon die sitzungsweise "Local\"-Mutex-Sperre in App.xaml.cs.
+                    new XElement(ns + "MultipleInstancesPolicy", "Parallel"),
                     new XElement(ns + "DisallowStartIfOnBatteries", "false"), // Alarmsystem - darf nicht vom Netzteilstatus abhängen
                     new XElement(ns + "StopIfGoingOnBatteries", "false"),
                     new XElement(ns + "AllowHardTerminate", "true"),

@@ -44,6 +44,33 @@ public class AutostartRegistrarTests
     }
 
     [Fact]
+    public void BuildTaskXml_HasConsoleConnectTrigger_ForFastUserSwitchingWithoutUserId()
+    {
+        // Issue #9: LogonTrigger allein feuert bei Fast User Switching zu einem zweiten
+        // Nutzer unzuverlässig - ConsoleConnect deckt genau diesen Fall ab. Wie beim
+        // LogonTrigger auch hier kein <UserId>, sonst gilt es wieder nur für einen Nutzer.
+        var doc = XDocument.Parse(AutostartRegistrar.BuildTaskXml(ExePath));
+
+        var trigger = doc.Root!.Element(Ns + "Triggers")!.Element(Ns + "SessionStateChangeTrigger")!;
+
+        Assert.Equal("true", trigger.Element(Ns + "Enabled")!.Value);
+        Assert.Equal("ConsoleConnect", trigger.Element(Ns + "StateChange")!.Value);
+        Assert.Null(trigger.Element(Ns + "UserId"));
+    }
+
+    [Fact]
+    public void BuildTaskXml_AllowsParallelInstances_SoASecondUsersSessionIsNotIgnored()
+    {
+        // Issue #9: IgnoreNew zählt Instanzen task-weit statt pro Sitzung - solange Nutzer
+        // A's Instanz läuft, würde Nutzer B beim Wechsel nie eine eigene bekommen.
+        var doc = XDocument.Parse(AutostartRegistrar.BuildTaskXml(ExePath));
+
+        var settings = doc.Root!.Element(Ns + "Settings")!;
+
+        Assert.Equal("Parallel", settings.Element(Ns + "MultipleInstancesPolicy")!.Value);
+    }
+
+    [Fact]
     public void BuildTaskXml_DoesNotSkipRunOnBatteryPower()
     {
         // Zweiter Teil desselben Bugfix: schtasks' eigene Standardwerte hätten den Agent auf
@@ -106,6 +133,40 @@ public class AutostartRegistrarTests
                   <RunLevel>LeastPrivilege</RunLevel>
                 </Principal>
               </Principals>
+              <Actions Context="Author">
+                <Exec>
+                  <Command>C:\Program Files\HaelpMi\HaelpMi.Agent.exe</Command>
+                </Exec>
+              </Actions>
+            </Task>
+            """;
+
+        Assert.False(AutostartRegistrar.TaskXmlIsUpToDate(preFixXml, ExePath));
+    }
+
+    [Fact]
+    public void TaskXmlIsUpToDate_PreFix_MissingConsoleConnectTrigger_IsNotUpToDate()
+    {
+        // Bugfix 25.08.2026 (Issue #9): ein Task von VOR diesem Fix hat den GroupId-Principal
+        // schon (08.08.2026-Fix), aber weder den ConsoleConnect-Trigger noch Parallel als
+        // Instanzrichtlinie - eine bestehende Installation muss sich trotzdem selbst reparieren.
+        const string preFixXml = """
+            <?xml version="1.0" encoding="UTF-16"?>
+            <Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
+              <Triggers>
+                <LogonTrigger>
+                  <Enabled>true</Enabled>
+                </LogonTrigger>
+              </Triggers>
+              <Principals>
+                <Principal id="Author">
+                  <GroupId>S-1-5-32-545</GroupId>
+                  <RunLevel>LeastPrivilege</RunLevel>
+                </Principal>
+              </Principals>
+              <Settings>
+                <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>
+              </Settings>
               <Actions Context="Author">
                 <Exec>
                   <Command>C:\Program Files\HaelpMi\HaelpMi.Agent.exe</Command>
