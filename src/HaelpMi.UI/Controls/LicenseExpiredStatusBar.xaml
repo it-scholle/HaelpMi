@@ -1,0 +1,20 @@
+<UserControl x:Class="HaelpMi.UI.Controls.LicenseExpiredStatusBar"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/HaelpMi.UI;component/Styles/ModernStyles.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </UserControl.Resources>
+    <Border Background="#FF3B30" CornerRadius="10" Padding="14,11">
+        <DockPanel LastChildFill="True">
+            <TextBlock x:Name="ActionLink" DockPanel.Dock="Right" Text="Neue Lizenz anfordern" Foreground="White"
+                       FontWeight="SemiBold" FontSize="12" VerticalAlignment="Center" Cursor="Hand"
+                       MouseLeftButtonUp="ActionLink_MouseLeftButtonUp" />
+            <TextBlock x:Name="MessageText" Foreground="#FFD9D5" FontSize="12.5" TextWrapping="Wrap"
+                       VerticalAlignment="Center" Margin="0,0,16,0" />
+        </DockPanel>
+    </Border>
+</UserControl>

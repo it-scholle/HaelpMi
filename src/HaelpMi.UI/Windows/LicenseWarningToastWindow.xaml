@@ -1,0 +1,59 @@
+<Window x:Class="HaelpMi.UI.Windows.LicenseWarningToastWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="HälpMi"
+        Width="360" SizeToContent="Height"
+        WindowStyle="None" ResizeMode="NoResize"
+        ShowInTaskbar="False" Topmost="True"
+        Background="Transparent" AllowsTransparency="True">
+    <Window.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/HaelpMi.UI;component/Styles/ModernStyles.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </Window.Resources>
+    <Grid>
+        <Border x:Name="CardBorder" CornerRadius="14" Padding="14,12" BorderThickness="1">
+            <Border.Effect>
+                <DropShadowEffect BlurRadius="18" ShadowDepth="3" Opacity="0.28" />
+            </Border.Effect>
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <Ellipse Grid.Column="0" x:Name="DotIndicator" Width="10" Height="10"
+                         VerticalAlignment="Top" Margin="2,4,10,0" />
+
+                <StackPanel Grid.Column="1">
+                    <TextBlock x:Name="TitleText" FontWeight="Bold" FontSize="13" TextWrapping="Wrap" />
+                    <TextBlock x:Name="SubText" FontSize="11.5" Margin="0,3,0,9" TextWrapping="Wrap" />
+                    <DockPanel LastChildFill="False">
+                        <Button x:Name="SnoozeButton" DockPanel.Dock="Left" Content="Erinnere mich in &#9662;"
+                                Background="Transparent" BorderThickness="0" Padding="0" FontSize="11"
+                                FontWeight="SemiBold" Cursor="Hand" Click="SnoozeButton_Click" />
+                        <Button x:Name="ActionButton" DockPanel.Dock="Right" Content="Neue Lizenz anfordern"
+                                Padding="10,6" FontSize="11" BorderThickness="0" Click="ActionButton_Click" />
+                    </DockPanel>
+                </StackPanel>
+
+                <Button Grid.Column="2" x:Name="CloseButton" Content="&#10005;" Width="20" Height="20"
+                        VerticalAlignment="Top" Background="Transparent" BorderThickness="0"
+                        Padding="0" FontSize="10" Cursor="Hand" Click="CloseButton_Click" />
+            </Grid>
+        </Border>
+
+        <!-- AllowsTransparency bewusst False + StaysOpen False (siehe ComboBox-Template in
+             ModernStyles.xaml): als layered Popup verschluckt es sonst unter RDP/VM ohne
+             GPU-Beschleunigung den ersten Klick auf eine Option. -->
+        <Popup x:Name="SnoozePopup" PlacementTarget="{Binding ElementName=SnoozeButton}" Placement="Bottom"
+               AllowsTransparency="False" StaysOpen="False">
+            <Border Background="White" BorderBrush="#D2D2D7" BorderThickness="1" MinWidth="150" Margin="0,4,0,0">
+                <StackPanel x:Name="SnoozeOptionsPanel" />
+            </Border>
+        </Popup>
+    </Grid>
+</Window>
