@@ -260,12 +260,18 @@
                                PopupAnimation="Slide" IsOpen="{TemplateBinding IsDropDownOpen}"
                                helpers:PopupNoActivateHelper.Enabled="True"
                                helpers:HoverTrackingHelper.Enabled="True">
+                            <!-- Äußere Border deckt die volle Popup-Fläche inkl. des 4px-Abstands zur
+                                 ComboBox ab (Margin unten auf der Karte, nicht hier) - ohne sie bliebe
+                                 dieser Abstand unbemalt und erschien seit AllowsTransparency=False als
+                                 schwarzer Balken statt (wie zuvor bei transparentem Popup) unsichtbar. -->
+                            <Border Background="{StaticResource WindowBackgroundBrush}">
                             <Border Background="{StaticResource CardBackgroundBrush}" BorderBrush="{StaticResource HairlineBrush}"
                                     BorderThickness="1" Margin="0,4,0,0"
                                     MinWidth="{Binding ActualWidth, RelativeSource={RelativeSource TemplatedParent}}">
                                 <ScrollViewer SnapsToDevicePixels="True" MaxHeight="{TemplateBinding MaxDropDownHeight}">
                                     <ItemsPresenter KeyboardNavigation.DirectionalNavigation="Contained" />
                                 </ScrollViewer>
+                            </Border>
                             </Border>
                         </Popup>
                     </Grid>
