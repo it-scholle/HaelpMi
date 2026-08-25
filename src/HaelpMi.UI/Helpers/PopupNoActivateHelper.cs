@@ -1,19 +1,15 @@
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls.Primitives;
-using System.Windows.Input;
 using System.Windows.Interop;
 
 namespace HaelpMi.UI.Helpers;
 
 /// <summary>
-/// Zwei Absicherungen gegen einen unter RDP/VM gemeldeten Bug, bei dem der erste Klick auf ein
-/// Popup-Element (z. B. ein ComboBoxItem) wirkungslos bleibt - Auswahl bleibt auf dem vorherigen
-/// Eintrag stehen: WS_EX_NOACTIVATE verhindert, dass das Popup-Fenster beim Öffnen als eigene
-/// Fensteraktivierung behandelt wird (die sonst den ersten Klick statt an das Element an die
-/// Aktivierung selbst gehen lässt); Mouse.Capture bindet die Maus zusätzlich explizit an den
-/// Popup-Inhalt, statt sich auf die implizite Windows-Zuordnung zu verlassen. Aktivierung per
-/// XAML: Enabled="True" auf dem Popup.
+/// WS_EX_NOACTIVATE verhindert, dass das Popup-Fenster beim Öffnen als eigene
+/// Fensteraktivierung behandelt wird - unter RDP/VM ohne dieses Flag ging sonst der erste
+/// Klick auf ein Popup-Element (z. B. ein ComboBoxItem) an die Aktivierung statt an das
+/// Element. Aktivierung per XAML: Enabled="True" auf dem Popup.
 /// </summary>
 public static class PopupNoActivateHelper
 {
@@ -28,7 +24,6 @@ public static class PopupNoActivateHelper
         if (d is Popup popup && e.NewValue is true)
         {
             popup.Opened += (_, _) => OnOpened(popup);
-            popup.Closed += (_, _) => OnClosed(popup);
         }
     }
 
@@ -38,16 +33,6 @@ public static class PopupNoActivateHelper
         {
             var exStyle = GetWindowLong(hwndSource.Handle, GwlExStyle);
             SetWindowLong(hwndSource.Handle, GwlExStyle, exStyle | WsExNoActivate);
-        }
-
-        Mouse.Capture(popup.Child, CaptureMode.SubTree);
-    }
-
-    private static void OnClosed(Popup popup)
-    {
-        if (Mouse.Captured == popup.Child)
-        {
-            Mouse.Capture(null);
         }
     }
 
