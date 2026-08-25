@@ -203,8 +203,15 @@ public partial class ConfigWindow : Window
     // Nutzerwunsch 04.08.2026 (schon im Admin-Dashboard umgesetzt, jetzt auch hier): "blur
     // soll auch funktionieren, wenn ich nur aus dem Feld klicke, nicht gezwungen aktiv in
     // ein anderes Feld" - siehe AdminDashboardWindow.Window_PreviewMouseDown für die
-    // ausführliche Begründung, identisches Vorgehen hier.
-    private void Window_PreviewMouseDown(object sender, MouseButtonEventArgs e) => Keyboard.Focus(this);
+    // ausführliche Begründung (inkl. ComboBox-Ausnahme), identisches Vorgehen hier.
+    private void Window_PreviewMouseDown(object sender, MouseButtonEventArgs e)
+    {
+        if (e.OriginalSource is DependencyObject source && WindowFocusHelper.IsWithinComboBox(source))
+        {
+            return;
+        }
+        Keyboard.Focus(this);
+    }
 
     private async void OpenAdminDashboardButton_Click(object sender, RoutedEventArgs e)
     {

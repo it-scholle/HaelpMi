@@ -153,7 +153,18 @@ public partial class AdminDashboardWindow : Window
     // tunneln von der Wurzel nach unten, laufen also VOR der eigentlichen Klick-Behandlung
     // ab) - falls das tatsächliche Ziel selbst fokussierbar ist (TextBox, ComboBox, ...),
     // übernimmt die normale WPF-Klick-Logik direkt danach ohnehin wieder dessen Fokus.
-    private void Window_PreviewMouseDown(object sender, MouseButtonEventArgs e) => Keyboard.Focus(this);
+    // Nutzer-Repro 25.08.2026 (Issue #1): ein Klick, der die ComboBox öffnet, feuert dieses
+    // Handler ebenfalls - Keyboard.Focus(this) mitten im Öffnen des Popups riss der ComboBox
+    // dabei den Fokus weg, wodurch der anschließende Klick auf ein Popup-Element nicht mehr
+    // als Auswahl zählte, sondern wie ein Klick außerhalb des Popups behandelt wurde.
+    private void Window_PreviewMouseDown(object sender, MouseButtonEventArgs e)
+    {
+        if (e.OriginalSource is DependencyObject source && WindowFocusHelper.IsWithinComboBox(source))
+        {
+            return;
+        }
+        Keyboard.Focus(this);
+    }
 
     // Bugfix 07.08.2026 (Fehlerbericht "Sender deselektiert sich, wenn ich einen Empfänger
     // auswähle"): GroupsList/ProfileCombo setzen ihr ItemsSource bei jedem Reload auf null
