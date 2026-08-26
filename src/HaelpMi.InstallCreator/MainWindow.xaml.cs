@@ -36,8 +36,8 @@ public partial class MainWindow : Window
         // Textvorschlag, der Nutzer kann ihn wie bisher jederzeit überschreiben.
         CustomerNameBox.Text = $"TG{version}";
 
-        // Issue #39: Vorschlagswert aus dem lokalen Zähler, vom Nutzer bei Bedarf überschreibbar.
-        CustomerNumberBox.Text = CustomerNumberStore.GetNextSuggested().ToString();
+        // Issue #39/#31: Vorschlagswert aus dem lokalen Kundenregister, vom Nutzer bei Bedarf überschreibbar.
+        CustomerNumberBox.Text = CustomerRegistryStore.GetNextSuggested().ToString();
     }
 
     private void GeneratePasswordButton_Click(object sender, RoutedEventArgs e) =>
@@ -414,7 +414,10 @@ public partial class MainWindow : Window
             var outputDir = Path.Combine(installerDir, "Output");
             Log($"Admin-Installer erfolgreich erstellt (siehe {outputDir}). " +
                 "Das ist die einzige Datei, die an den Sysadmin geht.");
-            CustomerNumberStore.Advance(customerNumber);
+            // LizenzAblauf/Kontakt bewusst noch null - Befüllung folgt erst mit #18/#19 (#21).
+            CustomerRegistryStore.Append(new CustomerRegistryEntry(
+                customerNumber, customerGroupId, customerNameOrTestLabel, isTestInstaller,
+                DateTime.Now, LizenzAblauf: null, Kontakt: null));
             ShowSuccessToast(outputDir);
         }
         else
