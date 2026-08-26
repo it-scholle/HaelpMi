@@ -12,6 +12,7 @@ using HaelpMi.Core.Models;
 using HaelpMi.Core.Networking;
 using HaelpMi.Core.Runtime;
 using HaelpMi.Core.Storage;
+using HaelpMi.UI.Windows;
 
 namespace HaelpMi.Agent;
 
@@ -378,6 +379,10 @@ public partial class App : System.Windows.Application
             // "HälpMi Dashboard" (siehe installer/HaelpMiCommon.iss.inc).
             menu.Items.Add("Dashboard öffnen", null, (_, _) => OpenDashboardDirectly());
         }
+        // Issue #6: allen Rollen zugänglich, deshalb außerhalb des Admin-Ifs oben - anders
+        // als Konfiguration/Dashboard braucht "Über mich" keinen eigenen Prozess
+        // (HaelpMi.Config.exe), da der Agent HaelpMi.UI ohnehin schon referenziert.
+        menu.Items.Add("Über HälpMi", null, (_, _) => new AboutWindow(_deployment).Show());
 
         _trayIcon = new System.Windows.Forms.NotifyIcon
         {
