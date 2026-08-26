@@ -65,6 +65,54 @@ public class AlarmFeedbackChannelTests
         Assert.Equal(alarmSessionId, received!.AlarmSessionId);
     }
 
+    /// <summary>
+    /// Issue #38: "bin unterwegs" ist ein EINMALIGES Ereignis, anders als die wiederholt
+    /// gesendete Alarm-Anfrage - trifft es bei der Primary ein, während die eigentlich
+    /// wartende Satellite-Sitzung ihren Relay-Client noch verbindet (Normalfall direkt nach
+    /// einem Fast User Switch), darf es nicht endgültig verloren gehen. Reproduziert die
+    /// Race absichtlich: erst senden, DANACH erst den Satellite starten.
+    /// </summary>
+    [Fact]
+    public async Task LateConnectingSatellite_StillReceivesOnMyWaySentBeforeItConnected()
+    {
+        var customerGroupId = Guid.NewGuid();
+        var senderDeviceId = Guid.NewGuid();
+        var identity = MakeIdentity(customerGroupId, senderDeviceId);
+        var port = GetFreeTcpPort();
+
+        await using var primary = new AlarmFeedbackChannel(() => identity);
+        primary.Start(port);
+        Assert.True(primary.IsPrimary);
+
+        var alarmSessionId = Guid.NewGuid();
+        var message = new AlarmOnMyWayMessage(
+            customerGroupId, Guid.NewGuid(), alarmSessionId, Guid.NewGuid(), "RESPONDER-PC", "Antworter",
+            "Antwort-Raum", DateTimeOffset.UtcNow);
+        var senderTarget = new DeviceEntry { DeviceId = senderDeviceId, IpAddress = "127.0.0.1" };
+
+        await SendOnMyWayToPortAsync(senderTarget, message, port);
+        await Task.Delay(TimeSpan.FromMilliseconds(300)); // Primary Zeit geben, den (clientlosen) Broadcast abzuschließen
+
+        await using var satellite = new AlarmFeedbackChannel(() => identity);
+        var satelliteReceived = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        AlarmOnMyWayMessage? received = null;
+        satellite.OnMyWayReceived += (_, m) =>
+        {
+            received = m;
+            satelliteReceived.TrySetResult();
+        };
+
+        satellite.Start(port);
+        Assert.False(satellite.IsPrimary);
+
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        await Task.WhenAny(satelliteReceived.Task, Task.Delay(Timeout.InfiniteTimeSpan, timeout.Token));
+
+        Assert.True(satelliteReceived.Task.IsCompleted, "Satellite hat eine vor ihrer Verbindung eingetroffene 'bin unterwegs'-Antwort nicht nachgeliefert bekommen.");
+        Assert.NotNull(received);
+        Assert.Equal(alarmSessionId, received!.AlarmSessionId);
+    }
+
     // AlarmFeedbackChannel.SendOnMyWayAsync verbindet fest gegen AppConstants.AlarmFeedbackTcpPort,
     // die Tests brauchen aber einen freien Port, um nicht mit einer echten lokalen Instanz zu
     // kollidieren - deshalb hier ein eigener minimaler Sender direkt gegen den Test-Port,

@@ -13,12 +13,25 @@ namespace HaelpMi.Core.Networking;
 /// zusätzlich an alle verbundenen Satellite-Instanzen derselben Maschine weiter (Issue #9-
 /// Nachtrag 2) - identisches Muster wie <see cref="AlarmRelayServer"/> für den Alarm-
 /// Empfangskanal, hier für "bin unterwegs" + Status-Relay.
+///
+/// Nachlieferung an frisch verbundene Satellites (Issue #38): anders als eine Alarm-Anfrage
+/// (die sich bei einem knapp verpassten Broadcast beim nächsten 5-Sekunden-Repeat von selbst
+/// heilt) ist "bin unterwegs" ein EINMALIGES Ereignis - trifft es ein, während eine Satellite-
+/// Sitzung ihren Relay-Client gerade erst verbindet (direkt nach einem Fast User Switch der
+/// Normalfall), wäre es ohne diesen Puffer endgültig verloren. <see cref="AcceptLoopAsync"/>
+/// liefert einer neu verbundenen Sitzung deshalb erst den kurzen Rückstand nach, bevor sie
+/// überhaupt in <see cref="_clients"/> aufgenommen wird - Duplikate durch die daraus
+/// resultierende Überschneidung sind unkritisch, beide Empfänger (RepeatingAlarmSession/
+/// AlarmFlowCoordinator) verarbeiten dieselbe Nachricht bereits idempotent.
 /// </summary>
 public sealed class AlarmFeedbackRelayServer : IAsyncDisposable
 {
     private const string BuiltInUsersGroupSid = "S-1-5-32-545";
 
+    private static readonly TimeSpan ReplayWindow = TimeSpan.FromSeconds(10);
+
     private readonly ConcurrentDictionary<Guid, NamedPipeServerStream> _clients = new();
+    private readonly ConcurrentQueue<(DateTimeOffset SentAtUtc, AlarmFeedbackEnvelope Envelope)> _recentBroadcasts = new();
     private CancellationTokenSource? _cts;
     private Task? _acceptLoop;
 
@@ -53,8 +66,46 @@ public sealed class AlarmFeedbackRelayServer : IAsyncDisposable
                 continue;
             }
 
+            // Rückstand nachliefern, BEVOR diese Sitzung in _clients aufgenommen wird - so
+            // kann kein gleichzeitiger BroadcastAsync-Aufruf parallel in denselben Pipe-Stream
+            // schreiben (NamedPipeServerStream ist nicht für nebenläufige Writer ausgelegt).
+            // Ein Broadcast, der exakt in der Mikrosekunden-Lücke zwischen Nachlieferung und
+            // Registrierung eintrifft, bliebe theoretisch weiterhin verpasst - ungleich
+            // unwahrscheinlicher als das ursprüngliche, mehrere Sekunden lange Verbindungs-
+            // fenster, das dieser Fix schließt.
+            if (!await TryReplayRecentBroadcastsAsync(server, ct))
+            {
+                continue; // Sitzung ist schon während der Nachlieferung wieder weg
+            }
+
             _clients[Guid.NewGuid()] = server;
         }
+    }
+
+    private async Task<bool> TryReplayRecentBroadcastsAsync(NamedPipeServerStream server, CancellationToken ct)
+    {
+        var cutoff = DateTimeOffset.UtcNow - ReplayWindow;
+        foreach (var (sentAtUtc, envelope) in _recentBroadcasts)
+        {
+            if (sentAtUtc < cutoff)
+            {
+                continue;
+            }
+
+            try
+            {
+                var line = NetworkSerializer.Encoding.GetBytes(NetworkSerializer.ToJsonLine(envelope));
+                await server.WriteAsync(line, ct);
+                await server.FlushAsync(ct);
+            }
+            catch (Exception)
+            {
+                server.Dispose();
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private static NamedPipeServerStream CreatePipeServer()
@@ -71,6 +122,9 @@ public sealed class AlarmFeedbackRelayServer : IAsyncDisposable
     /// <summary>Best-effort wie <see cref="AlarmRelayServer.BroadcastAsync"/>: ein toter Satellite darf die anderen nicht blockieren.</summary>
     public async Task BroadcastAsync(AlarmFeedbackEnvelope envelope, CancellationToken ct)
     {
+        _recentBroadcasts.Enqueue((DateTimeOffset.UtcNow, envelope));
+        TrimRecentBroadcasts();
+
         var line = NetworkSerializer.Encoding.GetBytes(NetworkSerializer.ToJsonLine(envelope));
         foreach (var (id, server) in _clients)
         {
@@ -84,6 +138,18 @@ public sealed class AlarmFeedbackRelayServer : IAsyncDisposable
                 _clients.TryRemove(id, out _);
                 server.Dispose();
             }
+        }
+    }
+
+    // Läuft nur hier, bei jedem neuen Eintrag - die Warteschlange bleibt dadurch beschränkt,
+    // ohne einen eigenen Timer zu brauchen (ConcurrentQueue ist FIFO, das älteste Element
+    // steht also garantiert vorn).
+    private void TrimRecentBroadcasts()
+    {
+        var cutoff = DateTimeOffset.UtcNow - ReplayWindow;
+        while (_recentBroadcasts.TryPeek(out var oldest) && oldest.SentAtUtc < cutoff)
+        {
+            _recentBroadcasts.TryDequeue(out _);
         }
     }
 
