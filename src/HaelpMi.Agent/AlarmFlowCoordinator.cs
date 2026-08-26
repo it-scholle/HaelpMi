@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using HaelpMi.Core.Audio;
+using HaelpMi.Core.Interop;
 using HaelpMi.Core.Models;
 using HaelpMi.Core.Networking;
 using HaelpMi.Core.Networking.Protocol;
@@ -52,6 +53,21 @@ public sealed class AlarmFlowCoordinator
     public void HandleIncomingAlarmRequest(AlarmReceivedEventArgs args)
     {
         var request = args.Request;
+
+        // Bugfix 25.08.2026 (Issue #9-Nachtrag): bei Fast User Switching bekommt JEDE
+        // angemeldete Sitzung ein empfangenes Alarmsignal (siehe AlarmChannel), auch eine
+        // gerade weggeschaltete. Ein NEUES erzwungenes Popup dort kann niemand sehen oder
+        // wegklicken - lieber gar nicht erst zeigen, als eine Zustellung vortäuschen, die
+        // niemand wahrnimmt. Der Ack ans sendende Gerät ist davon unabhängig (Geräte-Ebene,
+        // siehe AlarmTcpListener) - nur die lokale Anzeige wird hier unterdrückt. Ein schon
+        // offenes Popup (aus der Zeit, als diese Sitzung noch aktiv war) wird trotzdem
+        // weiter aktualisiert, siehe unten - das erzeugt kein neues Popup.
+        if (!_openPopups.ContainsKey(request.AlarmSessionId) && !ActiveSessionDetector.IsCurrentSessionActive())
+        {
+            _auditLog.Append($"alarm popup unterdrückt (Sitzung nicht aktiv sichtbar): alarmSessionId={request.AlarmSessionId}");
+            return;
+        }
+
         var settings = _settingsProvider();
         var soundOption = IncomingSoundCatalog.Resolve(settings.IncomingSoundId);
 
