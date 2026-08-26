@@ -1,0 +1,15 @@
+#!/bin/sh
+# Deckt den Fall ab, dass sich der HAUPT-Checkout selbst per `git merge`/`git pull` auf einen
+# neueren Stand bewegt, ohne dass dort lokal committet wird (z. B. der Mensch zieht einen von
+# einer Session gepushten Merge nach) - ein reiner Commit-Hook sieht das nie, weil dabei kein
+# neuer Commit in DIESEM Checkout entsteht. Feuert auch bei einem Fast-Forward-Merge.
+#
+# Gleiche gemeinsame, zustandsbasierte Logik wie die anderen drei Hooks - siehe
+# lib/rebuild-installcreator.sh für Details und docs/WORKFLOW.md Abschnitt
+# "Install-Creator-Rebuild-Hook".
+
+set -e
+
+hook_dir=$(cd "$(dirname "$0")" && pwd)
+REBUILD_ALLOW_ABORT=0
+. "$hook_dir/lib/rebuild-installcreator.sh"

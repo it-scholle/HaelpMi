@@ -1,0 +1,15 @@
+#!/bin/sh
+# Deckt den Fall ab, den pre-commit allein verpasst (Fehlerbericht 26.08.2026, "InstallCreator
+# startet noch mit alter Versionsnummer" nach einem Merge über `git rebase --continue` +
+# `git commit --amend`): dieser Hook feuert nach `git commit --amend` UND nach jedem
+# `git rebase` (git ruft ihn dafür extra auf, unabhängig davon, ob pre-commit während des
+# Rebase selbst gelaufen ist - in der Praxis oft nicht, siehe lib/rebuild-installcreator.sh).
+#
+# Gleiche gemeinsame, zustandsbasierte Logik wie die anderen drei Hooks - siehe dort für
+# Details und docs/WORKFLOW.md Abschnitt "Install-Creator-Rebuild-Hook".
+
+set -e
+
+hook_dir=$(cd "$(dirname "$0")" && pwd)
+REBUILD_ALLOW_ABORT=0
+. "$hook_dir/lib/rebuild-installcreator.sh"

@@ -1,1 +1,6 @@
 *.sh text eol=lf
+
+# Git-Hooks selbst haben keine Dateiendung (pre-commit, post-merge, ...) - dieselbe
+# Shebang-Bruch-Gefahr wie bei *.sh oben, deshalb explizit mit aufgenommen (26.08.2026,
+# Fund beim Hinzufügen von .githooks/post-rewrite/post-merge/post-checkout).
+.githooks/* text eol=lf

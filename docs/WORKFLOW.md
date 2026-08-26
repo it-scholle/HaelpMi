@@ -106,11 +106,42 @@ Synchronhalten des Haupt-Checkouts nötig — `dotnet publish` ist an keinen bes
 Checkout-Pfad gebunden, die Indirektion über einen separaten Quell-Checkout entfällt dadurch
 komplett statt nur seltener aufzutreten.
 
+**Bugfix 26.08.2026 (Fehlerbericht "InstallCreator startet noch mit alter Versionsnummer"
+nach einem Merge, der über `git rebase --continue` + `git commit --amend` gelaufen ist):**
+der Hook war bis dahin rein ereignisbasiert — er lief nur bei einem "normalen" `git commit`
+mit passendem staged diff. `git rebase --continue` führt `pre-commit` in der Praxis oft gar
+nicht aus, und ein `--amend`, das nur die Commit-Message ändert (der eigentliche
+Versionssprung war schon im vorherigen, hookless durchgelaufenen Rebase-Schritt committet),
+findet keinen staged diff. Ergebnis: die veröffentlichte exe blieb auf dem Stand des letzten
+Commits stehen, der tatsächlich einen normalen `pre-commit`-Lauf ausgelöst hatte.
+
+Die eigentliche Rebuild-Logik liegt seither gemeinsam genutzt in
+`.githooks/lib/rebuild-installcreator.sh` und ist **zustandsbasiert statt ereignisbasiert**:
+ein Hash über die beobachteten Pfade wird nach jedem erfolgreichen Build in
+`tools/InstallCreator/.source-hash` (gitignored) festgehalten und bei jedem Hook-Aufruf mit
+dem aktuellen Stand verglichen — unabhängig davon, WELCHE Git-Operation zu diesem Stand
+geführt hat. Vier dünne Hook-Skripte sourcen dieselbe Datei:
+
+| Hook | Deckt ab |
+|---|---|
+| `pre-commit` | normaler `git commit` (weiterhin der Regelfall, kann den Commit bei einem erkannten Build-Race noch hart abbrechen — `REBUILD_ALLOW_ABORT=1`) |
+| `post-rewrite` | `git commit --amend` und `git rebase` (der Grund für diesen Bugfix) |
+| `post-merge` | `git merge`/`git pull` **im Haupt-Checkout selbst**, auch bei Fast-Forward — deckt den Fall, dass jemand einen von einer Session gepushten Merge nachzieht, ohne lokal zu committen |
+| `post-checkout` | Branch-/Worktree-Wechsel |
+
+Ein unveränderter Hash beendet den jeweiligen Hook sofort ohne `dotnet publish` — die
+allermeisten Aufrufe (Commits, die diese Pfade nicht berühren) bleiben dadurch schnell.
+
 Aktivierung einmalig pro lokalem Repository-Klon (Hooks sind nicht automatisch aktiv):
 
 ```
 git config core.hooksPath .githooks
 ```
+
+Wichtig: `core.hooksPath` zeigt (wie oben beschrieben) immer auf den **Haupt-Checkout**. Ein
+neuer/geänderter Hook aus einem Feature-Branch wirkt sich für ALLE Worktrees erst aus, sobald
+er dort gemergt UND der Haupt-Checkout selbst darauf aktualisiert ist (`git pull`/`checkout`) —
+`.githooks/` ist ein normales, versioniertes Verzeichnis, kein Sonderfall wie `tools/InstallCreator/`.
 
 **Nicht pro Worktree wiederholen — `core.hooksPath` liegt in der von allen Worktrees geteilten
 `.git/config`** (kein `extensions.worktreeConfig` gesetzt) und wird beim Setzen auf einen

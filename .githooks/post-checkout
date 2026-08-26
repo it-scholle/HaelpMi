@@ -1,0 +1,14 @@
+#!/bin/sh
+# Deckt den Fall ab, dass ein Branch-/Worktree-Wechsel den beobachteten Quellstand ändert
+# (z. B. `git checkout` auf einen anderen Branch, oder EnterWorktree) - ein reiner Commit-Hook
+# sieht das nie, weil dabei kein neuer Commit entsteht.
+#
+# Gleiche gemeinsame, zustandsbasierte Logik wie die anderen drei Hooks - siehe
+# lib/rebuild-installcreator.sh für Details und docs/WORKFLOW.md Abschnitt
+# "Install-Creator-Rebuild-Hook".
+
+set -e
+
+hook_dir=$(cd "$(dirname "$0")" && pwd)
+REBUILD_ALLOW_ABORT=0
+. "$hook_dir/lib/rebuild-installcreator.sh"

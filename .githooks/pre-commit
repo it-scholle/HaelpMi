@@ -1,156 +1,20 @@
 #!/bin/sh
 # Baut die veröffentlichte Install-Creator-Kopie in tools/InstallCreator/ automatisch neu,
-# sobald ein Commit Quellcode aus src/HaelpMi.InstallCreator oder src/HaelpMi.UpdateSigner
-# enthält. Grund: die CLAUDE.md-Regel "nach Änderung direkt neu bauen" wurde mehrfach von
-# Sessions vergessen (zuletzt v0.29.2/v0.29.3 - die exe lief danach noch auf dem Stand von
-# v0.27.0). Ein Git-Hook hängt nicht vom Erinnern einer Session ab, sondern greift bei jedem
-# Commit automatisch, egal ob Mensch oder Claude Code committet.
-#
-# Directory.Build.props zählt hier ausdrücklich mit dazu (Nutzerkorrektur 17.08.2026): das
-# Tool zeigt seine eigene Versionsnummer im Fenstertitel an (MainWindow.xaml.cs,
-# Assembly.GetExecutingAssembly().GetName().Version, gespeist aus genau dieser Datei bei
-# Build-Zeit) - ein reiner Versions-Bump-Commit ohne sonstige InstallCreator-Änderung ließ
-# die angezeigte Version sonst veraltet stehen (v0.34.1 bumpte nur die Zahl, der Hook griff
-# nicht, die schon veröffentlichte exe zeigte weiter v0.34.0).
+# sobald sich Quellcode aus src/HaelpMi.InstallCreator, src/HaelpMi.UpdateSigner oder
+# Directory.Build.props seit dem letzten erfolgreichen Build geändert hat. Die eigentliche
+# Logik liegt seit 26.08.2026 gemeinsam mit drei weiteren Hooks (post-rewrite, post-merge,
+# post-checkout) in lib/rebuild-installcreator.sh - siehe dort für die volle Historie/
+# Begründung und docs/WORKFLOW.md Abschnitt "Install-Creator-Rebuild-Hook".
 #
 # Aktivierung pro Checkout einmalig: git config core.hooksPath .githooks
 # (siehe docs/WORKFLOW.md und BUILD-UND-INSTALLATION.md)
-#
-# Bugfix 17.08.2026 (Fehlerbericht "Startmenü-Verknüpfung zeigt noch die alte Version"):
-# `git rev-parse --show-toplevel` liefert den Wurzelpfad des GERADE AUSFÜHRENDEN Checkouts -
-# bei einem Commit aus einem EnterWorktree-Worktree (Normalfall laut Branch-Pflicht in
-# CLAUDE.md) also den Worktree selbst, nicht den Haupt-Checkout. Der Rebuild landete dadurch
-# jeweils in der eigenen, beim Aufräumen wieder gelöschten Kopie des Worktrees - nie in
-# tools/InstallCreator/ des Haupt-Checkouts, auf das die tatsächlich genutzte Verknüpfung
-# zeigt. core.hooksPath wird beim Setzen dagegen immer als fester absoluter Pfad im
-# Haupt-Checkout abgelegt (siehe docs/WORKFLOW.md) - git führt das Hook-Skript also so oder so
-# immer von dort aus, egal welcher Worktree committet. Der eigene Skriptpfad ($0) ist daher
-# die verlässliche Quelle für den Haupt-Checkout-ZIELpfad (tools_dir) - s.u.
-#
-# Bugfix 19.08.2026 (Fehlerbericht "Build aus veraltetem Haupt-Checkout trotz aktuellem main"):
-# der Bugfix vom 17.08.2026 hat den aus $0 abgeleiteten Pfad fälschlich auch für die
-# Build-QUELLE verwendet, nicht nur fürs Ziel. War der Haupt-Checkout dadurch selbst auf einem
-# alten/detached Stand hängengeblieben (main lokal korrekt aktuell, Haupt-Checkout-Arbeits-
-# verzeichnis nicht), baute dotnet publish lautlos aus dem veralteten Code - unabhängig davon,
-# was der gerade laufende Commit tatsächlich enthielt. Quelle (source_root) und Ziel
-# (dest_root) werden seither strikt getrennt ermittelt: die Quelle über einen frischen
-# `git rev-parse --show-toplevel`, der git-seitig immer den tatsächlich committenden Checkout
-# liefert (Haupt-Checkout oder Worktree, je nachdem); das Ziel bleibt unverändert über $0 am
-# Haupt-Checkout. Zusätzlich prüft eine Verifikation nach dem Build (Hash- und Zeitstempel-
-# Abgleich, s.u.), dass das Artefakt wirklich aus dem verifizierten Quellstand stammt - bricht
-# den Commit hart ab statt still ein falsches Artefakt zu erzeugen, falls das je wieder
-# auseinanderläuft.
 
 set -e
 
 hook_dir=$(cd "$(dirname "$0")" && pwd)
-dest_root=$(dirname "$hook_dir")
 
-# source_root und verify_root werden bewusst durch zwei unabhängige Aufrufe ermittelt statt
-# eine Variable zweimal zu verwenden - ein künftiger fehlerhafter Edit an nur einer der beiden
-# Stellen (z. B. versehentlich wieder $0 statt --show-toplevel) fällt dadurch beim Vergleich
-# weiter unten auf, statt unbemerkt durchzurutschen.
-source_root=$(git rev-parse --show-toplevel)
-verify_root=$(git rev-parse --show-toplevel)
-
-staged=$(git diff --cached --name-only)
-
-if ! printf '%s\n' "$staged" | grep -qE '^src/HaelpMi\.(InstallCreator|UpdateSigner)/|^Directory\.Build\.props$'; then
-    exit 0
-fi
-
-echo "Pre-Commit-Hook: src/HaelpMi.InstallCreator, UpdateSigner bzw. Directory.Build.props geändert - baue tools/InstallCreator neu..."
-
-if [ "$source_root" != "$verify_root" ]; then
-    echo "Pre-Commit-Hook: FEHLER - Quell- und Verifikationspfad weichen voneinander ab" >&2
-    echo "  ('$source_root' vs. '$verify_root'). Commit abgebrochen statt aus falscher Quelle zu bauen." >&2
-    exit 1
-fi
-
-csproj="$source_root/src/HaelpMi.InstallCreator/HaelpMi.InstallCreator.csproj"
-tools_dir="$dest_root/tools/InstallCreator"
-
-if [ ! -f "$csproj" ]; then
-    echo "Pre-Commit-Hook: $csproj nicht gefunden - überspringe Rebuild." >&2
-    exit 0
-fi
-
-# Hash über die beobachteten Pfade unter $verify_root - dient als Nachweis nach dem Build, dass
-# wirklich aus diesem Stand gebaut wurde und sich die Quelle währenddessen nicht verändert hat.
-#
-# Bugfix 19.08.2026 (Fehlerbericht "Hash-Mismatch/'nicht neuer als Build-Start' bei praktisch
-# jedem Commit, der Directory.Build.props anfasst"): bin/ und obj/ unter
-# src/HaelpMi.InstallCreator bzw. src/HaelpMi.UpdateSigner wurden bisher mitgehasht, obwohl es
-# reine Build-Ausgaben sind (gitignored, kein Quellcode) - genau der dotnet-publish-Aufruf ein
-# paar Zeilen weiter unten schreibt selbst laufend neue Dateien dort hinein, während er läuft.
-# pre_hash/post_hash unterschieden sich dadurch fast immer, unabhängig davon, ob sich die
-# eigentliche Quelle während des Builds verändert hat - der Vergleich prüfte damit im Kern nur
-# noch sich selbst. -prune schließt beide Verzeichnisse jetzt aus der Hash-Basis aus.
-hash_watched_paths() {
-    (
-        cd "$verify_root" || exit 1
-        find src/HaelpMi.InstallCreator src/HaelpMi.UpdateSigner Directory.Build.props \
-            \( -name bin -o -name obj \) -prune -o -type f -print 2>/dev/null \
-            | sort | xargs -r sha256sum 2>/dev/null | sha256sum | cut -d' ' -f1
-    )
-}
-
-pre_hash=$(hash_watched_paths)
-if [ -z "$pre_hash" ]; then
-    echo "Pre-Commit-Hook: FEHLER - Quell-Hash vor dem Build konnte nicht gebildet werden. Commit abgebrochen." >&2
-    exit 1
-fi
-
-build_start=$(date +%s)
-
-# Idle offen gelassene Vorgänger-Instanz sperrt sonst die exe beim Publish - unkritisch zu
-# killen (reines Entwickler-Werkzeug, siehe Speicher install-creator-idle-process-kill-ok).
-taskkill //IM HaelpMi.InstallCreator.exe //F >/dev/null 2>&1 || true
-
-# bin/obj vorher löschen (seit 19.08.2026, gleicher Fehlerbericht wie beim Hash-Fix oben, Fix
-# selbst korrigiert - "dotnet publish --no-incremental" existiert nicht, nur bei "dotnet build"):
-# ohne das kann ein inkrementeller Build die vorhandenen bin/obj-Ausgaben unverändert
-# wiederverwenden - der anschließende Publish-Copy nach $tools_dir übernimmt (Standardverhalten
-# von File.Copy) den ALTEN Zeitstempel der Quelle statt "jetzt" zu setzen, was die
-# Zeitstempel-Prüfung unten unabhängig vom eigentlichen Build-Ergebnis fehlschlagen ließ. Ein
-# leeres bin/obj erzwingt einen vollständigen Rebuild, damit die Ausgabedateien garantiert
-# nach $build_start entstehen - etwas langsamer, aber das läuft ohnehin nur bei Commits, die
-# genau diese Pfade berühren.
-rm -rf "$source_root/src/HaelpMi.InstallCreator/bin" "$source_root/src/HaelpMi.InstallCreator/obj" \
-       "$source_root/src/HaelpMi.UpdateSigner/bin" "$source_root/src/HaelpMi.UpdateSigner/obj"
-
-if ! dotnet publish "$csproj" -c Release -r win-x64 -p:Platform=x64 --self-contained true -p:PublishReadyToRun=true -o "$tools_dir"; then
-    echo "Pre-Commit-Hook: Rebuild von tools/InstallCreator fehlgeschlagen - Commit wird trotzdem nicht blockiert," >&2
-    echo "da tools/InstallCreator/ ohnehin nur eine gitignorete Bequemlichkeitskopie ist. Bitte manuell nachbauen." >&2
-    exit 0
-fi
-
-exe="$tools_dir/HaelpMi.InstallCreator.exe"
-
-# Verifikation nach dem Build (s. Bugfix 19.08.2026 oben): anders als der Soft-Fail oben bei
-# einem reinen dotnet-publish-Fehlschlag (Umgebungsproblem, z. B. fehlendes SDK) ist ein
-# Mismatch hier ein Korrektheitsverstoß - das frisch gebaute Artefakt entspricht nachweislich
-# nicht dem committeten Quellstand. Dafür wird der Commit hart abgebrochen statt ein falsches
-# Artefakt liegen zu lassen.
-post_hash=$(hash_watched_paths)
-if [ "$pre_hash" != "$post_hash" ]; then
-    rm -f "$exe"
-    echo "Pre-Commit-Hook: FEHLER - Quelle hat sich während des Builds verändert (Hash-Mismatch)." >&2
-    echo "  Artefakt gelöscht, Commit abgebrochen. Bitte erneut committen." >&2
-    exit 1
-fi
-
-if [ ! -f "$exe" ]; then
-    echo "Pre-Commit-Hook: FEHLER - $exe wurde von dotnet publish nicht erzeugt. Commit abgebrochen." >&2
-    exit 1
-fi
-
-exe_mtime=$(stat -c %Y "$exe" 2>/dev/null || echo 0)
-if [ "$exe_mtime" -lt "$build_start" ]; then
-    rm -f "$exe"
-    echo "Pre-Commit-Hook: FEHLER - $exe ist nicht neuer als der Build-Start - dotnet publish hat" >&2
-    echo "  offenbar keinen frischen Stand geschrieben. Artefakt gelöscht, Commit abgebrochen." >&2
-    exit 1
-fi
-
-echo "Pre-Commit-Hook: tools/InstallCreator neu veröffentlicht (verifiziert aus $source_root)."
+# Nur pre-commit darf einen erkannten Hash-Mismatch (Quelle ändert sich während des Builds)
+# noch hart verhindern - die anderen drei Hooks laufen nach einer bereits abgeschlossenen
+# Git-Operation, dort gibt es kein "abbrechen" mehr (siehe lib/rebuild-installcreator.sh).
+REBUILD_ALLOW_ABORT=1
+. "$hook_dir/lib/rebuild-installcreator.sh"

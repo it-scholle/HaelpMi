@@ -258,6 +258,17 @@ und `scripts/release-issue.sh <issue-nummer> ["grund"]`.
   Build (Hash- und Zeitstempel-Abgleich) bricht den Commit hart ab, statt je wieder still ein
   falsches Artefakt zu erzeugen. Details: `docs/WORKFLOW.md` Abschnitt
   "Install-Creator-Rebuild-Hook".
+- **Bugfix 26.08.2026:** der Hook war bis dahin rein ereignisbasiert (nur `pre-commit`, nur bei
+  passendem staged diff) — `git rebase --continue` führt `pre-commit` in der Praxis oft gar
+  nicht aus, und ein `--amend`, das nur die Commit-Message ändert, findet keinen staged diff.
+  Ein Merge, der über genau diesen Weg lief (Versionsnummer-Kollision beim Rebase, siehe
+  `docs/WORKFLOW.md`), ließ die veröffentlichte exe dadurch auf einem älteren Versionsstand
+  stehen, obwohl der eigentliche Commit längst durch war. Die Rebuild-Logik ist seither
+  zustandsbasiert (`.githooks/lib/rebuild-installcreator.sh` vergleicht einen Quell-Hash gegen
+  eine Marker-Datei, unabhängig von der auslösenden Git-Operation) und läuft zusätzlich zu
+  `pre-commit` auch über `post-rewrite` (Amend/Rebase), `post-merge` (Merge/Pull, auch
+  Fast-Forward) und `post-checkout` (Branch-/Worktree-Wechsel). Details:
+  `docs/WORKFLOW.md` Abschnitt "Install-Creator-Rebuild-Hook".
 - **Frühere Fassung dieses Abschnitts (bis 16.08.2026) verlangte zusätzlich, dass jede
   Claude-Code-Sitzung nach eigenen Änderungen an `src/HaelpMi.InstallCreator` manuell neu baut —
   das ist mit dem Hook entfallen, keine Session muss sich das mehr merken.** Grund für die
