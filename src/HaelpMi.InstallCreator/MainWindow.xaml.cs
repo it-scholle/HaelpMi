@@ -36,9 +36,22 @@ public partial class MainWindow : Window
         // Textvorschlag, der Nutzer kann ihn wie bisher jederzeit überschreiben.
         CustomerNameBox.Text = $"TG{version}";
 
-        // Issue #39/#31: Vorschlagswert aus dem lokalen Kundenregister, vom Nutzer bei Bedarf überschreibbar.
-        CustomerNumberBox.Text = CustomerRegistryStore.GetNextSuggested().ToString();
+        // Issue #39/#31/#43: Vorschlagswert aus dem lokalen Kundenregister, vom Nutzer bei
+        // Bedarf überschreibbar. Test- und Produktivinstaller haben getrennte Nummernreihen.
+        CustomerNumberBox.Text = CustomerRegistryStore.GetNextSuggested(TestInstallerCheckBox.IsChecked == true).ToString();
+
+        // Erst nach dem obigen Initialwert verdrahtet (nicht per XAML Checked=/Unchecked=) -
+        // CheckBox.IsChecked="True" in der XAML würde das Event sonst schon während
+        // InitializeComponent() auslösen, bevor CustomerNumberBox überhaupt existiert.
+        TestInstallerCheckBox.Checked += TestInstallerCheckBox_Changed;
+        TestInstallerCheckBox.Unchecked += TestInstallerCheckBox_Changed;
     }
+
+    // Issue #43: beim Umschalten Test-/Produktivinstaller neu vorschlagen, da beide Reihen
+    // getrennt nummeriert sind (T0001+ bzw. 10001+) - überschreibt einen manuell eingetragenen
+    // Wert, ist aber genau der Moment, in dem der bisherige Vorschlag ohnehin nicht mehr passt.
+    private void TestInstallerCheckBox_Changed(object sender, RoutedEventArgs e) =>
+        CustomerNumberBox.Text = CustomerRegistryStore.GetNextSuggested(TestInstallerCheckBox.IsChecked == true).ToString();
 
     private void GeneratePasswordButton_Click(object sender, RoutedEventArgs e) =>
         PasswordBox.Password = GenerateRandomPassword();
@@ -415,8 +428,9 @@ public partial class MainWindow : Window
             Log($"Admin-Installer erfolgreich erstellt (siehe {outputDir}). " +
                 "Das ist die einzige Datei, die an den Sysadmin geht.");
             // LizenzAblauf/Kontakt bewusst noch null - Befüllung folgt erst mit #18/#19 (#21).
-            CustomerRegistryStore.Append(new CustomerRegistryEntry(
-                customerNumber, customerGroupId, customerNameOrTestLabel, isTestInstaller,
+            // Test- und Produktivinstaller landen seit #43 in getrennten Registerdateien.
+            CustomerRegistryStore.Append(isTestInstaller, new CustomerRegistryEntry(
+                customerNumber, customerGroupId, customerNameOrTestLabel,
                 DateTime.Now, LizenzAblauf: null, Kontakt: null));
             ShowSuccessToast(outputDir);
         }
