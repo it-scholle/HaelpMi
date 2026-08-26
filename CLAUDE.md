@@ -102,6 +102,44 @@ Reparaturversuche an diesem Stand.
   Klassifizierung und Zielwerten. Die dortige Design-Richtlinie ("Fenster/Prozess zuerst, Daten
   danach", Parallelisierung als Normalfall) gilt ab sofort für neue Lade-/Wartevorgänge.
 
+## Issue-Workflow für parallele Sessions (ergänzt 26.08.2026)
+
+An diesem Repository arbeiten regelmäßig mehrere Claude-Code-Sessions gleichzeitig. Damit sich
+keine zwei Sessions unbemerkt am selben GitHub-Issue in die Quere kommen, gilt ein minimales
+Status-Label-System. **Diese Regeln müssen bei jedem Sessionstart gelesen und befolgt werden,
+bevor irgendein Issue bearbeitet wird.**
+
+Es gibt genau ein Status-Label: `status:in-progress` ("Issue wird gerade von einer Session
+bearbeitet"). Kein weiteres Status-Label. Blocker, Wartezustände und Abhängigkeiten werden
+ausschließlich über Kommentare im Issue sowie über Ticket-Abhängigkeiten/Parent-Issues
+abgebildet — nicht über zusätzliche Labels.
+
+- **Vor Beginn der Arbeit an einem Issue:** prüfen, ob es `status:in-progress` trägt. Falls ja:
+  dieses Issue NICHT bearbeiten, stattdessen ein anderes offenes Issue ohne dieses Label wählen.
+  ```
+  gh issue list --label status:in-progress   # was läuft gerade in anderen Sessions?
+  gh issue list --state open                 # alle offenen, zum Vergleich
+  ```
+- **Beim Start der Arbeit:** Label setzen, z. B. per `scripts/claim-issue.sh <issue-nummer>`.
+  ```
+  gh issue edit <issue-nummer> --add-label "status:in-progress"
+  ```
+- **Bei Abschluss der Arbeit:** Label entfernen und Issue schließen.
+  ```
+  gh issue edit <issue-nummer> --remove-label "status:in-progress"
+  gh issue close <issue-nummer> --comment "Kurzer Abschluss-Hinweis (Branch/Commit/Tag)"
+  ```
+- **Bei Abbruch/Unterbrechung** (wartet auf Klärung, Abhängigkeit nicht erfüllt, Kontext reicht
+  nicht mehr): Label entfernen und einen kurzen Kommentar mit dem Grund hinterlassen, z. B. per
+  `scripts/release-issue.sh <issue-nummer> "wartet auf #123"`.
+  ```
+  gh issue edit <issue-nummer> --remove-label "status:in-progress"
+  gh issue comment <issue-nummer> --body "wartet auf #123"
+  ```
+
+Hilfsskripte (führen genau die gh-Befehle oben aus, kein zusätzliches Verhalten):
+`scripts/claim-issue.sh <issue-nummer>` und `scripts/release-issue.sh <issue-nummer> ["grund"]`.
+
 ## Tech-Stack
 - .NET 8, C#, WPF
 - `System.Net.Sockets` für Netzwerkkommunikation (P2P, kein zentraler Server-Prozess)
