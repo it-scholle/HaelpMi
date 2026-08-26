@@ -82,7 +82,7 @@ Ausführungs-Hinweis (verändert das System, läuft NICHT automatisch in jedem `
 | B5 | Exklusiv-Edit-Lock: Kollision → beide lehnen ab → zufälliger Backoff → Retry | ❌ **Lücke** — nur der Port-belegt-Fall ist getestet, nicht die eigentliche Lock-Logik |
 | B6 | Edit-Lock Auto-Freigabe nach 10 Min. Inaktivität | ❌ **Lücke** |
 | B7 🔹 | Alarm-Anfrage/Ack Roundtrip über TCP | ✅ |
-| B8 | Alarm-Feedback-Kanal ("bin unterwegs") Roundtrip | ❌ **Lücke** — nur Port-belegt-Fall getestet |
+| B8 | Alarm-Feedback-Kanal ("bin unterwegs") Roundtrip, inkl. Primary/Satellite bei Fast User Switching (Issue #9-Nachtrag 2) | ✅ (26.08.2026, `AlarmFeedbackChannelTests.cs` - Regressionstest für live gemeldeten Bug: Sender-Gerät mit FUS bekam die Antwort nicht mit, Empfänger pingte endlos weiter) |
 | B9 🔹 | Alle 4 TCP-Dienste degradieren bei belegtem Port ohne Absturz | ✅ (dieser Sitzung's Regressions-Tests) |
 | B10 🔹 | Repeating-Alarm-Session stoppt bei Erreichen des PRO PROFIL konfigurierten Schwellwerts (nicht eines festen Default) | ✅ (07.08.2026, Regressionstest für live gemeldeten Bug - siehe SendingTests.cs) |
 | B11 | Multi-VLAN-Bridge-Seed: AnnounceAsync unicastet zusätzlich zum lokalen Broadcast an eine konfigurierte Bridge-Seed-Adresse | ✅ (13.08.2026, siehe NetworkingTests.cs) |

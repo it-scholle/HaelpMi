@@ -54,6 +54,17 @@ public static class AppConstants
     /// </summary>
     public const string AlarmRelayPipeName = "HaelpMi.Agent.AlarmRelay";
 
+    /// <summary>
+    /// Dieselbe Idee wie <see cref="AlarmRelayPipeName"/>, aber für den separaten
+    /// Feedback-Kanal (Port <see cref="AlarmFeedbackTcpPort"/>): "bin unterwegs" und der
+    /// Status-Relay wurden bei Einführung von <see cref="AlarmRelayPipeName"/> (Issue #9)
+    /// zunächst übersehen - je nachdem, welche Sitzung des SENDERS diesen zweiten Port
+    /// hält, verpuffte die Empfänger-Antwort sonst in einer Sitzung ohne die wartende
+    /// <c>RepeatingAlarmSession</c> (Issue #9-Nachtrag 2: Empfänger pingt endlos weiter,
+    /// obwohl längst geantwortet wurde).
+    /// </summary>
+    public const string AlarmFeedbackRelayPipeName = "HaelpMi.Agent.AlarmFeedbackRelay";
+
     /// <summary>Name of the local named-pipe used for Agent &lt;-&gt; Update-Dienst IPC on the same machine (Teil 2, Abschnitt 11).</summary>
     public const string UpdateServiceIpcPipeName = "HaelpMi.UpdateService.Ipc";
 
