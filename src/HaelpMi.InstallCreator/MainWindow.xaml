@@ -43,6 +43,10 @@
                                FontWeight="SemiBold" TextWrapping="Wrap" FontSize="12" />
                     <TextBox x:Name="CustomerNameBox" Margin="0,6,0,16" />
 
+                    <TextBlock Text="Kundennummer (dem Kunden sichtbar statt der internen Kundengruppen-ID)"
+                               FontWeight="SemiBold" TextWrapping="Wrap" FontSize="12" />
+                    <TextBox x:Name="CustomerNumberBox" Margin="0,6,0,16" />
+
                     <TextBlock Text="Admin-Installer-Passwort (Pflicht außer bei Test-Installer)" FontWeight="SemiBold" FontSize="12" />
                     <Grid Margin="0,6,0,4">
                         <Grid.ColumnDefinitions>

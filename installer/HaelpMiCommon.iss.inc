@@ -13,7 +13,7 @@
 #define MyAppName "HälpMi"
 ; Alpha: 0.x until release, per city/product decision - Version 1.0.0 is reserved for
 ; the actual release. Bump the third number for ordinary fixes, second for a feature.
-#define MyAppVersion "0.17.6"
+#define MyAppVersion "0.18.0"
 #define MyAppPublisher "HälpMi contributors"
 #define MyAgentExeName "HaelpMi.Agent.exe"
 #define MyConfigExeName "HaelpMi.Config.exe"
@@ -38,6 +38,14 @@
 #endif
 #ifndef IsTestInstaller
   #define IsTestInstaller "true"
+#endif
+
+; Issue #39: menschenlesbares Pendant zur CustomerGroupId, das der Kunde tatsächlich zu
+; sehen bekommt (z. B. im "Über mich"-Popup) - die UUID selbst bleibt rein intern. Vom
+; Install-Creator pro Installation fortlaufend vergeben (ISCC /DCustomerNumber={n}),
+; beginnend bei 10001. Ohne Angabe (manuelles Kompilieren) Platzhalter 0.
+#ifndef CustomerNumber
+  #define CustomerNumber "0"
 #endif
 
 ; Optionales Installer-Passwort (kein Schlüsselpaar - siehe CLAUDE.md Lizenz & Secrets,
@@ -435,6 +443,7 @@ begin
   Json :=
     '{' + #13#10 +
     '  "CustomerGroupId": "{#CustomerGroupId}",' + #13#10 +
+    '  "CustomerNumber": {#CustomerNumber},' + #13#10 +
     '  "Role": ' + GetRoleValue() + ',' + #13#10 +
     '  "IsTestInstaller": {#IsTestInstaller}' + #13#10 +
     '}';

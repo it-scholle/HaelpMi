@@ -35,6 +35,9 @@ public partial class MainWindow : Window
         // Zustand als Test-Bezeichnung (siehe BuildAdminInstallerAsync). Bleibt ein normaler
         // Textvorschlag, der Nutzer kann ihn wie bisher jederzeit überschreiben.
         CustomerNameBox.Text = $"TG{version}";
+
+        // Issue #39: Vorschlagswert aus dem lokalen Zähler, vom Nutzer bei Bedarf überschreibbar.
+        CustomerNumberBox.Text = CustomerNumberStore.GetNextSuggested().ToString();
     }
 
     private void GeneratePasswordButton_Click(object sender, RoutedEventArgs e) =>
@@ -245,6 +248,7 @@ public partial class MainWindow : Window
         }
 
         var customerGroupId = Guid.NewGuid(); // FR-49: fest für dieses Admin-Installer-Paket und jeden späteren daraus exportierten User-Installer
+        var customerNumber = int.Parse(CustomerNumberBox.Text.Trim());
         var password = PasswordBox.Password;
         var isTestInstaller = TestInstallerCheckBox.IsChecked == true;
         var customerNameOrTestLabel = CustomerNameBox.Text.Trim();
@@ -252,7 +256,7 @@ public partial class MainWindow : Window
         SetBusy(true);
         try
         {
-            await BuildAdminInstallerAsync(customerGroupId, isTestInstaller, password, customerNameOrTestLabel);
+            await BuildAdminInstallerAsync(customerGroupId, customerNumber, isTestInstaller, password, customerNameOrTestLabel);
         }
         catch (Exception ex)
         {
@@ -272,6 +276,15 @@ public partial class MainWindow : Window
 
     private bool TryValidate(out string error)
     {
+        // Kundennummer ist immer Pflicht (unabhängig vom Test-Installer-Häkchen) - sie
+        // landet ungequotet als Zahl in deployment.json (siehe HaelpMiCommon.iss.inc), ein
+        // leeres oder nicht-numerisches Feld würde dort ungültiges JSON erzeugen.
+        if (!int.TryParse(CustomerNumberBox.Text.Trim(), out var customerNumber) || customerNumber <= 0)
+        {
+            error = "Kundennummer muss eine positive Zahl sein.";
+            return false;
+        }
+
         var isTest = TestInstallerCheckBox.IsChecked == true;
         if (!isTest)
         {
@@ -297,12 +310,14 @@ public partial class MainWindow : Window
         BuildAdminButton.IsEnabled = !busy;
         TestInstallerCheckBox.IsEnabled = !busy;
         CustomerNameBox.IsEnabled = !busy;
+        CustomerNumberBox.IsEnabled = !busy;
     }
 
-    private async Task BuildAdminInstallerAsync(Guid customerGroupId, bool isTestInstaller, string password, string customerNameOrTestLabel)
+    private async Task BuildAdminInstallerAsync(Guid customerGroupId, int customerNumber, bool isTestInstaller, string password, string customerNameOrTestLabel)
     {
         Log("--- Installer werden erstellt ---");
         Log($"Kunden-Gruppen-ID: {customerGroupId}");
+        Log($"Kundennummer: {customerNumber}");
         Log($"Test-Installer: {(isTestInstaller ? "ja" : "nein")}");
         if (isTestInstaller && customerNameOrTestLabel.Length > 0)
         {
@@ -359,6 +374,7 @@ public partial class MainWindow : Window
         var userExitCode = await RunIsccAsync(isccPath, installerDir, userScriptPath, args =>
         {
             args.Add($"/DCustomerGroupId={customerGroupId}");
+            args.Add($"/DCustomerNumber={customerNumber}");
             args.Add($"/DIsTestInstaller={(isTestInstaller ? "true" : "false")}");
             args.Add($"/O{userPayloadDir}");
             args.Add("/FHaelpMi-User-Setup");
@@ -378,6 +394,7 @@ public partial class MainWindow : Window
         var adminExitCode = await RunIsccAsync(isccPath, installerDir, adminScriptPath, args =>
         {
             args.Add($"/DCustomerGroupId={customerGroupId}");
+            args.Add($"/DCustomerNumber={customerNumber}");
             args.Add($"/DIsTestInstaller={(isTestInstaller ? "true" : "false")}");
             if (!string.IsNullOrEmpty(password))
             {
@@ -397,6 +414,7 @@ public partial class MainWindow : Window
             var outputDir = Path.Combine(installerDir, "Output");
             Log($"Admin-Installer erfolgreich erstellt (siehe {outputDir}). " +
                 "Das ist die einzige Datei, die an den Sysadmin geht.");
+            CustomerNumberStore.Advance(customerNumber);
             ShowSuccessToast(outputDir);
         }
         else

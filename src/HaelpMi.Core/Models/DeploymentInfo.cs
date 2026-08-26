@@ -15,6 +15,14 @@ public sealed class DeploymentInfo
 {
     public required Guid CustomerGroupId { get; set; }
 
+    /// <summary>
+    /// Menschenlesbares Pendant zu <see cref="CustomerGroupId"/> für die Anzeige gegenüber
+    /// dem Kunden (z. B. im "Über mich"-Popup) - die UUID selbst soll ein Kunde nie sehen.
+    /// Vom Install-Creator pro Installation fortlaufend vergeben, beginnend bei 10001
+    /// (siehe Issue #39).
+    /// </summary>
+    public required int CustomerNumber { get; set; }
+
     public required Role Role { get; set; }
 
     /// <summary>
