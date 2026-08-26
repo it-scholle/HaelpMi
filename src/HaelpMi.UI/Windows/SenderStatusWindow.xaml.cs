@@ -38,6 +38,10 @@ public partial class SenderStatusWindow : Window
         });
 
         Loaded += (_, _) => PositionInCorner();
+        // Issue #7: die "Auf dem Weg"-Liste wächst per SizeToContent nach jeder Antwort -
+        // ohne Neupositionierung hier bliebe die einmalig in Loaded gesetzte Top-Kante stehen
+        // und das Fenster würde nach unten in die Taskleiste hineinwachsen.
+        SizeChanged += (_, _) => PositionInCorner();
         Closed += (_, _) =>
         {
             OpenWindows.Remove(this);
