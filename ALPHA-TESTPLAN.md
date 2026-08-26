@@ -103,6 +103,11 @@ Fehlermeldung kam.
       geleert) - alle angeklickten Geräte müssen am Ende grün markiert bleiben, keins darf
       wieder verschwinden
 - [ ] Tab "Alarm-Profile": neues Profil anlegen, Text/Tastenkürzel/Schwellwert setzen
+- [ ] Direkt danach, OHNE Neustart von Agent/Dashboard: das neue Tastenkürzel auf genau
+      diesem (Admin-)Gerät drücken - muss sofort senden (Regressionstest 26.08.2026:
+      `HandleRebroadcastRequestAsync` registrierte Hotkeys beim eigenen Admin-Gerät bisher
+      nicht neu, andere Geräte bekamen die Änderung sofort, das Admin-Gerät selbst erst
+      nach einem Neustart des Agent-Prozesses)
 - [ ] Im Profil-Tab: "Empfängerkreise verwalten" öffnen, einen Sender hinzufügen, per
       Drag-and-Drop einen Empfänger von "Verfügbar" nach "Zugeordnet" ziehen
 - [ ] Dasselbe nochmal nur mit den `>>`/`<<`-Buttons statt Drag-and-Drop (Fallback-Weg)

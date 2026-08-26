@@ -454,6 +454,18 @@ public partial class App : System.Windows.Application
     private async Task<IpcResponse> HandleRebroadcastRequestAsync()
     {
         _settings = _settingsStore.Load(); // pick up whatever Config just saved
+
+        // Bugfix 26.08.2026 (Fehlerbericht "Admin-Gerät sendet neues/geändertes
+        // Alarmprofil erst nach Neustart"): dieser Handler ist der einzige Weg, auf dem
+        // das EIGENE Admin-Gerät eine gerade selbst veröffentlichte Config-Änderung
+        // mitbekommt (NotifyLocalAgentOfConfigChange in HaelpMi.Config) - der reguläre
+        // ConfigSyncService.ConfigApplied-Pfad, der RegisterHotkeysFromConfig() sonst
+        // aufruft, feuert für die eigene Änderung nie (der lokale Agent verwirft seinen
+        // eigenen Broadcast als Echo, gleiche DeviceId). Ohne diesen Aufruf blieb ein neu
+        // angelegtes Profil auf dem sendenden Admin-Gerät selbst ohne registrierte Hotkey-
+        // Bindung, obwohl jedes andere Gerät die Änderung sofort bekam.
+        RegisterHotkeysFromConfig();
+
         await _discovery!.AnnounceAsync();
         return new IpcResponse(true);
     }
