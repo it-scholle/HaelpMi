@@ -109,36 +109,57 @@ keine zwei Sessions unbemerkt am selben GitHub-Issue in die Quere kommen, gilt e
 Status-Label-System. **Diese Regeln müssen bei jedem Sessionstart gelesen und befolgt werden,
 bevor irgendein Issue bearbeitet wird.**
 
-Es gibt genau ein Status-Label: `status:in-progress` ("Issue wird gerade von einer Session
-bearbeitet"). Kein weiteres Status-Label. Blocker, Wartezustände und Abhängigkeiten werden
+Es gibt genau zwei Status-Label, die eine einfache Kette abbilden:
+`status:in-progress` ("Issue wird gerade von einer Session bearbeitet") →
+`status:review` ("Fertig aus Sicht der Session, wartet auf Bestätigung/Abnahme durch den
+Nutzer"). Kein weiteres Status-Label. Blocker, Wartezustände und Abhängigkeiten werden
 ausschließlich über Kommentare im Issue sowie über Ticket-Abhängigkeiten/Parent-Issues
-abgebildet — nicht über zusätzliche Labels.
+abgebildet — nicht über zusätzliche Labels. **Eine Session schließt ein Issue nie selbst** —
+das Schließen (nach `status:review`) ist ausschließlich die Bestätigung/Abnahme durch den
+Nutzer, ggf. von einer Session ausgeführt, aber immer erst nachdem der Nutzer das explizit
+gesagt hat.
 
-- **Vor Beginn der Arbeit an einem Issue:** prüfen, ob es `status:in-progress` trägt. Falls ja:
-  dieses Issue NICHT bearbeiten, stattdessen ein anderes offenes Issue ohne dieses Label wählen.
+- **Vor Beginn der Arbeit an einem Issue:** prüfen, ob es `status:in-progress` oder
+  `status:review` trägt. Falls ja: dieses Issue NICHT bearbeiten, stattdessen ein anderes
+  offenes Issue ohne eines der beiden Label wählen. Eine Ausnahme: der Nutzer verweist explizit
+  auf ein Issue mit `status:review` und fordert Nacharbeit (Abnahme also gerade nicht erteilt,
+  sondern Änderungswunsch) — dann normal übernehmen (siehe "Beim Start der Arbeit").
   ```
   gh issue list --label status:in-progress   # was läuft gerade in anderen Sessions?
+  gh issue list --label status:review        # was wartet auf Abnahme?
   gh issue list --state open                 # alle offenen, zum Vergleich
   ```
 - **Beim Start der Arbeit:** Label setzen, z. B. per `scripts/claim-issue.sh <issue-nummer>`.
+  Entfernt dabei automatisch ein eventuell noch vorhandenes `status:review` (Fall: Nutzer
+  fordert Nacharbeit an einem bereits als fertig gemeldeten Issue an).
   ```
-  gh issue edit <issue-nummer> --add-label "status:in-progress"
+  gh issue edit <issue-nummer> --remove-label "status:review" --add-label "status:in-progress"
   ```
-- **Bei Abschluss der Arbeit:** Label entfernen und Issue schließen.
+- **Bei Abschluss der Arbeit:** `status:in-progress` entfernen, `status:review` setzen. **Nicht
+  schließen** — das Issue bleibt offen, bis der Nutzer es bestätigt/abgenommen hat. Z. B. per
+  `scripts/finish-issue.sh <issue-nummer> ["kurze Zusammenfassung"]`.
   ```
-  gh issue edit <issue-nummer> --remove-label "status:in-progress"
-  gh issue close <issue-nummer> --comment "Kurzer Abschluss-Hinweis (Branch/Commit/Tag)"
+  gh issue edit <issue-nummer> --remove-label "status:in-progress" --add-label "status:review"
   ```
 - **Bei Abbruch/Unterbrechung** (wartet auf Klärung, Abhängigkeit nicht erfüllt, Kontext reicht
-  nicht mehr): Label entfernen und einen kurzen Kommentar mit dem Grund hinterlassen, z. B. per
-  `scripts/release-issue.sh <issue-nummer> "wartet auf #123"`.
+  nicht mehr): `status:in-progress` entfernen und einen kurzen Kommentar mit dem Grund
+  hinterlassen, z. B. per `scripts/release-issue.sh <issue-nummer> "wartet auf #123"`. Kein
+  `status:review` in diesem Fall — das Issue ist nicht fertig, nur unterbrochen.
   ```
   gh issue edit <issue-nummer> --remove-label "status:in-progress"
   gh issue comment <issue-nummer> --body "wartet auf #123"
   ```
+- **Nach Bestätigung/Abnahme durch den Nutzer:** `status:review` entfernen und Issue schließen.
+  Nur nachdem der Nutzer die Abnahme tatsächlich erteilt hat (im Chat oder auf GitHub) — nie auf
+  eigene Initiative der Session, die die Arbeit erledigt hat.
+  ```
+  gh issue edit <issue-nummer> --remove-label "status:review"
+  gh issue close <issue-nummer> --comment "Kurzer Abschluss-Hinweis (Branch/Commit/Tag)"
+  ```
 
 Hilfsskripte (führen genau die gh-Befehle oben aus, kein zusätzliches Verhalten):
-`scripts/claim-issue.sh <issue-nummer>` und `scripts/release-issue.sh <issue-nummer> ["grund"]`.
+`scripts/claim-issue.sh <issue-nummer>`, `scripts/finish-issue.sh <issue-nummer> ["zusammenfassung"]`
+und `scripts/release-issue.sh <issue-nummer> ["grund"]`.
 
 ## Tech-Stack
 - .NET 8, C#, WPF
