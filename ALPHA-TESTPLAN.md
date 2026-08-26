@@ -400,6 +400,14 @@ Windows-Standard-Accounts (A und B), HälpMi darauf installiert.
       gegen die von A (Test für die Session-Scoping-Korrektur der Config↔Agent-IPC-Pipe)
 - [ ] Stresstest: mehrfach schnell zwischen A und B hin- und herwechseln - keine hängenden
       Prozesse, kein Deadlock bei der Primary/Satellite-Übernahme
+- [ ] **Nachtrag 25.08.2026 (nicht sichtbare Sitzung darf kein Popup zeigen):** zu Account B
+      wechseln, dann zurück zu A wechseln (B bleibt angemeldet, aber im Hintergrund/
+      `WTSDisconnected`). Alarm auslösen, während NUR A sichtbar ist - **B darf KEIN neues
+      Popup zeigen** (weder bei sich selbst sichtbar noch nach späterem Zurückwechseln zu B,
+      solange keine weitere Signal-Wiederholung während B's Aktivphase eintrifft), da niemand
+      es in B's unsichtbarer Sitzung hätte wegklicken können (`ActiveSessionDetector`). A
+      bekommt Popup+Ton wie gewohnt. Danach zu B zurückwechseln und prüfen, dass B ganz normal
+      auf den NÄCHSTEN Alarm reagiert (Suppression ist pro Signal, keine dauerhafte Sperre).
 
 **Wenn das fehlschlägt:** welcher Punkt genau, ob das Tray-Icon für die zweite Sitzung
 überhaupt erscheint (Autostart-Problem) oder nur der Alarm ausbleibt (Relay-Problem), plus
