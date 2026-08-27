@@ -38,7 +38,7 @@ public partial class MainWindow : Window
 
         // Issue #39/#31/#43: Vorschlagswert aus dem lokalen Kundenregister, vom Nutzer bei
         // Bedarf überschreibbar. Test- und Produktivinstaller haben getrennte Nummernreihen.
-        CustomerNumberBox.Text = CustomerRegistryStore.GetNextSuggested(TestInstallerCheckBox.IsChecked == true).ToString();
+        CustomerNumberBox.Text = SuggestCustomerNumberText(TestInstallerCheckBox.IsChecked == true);
 
         // Erst nach dem obigen Initialwert verdrahtet (nicht per XAML Checked=/Unchecked=) -
         // CheckBox.IsChecked="True" in der XAML würde das Event sonst schon während
@@ -51,7 +51,24 @@ public partial class MainWindow : Window
     // getrennt nummeriert sind (T0001+ bzw. 10001+) - überschreibt einen manuell eingetragenen
     // Wert, ist aber genau der Moment, in dem der bisherige Vorschlag ohnehin nicht mehr passt.
     private void TestInstallerCheckBox_Changed(object sender, RoutedEventArgs e) =>
-        CustomerNumberBox.Text = CustomerRegistryStore.GetNextSuggested(TestInstallerCheckBox.IsChecked == true).ToString();
+        CustomerNumberBox.Text = SuggestCustomerNumberText(TestInstallerCheckBox.IsChecked == true);
+
+    // Nacharbeit #43 (Nutzerfeedback 27.08.2026): der Vorschlag zeigte bisher auch bei
+    // Test-Installern nur die rohe Zahl statt des T-Präfix aus CustomerRegistryStore.FormatDisplay.
+    private static string SuggestCustomerNumberText(bool isTestInstaller) =>
+        CustomerRegistryStore.FormatDisplay(CustomerRegistryStore.GetNextSuggested(isTestInstaller), isTestInstaller);
+
+    // Feld zeigt/akzeptiert bei Test-Installern das T-Präfix (reine Anzeige-/Eingabekonvention,
+    // siehe FormatDisplay) - die intern/in deployment.json verwendete Kundennummer bleibt numerisch.
+    private static bool TryParseCustomerNumberText(string text, out int customerNumber)
+    {
+        var trimmed = text.Trim();
+        if (trimmed.Length > 0 && (trimmed[0] == 'T' || trimmed[0] == 't'))
+        {
+            trimmed = trimmed[1..];
+        }
+        return int.TryParse(trimmed, out customerNumber);
+    }
 
     private void GeneratePasswordButton_Click(object sender, RoutedEventArgs e) =>
         PasswordBox.Password = GenerateRandomPassword();
@@ -261,7 +278,7 @@ public partial class MainWindow : Window
         }
 
         var customerGroupId = Guid.NewGuid(); // FR-49: fest für dieses Admin-Installer-Paket und jeden späteren daraus exportierten User-Installer
-        var customerNumber = int.Parse(CustomerNumberBox.Text.Trim());
+        TryParseCustomerNumberText(CustomerNumberBox.Text, out var customerNumber); // von TryValidate oben bereits geprüft
         var password = PasswordBox.Password;
         var isTestInstaller = TestInstallerCheckBox.IsChecked == true;
         var customerNameOrTestLabel = CustomerNameBox.Text.Trim();
@@ -292,7 +309,7 @@ public partial class MainWindow : Window
         // Kundennummer ist immer Pflicht (unabhängig vom Test-Installer-Häkchen) - sie
         // landet ungequotet als Zahl in deployment.json (siehe HaelpMiCommon.iss.inc), ein
         // leeres oder nicht-numerisches Feld würde dort ungültiges JSON erzeugen.
-        if (!int.TryParse(CustomerNumberBox.Text.Trim(), out var customerNumber) || customerNumber <= 0)
+        if (!TryParseCustomerNumberText(CustomerNumberBox.Text, out var customerNumber) || customerNumber <= 0)
         {
             error = "Kundennummer muss eine positive Zahl sein.";
             return false;
@@ -330,7 +347,7 @@ public partial class MainWindow : Window
     {
         Log("--- Installer werden erstellt ---");
         Log($"Kunden-Gruppen-ID: {customerGroupId}");
-        Log($"Kundennummer: {customerNumber}");
+        Log($"Kundennummer: {CustomerRegistryStore.FormatDisplay(customerNumber, isTestInstaller)}");
         Log($"Test-Installer: {(isTestInstaller ? "ja" : "nein")}");
         if (isTestInstaller && customerNameOrTestLabel.Length > 0)
         {
