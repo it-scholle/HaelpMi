@@ -15,6 +15,42 @@ $exePath = Join-Path $toolsDir "HaelpMi.InstallCreator.exe"
 $srcDir = Join-Path $repoRoot "src\HaelpMi.InstallCreator"
 $csproj = Join-Path $srcDir "HaelpMi.InstallCreator.csproj"
 
+# Ergänzt 27.08.2026 (Nutzerwunsch: nicht mehr von Hand pullen müssen, bevor der
+# Install-Creator gestartet wird) - frischt den Checkout hier automatisch von origin,
+# bevor unten anhand der Zeitstempel geprüft wird, ob neu gebaut werden muss. Nur
+# Fast-Forward und nur bei sauberem Arbeitsbaum: ein Merge/Force würde sonst lokale,
+# noch nicht committete Änderungen überschreiben können - in dem Fall lieber
+# überspringen und mit dem lokalen Stand weiterbauen, als unbeaufsichtigt etwas zu
+# verlieren. Ist `core.hooksPath .githooks` aktiv, stößt der Pull über `post-merge`
+# ohnehin denselben Rebuild-Hook an, der hash-basierte Rebuild unten fängt den Fall
+# aber auch ab, falls die Hooks auf dieser Maschine nicht aktiviert sind.
+Push-Location $repoRoot
+$prevErrorPref = $ErrorActionPreference
+$ErrorActionPreference = "Continue"
+try {
+    git rev-parse --is-inside-work-tree *> $null
+    if ($LASTEXITCODE -eq 0) {
+        $dirtyStatus = git status --porcelain 2>$null
+        if ([string]::IsNullOrWhiteSpace($dirtyStatus)) {
+            git fetch --quiet 2>$null
+            $pullOutput = (git pull --ff-only 2>&1 | Out-String).Trim()
+            if ($LASTEXITCODE -ne 0) {
+                Write-Host "Hinweis: automatischer git pull nicht möglich (kein Fast-Forward oder kein Netzwerk) - baue mit dem lokalen Stand weiter."
+            } elseif ($pullOutput -notmatch "Already up to date") {
+                Write-Host "git pull: $pullOutput"
+            }
+        } else {
+            # Grossgeschriebenes "Ä" ohne BOM wird von PowerShell 5.1 ohne UTF-8-BOM als
+            # typografisches Anführungszeichen fehlinterpretiert und würde den String hier
+            # vorzeitig beenden - deshalb "Aenderungen" statt "Änderungen" in dieser Zeile.
+            Write-Host "Hinweis: lokale, nicht committete Aenderungen im Checkout - automatischer git pull uebersprungen, baue mit dem lokalen Stand weiter."
+        }
+    }
+} finally {
+    $ErrorActionPreference = $prevErrorPref
+    Pop-Location
+}
+
 if (-not (Test-Path $csproj)) {
     Write-Host "Fehler: $csproj nicht gefunden - läuft dieses Skript innerhalb des Repo-Checkouts?"
     Read-Host "Enter zum Schließen"

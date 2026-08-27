@@ -153,6 +153,16 @@ Build-Maschine). Der `Start.ps1`-Selbstheilungsmechanismus (siehe CLAUDE.md) ble
 bestehen und greift beim nächsten Start ohnehin, falls der Hook aus irgendeinem Grund nicht aktiv
 war — zwei unabhängige Absicherungen statt einer.
 
+**Ergänzt 27.08.2026:** `Start.ps1` pullt vor der Zeitstempel-Prüfung zusätzlich selbst
+(`git fetch` + `git pull --ff-only`) im Haupt-Checkout — ein manuelles `git pull`, bevor
+jemand den Install-Creator startet, entfällt dadurch. Nur Fast-Forward, und nur bei sauberem
+Arbeitsbaum (`git status --porcelain` leer) — bei lokalen, nicht committeten Änderungen oder
+fehlendem Fast-Forward wird der Pull übersprungen und mit dem vorhandenen lokalen Stand
+weitergebaut, statt unbeaufsichtigt etwas zu überschreiben oder das Skript abzubrechen. Ist
+der Hook oben aktiv, stößt dieser Pull über `post-merge` ohnehin denselben Rebuild an — der
+hash-basierte Rebuild in `Start.ps1` selbst fängt den Fall aber zusätzlich ab, falls die
+Hooks auf dieser Maschine nicht aktiviert sind.
+
 ### Versionsnummer-Kollisionen
 
 Kollidieren beim Rebase zwei unabhängig vergebene Versionsnummern (z. B. weil zwei Branches
