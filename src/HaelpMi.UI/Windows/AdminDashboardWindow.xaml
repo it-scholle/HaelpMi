@@ -321,13 +321,8 @@
                 </Grid>
             </TabItem>
 
-            <!-- Updates (Nutzerwunsch 09.08.2026): "vollautomatisch, sobald der Admin sich
-                 selbst aktualisiert hat" - aber der Freigabe-Klick hier bleibt Pflicht
-                 (CLAUDE.md: "Rollout ist gestaffelt und wird vom Admin freigegeben, nicht
-                 unkontrolliert lauffeuerartig"). Alles danach (Boot-Erkennung, P2P-Pull,
-                 Weiterverteilung, Background-Install ohne erneuten UAC-Prompt) läuft ohne
-                 weiteres Zutun - siehe UpdateOrchestrator/UpdateServiceWorker. -->
-            <TabItem x:Name="UpdatesTabItem" Header="Updates">
+            <!-- Release 1.0 hat kein automatisches Update - Reiter bleibt bis dahin versteckt. -->
+            <TabItem x:Name="UpdatesTabItem" Header="Updates" Visibility="Collapsed">
                 <StackPanel Margin="10" x:Name="UpdatesPanel" IsEnabled="False">
                     <TextBlock Text="Programm-Updates" FontSize="16" FontWeight="Bold" Margin="0,0,0,4" />
                     <TextBlock TextWrapping="Wrap" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,0,14"
