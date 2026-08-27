@@ -1,0 +1,20 @@
+<UserControl x:Class="HaelpMi.InstallCreator.Controls.LicenseTierPicker"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/HaelpMi.InstallCreator;component/Styles/ModernStyles.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </UserControl.Resources>
+    <StackPanel>
+        <TextBlock Text="Lizenz-Paketgröße" FontWeight="SemiBold" FontSize="12" />
+        <!-- Kein Default-Eintrag (Nutzerwunsch, siehe Issue #18: "kein Default-Lizenz mehr") -
+             ItemsSource/Auswahl kommt aus dem Code-Behind statt aus Bindings, damit die
+             Zuordnung Tier -> Nutzerlimit an einer Stelle (LicenseTierLimits) bleibt. -->
+        <ComboBox x:Name="TierComboBox" Margin="0,6,0,0"
+                  DisplayMemberPath="Label"
+                  SelectionChanged="TierComboBox_SelectionChanged" />
+    </StackPanel>
+</UserControl>
