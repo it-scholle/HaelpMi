@@ -1,19 +1,16 @@
 using System;
-using System.Security.Cryptography;
-using System.Text;
-using System.Text.Json;
 using Org.BouncyCastle.Crypto.Parameters;
 using Org.BouncyCastle.Crypto.Signers;
 
 namespace HaelpMi.InstallCreator.Licensing;
 
 /// <summary>
-/// Signiert/prüft Lizenzen mit dem Kunden-Lizenzschlüssel (Ed25519, CLAUDE.md "Lizenz &amp;
-/// Secrets" Schlüssel Nr. 1 - separat vom Update-Signaturschlüssel). Gleiches Signaturschema
-/// (SHA-256 über die kanonische Nutzlast, dann Ed25519 über den Hash) wie
-/// <c>HaelpMi.Core.Updates.UpdatePackageVerifier</c>, damit #19 dieselbe Prüflogik übernehmen
-/// kann. BouncyCastle statt Eigenbau: bereits Projektabhängigkeit für exakt dieses Verfahren
-/// (siehe HaelpMi.UpdateSigner), kein neuer Abwägungsbedarf.
+/// Signiert Lizenzen mit dem Kunden-Lizenzschlüssel (Ed25519, CLAUDE.md "Lizenz &amp;
+/// Secrets" Schlüssel Nr. 1 - separat vom Update-Signaturschlüssel). Signiert direkt über
+/// <see cref="License.GetSigningPayload"/> ohne SHA-256-Vorstufe - muss exakt zu
+/// <c>HaelpMi.Core.Licensing.LicenseReader.HasValidSignature</c> (Issue #19) passen, sonst
+/// verifiziert der Kunde eine hier erstellte Lizenz nicht. BouncyCastle statt Eigenbau:
+/// bereits Projektabhängigkeit für exakt dieses Verfahren (siehe HaelpMi.UpdateSigner).
 ///
 /// Bewusst ohne Vaultwarden-Anbindung für den privaten Schlüssel (wie CustomerRegistryStore):
 /// der Schlüssel wird pro Lauf per Datei geladen (<see cref="LoadPrivateKey"/>), nie auf der
@@ -21,22 +18,21 @@ namespace HaelpMi.InstallCreator.Licensing;
 /// </summary>
 internal static class LicenseFileSigner
 {
-    public static SignedLicenseFile CreateSigned(LicenseFile license, byte[] privateKeyBytes)
+    public static License CreateSigned(License unsigned, byte[] privateKeyBytes)
     {
-        var hash = HashOf(license.CustomerGroupId, license.Tier.ToString(), license.UserLimit, license.IssuedAtUtc, license.ExpiryDateUtc);
+        var payload = unsigned.GetSigningPayload();
 
         var privateKey = new Ed25519PrivateKeyParameters(privateKeyBytes, 0);
         var signer = new Ed25519Signer();
         signer.Init(true, privateKey);
-        signer.BlockUpdate(hash, 0, hash.Length);
+        signer.BlockUpdate(payload, 0, payload.Length);
         var signature = signer.GenerateSignature();
 
-        return new SignedLicenseFile(
-            license.CustomerGroupId, license.Tier.ToString(), license.UserLimit,
-            license.IssuedAtUtc, license.ExpiryDateUtc, Convert.ToBase64String(signature));
+        return unsigned with { SignatureBase64 = Convert.ToBase64String(signature) };
     }
 
-    public static bool Verify(SignedLicenseFile signed, byte[] publicKeyBytes)
+    /// <summary>Für Tests/Sanity-Checks in dieser Codebasis - die echte Prüfung beim Kunden übernimmt #19.</summary>
+    public static bool Verify(License signed, byte[] publicKeyBytes)
     {
         byte[] signature;
         try
@@ -48,11 +44,11 @@ internal static class LicenseFileSigner
             return false;
         }
 
-        var hash = HashOf(signed.CustomerGroupId, signed.Tier, signed.UserLimit, signed.IssuedAtUtc, signed.ExpiryDateUtc);
+        var payload = signed.GetSigningPayload();
         var publicKey = new Ed25519PublicKeyParameters(publicKeyBytes, 0);
         var verifier = new Ed25519Signer();
         verifier.Init(false, publicKey);
-        verifier.BlockUpdate(hash, 0, hash.Length);
+        verifier.BlockUpdate(payload, 0, payload.Length);
         return verifier.VerifySignature(signature);
     }
 
@@ -63,17 +59,4 @@ internal static class LicenseFileSigner
     /// </summary>
     public static byte[] LoadPrivateKey(string path) =>
         Convert.FromBase64String(System.IO.File.ReadAllText(path).Trim());
-
-    private static byte[] HashOf(Guid customerGroupId, string tier, int? userLimit, DateTime issuedAtUtc, DateTime expiryDateUtc)
-    {
-        var canonicalJson = JsonSerializer.Serialize(new
-        {
-            CustomerGroupId = customerGroupId,
-            Tier = tier,
-            UserLimit = userLimit,
-            IssuedAtUtc = issuedAtUtc,
-            ExpiryDateUtc = expiryDateUtc,
-        });
-        return SHA256.HashData(Encoding.UTF8.GetBytes(canonicalJson));
-    }
 }

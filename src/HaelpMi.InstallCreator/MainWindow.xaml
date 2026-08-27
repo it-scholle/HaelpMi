@@ -1,6 +1,7 @@
 <Window x:Class="HaelpMi.InstallCreator.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:controls="clr-namespace:HaelpMi.InstallCreator.Controls"
         Title="HälpMi Install-Creator"
         Width="1000" Height="680"
         ResizeMode="NoResize"
@@ -196,17 +197,9 @@
             <Border Background="{StaticResource CardBackgroundBrush}" BorderBrush="{StaticResource HairlineBrush}"
                     BorderThickness="1" CornerRadius="12" Padding="16" Margin="0,0,0,16">
                 <StackPanel>
-                    <TextBlock Text="Paketgröße" FontWeight="SemiBold" FontSize="12" />
-                    <ComboBox x:Name="LicenseTierComboBox" Margin="0,6,0,4"
-                              SelectionChanged="LicenseTierComboBox_SelectionChanged">
-                        <ComboBoxItem Content="Trial (10 Nutzer)" Tag="Trial" IsSelected="True" />
-                        <ComboBoxItem Content="S (25 Nutzer)" Tag="S" />
-                        <ComboBoxItem Content="M (75 Nutzer)" Tag="M" />
-                        <ComboBoxItem Content="L (150 Nutzer)" Tag="L" />
-                        <ComboBoxItem Content="XL (151+, unbegrenzt)" Tag="XL" />
-                    </ComboBox>
-                    <TextBlock x:Name="LicenseUserLimitText" Foreground="{StaticResource TextSecondaryBrush}"
-                               FontSize="11" Margin="0,0,0,16" />
+                    <!-- Issue #46: fertige, eigenständige Control statt einer eigenen zweiten
+                         Tier-Auswahl - vermeidet eine zweite LicenseTier-Enum im selben Projekt. -->
+                    <controls:LicenseTierPicker x:Name="TierPicker" Margin="0,0,0,16" />
 
                     <!-- Kein Standard-Laufzeit-Vorschlag (Nutzer-Entscheidung 27.08.2026, auch
                          nicht für Trial) - DatePicker startet deshalb bewusst leer. Ersatz durch

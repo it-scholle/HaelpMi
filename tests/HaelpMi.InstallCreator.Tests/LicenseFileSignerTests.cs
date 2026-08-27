@@ -1,4 +1,5 @@
 using System;
+using HaelpMi.InstallCreator.Controls;
 using HaelpMi.InstallCreator.Licensing;
 using Org.BouncyCastle.Crypto.Generators;
 using Org.BouncyCastle.Crypto.Parameters;
@@ -9,6 +10,10 @@ namespace HaelpMi.InstallCreator.Tests;
 
 /// <summary>
 /// Issue #18: eigenes Wegwerf-Schlüsselpaar pro Test, nie ein echter Lizenzschlüssel.
+/// <see cref="CreateSigned_VerifiesAgainstRealCoreLicenseReader"/> ist der eigentlich
+/// wichtige Test hier - er hat beim ersten Rebase auf release-1.0-MVP einen echten
+/// Formatunterschied zu HaelpMi.Core.Licensing.LicenseReader (Issue #19) aufgedeckt, den ein
+/// reiner Roundtrip-Test gegen den eigenen Signierer nie gefunden hätte.
 /// </summary>
 public class LicenseFileSignerTests
 {
@@ -22,12 +27,13 @@ public class LicenseFileSignerTests
         return (priv.GetEncoded(), pub.GetEncoded());
     }
 
-    private static LicenseFile SampleLicense(LicenseTier tier = LicenseTier.S) => new(
+    private static License SampleLicense(LicenseTier tier = LicenseTier.S) => new(
         CustomerGroupId: Guid.NewGuid(),
         Tier: tier,
-        UserLimit: tier.UserLimit(),
+        UserLimit: LicenseTierLimits.GetUserLimit(tier),
         IssuedAtUtc: new DateTime(2026, 8, 27, 0, 0, 0, DateTimeKind.Utc),
-        ExpiryDateUtc: new DateTime(2027, 8, 27, 0, 0, 0, DateTimeKind.Utc));
+        ExpiryDateUtc: new DateTime(2027, 8, 27, 0, 0, 0, DateTimeKind.Utc),
+        SignatureBase64: string.Empty);
 
     [Fact]
     public void CreateSigned_ThenVerify_WithMatchingPublicKey_Succeeds()
@@ -36,6 +42,34 @@ public class LicenseFileSignerTests
         var signed = LicenseFileSigner.CreateSigned(SampleLicense(), privateKey);
 
         Assert.True(LicenseFileSigner.Verify(signed, publicKey));
+    }
+
+    [Fact]
+    public void CreateSigned_VerifiesAgainstRealCoreLicenseReader()
+    {
+        var (privateKey, publicKey) = GenerateTestKeyPair();
+        var license = SampleLicense();
+        var signed = LicenseFileSigner.CreateSigned(license, privateKey);
+
+        var coreLicense = new HaelpMi.Core.Licensing.License(
+            signed.CustomerGroupId,
+            (HaelpMi.Core.Licensing.LicenseTier)(int)signed.Tier,
+            signed.UserLimit,
+            signed.IssuedAtUtc,
+            signed.ExpiryDateUtc,
+            signed.SignatureBase64);
+
+        var tempFile = System.IO.Path.GetTempFileName();
+        try
+        {
+            System.IO.File.WriteAllText(tempFile, System.Text.Json.JsonSerializer.Serialize(coreLicense));
+            var result = HaelpMi.Core.Licensing.LicenseReader.Load(tempFile, signed.CustomerGroupId, publicKey);
+            Assert.Equal(HaelpMi.Core.Licensing.LicenseStatus.Valid, result.Status);
+        }
+        finally
+        {
+            System.IO.File.Delete(tempFile);
+        }
     }
 
     [Fact]
@@ -70,19 +104,4 @@ public class LicenseFileSignerTests
 
         Assert.False(LicenseFileSigner.Verify(signed, publicKey));
     }
-
-    // Theory-Parameter bewusst als string statt LicenseTier: die Enum ist wie der Rest von
-    // HaelpMi.InstallCreator internal, ein öffentlicher Testmethoden-Parameter darf sie aber
-    // nicht direkt aufnehmen (CS0051).
-    [Theory]
-    [InlineData("Trial", 10)]
-    [InlineData("S", 25)]
-    [InlineData("M", 75)]
-    [InlineData("L", 150)]
-    public void UserLimit_MatchesAgreedStaffelung(string tierName, int expected) =>
-        Assert.Equal(expected, Enum.Parse<LicenseTier>(tierName).UserLimit());
-
-    [Fact]
-    public void UserLimit_ForXL_IsUnlimited() =>
-        Assert.Null(LicenseTier.XL.UserLimit());
 }

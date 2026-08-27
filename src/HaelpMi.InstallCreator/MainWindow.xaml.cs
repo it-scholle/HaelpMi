@@ -7,6 +7,7 @@ using System.Text;
 using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
+using HaelpMi.InstallCreator.Controls;
 using HaelpMi.InstallCreator.Licensing;
 
 namespace HaelpMi.InstallCreator;
@@ -774,20 +775,6 @@ public partial class MainWindow : Window
             $"{entry.Tier} - erstellt {entry.ErstelltAm:d}, gültig bis {entry.Ablaufdatum:d}");
     }
 
-    private void LicenseTierComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
-    {
-        // LicenseUserLimitText kann vor InitializeComponent-Abschluss durch das
-        // IsSelected="True" des ersten ComboBoxItem schon ausgelöst werden.
-        if (LicenseUserLimitText is null || LicenseTierComboBox.SelectedItem is not ComboBoxItem item)
-        {
-            return;
-        }
-
-        var tier = Enum.Parse<LicenseTier>((string)item.Tag);
-        var limit = tier.UserLimit();
-        LicenseUserLimitText.Text = limit is null ? "Nutzerlimit: unbegrenzt" : $"Nutzerlimit: {limit}";
-    }
-
     private void LoadLicenseKeyButton_Click(object sender, RoutedEventArgs e)
     {
         var dialog = new Microsoft.Win32.OpenFileDialog
@@ -831,15 +818,16 @@ public partial class MainWindow : Window
             LicenseStatusText.Text = "Bitte ein Ablaufdatum wählen.";
             return;
         }
-        if (LicenseTierComboBox.SelectedItem is not ComboBoxItem tierItem)
+        if (TierPicker.SelectedTier is not { } tier)
         {
+            LicenseStatusText.Text = "Bitte eine Paketgröße wählen.";
             return;
         }
 
-        var tier = Enum.Parse<LicenseTier>((string)tierItem.Tag);
         var customer = _selectedLicenseCustomer.Entry;
-        var license = new LicenseFile(customer.CustomerGroupId, tier, tier.UserLimit(), DateTime.UtcNow, expiryDate);
-        var signed = LicenseFileSigner.CreateSigned(license, _licensePrivateKey);
+        var issuedAtUtc = DateTime.UtcNow;
+        var unsigned = new License(customer.CustomerGroupId, tier, TierPicker.UserLimit, issuedAtUtc, expiryDate, SignatureBase64: string.Empty);
+        var signed = LicenseFileSigner.CreateSigned(unsigned, _licensePrivateKey);
 
         var saveDialog = new Microsoft.Win32.SaveFileDialog
         {
@@ -863,7 +851,7 @@ public partial class MainWindow : Window
         }
 
         LicenseRegistryStore.Append(new LicenseRegistryEntry(
-            Guid.NewGuid(), customer.CustomerGroupId, tier, tier.UserLimit(), license.IssuedAtUtc, expiryDate));
+            Guid.NewGuid(), customer.CustomerGroupId, tier, TierPicker.UserLimit, issuedAtUtc, expiryDate));
 
         LicenseStatusText.Text = $"Lizenz erstellt: {saveDialog.FileName}";
         Log($"Lizenz für {customer.Kundenname} erstellt (Tier {tier}, gültig bis {expiryDate:d}).");
