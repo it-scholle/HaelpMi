@@ -2,7 +2,7 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="HälpMi Install-Creator"
-        Width="1000" Height="640"
+        Width="1000" Height="680"
         ResizeMode="NoResize"
         WindowStartupLocation="CenterScreen">
     <!-- Breitbild statt Hochformat (Nutzerwunsch 06.08.2026): links wie bisher Kundenname/
@@ -17,6 +17,10 @@
             </ResourceDictionary.MergedDictionaries>
         </ResourceDictionary>
     </Window.Resources>
+    <!-- Zweiter Reiter "Lizenzen" (Issue #18) - Höhe deshalb 640->680, damit für den
+         Tab-Kopf kein Content beengt wird. -->
+    <TabControl>
+    <TabItem Header="Installer erstellen">
     <Grid Margin="24">
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="420" />
@@ -169,4 +173,71 @@
              Text damit in die untere rechte Ecke der linken Spalte. -->
         <TextBlock x:Name="VersionText" Grid.Column="0" VerticalAlignment="Bottom" Style="{StaticResource VersionWatermarkStyle}" />
     </Grid>
+    </TabItem>
+
+    <TabItem Header="Lizenzen">
+    <Grid Margin="24">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="300" />
+            <ColumnDefinition Width="24" />
+            <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+
+        <DockPanel Grid.Column="0">
+            <TextBlock DockPanel.Dock="Top" Text="Kunden" FontWeight="SemiBold" Margin="0,0,0,6" />
+            <ListBox x:Name="LicenseCustomerListBox" SelectionChanged="LicenseCustomerListBox_SelectionChanged" />
+        </DockPanel>
+
+        <StackPanel Grid.Column="2">
+            <TextBlock Text="Neue Lizenz erstellen" FontSize="16" FontWeight="Bold" Margin="0,0,0,4" />
+            <TextBlock x:Name="LicenseSelectedCustomerText" Foreground="{StaticResource TextSecondaryBrush}"
+                       FontSize="11" Text="Kein Kunde ausgewählt" Margin="0,0,0,16" />
+
+            <Border Background="{StaticResource CardBackgroundBrush}" BorderBrush="{StaticResource HairlineBrush}"
+                    BorderThickness="1" CornerRadius="12" Padding="16" Margin="0,0,0,16">
+                <StackPanel>
+                    <TextBlock Text="Paketgröße" FontWeight="SemiBold" FontSize="12" />
+                    <ComboBox x:Name="LicenseTierComboBox" Margin="0,6,0,4"
+                              SelectionChanged="LicenseTierComboBox_SelectionChanged">
+                        <ComboBoxItem Content="Trial (10 Nutzer)" Tag="Trial" IsSelected="True" />
+                        <ComboBoxItem Content="S (25 Nutzer)" Tag="S" />
+                        <ComboBoxItem Content="M (75 Nutzer)" Tag="M" />
+                        <ComboBoxItem Content="L (150 Nutzer)" Tag="L" />
+                        <ComboBoxItem Content="XL (151+, unbegrenzt)" Tag="XL" />
+                    </ComboBox>
+                    <TextBlock x:Name="LicenseUserLimitText" Foreground="{StaticResource TextSecondaryBrush}"
+                               FontSize="11" Margin="0,0,0,16" />
+
+                    <!-- Kein Standard-Laufzeit-Vorschlag (Nutzer-Entscheidung 27.08.2026, auch
+                         nicht für Trial) - DatePicker startet deshalb bewusst leer. Ersatz durch
+                         Toggle Tage/Monatsende + Datepicker-Komfort: eigenes Ticket #47. -->
+                    <TextBlock Text="Ablaufdatum" FontWeight="SemiBold" FontSize="12" />
+                    <DatePicker x:Name="LicenseExpiryDatePicker" Margin="0,6,0,16" />
+
+                    <TextBlock Text="Lizenzschlüssel" FontWeight="SemiBold" FontSize="12" />
+                    <Grid Margin="0,6,0,4">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Button Grid.Column="0" x:Name="LoadLicenseKeyButton" Content="Datei wählen..."
+                                Padding="14,6" Click="LoadLicenseKeyButton_Click" />
+                        <TextBlock Grid.Column="1" x:Name="LicenseKeyStatusText" Text="kein Schlüssel geladen"
+                                   Foreground="{StaticResource TextSecondaryBrush}" FontSize="11"
+                                   VerticalAlignment="Center" Margin="12,0,0,0" />
+                    </Grid>
+                </StackPanel>
+            </Border>
+
+            <Button x:Name="CreateLicenseButton" Content="Lizenz erstellen" HorizontalAlignment="Left"
+                    Style="{StaticResource AccentButtonStyle}" Padding="18,9" Margin="0,0,0,8"
+                    Click="CreateLicenseButton_Click" />
+            <TextBlock x:Name="LicenseStatusText" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,16" />
+
+            <TextBlock Text="Bisher ausgestellte Lizenzen" FontWeight="SemiBold" Margin="0,0,0,6" />
+            <ListBox x:Name="LicenseHistoryListBox" Height="160" />
+        </StackPanel>
+    </Grid>
+    </TabItem>
+    </TabControl>
 </Window>

@@ -16,10 +16,18 @@
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
     <PackageReference Include="xunit" Version="2.9.2" />
     <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
+    <!-- Für ein Wegwerf-Testschlüsselpaar in LicenseFileSignerTests, gleiche Version wie
+         HaelpMi.InstallCreator selbst. -->
+    <PackageReference Include="BouncyCastle.Cryptography" Version="2.4.0" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\HaelpMi.InstallCreator\HaelpMi.InstallCreator.csproj" />
+    <!-- Nur für den Kompatibilitäts-Roundtrip-Test (Issue #18 signiert, #19 prüft): rein
+         testseitige Abhängigkeit, die HaelpMi.InstallCreator selbst bewusst nicht hat (siehe
+         Kommentar dort) - keine Laufzeitkopplung, nur Verifikation, dass beide unabhängig
+         entwickelten Formate tatsächlich zusammenpassen. -->
+    <ProjectReference Include="..\..\src\HaelpMi.Core\HaelpMi.Core.csproj" />
   </ItemGroup>
 
   <ItemGroup>

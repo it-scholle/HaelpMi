@@ -4,8 +4,10 @@ using System.Linq;
 using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
+using HaelpMi.InstallCreator.Licensing;
 
 namespace HaelpMi.InstallCreator;
 
@@ -20,6 +22,11 @@ namespace HaelpMi.InstallCreator;
 /// </summary>
 public partial class MainWindow : Window
 {
+    // Nur im Arbeitsspeicher dieses Laufs (Issue #18) - nie auf die Platte geschrieben, siehe
+    // LicenseFileSigner-Kommentar.
+    private byte[]? _licensePrivateKey;
+    private CustomerListItem? _selectedLicenseCustomer;
+
     public MainWindow()
     {
         InitializeComponent();
@@ -45,6 +52,8 @@ public partial class MainWindow : Window
         // InitializeComponent() auslösen, bevor CustomerNumberBox überhaupt existiert.
         TestInstallerCheckBox.Checked += TestInstallerCheckBox_Changed;
         TestInstallerCheckBox.Unchecked += TestInstallerCheckBox_Changed;
+
+        PopulateLicenseCustomers();
     }
 
     // Issue #43: beim Umschalten Test-/Produktivinstaller neu vorschlagen, da beide Reihen
@@ -724,5 +733,140 @@ public partial class MainWindow : Window
     {
         LogBox.AppendText($"{DateTime.Now:HH:mm:ss} {message}{Environment.NewLine}");
         LogBox.ScrollToEnd(); // Nutzerwunsch: Protokoll immer "live" am Ende, kein manuelles Nachscrollen
+    }
+
+    // Issue #18 - Reiter "Lizenzen". Zeigt Test- und Produktivkunden zusammen an: für die
+    // Lizenzerstellung ist die getrennte Nummernreihe (#43) irrelevant, beide brauchen eine
+    // eigene Lizenz.
+    private sealed record CustomerListItem(CustomerRegistryEntry Entry, bool IsTestInstaller)
+    {
+        public override string ToString() =>
+            $"{Entry.Kundenname} ({CustomerRegistryStore.FormatDisplay(Entry.Kundennummer, IsTestInstaller)})";
+    }
+
+    private void PopulateLicenseCustomers()
+    {
+        var items = CustomerRegistryStore.Load(isTestInstaller: false).Select(e => new CustomerListItem(e, false))
+            .Concat(CustomerRegistryStore.Load(isTestInstaller: true).Select(e => new CustomerListItem(e, true)))
+            .OrderByDescending(i => i.Entry.ErstelltAm)
+            .ToList();
+        LicenseCustomerListBox.ItemsSource = items;
+    }
+
+    private void LicenseCustomerListBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        _selectedLicenseCustomer = LicenseCustomerListBox.SelectedItem as CustomerListItem;
+        LicenseSelectedCustomerText.Text = _selectedLicenseCustomer is null
+            ? "Kein Kunde ausgewählt"
+            : $"Kundengruppen-ID: {_selectedLicenseCustomer.Entry.CustomerGroupId}";
+        RefreshLicenseHistory();
+    }
+
+    private void RefreshLicenseHistory()
+    {
+        var history = _selectedLicenseCustomer is null
+            ? new List<LicenseRegistryEntry>()
+            : LicenseRegistryStore.Load()
+                .Where(entry => entry.CustomerGroupId == _selectedLicenseCustomer.Entry.CustomerGroupId)
+                .OrderByDescending(entry => entry.ErstelltAm)
+                .ToList();
+        LicenseHistoryListBox.ItemsSource = history.Select(entry =>
+            $"{entry.Tier} - erstellt {entry.ErstelltAm:d}, gültig bis {entry.Ablaufdatum:d}");
+    }
+
+    private void LicenseTierComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        // LicenseUserLimitText kann vor InitializeComponent-Abschluss durch das
+        // IsSelected="True" des ersten ComboBoxItem schon ausgelöst werden.
+        if (LicenseUserLimitText is null || LicenseTierComboBox.SelectedItem is not ComboBoxItem item)
+        {
+            return;
+        }
+
+        var tier = Enum.Parse<LicenseTier>((string)item.Tag);
+        var limit = tier.UserLimit();
+        LicenseUserLimitText.Text = limit is null ? "Nutzerlimit: unbegrenzt" : $"Nutzerlimit: {limit}";
+    }
+
+    private void LoadLicenseKeyButton_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new Microsoft.Win32.OpenFileDialog
+        {
+            Title = "Lizenzschlüssel (privat) laden",
+            Filter = "Schlüsseldatei (*.txt)|*.txt|Alle Dateien (*.*)|*.*",
+        };
+        if (dialog.ShowDialog(this) != true)
+        {
+            return;
+        }
+
+        try
+        {
+            _licensePrivateKey = LicenseFileSigner.LoadPrivateKey(dialog.FileName);
+            LicenseKeyStatusText.Text = "Schlüssel geladen";
+        }
+        catch (Exception ex) when (ex is IOException or FormatException)
+        {
+            _licensePrivateKey = null;
+            LicenseKeyStatusText.Text = "Schlüsseldatei ungültig";
+            System.Windows.MessageBox.Show($"Lizenzschlüssel konnte nicht geladen werden:{Environment.NewLine}{ex.Message}",
+                "HälpMi Install-Creator", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    private void CreateLicenseButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_selectedLicenseCustomer is null)
+        {
+            LicenseStatusText.Text = "Bitte zuerst einen Kunden auswählen.";
+            return;
+        }
+        if (_licensePrivateKey is null)
+        {
+            LicenseStatusText.Text = "Bitte zuerst den Lizenzschlüssel laden.";
+            return;
+        }
+        if (LicenseExpiryDatePicker.SelectedDate is not { } expiryDate)
+        {
+            LicenseStatusText.Text = "Bitte ein Ablaufdatum wählen.";
+            return;
+        }
+        if (LicenseTierComboBox.SelectedItem is not ComboBoxItem tierItem)
+        {
+            return;
+        }
+
+        var tier = Enum.Parse<LicenseTier>((string)tierItem.Tag);
+        var customer = _selectedLicenseCustomer.Entry;
+        var license = new LicenseFile(customer.CustomerGroupId, tier, tier.UserLimit(), DateTime.UtcNow, expiryDate);
+        var signed = LicenseFileSigner.CreateSigned(license, _licensePrivateKey);
+
+        var saveDialog = new Microsoft.Win32.SaveFileDialog
+        {
+            Title = "Lizenzdatei speichern",
+            FileName = $"{SanitizeForFileName(customer.Kundenname)}-lizenz.json",
+            Filter = "Lizenzdatei (*.json)|*.json",
+        };
+        if (saveDialog.ShowDialog(this) != true)
+        {
+            return;
+        }
+
+        try
+        {
+            File.WriteAllText(saveDialog.FileName, JsonSerializer.Serialize(signed, new JsonSerializerOptions { WriteIndented = true }));
+        }
+        catch (IOException ex)
+        {
+            LicenseStatusText.Text = $"Speichern fehlgeschlagen: {ex.Message}";
+            return;
+        }
+
+        LicenseRegistryStore.Append(new LicenseRegistryEntry(
+            Guid.NewGuid(), customer.CustomerGroupId, tier, tier.UserLimit(), license.IssuedAtUtc, expiryDate));
+
+        LicenseStatusText.Text = $"Lizenz erstellt: {saveDialog.FileName}";
+        Log($"Lizenz für {customer.Kundenname} erstellt (Tier {tier}, gültig bis {expiryDate:d}).");
+        RefreshLicenseHistory();
     }
 }

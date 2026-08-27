@@ -1,17 +1,19 @@
 using System;
+using HaelpMi.InstallCreator.Licensing;
 
 namespace HaelpMi.InstallCreator;
 
 /// <summary>
-/// Vorarbeit zu #18/#19 (Lizenzerstellung/-prüfung): bindet eine Lizenz an genau eine
-/// Kundengruppe (<see cref="CustomerGroupId"/>), damit sie nicht einfach an eine andere
-/// Installation weitergereicht werden kann - ein reines Ablaufdatum (wie zunächst in #21
-/// vorgesehen) enthält keine solche Bindung. Die eigentliche Erzeugung/Signierung (Ed25519,
-/// siehe CLAUDE.md "Kunden-Lizenzsignatur") sowie die Prüfung beim Kunden (Abgleich der
-/// eigenen CustomerGroupId gegen dieses Feld) gehören zu #18/#19, nicht zu diesem Ticket -
-/// dieser Datensatz ist nur die Struktur dafür.
+/// Eigene Bookkeeping-Kopie (Anbieter-Sicht) einer ausgestellten Lizenz, bindet sie an genau
+/// eine Kundengruppe (<see cref="CustomerGroupId"/>) - ein reines Ablaufdatum (wie zunächst in
+/// #21 vorgesehen) enthält keine solche Bindung. Unabhängig von der signierten Datei, die der
+/// Kunde erhält (<see cref="Licensing.SignedLicenseFile"/>): dieser Eintrag dient nur der
+/// eigenen Übersicht (#21), enthält deshalb keine Signatur.
 /// </summary>
 internal sealed record LicenseRegistryEntry(
     Guid LizenzId,
     Guid CustomerGroupId,
+    LicenseTier Tier,
+    int? UserLimit,
+    DateTime ErstelltAm,
     DateTime Ablaufdatum);

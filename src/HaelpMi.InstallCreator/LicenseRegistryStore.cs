@@ -6,10 +6,10 @@ using System.Text.Json;
 namespace HaelpMi.InstallCreator;
 
 /// <summary>
-/// Lokale JSON-Ablage für <see cref="LicenseRegistryEntry"/> (Vorarbeit zu #18/#19), getrennt
-/// vom Kundenregister (#31/#21) - eine Lizenz ist ein eigener, an eine Kundengruppe gebundener
-/// Datensatz, keine Eigenschaft eines Installer-Baus. Noch nirgends verdrahtet: weder Erzeugung
-/// (samt Ed25519-Signatur) noch Prüfung beim Kunden gehören zu diesem Ticket.
+/// Lokale JSON-Ablage für <see cref="LicenseRegistryEntry"/>, getrennt vom Kundenregister
+/// (#31/#21) - eine Lizenz ist ein eigener, an eine Kundengruppe gebundener Datensatz, keine
+/// Eigenschaft eines Installer-Baus. Nur die eigene Anbieter-Übersicht/Historie (#21); die
+/// Prüfung der signierten Lizenzdatei beim Kunden gehört zu #19, nicht zu diesem Register.
 /// </summary>
 internal static class LicenseRegistryStore
 {

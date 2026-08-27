@@ -33,6 +33,17 @@
     <Resource Include="Assets\haelpmi_icon.ico" />
   </ItemGroup>
 
+  <!-- Ed25519-Signierung der Lizenzdatei (Issue #18) - dieselbe Bibliothek, die HaelpMi.Core
+       (Update-Signatur) und HaelpMi.UpdateSigner schon für exakt dasselbe Verfahren nutzen,
+       kein neuer Abwägungsbedarf. -->
+  <ItemGroup>
+    <PackageReference Include="BouncyCastle.Cryptography" Version="2.4.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="HaelpMi.InstallCreator.Tests" />
+  </ItemGroup>
+
   <!-- Splashscreen (05.08.2026) am 06.08.2026 wieder entfernt - siehe HaelpMi.Config.csproj
        für die ausführliche Begründung (WPF SplashScreen.Show() stürzt in einer self-contained
        Veröffentlichung mit MissingManifestResourceException ab, VOR jeder eigenen
