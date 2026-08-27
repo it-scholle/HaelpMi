@@ -163,6 +163,15 @@ der Hook oben aktiv, stößt dieser Pull über `post-merge` ohnehin denselben Re
 hash-basierte Rebuild in `Start.ps1` selbst fängt den Fall aber zusätzlich ab, falls die
 Hooks auf dieser Maschine nicht aktiviert sind.
 
+**Nachbesserung 27.08.2026 (Nutzerfeedback: spürbar langsamerer Start):** ein `git fetch`
+gegen GitHub kostet allein am Verbindungs-/Auth-Handshake gemessen 5-10 Sekunden, unabhängig
+davon, ob es überhaupt etwas Neues gibt — bei jedem einzelnen Start unverhältnismäßig. Der
+obige Pull läuft daher gedrosselt: eine Marker-Datei `tools/InstallCreator/.last-pull-check`
+(gitignored wie `.source-hash`) hält den Zeitpunkt des letzten Versuchs fest, ein neuer
+Fetch/Pull passiert höchstens alle 10 Minuten. Der Zeitstempel wird auch bei einem
+Fehlschlag (kein Netzwerk) geschrieben, damit ein Offline-Start nicht bei jedem weiteren
+Start erneut die volle Wartezeit erzwingt.
+
 ### Versionsnummer-Kollisionen
 
 Kollidieren beim Rebase zwei unabhängig vergebene Versionsnummern (z. B. weil zwei Branches

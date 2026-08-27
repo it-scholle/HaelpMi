@@ -24,31 +24,60 @@ $csproj = Join-Path $srcDir "HaelpMi.InstallCreator.csproj"
 # verlieren. Ist `core.hooksPath .githooks` aktiv, stößt der Pull über `post-merge`
 # ohnehin denselben Rebuild-Hook an, der hash-basierte Rebuild unten fängt den Fall
 # aber auch ab, falls die Hooks auf dieser Maschine nicht aktiviert sind.
-Push-Location $repoRoot
-$prevErrorPref = $ErrorActionPreference
-$ErrorActionPreference = "Continue"
-try {
-    git rev-parse --is-inside-work-tree *> $null
-    if ($LASTEXITCODE -eq 0) {
-        $dirtyStatus = git status --porcelain 2>$null
-        if ([string]::IsNullOrWhiteSpace($dirtyStatus)) {
-            git fetch --quiet 2>$null
-            $pullOutput = (git pull --ff-only 2>&1 | Out-String).Trim()
-            if ($LASTEXITCODE -ne 0) {
-                Write-Host "Hinweis: automatischer git pull nicht möglich (kein Fast-Forward oder kein Netzwerk) - baue mit dem lokalen Stand weiter."
-            } elseif ($pullOutput -notmatch "Already up to date") {
-                Write-Host "git pull: $pullOutput"
-            }
-        } else {
-            # Grossgeschriebenes "Ä" ohne BOM wird von PowerShell 5.1 ohne UTF-8-BOM als
-            # typografisches Anführungszeichen fehlinterpretiert und würde den String hier
-            # vorzeitig beenden - deshalb "Aenderungen" statt "Änderungen" in dieser Zeile.
-            Write-Host "Hinweis: lokale, nicht committete Aenderungen im Checkout - automatischer git pull uebersprungen, baue mit dem lokalen Stand weiter."
-        }
+#
+# Nachbesserung 27.08.2026 (Nutzerfeedback: Install-Creator startet seit obiger Aenderung
+# spuerbar langsamer): gemessen 5-10 Sekunden allein fuer den Handshake von "git fetch"
+# gegen GitHub, unabhaengig davon, ob es ueberhaupt etwas Neues gibt - reine Auth-/
+# Verbindungslatenz, kein Datenvolumen (.git ist nur wenige MB gross). Bei jedem einzelnen
+# Start diesen Preis zu zahlen waere fuer den eigentlichen Zweck (Start des Tages nicht
+# veraltet, nicht: jeder einzelne Neustart binnen Minuten taggenau) unverhaeltnismaessig -
+# deshalb Drossel per Marker-Datei: ein Fetch/Pull passiert hoechstens alle 10 Minuten,
+# dazwischen startet das Tool sofort mit dem zuletzt bekannten Stand.
+$pullThrottleMinutes = 10
+$lastPullMarker = Join-Path $toolsDir ".last-pull-check"
+$dueForPullCheck = $true
+if (Test-Path $lastPullMarker) {
+    $lastCheck = [datetime]::MinValue
+    $lastCheckText = Get-Content -Path $lastPullMarker -Raw -ErrorAction SilentlyContinue
+    $parsed = [datetime]::TryParse(
+        $lastCheckText, [System.Globalization.CultureInfo]::InvariantCulture,
+        [System.Globalization.DateTimeStyles]::RoundtripKind, [ref]$lastCheck)
+    if ($parsed -and ((Get-Date).ToUniversalTime() - $lastCheck).TotalMinutes -lt $pullThrottleMinutes) {
+        $dueForPullCheck = $false
     }
-} finally {
-    $ErrorActionPreference = $prevErrorPref
-    Pop-Location
+}
+
+if ($dueForPullCheck) {
+    Push-Location $repoRoot
+    $prevErrorPref = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    try {
+        git rev-parse --is-inside-work-tree *> $null
+        if ($LASTEXITCODE -eq 0) {
+            $dirtyStatus = git status --porcelain 2>$null
+            if ([string]::IsNullOrWhiteSpace($dirtyStatus)) {
+                git fetch --quiet 2>$null
+                $pullOutput = (git pull --ff-only 2>&1 | Out-String).Trim()
+                if ($LASTEXITCODE -ne 0) {
+                    Write-Host "Hinweis: automatischer git pull nicht möglich (kein Fast-Forward oder kein Netzwerk) - baue mit dem lokalen Stand weiter."
+                } elseif ($pullOutput -notmatch "Already up to date") {
+                    Write-Host "git pull: $pullOutput"
+                }
+            } else {
+                # Grossgeschriebenes "Ä" ohne BOM wird von PowerShell 5.1 ohne UTF-8-BOM als
+                # typografisches Anführungszeichen fehlinterpretiert und würde den String hier
+                # vorzeitig beenden - deshalb "Aenderungen" statt "Änderungen" in dieser Zeile.
+                Write-Host "Hinweis: lokale, nicht committete Aenderungen im Checkout - automatischer git pull uebersprungen, baue mit dem lokalen Stand weiter."
+            }
+        }
+    } finally {
+        $ErrorActionPreference = $prevErrorPref
+        Pop-Location
+        # Zeitstempel wird auch bei Fehlschlag (kein Netzwerk o. Ä.) geschrieben - sonst
+        # wuerde ein Offline-Start bei jedem weiteren Start erneut die volle Handshake-
+        # Wartezeit erzwingen, bis wieder Netzwerk da ist.
+        (Get-Date).ToUniversalTime().ToString("o") | Set-Content -Path $lastPullMarker -NoNewline
+    }
 }
 
 if (-not (Test-Path $csproj)) {
