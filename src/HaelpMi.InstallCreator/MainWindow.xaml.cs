@@ -444,11 +444,13 @@ public partial class MainWindow : Window
             var outputDir = Path.Combine(installerDir, "Output");
             Log($"Admin-Installer erfolgreich erstellt (siehe {outputDir}). " +
                 "Das ist die einzige Datei, die an den Sysadmin geht.");
-            // LizenzAblauf/Kontakt bewusst noch null - Befüllung folgt erst mit #18/#19 (#21).
+            // Kontakt bewusst noch null - Befüllung folgt erst mit #18/#19 (#21). Kein
+            // Lizenz-Ablaufdatum hier (siehe CustomerRegistryEntry) - das liegt gebunden an
+            // die CustomerGroupId im Lizenzregister, nicht redundant im Kundenregister.
             // Test- und Produktivinstaller landen seit #43 in getrennten Registerdateien.
             CustomerRegistryStore.Append(isTestInstaller, new CustomerRegistryEntry(
                 customerNumber, customerGroupId, customerNameOrTestLabel,
-                DateTime.Now, LizenzAblauf: null, Kontakt: null));
+                DateTime.Now, Kontakt: null));
             ShowSuccessToast(outputDir);
         }
         else
