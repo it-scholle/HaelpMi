@@ -8,6 +8,7 @@ using HaelpMi.Core.Autostart;
 using HaelpMi.Core.Diagnostics;
 using HaelpMi.Core.Interop;
 using HaelpMi.Core.Ipc;
+using HaelpMi.Core.Licensing;
 using HaelpMi.Core.Models;
 using HaelpMi.Core.Networking;
 using HaelpMi.Core.Runtime;
@@ -62,6 +63,13 @@ public partial class App : System.Windows.Application
 
     private OwnSettings _settings = null!;
     private DeploymentInfo _deployment = null!;
+
+    /// <summary>
+    /// Einmal beim Start gelesen (Lizenzdatei ändert sich nie im laufenden Betrieb, anders
+    /// als die Config) - Soft-Expiry/Invalid/Missing blockieren den Start nicht (CLAUDE.md),
+    /// stehen aber für die Ablaufwarnung aus Issue #20 zur Verfügung.
+    /// </summary>
+    private LicenseCheckResult _license = null!;
 
     private DiscoveryService? _discovery;
     private AlarmChannel? _listener;
@@ -132,6 +140,7 @@ public partial class App : System.Windows.Application
         {
             _deployment = DeploymentInfoStore.Load();
             _settings = _settingsStore.Load();
+            _license = LicenseReader.Load(_deployment.CustomerGroupId);
         }
         catch (Exception ex) when (ex is InvalidOperationException or System.Text.Json.JsonException or IOException)
         {

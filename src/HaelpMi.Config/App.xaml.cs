@@ -7,6 +7,7 @@ using System.Windows.Media;
 using HaelpMi.Core.Diagnostics;
 using HaelpMi.Core.Interop;
 using HaelpMi.Core.Ipc;
+using HaelpMi.Core.Licensing;
 using HaelpMi.Core.Models;
 using HaelpMi.Core.Networking;
 using HaelpMi.Core.Runtime;
@@ -61,6 +62,9 @@ public partial class App : System.Windows.Application
     private SettingsStore? _settingsStore;
     private DeploymentInfo? _deployment;
     private DeviceStore? _deviceStore;
+
+    /// <summary>Wie beim Agent (siehe dortiger Feldkommentar) - Grundlage für Issue #20.</summary>
+    private LicenseCheckResult? _license;
 
     // async void statt async Task: OnStartup ist ein void-Override (Application-Basisklasse),
     // dasselbe etablierte WPF-Muster wie bei einem async Button_Click-Handler.
@@ -139,6 +143,7 @@ public partial class App : System.Windows.Application
         {
             settings = settingsStore.Load();
             deployment = DeploymentInfoStore.Load();
+            _license = LicenseReader.Load(deployment.CustomerGroupId);
         }
         catch (Exception ex) when (ex is InvalidOperationException or System.Text.Json.JsonException or IOException)
         {

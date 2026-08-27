@@ -16,4 +16,7 @@ public static class LicensePublicKey
     /// <summary>32-byte Ed25519 public key, hex-encoded. Placeholder value - see class remarks.</summary>
     public const string PlaceholderHex =
         "0000000000000000000000000000000000000000000000000000000000000000";
+
+    /// <summary>Dekodierte Form von <see cref="PlaceholderHex"/> für <see cref="LicenseReader"/>.</summary>
+    public static byte[] Bytes { get; } = Convert.FromHexString(PlaceholderHex);
 }

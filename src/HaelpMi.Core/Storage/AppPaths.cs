@@ -43,6 +43,13 @@ public static class AppPaths
     /// </summary>
     public static string DeploymentInfoFilePath => Path.Combine(AppContext.BaseDirectory, "deployment.json");
 
+    /// <summary>
+    /// Wie <see cref="DeploymentInfoFilePath"/> vom Installer ins Installationsverzeichnis
+    /// geschrieben (Issue #18/#19), nicht %AppData% - eine Lizenz beschreibt die
+    /// Installation, nicht den Zustand eines einzelnen Nutzerkontos.
+    /// </summary>
+    public static string LicenseFilePath => Path.Combine(AppContext.BaseDirectory, "lizenz.json");
+
     public static void EnsureRootExists() => Directory.CreateDirectory(RootFolder);
 
     private sealed class RestoreOnDispose(Action onDispose) : IDisposable
