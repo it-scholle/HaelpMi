@@ -207,15 +207,21 @@
                     <TextBlock Text="Ablaufdatum" FontWeight="SemiBold" FontSize="12" />
                     <DatePicker x:Name="LicenseExpiryDatePicker" Margin="0,6,0,16" />
 
-                    <TextBlock Text="Lizenzschlüssel" FontWeight="SemiBold" FontSize="12" />
-                    <Grid Margin="0,6,0,4">
+                    <!-- Nutzerfeedback 27.08.2026: "Lizenzschlüssel" klang wie die zu erstellende
+                         Lizenz selbst (Verwechslung mit einem klassischen Produktschlüssel) -
+                         das hier ist der private Anbieter-Signaturschlüssel (Ed25519), mit dem
+                         jede Lizenz signiert wird, vergleichbar einem Code-Signing-Zertifikat. -->
+                    <TextBlock Text="Signaturschlüssel (privat)" FontWeight="SemiBold" FontSize="12" />
+                    <TextBlock Text="Der Anbieter-Schlüssel, mit dem die Lizenz signiert wird - nicht die Lizenz selbst."
+                               Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" TextWrapping="Wrap" Margin="0,2,0,4" />
+                    <Grid Margin="0,2,0,4">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto" />
                             <ColumnDefinition Width="*" />
                         </Grid.ColumnDefinitions>
-                        <Button Grid.Column="0" x:Name="LoadLicenseKeyButton" Content="Datei wählen..."
+                        <Button Grid.Column="0" x:Name="LoadLicenseKeyButton" Content="Schlüsseldatei laden..."
                                 Padding="14,6" Click="LoadLicenseKeyButton_Click" />
-                        <TextBlock Grid.Column="1" x:Name="LicenseKeyStatusText" Text="kein Schlüssel geladen"
+                        <TextBlock Grid.Column="1" x:Name="LicenseKeyStatusText" Text="kein Signaturschlüssel geladen"
                                    Foreground="{StaticResource TextSecondaryBrush}" FontSize="11"
                                    VerticalAlignment="Center" Margin="12,0,0,0" />
                     </Grid>

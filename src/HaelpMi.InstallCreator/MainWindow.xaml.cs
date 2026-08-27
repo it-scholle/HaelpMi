@@ -779,7 +779,7 @@ public partial class MainWindow : Window
     {
         var dialog = new Microsoft.Win32.OpenFileDialog
         {
-            Title = "Lizenzschlüssel (privat) laden",
+            Title = "Signaturschlüssel (privat) laden",
             Filter = "Schlüsseldatei (*.txt)|*.txt|Alle Dateien (*.*)|*.*",
         };
         if (dialog.ShowDialog(this) != true)
@@ -790,13 +790,13 @@ public partial class MainWindow : Window
         try
         {
             _licensePrivateKey = LicenseFileSigner.LoadPrivateKey(dialog.FileName);
-            LicenseKeyStatusText.Text = "Schlüssel geladen";
+            LicenseKeyStatusText.Text = "Signaturschlüssel geladen";
         }
         catch (Exception ex) when (ex is IOException or FormatException)
         {
             _licensePrivateKey = null;
             LicenseKeyStatusText.Text = "Schlüsseldatei ungültig";
-            System.Windows.MessageBox.Show($"Lizenzschlüssel konnte nicht geladen werden:{Environment.NewLine}{ex.Message}",
+            System.Windows.MessageBox.Show($"Signaturschlüssel konnte nicht geladen werden:{Environment.NewLine}{ex.Message}",
                 "HälpMi Install-Creator", MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
@@ -810,7 +810,7 @@ public partial class MainWindow : Window
         }
         if (_licensePrivateKey is null)
         {
-            LicenseStatusText.Text = "Bitte zuerst den Lizenzschlüssel laden.";
+            LicenseStatusText.Text = "Bitte zuerst den Signaturschlüssel laden.";
             return;
         }
         if (LicenseExpiryDatePicker.SelectedDate is not { } expiryDate)
