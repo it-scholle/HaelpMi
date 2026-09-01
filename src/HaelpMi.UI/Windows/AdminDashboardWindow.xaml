@@ -59,12 +59,27 @@
     <Grid Margin="12">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
+        <!-- Issue #20: Warnung vor Lizenzablauf (gestaffelt - läuft bald ab/abgelaufen/
+             ungültig/fehlt, siehe LicenseWarningEvaluator), Standard Collapsed. Der Import-
+             Button hier ist gleichzeitig Issue #51 (Lizenz-Import im Admin-Dashboard) -
+             bewusst direkt hier statt an einer zweiten Stelle, siehe dortige Begründung. -->
+        <Border Grid.Row="0" x:Name="LicenseWarningBanner" Visibility="Collapsed" Margin="0,0,0,10"
+                Padding="12,8" CornerRadius="4">
+            <DockPanel LastChildFill="True">
+                <Button DockPanel.Dock="Right" x:Name="ImportLicenseButton" Content="Lizenz einspielen"
+                        Padding="12,6" Background="White" BorderThickness="1" Margin="12,0,0,0"
+                        Click="ImportLicenseButton_Click" />
+                <TextBlock x:Name="LicenseWarningText" VerticalAlignment="Center" TextWrapping="Wrap" Foreground="White" FontWeight="SemiBold" />
+            </DockPanel>
+        </Border>
+
         <!-- Nutzerwunsch: eine Datei an den Sysadmin, User-Installer wird bei Bedarf aus dem Dashboard selbst nachgebaut. -->
-        <DockPanel Grid.Row="0" Margin="0,0,0,10">
+        <DockPanel Grid.Row="1" Margin="0,0,0,10">
             <Button DockPanel.Dock="Left" x:Name="ExportUserInstallerButton" Content="User-Installer exportieren"
                     Padding="14,8" Background="#2471A3" Foreground="White" BorderThickness="0"
                     Click="ExportUserInstallerButton_Click" />
@@ -75,7 +90,7 @@
              den Anfang, nicht hinten versteckt - deshalb Alarm-Profile hier als erster Tab.
              "Kreise" gibt es hier bewusst nicht mehr - Gruppe ist die einzige organisatorische
              Einheit im Dashboard (siehe EditScope.cs für den Hintergrund). -->
-        <TabControl Grid.Row="1" x:Name="MainTabControl" SelectionChanged="MainTabControl_SelectionChanged">
+        <TabControl Grid.Row="2" x:Name="MainTabControl" SelectionChanged="MainTabControl_SelectionChanged">
             <!-- Alarm-Profile: Nutzerwunsch 04.08.2026 - Empfängerkreis-Zuordnung nicht mehr
                  als separates Popup-Fenster, sondern direkt hier im Profil; Profilauswahl
                  als Dropdown (alphabetisch, erster Eintrag standardmäßig gewählt) statt
@@ -359,7 +374,7 @@
             </TabItem>
         </TabControl>
 
-        <DockPanel Grid.Row="2" Margin="0,8,0,0">
+        <DockPanel Grid.Row="3" Margin="0,8,0,0">
             <TextBlock x:Name="VersionText" DockPanel.Dock="Right" Style="{StaticResource VersionWatermarkStyle}" Margin="8,0,0,0" />
             <TextBlock Foreground="Gray" FontSize="11" TextWrapping="Wrap"
                        Text="Änderungen werden sofort beim Verlassen eines Feldes gespeichert und an alle Geräte verteilt (Config-Sync, kein Speichern-Button). Auswahl einer Gruppe/eines Profils reserviert es exklusiv zur Bearbeitung." />

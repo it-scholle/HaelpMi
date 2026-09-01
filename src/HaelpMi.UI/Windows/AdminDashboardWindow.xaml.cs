@@ -3,12 +3,14 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using HaelpMi.Core.Licensing;
 using HaelpMi.Core.Models;
 using HaelpMi.Core.Networking;
 using HaelpMi.Core.Runtime;
 using HaelpMi.Core.Storage;
 using HaelpMi.UI.Helpers;
 using HaelpMi.UI.ViewModels;
+using Microsoft.Win32;
 
 namespace HaelpMi.UI.Windows;
 
@@ -104,6 +106,7 @@ public partial class AdminDashboardWindow : Window
 
         UpdateUserLabelModeButtons();
         ReloadAll();
+        RefreshLicenseBanner();
 
         _deviceFileWatcher.Changed += (_, _) => RefreshDeviceDerivedViews();
         Closed += (_, _) =>
@@ -283,6 +286,63 @@ public partial class AdminDashboardWindow : Window
             _context.ReleaseLock(EditScopeKind.UpdateRollout, AppConstants.UpdateRolloutScopeId);
             _heldUpdateRolloutLock = false;
         }
+    }
+
+    // --------------------------------------------------- Lizenz (Issue #19/#20/#51) ---
+
+    // Live neu ausgewertet statt einmalig beim Öffnen gecacht (siehe Kommentar an
+    // AdminDashboardContext.GetLicenseStatus) - ein Import muss sofort sichtbar werden.
+    private void RefreshLicenseBanner()
+    {
+        var checkResult = _context.GetLicenseStatus();
+        var warning = LicenseWarningEvaluator.Evaluate(checkResult, DateTime.UtcNow);
+
+        if (warning.Level == LicenseWarningLevel.None)
+        {
+            LicenseWarningBanner.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        LicenseWarningBanner.Background = warning.Level == LicenseWarningLevel.ExpiringSoon
+            ? (Brush)FindResource("WarningBrush")
+            : (Brush)FindResource("DangerBrush");
+        LicenseWarningText.Text = warning.Level switch
+        {
+            LicenseWarningLevel.Missing => "Keine Lizenz gefunden. Bitte eine gültige Lizenzdatei einspielen.",
+            LicenseWarningLevel.Invalid => "Lizenz ungültig (beschädigt, manipuliert oder für eine andere Installation ausgestellt). Bitte eine gültige Lizenzdatei einspielen.",
+            LicenseWarningLevel.Expired => $"Lizenz seit {-warning.DaysRemaining} Tag(en) abgelaufen. Bitte eine neue Lizenz einspielen.",
+            LicenseWarningLevel.ExpiringSoon => $"Lizenz läuft in {warning.DaysRemaining} Tag(en) ab. Bitte rechtzeitig eine neue Lizenz einspielen.",
+            _ => string.Empty,
+        };
+        LicenseWarningBanner.Visibility = Visibility.Visible;
+    }
+
+    // Issue #51 (Lizenz-Import im Admin-Dashboard), verdrahtet direkt im #20-Banner: baut
+    // auf #19 auf (LicenseImporter prüft über LicenseReader, bevor irgendetwas übernommen
+    // wird - eine ungültige Auswahl überschreibt eine bestehende gültige Lizenz nie).
+    private void ImportLicenseButton_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new OpenFileDialog
+        {
+            Title = "Lizenzdatei auswählen",
+            Filter = "Lizenzdatei (*.json)|*.json|Alle Dateien (*.*)|*.*",
+        };
+        if (dialog.ShowDialog(this) != true)
+        {
+            return;
+        }
+
+        var result = _context.ImportLicenseFile(dialog.FileName);
+        if (!result.Success)
+        {
+            var reason = result.CheckResult.Status == LicenseStatus.Missing
+                ? "Die Datei konnte nicht gelesen werden."
+                : "Die Datei ist keine gültige Lizenz für diese Installation (Signatur oder Kundengruppe passt nicht).";
+            MessageBox.Show(this, reason, "HälpMi - Lizenz einspielen fehlgeschlagen", MessageBoxButton.OK, MessageBoxImage.Error);
+            return;
+        }
+
+        RefreshLicenseBanner();
     }
 
     // ------------------------------------------------------------- User-Installer-Export ---

@@ -1,3 +1,4 @@
+using HaelpMi.Core.Licensing;
 using HaelpMi.Core.Models;
 using HaelpMi.Core.Networking;
 
@@ -55,6 +56,17 @@ public sealed class AdminDashboardContext
     /// UpdatePackageCacheStore.ListAvailableVersions.
     /// </summary>
     public required Func<List<string>> ListAvailableUpdateVersions { get; init; }
+
+    /// <summary>
+    /// Issue #20: live neu ausgewertet statt gecacht (billiger Dateizugriff + Ed25519-
+    /// Prüfung, siehe #19/LicenseReader) - damit ein per <see cref="ImportLicenseFile"/>
+    /// gerade erst eingespielter Lizenzstand sofort sichtbar wird, ohne das Dashboard neu
+    /// zu starten.
+    /// </summary>
+    public required Func<LicenseCheckResult> GetLicenseStatus { get; init; }
+
+    /// <summary>"Lizenz einspielen"-Button im #20-Banner (Issue #51) - nimmt den vom Windows-Datei-Picker gewählten Pfad entgegen, siehe <see cref="LicenseImporter"/>.</summary>
+    public required Func<string, LicenseImportResult> ImportLicenseFile { get; init; }
 }
 
 public sealed record UserInstallerExportResult(bool Success, string? OutputFilePath, string? Error);
