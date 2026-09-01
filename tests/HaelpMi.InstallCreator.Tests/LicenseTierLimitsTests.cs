@@ -32,4 +32,12 @@ public class LicenseTierLimitsTests
     {
         Assert.Equal("M - 75 Nutzer", LicenseTierLimits.GetDisplayLabel(LicenseTier.M));
     }
+
+    [Fact]
+    public void GetDisplayLabel_Trial_ShowsXsTrialNotJustTrial()
+    {
+        // Offizielles XS-Paket hat dasselbe Nutzerlimit wie Trial - eine gemeinsame Stufe
+        // im Dropdown statt zweier Einträge mit identischem Limit.
+        Assert.Equal("XS/Trial - 10 Nutzer", LicenseTierLimits.GetDisplayLabel(LicenseTier.Trial));
+    }
 }

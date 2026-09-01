@@ -1,9 +1,12 @@
 namespace HaelpMi.InstallCreator.Controls;
 
 /// <summary>
-/// Lizenz-Paketgrößen. Werte und Namen wie im Freeze zu Issue #19 festgelegt - müssen bei
-/// künftiger Signier-/Prüf-Implementierung (Issues #18/#19) unverändert übernommen werden,
-/// da sie 1:1 dem <c>Tier</c>-Feld der signierten Lizenzdatei entsprechen.
+/// Lizenz-Paketgrößen. Enum-Namen wie im Freeze zu Issue #19 festgelegt - der Signierer
+/// (<see cref="HaelpMi.Core.Licensing.License.GetSigningPayload"/>) verwendet
+/// <c>Tier.ToString()</c> als Teil der signierten Bytes, <c>Trial</c> bleibt daher als
+/// Symbol unverändert. Anzeigename ist davon getrennt: seit Einführung eines offiziellen
+/// XS-Pakets (gleiches Nutzerlimit wie Trial) zeigt <see cref="LicenseTierLimits.GetDisplayLabel"/>
+/// diese eine Stufe als "XS/Trial" statt nur "Trial".
 /// </summary>
 public enum LicenseTier
 {
@@ -27,10 +30,14 @@ public static class LicenseTierLimits
         _ => throw new ArgumentOutOfRangeException(nameof(tier), tier, null)
     };
 
+    private static string GetDisplayName(LicenseTier tier) =>
+        tier == LicenseTier.Trial ? "XS/Trial" : tier.ToString();
+
     public static string GetDisplayLabel(LicenseTier tier)
     {
         var limit = GetUserLimit(tier);
-        return limit is null ? $"{tier} - unbegrenzt" : $"{tier} - {limit} Nutzer";
+        var name = GetDisplayName(tier);
+        return limit is null ? $"{name} - unbegrenzt" : $"{name} - {limit} Nutzer";
     }
 }
 

@@ -7,9 +7,8 @@ using UserControl = System.Windows.Controls.UserControl;
 namespace HaelpMi.InstallCreator.Controls;
 
 /// <summary>
-/// Eigenständige, noch nicht eingebundene Auswahl-Control für die Lizenz-Paketgröße
-/// (Trial/S/M/L/XL). Das Einhängen in einen Lizenz-Reiter des Install-Creators erfolgt
-/// bewusst in einer anderen Session/Issue (#18) - siehe Kommentar in Issue #46.
+/// Auswahl-Control für die Lizenz-Paketgröße (XS/Trial, S, M, L, XL), eingehängt im
+/// Lizenzen-Reiter des Install-Creators (Issue #18).
 /// </summary>
 public partial class LicenseTierPicker : UserControl
 {
