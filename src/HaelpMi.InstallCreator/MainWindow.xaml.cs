@@ -5,6 +5,7 @@ using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Threading;
 using System.Windows;
 using System.Windows.Controls;
 using HaelpMi.InstallCreator.Controls;
@@ -852,7 +853,7 @@ public partial class MainWindow : Window
                 return;
             }
 
-            File.WriteAllText(saveDialog.FileName, JsonSerializer.Serialize(signed, new JsonSerializerOptions { WriteIndented = true }));
+            WriteLicenseFileWithRetry(saveDialog.FileName, JsonSerializer.Serialize(signed, new JsonSerializerOptions { WriteIndented = true }));
             savedFilePath = saveDialog.FileName;
         }
         catch (Exception ex)
@@ -868,5 +869,31 @@ public partial class MainWindow : Window
         LicenseStatusText.Text = $"Lizenz erstellt: {savedFilePath}";
         Log($"Lizenz für {customer.Kundenname} erstellt (Tier {tier}, gültig bis {expiryDate:d}).");
         RefreshLicenseHistory();
+    }
+
+    // Nutzerbericht 01.09.2026 ("a portion of the file is locked", wiederholt, im selben
+    // Ordner wie der frühere Windows-Defender-Fund WinLNK.GAC!MTB): Echtzeit-Virenschutz
+    // scannt eine frisch geschriebene Datei und hält dabei kurz einen Teil-Lock - bekanntes,
+    // meist binnen Millisekunden bis niedrigen Sekunden vorbeigehendes Muster, kein
+    // Programmierfehler. Kurzer Retry statt Sofort-Abbruch behebt den Regelfall; bleibt die
+    // Sperre bestehen, ist das ein Hinweis auf eine echte Virenschutz-Ausnahme statt eines
+    // Timing-Problems (siehe Ticket-Diskussion: Ausnahme für den Ordner in Windows-Sicherheit
+    // einrichten). Thread.Sleep auf dem UI-Thread ist hier bewusst in Kauf genommen - ein
+    // einmaliger, seltener Klick, kein Dauerbetrieb, maximal ~600ms Wartezeit.
+    private static void WriteLicenseFileWithRetry(string path, string content)
+    {
+        const int maxAttempts = 3;
+        for (var attempt = 1; attempt <= maxAttempts; attempt++)
+        {
+            try
+            {
+                File.WriteAllText(path, content);
+                return;
+            }
+            catch (IOException) when (attempt < maxAttempts)
+            {
+                Thread.Sleep(300);
+            }
+        }
     }
 }
