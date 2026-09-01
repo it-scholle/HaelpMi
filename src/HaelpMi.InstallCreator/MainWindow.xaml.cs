@@ -827,33 +827,45 @@ public partial class MainWindow : Window
         var customer = _selectedLicenseCustomer.Entry;
         var issuedAtUtc = DateTime.UtcNow;
         var unsigned = new License(customer.CustomerGroupId, tier, TierPicker.UserLimit, issuedAtUtc, expiryDate, SignatureBase64: string.Empty);
-        var signed = LicenseFileSigner.CreateSigned(unsigned, _licensePrivateKey);
 
-        var saveDialog = new Microsoft.Win32.SaveFileDialog
-        {
-            Title = "Lizenzdatei speichern",
-            FileName = $"{SanitizeForFileName(customer.Kundenname)}-lizenz.json",
-            Filter = "Lizenzdatei (*.json)|*.json",
-        };
-        if (saveDialog.ShowDialog(this) != true)
-        {
-            return;
-        }
-
+        // Bugfix (Nutzerbericht 01.09.2026, "Speichern fehlgeschlagen" ohne sichtbare Meldung):
+        // CreateSigned (falsch formatierte Schlüsseldatei -> BouncyCastle-Ausnahme) und
+        // File.WriteAllText (z. B. UnauthorizedAccessException auf einem Netzlaufwerk, nicht
+        // von IOException abgeleitet) fingen vorher nur teilweise/gar nicht ab - jede nicht
+        // abgefangene Ausnahme landete im globalen DispatcherUnhandledException-Handler
+        // (App.xaml.cs), der sie bewusst nur ins crash.log schreibt und die App weiterlaufen
+        // lässt, ohne den Nutzer zu informieren. Deshalb hier bewusst breit gefangen, mit
+        // Meldung statt stillem Nichts-Passieren.
+        string savedFilePath;
         try
         {
+            var signed = LicenseFileSigner.CreateSigned(unsigned, _licensePrivateKey);
+
+            var saveDialog = new Microsoft.Win32.SaveFileDialog
+            {
+                Title = "Lizenzdatei speichern",
+                FileName = $"{SanitizeForFileName(customer.Kundenname)}-lizenz.json",
+                Filter = "Lizenzdatei (*.json)|*.json",
+            };
+            if (saveDialog.ShowDialog(this) != true)
+            {
+                return;
+            }
+
             File.WriteAllText(saveDialog.FileName, JsonSerializer.Serialize(signed, new JsonSerializerOptions { WriteIndented = true }));
+            savedFilePath = saveDialog.FileName;
         }
-        catch (IOException ex)
+        catch (Exception ex)
         {
             LicenseStatusText.Text = $"Speichern fehlgeschlagen: {ex.Message}";
+            CrashLogger.Log("CreateLicenseButton_Click", ex);
             return;
         }
 
         LicenseRegistryStore.Append(new LicenseRegistryEntry(
             Guid.NewGuid(), customer.CustomerGroupId, tier, TierPicker.UserLimit, issuedAtUtc, expiryDate));
 
-        LicenseStatusText.Text = $"Lizenz erstellt: {saveDialog.FileName}";
+        LicenseStatusText.Text = $"Lizenz erstellt: {savedFilePath}";
         Log($"Lizenz für {customer.Kundenname} erstellt (Tier {tier}, gültig bis {expiryDate:d}).");
         RefreshLicenseHistory();
     }
