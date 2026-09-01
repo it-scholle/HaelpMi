@@ -189,7 +189,11 @@
             <ListBox x:Name="LicenseCustomerListBox" SelectionChanged="LicenseCustomerListBox_SelectionChanged" />
         </DockPanel>
 
-        <StackPanel Grid.Column="2">
+        <!-- Nutzerfeedback 01.09.2026: die Lizenzhistorie ganz unten war bei fixer
+             Fensterhöhe (ResizeMode="NoResize") unauffindbar - StackPanel-Inhalt reichte
+             über den sichtbaren Bereich hinaus, ohne Scrollbar zum Nachscrollen. -->
+        <ScrollViewer Grid.Column="2" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+        <StackPanel Margin="0,0,12,0">
             <TextBlock Text="Neue Lizenz erstellen" FontSize="16" FontWeight="Bold" Margin="0,0,0,4" />
             <TextBlock x:Name="LicenseSelectedCustomerText" Foreground="{StaticResource TextSecondaryBrush}"
                        FontSize="11" Text="Kein Kunde ausgewählt" Margin="0,0,0,16" />
@@ -234,8 +238,9 @@
             <TextBlock x:Name="LicenseStatusText" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,16" />
 
             <TextBlock Text="Bisher ausgestellte Lizenzen" FontWeight="SemiBold" Margin="0,0,0,6" />
-            <ListBox x:Name="LicenseHistoryListBox" Height="160" />
+            <ListBox x:Name="LicenseHistoryListBox" Height="160" Margin="0,0,0,16" />
         </StackPanel>
+        </ScrollViewer>
     </Grid>
     </TabItem>
     </TabControl>
