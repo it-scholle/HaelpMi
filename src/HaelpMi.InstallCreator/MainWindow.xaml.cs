@@ -24,9 +24,6 @@ namespace HaelpMi.InstallCreator;
 /// </summary>
 public partial class MainWindow : Window
 {
-    // Nur im Arbeitsspeicher dieses Laufs (Issue #18) - nie auf die Platte geschrieben, siehe
-    // LicenseFileSigner-Kommentar.
-    private byte[]? _licensePrivateKey;
     private CustomerListItem? _selectedLicenseCustomer;
 
     public MainWindow()
@@ -298,6 +295,14 @@ public partial class MainWindow : Window
     {
         Log("--- Installer werden erstellt ---");
         Log($"Kunden-Gruppen-ID: {customerGroupId}");
+
+        // Issue #56: eigenes Lizenzsignatur-Schlüsselpaar für DIESE Kundengruppe, genau
+        // einmal hier erzeugt (im selben Moment wie die CustomerGroupId selbst) - der
+        // private Teil bleibt lokal (LicenseKeyPairStore), der öffentliche geht unten per
+        // ISCC-Define in beide Installer-Varianten.
+        var (licensePrivateKeyBytes, licensePublicKeyHex) = LicenseFileSigner.GenerateKeyPair();
+        LicenseKeyPairStore.Append(new LicenseKeyPairEntry(
+            customerGroupId, Convert.ToBase64String(licensePrivateKeyBytes), licensePublicKeyHex, DateTime.Now));
         Log($"Kundennummer: {CustomerRegistryStore.FormatDisplay(customerNumber, isTestInstaller)}");
         Log($"Test-Installer: {(isTestInstaller ? "ja" : "nein")}");
         if (isTestInstaller && customerNameOrTestLabel.Length > 0)
@@ -357,6 +362,7 @@ public partial class MainWindow : Window
             args.Add($"/DCustomerGroupId={customerGroupId}");
             args.Add($"/DCustomerNumber={customerNumber}");
             args.Add($"/DIsTestInstaller={(isTestInstaller ? "true" : "false")}");
+            args.Add($"/DLicensePublicKeyHex={licensePublicKeyHex}");
             args.Add($"/O{userPayloadDir}");
             args.Add("/FHaelpMi-User-Setup");
         });
@@ -377,6 +383,7 @@ public partial class MainWindow : Window
             args.Add($"/DCustomerGroupId={customerGroupId}");
             args.Add($"/DCustomerNumber={customerNumber}");
             args.Add($"/DIsTestInstaller={(isTestInstaller ? "true" : "false")}");
+            args.Add($"/DLicensePublicKeyHex={licensePublicKeyHex}");
             if (!string.IsNullOrEmpty(password))
             {
                 args.Add($"/DInstallerPassword={password}");
@@ -733,37 +740,6 @@ public partial class MainWindow : Window
             entry.KeyText));
     }
 
-    private void LoadLicenseKeyButton_Click(object sender, RoutedEventArgs e)
-    {
-        // Rückbau des NoRecentFileDialog-Workarounds (Nutzerentscheidung 01.09.2026) - mit
-        // #54-Nacharbeit (Lizenz als Text statt Datei) ist das ursprüngliche "Zuletzt
-        // verwendet"-Problem für Erstellung/Import bereits gegenstandslos, hier bleibt nur
-        // noch dieser eine Datei-Dialog übrig. Wieder der einfache Standarddialog statt
-        // COM-Interop.
-        var dialog = new Microsoft.Win32.OpenFileDialog
-        {
-            Title = "Signaturschlüssel (privat) laden",
-            Filter = "Schlüsseldatei (*.txt)|*.txt|Alle Dateien (*.*)|*.*",
-        };
-        if (dialog.ShowDialog(this) != true)
-        {
-            return;
-        }
-
-        try
-        {
-            _licensePrivateKey = LicenseFileSigner.LoadPrivateKey(dialog.FileName);
-            LicenseKeyStatusText.Text = "Signaturschlüssel geladen";
-        }
-        catch (Exception ex) when (ex is IOException or FormatException)
-        {
-            _licensePrivateKey = null;
-            LicenseKeyStatusText.Text = "Schlüsseldatei ungültig";
-            System.Windows.MessageBox.Show($"Signaturschlüssel konnte nicht geladen werden:{Environment.NewLine}{ex.Message}",
-                "HälpMi Install-Creator", MessageBoxButton.OK, MessageBoxImage.Error);
-        }
-    }
-
     private async void CreateLicenseButton_Click(object sender, RoutedEventArgs e)
     {
         if (_selectedLicenseCustomer is null)
@@ -771,11 +747,19 @@ public partial class MainWindow : Window
             LicenseStatusText.Text = "Bitte zuerst einen Kunden auswählen.";
             return;
         }
-        if (_licensePrivateKey is null)
+
+        // Issue #56: automatischer Lookup statt manueller Schlüsseldatei-Auswahl - jede
+        // Kundengruppe hat seit BuildAdminInstallerAsync ihr eigenes, dort erzeugtes
+        // Schlüsselpaar. Fehlt ein Eintrag, wurde der Installer vor dieser Umstellung
+        // gebaut (kein automatisch generiertes Schlüsselpaar vorhanden) - der Kunde muss
+        // neu angelegt werden, ein alter globaler Schlüssel existiert nicht mehr.
+        var keyPair = LicenseKeyPairStore.Find(_selectedLicenseCustomer.Entry.CustomerGroupId);
+        if (keyPair is null)
         {
-            LicenseStatusText.Text = "Bitte zuerst den Signaturschlüssel laden.";
+            LicenseStatusText.Text = "Kein Signaturschlüssel für diesen Kunden gefunden - Installer wurde vor Issue #56 gebaut, Kunde muss neu angelegt werden.";
             return;
         }
+
         if (LicenseExpiryDatePicker.SelectedDate is not { } expiryDate)
         {
             LicenseStatusText.Text = "Bitte ein Ablaufdatum wählen.";
@@ -806,7 +790,7 @@ public partial class MainWindow : Window
         {
             licenseKeyText = await Task.Run(() =>
             {
-                var signed = LicenseFileSigner.CreateSigned(unsigned, _licensePrivateKey);
+                var signed = LicenseFileSigner.CreateSigned(unsigned, Convert.FromBase64String(keyPair.PrivateKeyBase64));
                 // Issue #54-Nacharbeit (01.09.2026, Nutzerentscheidung): kompakter Text statt
                 // Datei - kein Datei-Dialog mehr nötig, löst damit auch das "Zuletzt
                 // verwendet"-Problem aus der #18-Diskussion an der Wurzel statt es nur

@@ -1,6 +1,8 @@
 using System;
+using Org.BouncyCastle.Crypto.Generators;
 using Org.BouncyCastle.Crypto.Parameters;
 using Org.BouncyCastle.Crypto.Signers;
+using Org.BouncyCastle.Security;
 
 namespace HaelpMi.InstallCreator.Licensing;
 
@@ -18,6 +20,23 @@ namespace HaelpMi.InstallCreator.Licensing;
 /// </summary>
 internal static class LicenseFileSigner
 {
+    /// <summary>
+    /// Issue #56: EIN eigenes Schlüsselpaar pro Kundengruppe statt eines globalen -
+    /// automatisch erzeugt in demselben Moment, in dem die CustomerGroupId selbst entsteht
+    /// (siehe BuildAdminInstallerAsync). Der öffentliche Teil wird ins jeweilige
+    /// deployment.json eingebettet, der private bleibt lokal (LicenseKeyPairStore) und
+    /// verlässt den Anbieter nie.
+    /// </summary>
+    public static (byte[] PrivateKeyBytes, string PublicKeyHex) GenerateKeyPair()
+    {
+        var generator = new Ed25519KeyPairGenerator();
+        generator.Init(new Ed25519KeyGenerationParameters(new SecureRandom()));
+        var keyPair = generator.GenerateKeyPair();
+        var privateKey = (Ed25519PrivateKeyParameters)keyPair.Private;
+        var publicKey = (Ed25519PublicKeyParameters)keyPair.Public;
+        return (privateKey.GetEncoded(), Convert.ToHexString(publicKey.GetEncoded()));
+    }
+
     public static License CreateSigned(License unsigned, byte[] privateKeyBytes)
     {
         var payload = unsigned.GetSigningPayload();

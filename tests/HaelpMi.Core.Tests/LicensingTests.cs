@@ -220,12 +220,12 @@ public class LicensingTests
     }
 
     // Regressionstest ("Lizenz einspielen"-Button reagierte gar nicht, Nutzerbericht
-    // 02.09.2026): BouncyCastles Ed25519PublicKeyParameters-Konstruktor wirft
+    // 02.09.2026, Issue #55): BouncyCastles Ed25519PublicKeyParameters-Konstruktor wirft
     // ArgumentException("invalid public key") für einen strukturell ungültigen Schlüssel
-    // (32 Nullbytes - genau der aktuell noch eingebettete LicensePublicKey.PlaceholderHex
-    // sind kein gültiger Ed25519-Punkt). Ohne den Fang in TryVerifySignature riss das bis
-    // zum globalen DispatcherUnhandledException-Handler der UI durch - der Button wirkte
-    // dadurch wirkungslos, ohne jede Fehlermeldung, statt sauber "Invalid" zu liefern.
+    // (32 Nullbytes sind kein gültiger Ed25519-Punkt - der Fall, wenn deployment.json einen
+    // beschädigten LicensePublicKeyHex trägt). Ohne den Fang in TryVerifySignature riss das
+    // bis zum globalen DispatcherUnhandledException-Handler der UI durch - der Button
+    // wirkte dadurch wirkungslos, ohne jede Fehlermeldung, statt sauber "Invalid" zu liefern.
     [Fact]
     public void LoadFromKeyText_ReturnsInvalidRatherThanThrowing_WhenEmbeddedPublicKeyIsStructurallyInvalid()
     {
@@ -234,7 +234,7 @@ public class LicensingTests
         var signed = SignLicense(MakeUnsigned(customerGroupId, DateTime.UtcNow.AddYears(1)), privateKey);
         var keyText = LicenseKeyText.Encode(signed);
 
-        var malformedPublicKey = new byte[32]; // wie LicensePublicKey.PlaceholderHex
+        var malformedPublicKey = new byte[32]; // strukturell ungültig, wie ein beschädigtes deployment.json
 
         var exception = Record.Exception(() => LicenseReader.LoadFromKeyText(keyText, customerGroupId, malformedPublicKey));
         Assert.Null(exception);

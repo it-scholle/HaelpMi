@@ -140,9 +140,11 @@ public partial class App : System.Windows.Application
         {
             _deployment = DeploymentInfoStore.Load();
             _settings = _settingsStore.Load();
-            _license = LicenseReader.Load(_deployment.CustomerGroupId);
+            _license = LicenseReader.Load(_deployment.CustomerGroupId, Convert.FromHexString(_deployment.LicensePublicKeyHex));
         }
-        catch (Exception ex) when (ex is InvalidOperationException or System.Text.Json.JsonException or IOException)
+        // FormatException: LicensePublicKeyHex (Issue #56) ist kein gültiger Hex-String -
+        // dieselbe Fehlerklasse wie ein beschädigtes deployment.json, nicht separat zu werten.
+        catch (Exception ex) when (ex is InvalidOperationException or System.Text.Json.JsonException or IOException or FormatException)
         {
             // Vorher nur InvalidOperationException (fehlende Datei) abgefangen - eine
             // BESCHÄDIGTE settings.json/deployment.json (z. B. JsonException) flog bis zum

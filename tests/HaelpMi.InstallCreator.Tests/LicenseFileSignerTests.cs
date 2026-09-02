@@ -108,6 +108,26 @@ public class LicenseFileSignerTests
         Assert.False(LicenseFileSigner.Verify(tampered, publicKey));
     }
 
+    // Issue #56: eigenes Schlüsselpaar pro Kundengruppe, hier erzeugt statt manuell geladen.
+    [Fact]
+    public void GenerateKeyPair_ProducesAWorkingPair_SignedWithPrivate_VerifiesWithPublic()
+    {
+        var (privateKeyBytes, publicKeyHex) = LicenseFileSigner.GenerateKeyPair();
+        var publicKeyBytes = Convert.FromHexString(publicKeyHex);
+        var signed = LicenseFileSigner.CreateSigned(SampleLicense(), privateKeyBytes);
+
+        Assert.True(LicenseFileSigner.Verify(signed, publicKeyBytes));
+    }
+
+    [Fact]
+    public void GenerateKeyPair_ProducesADifferentPairOnEachCall()
+    {
+        var (_, publicKeyHexA) = LicenseFileSigner.GenerateKeyPair();
+        var (_, publicKeyHexB) = LicenseFileSigner.GenerateKeyPair();
+
+        Assert.NotEqual(publicKeyHexA, publicKeyHexB);
+    }
+
     [Fact]
     public void Verify_WithMalformedSignature_FailsInsteadOfThrowing()
     {

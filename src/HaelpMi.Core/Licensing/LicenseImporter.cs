@@ -11,8 +11,8 @@ namespace HaelpMi.Core.Licensing;
 /// </summary>
 public static class LicenseImporter
 {
-    public static LicenseImportResult Import(string sourceFilePath, Guid ownCustomerGroupId) =>
-        Import(sourceFilePath, ownCustomerGroupId, AppPaths.LicenseFilePath, LicensePublicKey.Bytes);
+    public static LicenseImportResult Import(string sourceFilePath, Guid ownCustomerGroupId, byte[] publicKeyBytes) =>
+        Import(sourceFilePath, ownCustomerGroupId, AppPaths.LicenseFilePath, publicKeyBytes);
 
     internal static LicenseImportResult Import(string sourceFilePath, Guid ownCustomerGroupId, string destinationFilePath, byte[] publicKeyBytes)
     {
@@ -34,8 +34,8 @@ public static class LicenseImporter
     /// installierte Lizenz zur Laufzeit) - ein frisch eingespielter Schlüssel, der schon tot
     /// ist, nützt nichts und sähe als "aktiviert" nur falsch erfolgreich aus.
     /// </summary>
-    public static LicenseImportDiagnosis ImportFromKeyText(string keyText, Guid ownCustomerGroupId) =>
-        ImportFromKeyText(keyText, ownCustomerGroupId, AppPaths.LicenseFilePath, LicensePublicKey.Bytes);
+    public static LicenseImportDiagnosis ImportFromKeyText(string keyText, Guid ownCustomerGroupId, byte[] publicKeyBytes) =>
+        ImportFromKeyText(keyText, ownCustomerGroupId, AppPaths.LicenseFilePath, publicKeyBytes);
 
     internal static LicenseImportDiagnosis ImportFromKeyText(string keyText, Guid ownCustomerGroupId, string destinationFilePath, byte[] publicKeyBytes)
     {

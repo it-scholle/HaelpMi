@@ -17,13 +17,18 @@ namespace HaelpMi.Core.Licensing;
 /// </summary>
 public static class LicenseReader
 {
-    public static LicenseCheckResult Load(Guid ownCustomerGroupId) =>
-        Load(AppPaths.LicenseFilePath, ownCustomerGroupId, LicensePublicKey.Bytes);
+    /// <summary>
+    /// Issue #56: der Prüfschlüssel ist seit der Umstellung auf ein Schlüsselpaar PRO
+    /// Kundengruppe kein fest einkompilierter Wert mehr, sondern kommt aus
+    /// <see cref="Models.DeploymentInfo.LicensePublicKeyHex"/> - der Aufrufer liest ihn dort
+    /// und reicht ihn hier durch (siehe HaelpMi.Agent/HaelpMi.Config App.xaml.cs).
+    /// </summary>
+    public static LicenseCheckResult Load(Guid ownCustomerGroupId, byte[] publicKeyBytes) =>
+        Load(AppPaths.LicenseFilePath, ownCustomerGroupId, publicKeyBytes);
 
     /// <summary>
-    /// Dateipfad und Schlüssel als Parameter (statt fest verdrahtet), damit Tests mit einer
-    /// temporären Datei und einem eigenen Wegwerf-Schlüsselpaar arbeiten können, ohne je den
-    /// echten privaten Schlüssel zu benötigen - gleiches Prinzip wie
+    /// Dateipfad als zusätzlicher Parameter (statt fest verdrahtet), damit Tests mit einer
+    /// temporären Datei arbeiten können - gleiches Prinzip wie
     /// <c>UpdatePackageVerifier.Verify</c>.
     /// </summary>
     internal static LicenseCheckResult Load(string filePath, Guid ownCustomerGroupId, byte[] publicKeyBytes)
@@ -64,10 +69,7 @@ public static class LicenseReader
     /// <see cref="License"/>), damit kein Rundungs-/Formatierungsdrift beim erneuten
     /// Zusammenbauen des Datums die Prüfung verfälschen kann.
     /// </summary>
-    public static LicenseCheckResult LoadFromKeyText(string keyText, Guid ownCustomerGroupId) =>
-        LoadFromKeyText(keyText, ownCustomerGroupId, LicensePublicKey.Bytes);
-
-    internal static LicenseCheckResult LoadFromKeyText(string keyText, Guid ownCustomerGroupId, byte[] publicKeyBytes)
+    public static LicenseCheckResult LoadFromKeyText(string keyText, Guid ownCustomerGroupId, byte[] publicKeyBytes)
     {
         if (!LicenseKeyText.TryDecode(keyText, out var payloadBytes, out var signatureBytes))
         {
@@ -86,9 +88,9 @@ public static class LicenseReader
     /// <summary>
     /// Nur Signaturprüfung, absichtlich OHNE die Kundengruppen-/Ablaufprüfung aus
     /// <see cref="Classify"/> - für <see cref="LicenseImporter"/>, der beim manuellen Import
-    /// anders als der sonst überall genutzte <see cref="LoadFromKeyText(string, Guid)"/>
-    /// bewusst zwischen "falscher Kunde"/"abgelaufen" und "gar nicht als Lizenzschlüssel
-    /// erkennbar" unterscheiden soll (Nutzervorgabe: unterschiedliche Meldungen je Fehlerart).
+    /// anders als der sonst überall genutzte <see cref="LoadFromKeyText"/> bewusst zwischen
+    /// "falscher Kunde"/"abgelaufen" und "gar nicht als Lizenzschlüssel erkennbar"
+    /// unterscheiden soll (Nutzervorgabe: unterschiedliche Meldungen je Fehlerart).
     /// Gibt <c>null</c> zurück, wenn der Text nicht dekodierbar ist oder die Signatur nicht
     /// zum eingebetteten öffentlichen Schlüssel passt - beides "kein echter Lizenzschlüssel".
     /// </summary>
@@ -137,13 +139,12 @@ public static class LicenseReader
     /// BouncyCastle's <see cref="Ed25519PublicKeyParameters"/>-Konstruktor prüft den
     /// öffentlichen Schlüssel bereits beim Erzeugen und wirft <see cref="ArgumentException"/>
     /// ("invalid public key"), statt erst bei der eigentlichen Signaturprüfung ein sauberes
-    /// "ungültig" zurückzugeben - z. B. wenn der eingebettete Schlüssel (noch)
-    /// <see cref="LicensePublicKey.PlaceholderHex"/> ist (32 Nullbytes sind kein gültiger
-    /// Ed25519-Punkt). Ohne diesen Fang riss das bis zum globalen
-    /// DispatcherUnhandledException-Handler der aufrufenden UI durch - der "Lizenz
-    /// einspielen"-Button wirkte dadurch wirkungslos, ohne jede Fehlermeldung. Ein falsch
-    /// konfigurierter Prüfschlüssel ist aus Sicht des Aufrufers dasselbe wie eine
-    /// fehlgeschlagene Prüfung, kein Programmfehler.
+    /// "ungültig" zurückzugeben - z. B. für den früheren, nie ersetzten 32-Nullbyte-
+    /// Platzhalter (Issue #55) oder ein beschädigtes <c>deployment.json</c>. Ohne diesen
+    /// Fang riss das bis zum globalen DispatcherUnhandledException-Handler der aufrufenden
+    /// UI durch - der "Lizenz einspielen"-Button wirkte dadurch wirkungslos, ohne jede
+    /// Fehlermeldung. Ein falsch konfigurierter Prüfschlüssel ist aus Sicht des Aufrufers
+    /// dasselbe wie eine fehlgeschlagene Prüfung, kein Programmfehler.
     /// </summary>
     private static bool TryVerifySignature(byte[] payload, byte[] signature, byte[] publicKeyBytes)
     {

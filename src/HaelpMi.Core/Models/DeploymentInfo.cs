@@ -33,4 +33,14 @@ public sealed class DeploymentInfo
     /// branches on it at runtime beyond that.
     /// </summary>
     public bool IsTestInstaller { get; set; }
+
+    /// <summary>
+    /// Issue #56: Ed25519-Prüfschlüssel (hex, 64 Zeichen) für die Lizenzsignatur - EIN
+    /// eigenes Schlüsselpaar pro <see cref="CustomerGroupId"/>, nicht global (Blast-Radius:
+    /// ein kompromittierter Schlüssel betrifft dann nur diese eine Kundengruppe, nicht alle
+    /// Kunden). Vom Install-Creator zusammen mit der CustomerGroupId erzeugt, der private
+    /// Gegenpart verlässt den Anbieter nie (siehe HaelpMi.InstallCreator.LicenseKeyPairStore).
+    /// Ersetzt den früheren fest einkompilierten Platzhalter (siehe #55).
+    /// </summary>
+    public required string LicensePublicKeyHex { get; set; }
 }

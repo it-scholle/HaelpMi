@@ -143,9 +143,11 @@ public partial class App : System.Windows.Application
         {
             settings = settingsStore.Load();
             deployment = DeploymentInfoStore.Load();
-            _license = LicenseReader.Load(deployment.CustomerGroupId);
+            _license = LicenseReader.Load(deployment.CustomerGroupId, Convert.FromHexString(deployment.LicensePublicKeyHex));
         }
-        catch (Exception ex) when (ex is InvalidOperationException or System.Text.Json.JsonException or IOException)
+        // FormatException: LicensePublicKeyHex (Issue #56) ist kein gültiger Hex-String -
+        // dieselbe Fehlerklasse wie ein beschädigtes deployment.json, nicht separat zu werten.
+        catch (Exception ex) when (ex is InvalidOperationException or System.Text.Json.JsonException or IOException or FormatException)
         {
             // Vorher nur InvalidOperationException (fehlende Datei) abgefangen - eine
             // BESCHÄDIGTE settings.json/deployment.json (z. B. JsonException) flog bis zum
@@ -455,8 +457,8 @@ public partial class App : System.Windows.Application
             ReleaseLock = (scopeKind, scopeId) => _editLock.Release(scopeKind, scopeId),
             ExportUserInstaller = ExportUserInstallerAsync,
             ListAvailableUpdateVersions = () => new UpdatePackageCacheStore().ListAvailableVersions(),
-            GetLicenseStatus = () => LicenseReader.Load(deployment.CustomerGroupId),
-            ImportLicenseKeyText = keyText => LicenseImporter.ImportFromKeyText(keyText, deployment.CustomerGroupId),
+            GetLicenseStatus = () => LicenseReader.Load(deployment.CustomerGroupId, Convert.FromHexString(deployment.LicensePublicKeyHex)),
+            ImportLicenseKeyText = keyText => LicenseImporter.ImportFromKeyText(keyText, deployment.CustomerGroupId, Convert.FromHexString(deployment.LicensePublicKeyHex)),
         };
 
         var window = new AdminDashboardWindow(context);

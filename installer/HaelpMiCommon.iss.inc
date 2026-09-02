@@ -13,7 +13,7 @@
 #define MyAppName "HälpMi"
 ; Alpha: 0.x until release, per city/product decision - Version 1.0.0 is reserved for
 ; the actual release. Bump the third number for ordinary fixes, second for a feature.
-#define MyAppVersion "0.29.2"
+#define MyAppVersion "0.30.0"
 #define MyAppPublisher "HälpMi contributors"
 #define MyAgentExeName "HaelpMi.Agent.exe"
 #define MyConfigExeName "HaelpMi.Config.exe"
@@ -46,6 +46,17 @@
 ; beginnend bei 10001. Ohne Angabe (manuelles Kompilieren) Platzhalter 0.
 #ifndef CustomerNumber
   #define CustomerNumber "0"
+#endif
+
+; Issue #56: EIN Ed25519-Prüfschlüssel pro Kundengruppe (nicht global - Blast-Radius: ein
+; kompromittierter Schlüssel betrifft dann nur diese eine Kundengruppe). Vom Install-Creator
+; automatisch erzeugt und per ISCC-Kommandozeile gesetzt ("/DLicensePublicKeyHex={hex}"),
+; zusammen mit CustomerGroupId. Format: 64 Hex-Zeichen (32-Byte-Schlüssel). Ohne Angabe
+; (manuelles Kompilieren) ein strukturell ungültiger Platzhalter, den LicenseReader als
+; "kein echter Lizenzschlüssel" behandelt statt abzustürzen (siehe #55) - ein damit gebauter
+; Installer kann daher NIE eine echte Lizenz verifizieren, genau wie beabsichtigt.
+#ifndef LicensePublicKeyHex
+  #define LicensePublicKeyHex "0000000000000000000000000000000000000000000000000000000000000000"
 #endif
 
 ; Optionales Installer-Passwort (kein Schlüsselpaar - siehe CLAUDE.md Lizenz & Secrets,
@@ -445,7 +456,8 @@ begin
     '  "CustomerGroupId": "{#CustomerGroupId}",' + #13#10 +
     '  "CustomerNumber": {#CustomerNumber},' + #13#10 +
     '  "Role": ' + GetRoleValue() + ',' + #13#10 +
-    '  "IsTestInstaller": {#IsTestInstaller}' + #13#10 +
+    '  "IsTestInstaller": {#IsTestInstaller},' + #13#10 +
+    '  "LicensePublicKeyHex": "{#LicensePublicKeyHex}"' + #13#10 +
     '}';
 
   // Aktuell nur ASCII-Inhalte (GUID/Zahlen), aber aus Konsistenz mit WriteSettingsJson

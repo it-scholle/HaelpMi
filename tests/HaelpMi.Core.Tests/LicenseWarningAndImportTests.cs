@@ -212,9 +212,11 @@ public class LicenseWarningAndImportTests
     [Fact]
     public void ImportFromKeyText_ReturnsNotRecognized_RatherThanThrowing_ForStructurallyInvalidEmbeddedPublicKey()
     {
-        // Regressionstest für den eigentlichen Fehlerbericht: mit dem noch nicht ersetzten
-        // LicensePublicKey.PlaceholderHex (32 Nullbytes) warf der Ed25519-Konstruktor bisher
-        // ungefangen - der Button wirkte dadurch komplett wirkungslos statt "nicht erkannt" zu melden.
+        // Regressionstest für den eigentlichen Fehlerbericht (#55): mit dem damals noch nicht
+        // ersetzten globalen Platzhalter-Prüfschlüssel (32 Nullbytes) warf der Ed25519-
+        // Konstruktor ungefangen - der Button wirkte dadurch komplett wirkungslos statt
+        // "nicht erkannt" zu melden. Ein strukturell ungültiger Schlüssel kann auch mit dem
+        // Pro-Kundengruppe-Modell (#56) weiterhin vorkommen (beschädigtes deployment.json).
         var (privateKey, _) = GenerateTestKeyPair();
         var customerGroupId = Guid.NewGuid();
         var signed = SignLicense(MakeUnsigned(customerGroupId, DateTime.UtcNow.AddYears(1)), privateKey);
