@@ -251,7 +251,34 @@
             </StackPanel>
 
             <TextBlock Text="Bisher ausgestellte Lizenzen" FontWeight="SemiBold" Margin="0,0,0,6" />
-            <ListBox x:Name="LicenseHistoryListBox" Height="160" Margin="0,0,0,16" />
+            <!-- Nutzerwunsch 01.09.2026: jede Zeile zeigt Paketgröße+Datum und lässt sich
+                 einzeln erneut kopieren (LicenseHistoryItem), ohne neu zu signieren. -->
+            <ListBox x:Name="LicenseHistoryListBox" Height="160" Margin="0,0,0,16">
+                <ListBox.ItemTemplate>
+                    <DataTemplate>
+                        <Grid Margin="0,4">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="{Binding Label}" VerticalAlignment="Center"
+                                       FontSize="11" TextWrapping="Wrap" />
+                            <Button Grid.Column="1" Width="24" Height="24" Padding="0" Margin="8,0,0,0"
+                                    ToolTip="Lizenzschlüssel in die Zwischenablage kopieren"
+                                    Click="HistoryCopyButton_Click">
+                                <Grid Width="12" Height="12">
+                                    <Border Width="7" Height="9" CornerRadius="1.2" BorderThickness="1"
+                                            BorderBrush="{StaticResource TextPrimaryBrush}"
+                                            HorizontalAlignment="Right" VerticalAlignment="Top" />
+                                    <Border Width="7" Height="9" CornerRadius="1.2" BorderThickness="1"
+                                            BorderBrush="{StaticResource TextPrimaryBrush}" Background="{StaticResource SecondaryButtonBrush}"
+                                            HorizontalAlignment="Left" VerticalAlignment="Bottom" />
+                                </Grid>
+                            </Button>
+                        </Grid>
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+            </ListBox>
         </StackPanel>
         </ScrollViewer>
     </Grid>

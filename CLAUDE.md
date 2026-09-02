@@ -400,6 +400,17 @@ und `scripts/release-issue.sh <issue-nummer> ["grund"]`.
 - Vor jedem Abschluss eines Features: kurzer Blick, ob eine neu eingeführte Abhängigkeit bekannte
   CVEs hat — nicht als Gate, sondern als Gewohnheit. Der volle Ablauf für den Release-Zeitpunkt
   selbst liegt im Skill `dependency-check`.
+- **Zwischenablage-Regel (ergänzt 01.09.2026, Nutzerentscheidung nach wiederholten Absturz-/
+  Hänger-Berichten):** Niemals direkt `System.Windows.Clipboard` oder
+  `System.Windows.Forms.Clipboard` aufrufen. Jeder Zwischenablage-Zugriff läuft über eine
+  projekteigene `ClipboardCopier`-Hilfsklasse (Vorbild: `HaelpMi.InstallCreator/ClipboardCopier.cs`)
+  mit Retry + Rücklese-Verify, siehe dortiger Kommentar für die volle technische Begründung
+  (`System.Windows.Clipboard` wirft auf einem STA-Thread ohne eigene Nachrichtenschleife
+  zuverlässig eine Fehlermeldung, obwohl der Schreibvorgang ankam; `SetDataObject` meldet aus
+  demselben Grund gelegentlich fälschlich `CLIPBRD_E_CANT_OPEN`). Existiert im jeweiligen
+  Projekt noch keine solche Klasse (kein ProjectReference zwischen InstallCreator/UI/Agent/
+  Config, siehe dortige Begründung), wird sie dort neu angelegt — bewusstes Duplikat statt
+  eines erneuten rohen Clipboard-Aufrufs.
 
 ## Versionierung
 `MAJOR.MINOR.PATCH` in einem einzigen Strom — ein Produkt, keine separat versionierten Module.
