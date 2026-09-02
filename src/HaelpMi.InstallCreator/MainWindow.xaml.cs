@@ -402,6 +402,7 @@ public partial class MainWindow : Window
             CustomerRegistryStore.Append(isTestInstaller, new CustomerRegistryEntry(
                 customerNumber, customerGroupId, customerNameOrTestLabel,
                 DateTime.Now, Kontakt: null));
+            PopulateLicenseCustomers(customerGroupId); // Issue #50: sofort im Lizenzen-Reiter sichtbar, nicht erst nach einem Neustart
             ShowSuccessToast(outputDir);
         }
         else
@@ -686,13 +687,22 @@ public partial class MainWindow : Window
             $"{Entry.Kundenname} ({CustomerRegistryStore.FormatDisplay(Entry.Kundennummer, IsTestInstaller)})";
     }
 
-    private void PopulateLicenseCustomers()
+    // Issue #50 (Bugfix, 02.09.2026): Kundenliste wurde bisher nur einmal beim Fensterstart
+    // gefüllt - ein frisch gebauter Installer (BuildAdminInstallerAsync) war im Lizenzen-Reiter
+    // erst nach einem Neustart des Tools sichtbar. selectCustomerGroupId wählt den gerade neu
+    // angelegten Kunden direkt an, statt ihn nur unsichtbar in die Liste zu mischen.
+    private void PopulateLicenseCustomers(Guid? selectCustomerGroupId = null)
     {
         var items = CustomerRegistryStore.Load(isTestInstaller: false).Select(e => new CustomerListItem(e, false))
             .Concat(CustomerRegistryStore.Load(isTestInstaller: true).Select(e => new CustomerListItem(e, true)))
             .OrderByDescending(i => i.Entry.ErstelltAm)
             .ToList();
         LicenseCustomerListBox.ItemsSource = items;
+
+        if (selectCustomerGroupId is { } groupId)
+        {
+            LicenseCustomerListBox.SelectedItem = items.FirstOrDefault(i => i.Entry.CustomerGroupId == groupId);
+        }
     }
 
     private void LicenseCustomerListBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
