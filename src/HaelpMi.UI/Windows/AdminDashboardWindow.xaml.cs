@@ -9,6 +9,7 @@ using HaelpMi.Core.Networking;
 using HaelpMi.Core.Runtime;
 using HaelpMi.Core.Storage;
 using HaelpMi.UI.Helpers;
+using HaelpMi.UI.Interop;
 using HaelpMi.UI.ViewModels;
 using Microsoft.Win32;
 
@@ -322,17 +323,19 @@ public partial class AdminDashboardWindow : Window
     // wird - eine ungültige Auswahl überschreibt eine bestehende gültige Lizenz nie).
     private void ImportLicenseButton_Click(object sender, RoutedEventArgs e)
     {
-        var dialog = new OpenFileDialog
-        {
-            Title = "Lizenzdatei auswählen",
-            Filter = "Lizenzdatei (*.json)|*.json|Alle Dateien (*.*)|*.*",
-        };
-        if (dialog.ShowDialog(this) != true)
+        // Issue #18-Diskussion (Windows-Defender-Fund auf einer "Zuletzt verwendet"-
+        // Verknüpfung): eigener Vista-Dialog statt Microsoft.Win32.OpenFileDialog, damit die
+        // eingespielte Lizenzdatei nicht in "Zuletzt verwendet" landet.
+        var filePath = NoRecentFileDialog.ShowOpen(
+            new System.Windows.Interop.WindowInteropHelper(this).Handle,
+            "Lizenzdatei auswählen",
+            ("Lizenzdatei (*.json)", "*.json"), ("Alle Dateien (*.*)", "*.*"));
+        if (filePath is null)
         {
             return;
         }
 
-        var result = _context.ImportLicenseFile(dialog.FileName);
+        var result = _context.ImportLicenseFile(filePath);
         if (!result.Success)
         {
             var reason = result.CheckResult.Status == LicenseStatus.Missing

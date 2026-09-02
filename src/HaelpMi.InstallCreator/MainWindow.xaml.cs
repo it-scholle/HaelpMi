@@ -778,19 +778,21 @@ public partial class MainWindow : Window
 
     private void LoadLicenseKeyButton_Click(object sender, RoutedEventArgs e)
     {
-        var dialog = new Microsoft.Win32.OpenFileDialog
-        {
-            Title = "Signaturschlüssel (privat) laden",
-            Filter = "Schlüsseldatei (*.txt)|*.txt|Alle Dateien (*.*)|*.*",
-        };
-        if (dialog.ShowDialog(this) != true)
+        // Issue #18-Diskussion: eigener Vista-Dialog statt Microsoft.Win32.OpenFileDialog,
+        // damit die geladene Schlüsseldatei nicht in "Zuletzt verwendet" landet - siehe
+        // NoRecentFileDialog-Kommentar.
+        var filePath = Interop.NoRecentFileDialog.ShowOpen(
+            new System.Windows.Interop.WindowInteropHelper(this).Handle,
+            "Signaturschlüssel (privat) laden",
+            ("Schlüsseldatei (*.txt)", "*.txt"), ("Alle Dateien (*.*)", "*.*"));
+        if (filePath is null)
         {
             return;
         }
 
         try
         {
-            _licensePrivateKey = LicenseFileSigner.LoadPrivateKey(dialog.FileName);
+            _licensePrivateKey = LicenseFileSigner.LoadPrivateKey(filePath);
             LicenseKeyStatusText.Text = "Signaturschlüssel geladen";
         }
         catch (Exception ex) when (ex is IOException or FormatException)
@@ -842,19 +844,20 @@ public partial class MainWindow : Window
         {
             var signed = LicenseFileSigner.CreateSigned(unsigned, _licensePrivateKey);
 
-            var saveDialog = new Microsoft.Win32.SaveFileDialog
-            {
-                Title = "Lizenzdatei speichern",
-                FileName = $"{SanitizeForFileName(customer.Kundenname)}-lizenz.json",
-                Filter = "Lizenzdatei (*.json)|*.json",
-            };
-            if (saveDialog.ShowDialog(this) != true)
+            // Issue #18-Diskussion (Windows-Defender-Fund auf einer "Zuletzt verwendet"-
+            // Verknüpfung): eigener Vista-Dialog statt Microsoft.Win32.SaveFileDialog, damit
+            // die erstellte Lizenzdatei nicht in "Zuletzt verwendet" landet.
+            var targetPath = Interop.NoRecentFileDialog.ShowSave(
+                new System.Windows.Interop.WindowInteropHelper(this).Handle,
+                "Lizenzdatei speichern", $"{SanitizeForFileName(customer.Kundenname)}-lizenz.json", "json",
+                ("Lizenzdatei (*.json)", "*.json"));
+            if (targetPath is null)
             {
                 return;
             }
 
-            WriteLicenseFileWithRetry(saveDialog.FileName, JsonSerializer.Serialize(signed, new JsonSerializerOptions { WriteIndented = true }));
-            savedFilePath = saveDialog.FileName;
+            WriteLicenseFileWithRetry(targetPath, JsonSerializer.Serialize(signed, new JsonSerializerOptions { WriteIndented = true }));
+            savedFilePath = targetPath;
         }
         catch (Exception ex)
         {
