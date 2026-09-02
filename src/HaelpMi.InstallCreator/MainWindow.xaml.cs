@@ -591,22 +591,29 @@ public partial class MainWindow : Window
         }
     }
 
-    private void LastBuildMoveButton_Click(object sender, RoutedEventArgs e)
+    private async void LastBuildMoveButton_Click(object sender, RoutedEventArgs e)
     {
         if (_lastBuiltInstallerPath is null)
         {
             return;
         }
 
+        LastBuildMoveButton.IsEnabled = false;
+        LastBuildFileText.Text = "Wird nach Z:\\HaelpMi-Installer\\ verschoben …";
+
         try
         {
-            _lastBuiltInstallerPath = InstallerMountMover.MoveToMount(_lastBuiltInstallerPath);
+            _lastBuiltInstallerPath = await InstallerMountMover.MoveToMountAsync(_lastBuiltInstallerPath);
             LastBuildFileText.Text = Path.GetFileName(_lastBuiltInstallerPath) + " liegt auf Z:\\HaelpMi-Installer\\.";
         }
         catch (Exception ex)
         {
             System.Windows.MessageBox.Show($"Verschieben nach Z: fehlgeschlagen:{Environment.NewLine}{ex.Message}",
                 "HälpMi Install-Creator", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+        finally
+        {
+            LastBuildMoveButton.IsEnabled = true;
         }
     }
 

@@ -74,23 +74,27 @@ public partial class BuildSuccessToastWindow : Window
         AnimateOutAndClose();
     }
 
-    private void MoveToMountButton_Click(object sender, RoutedEventArgs e)
+    private async void MoveToMountButton_Click(object sender, RoutedEventArgs e)
     {
         _autoCloseTimer.Stop();
+        MoveToMountButton.IsEnabled = false;
+        SubText.Text = "Wird nach Z:\\HaelpMi-Installer\\ verschoben …";
 
         try
         {
-            _filePath = InstallerMountMover.MoveToMount(_filePath);
+            _filePath = await InstallerMountMover.MoveToMountAsync(_filePath);
             SubText.Text = "Liegt jetzt auf Z:\\HaelpMi-Installer\\";
         }
         catch (Exception ex)
         {
             System.Windows.MessageBox.Show($"Verschieben nach Z: fehlgeschlagen:{Environment.NewLine}{ex.Message}",
                 "HälpMi Install-Creator", MessageBoxButton.OK, MessageBoxImage.Error);
+            MoveToMountButton.IsEnabled = true;
             _autoCloseTimer.Start();
             return;
         }
 
+        MoveToMountButton.IsEnabled = true;
         _autoCloseTimer.Interval = TimeSpan.FromSeconds(2);
         _autoCloseTimer.Start();
     }

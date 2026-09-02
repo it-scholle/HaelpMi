@@ -1,4 +1,5 @@
 using System.IO;
+using System.Threading.Tasks;
 
 namespace HaelpMi.InstallCreator;
 
@@ -12,11 +13,17 @@ internal static class InstallerMountMover
 {
     private static readonly string TargetDir = Path.Combine("Z:\\", "HaelpMi-Installer");
 
-    public static string MoveToMount(string sourcePath)
+    // Läuft über Task.Run auf einem Threadpool-Thread: Z: ist ein Netzlaufwerk, ein
+    // hängender/getrennter Mount würde File.Move sonst direkt auf dem UI-Thread blockieren
+    // und den Install-Creator einfrieren lassen.
+    public static Task<string> MoveToMountAsync(string sourcePath)
     {
-        Directory.CreateDirectory(TargetDir);
-        var targetPath = Path.Combine(TargetDir, Path.GetFileName(sourcePath));
-        File.Move(sourcePath, targetPath, overwrite: true);
-        return targetPath;
+        return Task.Run(() =>
+        {
+            Directory.CreateDirectory(TargetDir);
+            var targetPath = Path.Combine(TargetDir, Path.GetFileName(sourcePath));
+            File.Move(sourcePath, targetPath, overwrite: true);
+            return targetPath;
+        });
     }
 }
