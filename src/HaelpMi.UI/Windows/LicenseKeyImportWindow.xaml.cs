@@ -1,5 +1,6 @@
 using System.Windows;
 using HaelpMi.Core.Licensing;
+using HaelpMi.UI.Helpers;
 
 namespace HaelpMi.UI.Windows;
 
@@ -38,7 +39,24 @@ public partial class LicenseKeyImportWindow : Window
             return;
         }
 
-        var diagnosis = _importLicenseKeyText(keyText);
+        // Fehlerbericht 02.09.2026 ("Button gibt keine Rückmeldung", Ursache diesmal:
+        // AppPaths.LicenseFilePath lag im Installationsverzeichnis, das die rechtelos im
+        // User-Kontext laufende App nicht beschreiben darf - siehe AppPaths-Kommentar).
+        // Zusätzlich zum eigentlichen Fix hier ein genereller Fang: jede unerwartete
+        // Ausnahme (nicht nur die damals konkret gefundene) landet jetzt sichtbar über
+        // ActionErrorHandler statt erneut lautlos im globalen UI-Handler zu verschwinden -
+        // exakt das dort dokumentierte "Button tut einfach nichts"-Muster.
+        LicenseImportDiagnosis diagnosis;
+        try
+        {
+            diagnosis = _importLicenseKeyText(keyText);
+        }
+        catch (Exception ex)
+        {
+            ActionErrorHandler.Show(this, "Lizenz einspielen", ex);
+            return;
+        }
+
         if (diagnosis.Outcome != LicenseImportOutcome.Activated)
         {
             ShowError(BuildErrorMessage(diagnosis));

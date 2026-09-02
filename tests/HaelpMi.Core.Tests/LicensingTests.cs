@@ -1,4 +1,5 @@
 using HaelpMi.Core.Licensing;
+using HaelpMi.Core.Storage;
 using Org.BouncyCastle.Crypto.Generators;
 using Org.BouncyCastle.Crypto.Parameters;
 using Org.BouncyCastle.Crypto.Signers;
@@ -258,5 +259,21 @@ public class LicensingTests
 
         var result = LicenseReader.Load(path, customerGroupId, malformedPublicKey);
         Assert.Equal(LicenseStatus.Invalid, result.Status);
+    }
+
+    // Regressionstest ("Lizenz einspielen"-Button gab wieder keine Rückmeldung, obwohl #55
+    // bereits behoben war): AppPaths.LicenseFilePath lag im Installationsverzeichnis
+    // ({app}) - das bekommt anders als {commonappdata}\HaelpMi keine users-modify-
+    // Berechtigung (siehe [Dirs] in HaelpMiCommon.iss.inc), ein Schreibversuch der
+    // rechtelos laufenden App warf dort eine ungefangene UnauthorizedAccessException.
+    // Lizenz-Import MUSS also im selben, per Installer beschreibbaren Wurzelordner landen
+    // wie settings.json/devices.json/shared-config.json - dieser Test hält das fest, damit
+    // eine künftige Änderung nicht wieder auf AppContext.BaseDirectory zurückfällt.
+    [Fact]
+    public void LicenseFilePath_LivesUnderTheWritableRootFolder_NotTheInstallDirectory()
+    {
+        using var scope = new TestAppDataScope();
+
+        Assert.StartsWith(AppPaths.RootFolder, AppPaths.LicenseFilePath);
     }
 }

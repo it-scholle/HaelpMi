@@ -293,7 +293,21 @@ public partial class AdminDashboardWindow : Window
     // AdminDashboardContext.GetLicenseStatus) - ein Import muss sofort sichtbar werden.
     private void RefreshLicenseBanner()
     {
-        var checkResult = _context.GetLicenseStatus();
+        LicenseCheckResult checkResult;
+        try
+        {
+            checkResult = _context.GetLicenseStatus();
+        }
+        catch (Exception ex)
+        {
+            // Gleiche Begründung wie beim Fang in LicenseKeyImportWindow.ImportButton_Click -
+            // ein Fehler hier lief bisher am Fenster-Konstruktor vorbei bis zum globalen
+            // UI-Handler durch, ohne dass das Dashboard je sichtbar wurde.
+            ActionErrorHandler.Show(this, "Lizenzstatus prüfen", ex);
+            LicenseWarningBanner.Visibility = Visibility.Collapsed;
+            return;
+        }
+
         var warning = LicenseWarningEvaluator.Evaluate(checkResult, DateTime.UtcNow);
 
         if (warning.Level == LicenseWarningLevel.None)
@@ -307,8 +321,8 @@ public partial class AdminDashboardWindow : Window
             : (Brush)FindResource("DangerBrush");
         LicenseWarningText.Text = warning.Level switch
         {
-            LicenseWarningLevel.Missing => "Keine Lizenz gefunden. Bitte eine gültige Lizenzdatei einspielen.",
-            LicenseWarningLevel.Invalid => "Lizenz ungültig (beschädigt, manipuliert oder für eine andere Installation ausgestellt). Bitte eine gültige Lizenzdatei einspielen.",
+            LicenseWarningLevel.Missing => "Keine Lizenz gefunden. Bitte einen gültigen Lizenzschlüssel einspielen.",
+            LicenseWarningLevel.Invalid => "Lizenz ungültig (beschädigt, manipuliert oder für eine andere Installation ausgestellt). Bitte einen gültigen Lizenzschlüssel einspielen.",
             LicenseWarningLevel.Expired => $"Lizenz seit {-warning.DaysRemaining} Tag(en) abgelaufen. Bitte eine neue Lizenz einspielen.",
             LicenseWarningLevel.ExpiringSoon => $"Lizenz läuft in {warning.DaysRemaining} Tag(en) ab. Bitte rechtzeitig eine neue Lizenz einspielen.",
             _ => string.Empty,

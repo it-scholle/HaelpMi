@@ -44,11 +44,19 @@ public static class AppPaths
     public static string DeploymentInfoFilePath => Path.Combine(AppContext.BaseDirectory, "deployment.json");
 
     /// <summary>
-    /// Wie <see cref="DeploymentInfoFilePath"/> vom Installer ins Installationsverzeichnis
-    /// geschrieben (Issue #18/#19), nicht %AppData% - eine Lizenz beschreibt die
-    /// Installation, nicht den Zustand eines einzelnen Nutzerkontos.
+    /// Root-Bugfix (Fehlerbericht "Lizenz einspielen gibt keine Rückmeldung", 02.09.2026):
+    /// eine Lizenz beschreibt zwar wie <see cref="DeploymentInfoFilePath"/> die
+    /// Installation, MUSS aber - anders als deployment.json, das nur
+    /// der (elevierte) Installer je schreibt - vom rechtelos im User-Kontext laufenden
+    /// Programm selbst SCHREIBBAR sein (Lizenz einspielen/erneuern ohne Neuinstallation,
+    /// siehe #51/#56). Das Installationsverzeichnis ({app}) bekommt anders als
+    /// {commonappdata}\HaelpMi keine users-modify-Berechtigung (siehe [Dirs] in
+    /// HaelpMiCommon.iss.inc) - ein Schreibversuch dorthin warf bisher eine ungefangene
+    /// UnauthorizedAccessException, die genau wie die in #55 gefundene Ed25519-Exception
+    /// bis zum globalen UI-Handler durchriss: der "Einspielen"-Button wirkte wirkungslos,
+    /// ohne jede Fehlermeldung. RootFolder statt AppContext.BaseDirectory behebt das.
     /// </summary>
-    public static string LicenseFilePath => Path.Combine(AppContext.BaseDirectory, "lizenz.json");
+    public static string LicenseFilePath => Path.Combine(RootFolder, "lizenz.json");
 
     public static void EnsureRootExists() => Directory.CreateDirectory(RootFolder);
 
