@@ -74,17 +74,37 @@ public static class LicenseReader
             return new LicenseCheckResult(LicenseStatus.Invalid, null);
         }
 
-        var publicKey = new Ed25519PublicKeyParameters(publicKeyBytes, 0);
-        var verifier = new Ed25519Signer();
-        verifier.Init(false, publicKey);
-        verifier.BlockUpdate(payloadBytes, 0, payloadBytes.Length);
-        if (!verifier.VerifySignature(signatureBytes))
+        if (!TryVerifySignature(payloadBytes, signatureBytes, publicKeyBytes))
         {
             return new LicenseCheckResult(LicenseStatus.Invalid, null);
         }
 
         var license = LicenseKeyText.ParsePayload(payloadBytes, Convert.ToBase64String(signatureBytes));
         return license is null ? new LicenseCheckResult(LicenseStatus.Invalid, null) : Classify(license, ownCustomerGroupId);
+    }
+
+    /// <summary>
+    /// Nur Signaturprüfung, absichtlich OHNE die Kundengruppen-/Ablaufprüfung aus
+    /// <see cref="Classify"/> - für <see cref="LicenseImporter"/>, der beim manuellen Import
+    /// anders als der sonst überall genutzte <see cref="LoadFromKeyText(string, Guid)"/>
+    /// bewusst zwischen "falscher Kunde"/"abgelaufen" und "gar nicht als Lizenzschlüssel
+    /// erkennbar" unterscheiden soll (Nutzervorgabe: unterschiedliche Meldungen je Fehlerart).
+    /// Gibt <c>null</c> zurück, wenn der Text nicht dekodierbar ist oder die Signatur nicht
+    /// zum eingebetteten öffentlichen Schlüssel passt - beides "kein echter Lizenzschlüssel".
+    /// </summary>
+    internal static License? TryVerifyKeyTextAuthenticity(string keyText, byte[] publicKeyBytes)
+    {
+        if (!LicenseKeyText.TryDecode(keyText, out var payloadBytes, out var signatureBytes))
+        {
+            return null;
+        }
+
+        if (!TryVerifySignature(payloadBytes, signatureBytes, publicKeyBytes))
+        {
+            return null;
+        }
+
+        return LicenseKeyText.ParsePayload(payloadBytes, Convert.ToBase64String(signatureBytes));
     }
 
     private static LicenseCheckResult Classify(License license, Guid ownCustomerGroupId)
@@ -110,11 +130,34 @@ public static class LicenseReader
             return false;
         }
 
-        var payload = license.GetSigningPayload();
-        var publicKey = new Ed25519PublicKeyParameters(publicKeyBytes, 0);
-        var verifier = new Ed25519Signer();
-        verifier.Init(false, publicKey);
-        verifier.BlockUpdate(payload, 0, payload.Length);
-        return verifier.VerifySignature(signature);
+        return TryVerifySignature(license.GetSigningPayload(), signature, publicKeyBytes);
+    }
+
+    /// <summary>
+    /// BouncyCastle's <see cref="Ed25519PublicKeyParameters"/>-Konstruktor prüft den
+    /// öffentlichen Schlüssel bereits beim Erzeugen und wirft <see cref="ArgumentException"/>
+    /// ("invalid public key"), statt erst bei der eigentlichen Signaturprüfung ein sauberes
+    /// "ungültig" zurückzugeben - z. B. wenn der eingebettete Schlüssel (noch)
+    /// <see cref="LicensePublicKey.PlaceholderHex"/> ist (32 Nullbytes sind kein gültiger
+    /// Ed25519-Punkt). Ohne diesen Fang riss das bis zum globalen
+    /// DispatcherUnhandledException-Handler der aufrufenden UI durch - der "Lizenz
+    /// einspielen"-Button wirkte dadurch wirkungslos, ohne jede Fehlermeldung. Ein falsch
+    /// konfigurierter Prüfschlüssel ist aus Sicht des Aufrufers dasselbe wie eine
+    /// fehlgeschlagene Prüfung, kein Programmfehler.
+    /// </summary>
+    private static bool TryVerifySignature(byte[] payload, byte[] signature, byte[] publicKeyBytes)
+    {
+        try
+        {
+            var publicKey = new Ed25519PublicKeyParameters(publicKeyBytes, 0);
+            var verifier = new Ed25519Signer();
+            verifier.Init(false, publicKey);
+            verifier.BlockUpdate(payload, 0, payload.Length);
+            return verifier.VerifySignature(signature);
+        }
+        catch (ArgumentException)
+        {
+            return false;
+        }
     }
 }

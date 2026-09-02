@@ -72,7 +72,7 @@ public sealed class AdminDashboardContext
     /// bleibt als eigenständige, getestete Fähigkeit bestehen, hängt nur an keinem
     /// UI-Button mehr.
     /// </summary>
-    public required Func<string, LicenseImportResult> ImportLicenseKeyText { get; init; }
+    public required Func<string, LicenseImportDiagnosis> ImportLicenseKeyText { get; init; }
 }
 
 public sealed record UserInstallerExportResult(bool Success, string? OutputFilePath, string? Error);

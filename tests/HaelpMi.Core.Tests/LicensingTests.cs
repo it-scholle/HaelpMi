@@ -218,4 +218,45 @@ public class LicensingTests
 
         Assert.Equal(LicenseStatus.Invalid, result.Status);
     }
+
+    // Regressionstest ("Lizenz einspielen"-Button reagierte gar nicht, Nutzerbericht
+    // 02.09.2026): BouncyCastles Ed25519PublicKeyParameters-Konstruktor wirft
+    // ArgumentException("invalid public key") für einen strukturell ungültigen Schlüssel
+    // (32 Nullbytes - genau der aktuell noch eingebettete LicensePublicKey.PlaceholderHex
+    // sind kein gültiger Ed25519-Punkt). Ohne den Fang in TryVerifySignature riss das bis
+    // zum globalen DispatcherUnhandledException-Handler der UI durch - der Button wirkte
+    // dadurch wirkungslos, ohne jede Fehlermeldung, statt sauber "Invalid" zu liefern.
+    [Fact]
+    public void LoadFromKeyText_ReturnsInvalidRatherThanThrowing_WhenEmbeddedPublicKeyIsStructurallyInvalid()
+    {
+        var (privateKey, _) = GenerateTestKeyPair();
+        var customerGroupId = Guid.NewGuid();
+        var signed = SignLicense(MakeUnsigned(customerGroupId, DateTime.UtcNow.AddYears(1)), privateKey);
+        var keyText = LicenseKeyText.Encode(signed);
+
+        var malformedPublicKey = new byte[32]; // wie LicensePublicKey.PlaceholderHex
+
+        var exception = Record.Exception(() => LicenseReader.LoadFromKeyText(keyText, customerGroupId, malformedPublicKey));
+        Assert.Null(exception);
+
+        var result = LicenseReader.LoadFromKeyText(keyText, customerGroupId, malformedPublicKey);
+        Assert.Equal(LicenseStatus.Invalid, result.Status);
+    }
+
+    [Fact]
+    public void Load_ReturnsInvalidRatherThanThrowing_WhenEmbeddedPublicKeyIsStructurallyInvalid()
+    {
+        var (privateKey, _) = GenerateTestKeyPair();
+        var customerGroupId = Guid.NewGuid();
+        var license = SignLicense(MakeUnsigned(customerGroupId, DateTime.UtcNow.AddYears(1)), privateKey);
+        var path = WriteTempLicenseFile(license);
+
+        var malformedPublicKey = new byte[32];
+
+        var exception = Record.Exception(() => LicenseReader.Load(path, customerGroupId, malformedPublicKey));
+        Assert.Null(exception);
+
+        var result = LicenseReader.Load(path, customerGroupId, malformedPublicKey);
+        Assert.Equal(LicenseStatus.Invalid, result.Status);
+    }
 }

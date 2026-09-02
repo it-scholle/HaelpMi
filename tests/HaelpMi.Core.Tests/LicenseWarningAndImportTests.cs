@@ -139,4 +139,93 @@ public class LicenseWarningAndImportTests
         Assert.True(result.Success);
         Assert.Equal(LicenseStatus.Expired, result.CheckResult.Status);
     }
+
+    // --------------------------------------- LicenseImporter.ImportFromKeyText (Fehlerbericht 02.09.2026) ---
+    // Anders als der Datei-Import oben unterscheidet dieser Pfad die Ablehnungsgründe, damit
+    // der "Lizenz einspielen"-Dialog eine konkrete statt einer generischen Meldung zeigen kann.
+
+    [Fact]
+    public void ImportFromKeyText_Activates_ForValidKey_MatchingCustomerGroup_NotExpired()
+    {
+        var (privateKey, publicKeyBytes) = GenerateTestKeyPair();
+        var customerGroupId = Guid.NewGuid();
+        var signed = SignLicense(MakeUnsigned(customerGroupId, DateTime.UtcNow.AddYears(1)), privateKey);
+        var keyText = LicenseKeyText.Encode(signed);
+        var destinationPath = Path.Combine(Path.GetTempPath(), $"lizenz-keytext-dst-{Guid.NewGuid():N}.json");
+
+        var diagnosis = LicenseImporter.ImportFromKeyText(keyText, customerGroupId, destinationPath, publicKeyBytes);
+
+        Assert.Equal(LicenseImportOutcome.Activated, diagnosis.Outcome);
+        Assert.NotNull(diagnosis.License);
+        Assert.True(File.Exists(destinationPath));
+    }
+
+    [Fact]
+    public void ImportFromKeyText_ReturnsExpired_WithoutPersisting_ForKeyPastItsExpiryDate()
+    {
+        // Abweichung vom Datei-Import (der Expired als Erfolg persistiert, Soft-Expiry für
+        // eine bereits installierte Lizenz) - ein frisch importierter, schon abgelaufener
+        // Schlüssel wird NICHT übernommen, siehe Klassenkommentar an ImportFromKeyText.
+        var (privateKey, publicKeyBytes) = GenerateTestKeyPair();
+        var customerGroupId = Guid.NewGuid();
+        var signed = SignLicense(MakeUnsigned(customerGroupId, DateTime.UtcNow.AddDays(-1)), privateKey);
+        var keyText = LicenseKeyText.Encode(signed);
+        var destinationPath = Path.Combine(Path.GetTempPath(), $"lizenz-keytext-dst-{Guid.NewGuid():N}.json");
+
+        var diagnosis = LicenseImporter.ImportFromKeyText(keyText, customerGroupId, destinationPath, publicKeyBytes);
+
+        Assert.Equal(LicenseImportOutcome.Expired, diagnosis.Outcome);
+        Assert.NotNull(diagnosis.License);
+        Assert.False(File.Exists(destinationPath));
+    }
+
+    [Fact]
+    public void ImportFromKeyText_ReturnsWrongCustomer_WithoutPersisting_ForKeyBoundToADifferentCustomerGroup()
+    {
+        var (privateKey, publicKeyBytes) = GenerateTestKeyPair();
+        var licenseeGroupId = Guid.NewGuid();
+        var ownGroupId = Guid.NewGuid();
+        var signed = SignLicense(MakeUnsigned(licenseeGroupId, DateTime.UtcNow.AddYears(1)), privateKey);
+        var keyText = LicenseKeyText.Encode(signed);
+        var destinationPath = Path.Combine(Path.GetTempPath(), $"lizenz-keytext-dst-{Guid.NewGuid():N}.json");
+
+        var diagnosis = LicenseImporter.ImportFromKeyText(keyText, ownGroupId, destinationPath, publicKeyBytes);
+
+        Assert.Equal(LicenseImportOutcome.WrongCustomer, diagnosis.Outcome);
+        Assert.NotNull(diagnosis.License); // authentisch lesbar, nur die falsche Kundengruppe
+        Assert.False(File.Exists(destinationPath));
+    }
+
+    [Fact]
+    public void ImportFromKeyText_ReturnsNotRecognized_WithoutPersisting_ForGarbageText()
+    {
+        var (_, publicKeyBytes) = GenerateTestKeyPair();
+        var destinationPath = Path.Combine(Path.GetTempPath(), $"lizenz-keytext-dst-{Guid.NewGuid():N}.json");
+
+        var diagnosis = LicenseImporter.ImportFromKeyText("das ist kein Lizenzschlüssel", Guid.NewGuid(), destinationPath, publicKeyBytes);
+
+        Assert.Equal(LicenseImportOutcome.NotRecognized, diagnosis.Outcome);
+        Assert.Null(diagnosis.License);
+        Assert.False(File.Exists(destinationPath));
+    }
+
+    [Fact]
+    public void ImportFromKeyText_ReturnsNotRecognized_RatherThanThrowing_ForStructurallyInvalidEmbeddedPublicKey()
+    {
+        // Regressionstest für den eigentlichen Fehlerbericht: mit dem noch nicht ersetzten
+        // LicensePublicKey.PlaceholderHex (32 Nullbytes) warf der Ed25519-Konstruktor bisher
+        // ungefangen - der Button wirkte dadurch komplett wirkungslos statt "nicht erkannt" zu melden.
+        var (privateKey, _) = GenerateTestKeyPair();
+        var customerGroupId = Guid.NewGuid();
+        var signed = SignLicense(MakeUnsigned(customerGroupId, DateTime.UtcNow.AddYears(1)), privateKey);
+        var keyText = LicenseKeyText.Encode(signed);
+        var destinationPath = Path.Combine(Path.GetTempPath(), $"lizenz-keytext-dst-{Guid.NewGuid():N}.json");
+        var malformedPublicKey = new byte[32];
+
+        var exception = Record.Exception(() => LicenseImporter.ImportFromKeyText(keyText, customerGroupId, destinationPath, malformedPublicKey));
+        Assert.Null(exception);
+
+        var diagnosis = LicenseImporter.ImportFromKeyText(keyText, customerGroupId, destinationPath, malformedPublicKey);
+        Assert.Equal(LicenseImportOutcome.NotRecognized, diagnosis.Outcome);
+    }
 }
