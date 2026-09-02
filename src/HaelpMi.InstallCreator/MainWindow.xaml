@@ -235,7 +235,20 @@
             <Button x:Name="CreateLicenseButton" Content="Lizenz erstellen" HorizontalAlignment="Left"
                     Style="{StaticResource AccentButtonStyle}" Padding="18,9" Margin="0,0,0,8"
                     Click="CreateLicenseButton_Click" />
-            <TextBlock x:Name="LicenseStatusText" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,16" />
+            <TextBlock x:Name="LicenseStatusText" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,8" />
+
+            <!-- Issue #54-Nacharbeit (01.09.2026, Nutzerentscheidung): Lizenz als kompakter
+                 Text statt Datei - direkt per E-Mail verschickbar, kein Datei-Dialog nötig
+                 (löst dabei auch das dortige "Zuletzt verwendet"-Problem an der Wurzel). -->
+            <StackPanel x:Name="LicenseKeyResultPanel" Visibility="Collapsed" Margin="0,0,0,16">
+                <TextBlock Text="Lizenzschlüssel (an den Kunden zu übermitteln, z. B. per E-Mail)"
+                           FontWeight="SemiBold" FontSize="12" Margin="0,0,0,6" />
+                <TextBox x:Name="LicenseKeyResultTextBox" IsReadOnly="True" TextWrapping="Wrap"
+                         AcceptsReturn="True" Height="70" VerticalScrollBarVisibility="Auto"
+                         FontFamily="Consolas" FontSize="11" Margin="0,0,0,8" />
+                <Button x:Name="CopyLicenseKeyButton" Content="In Zwischenablage kopieren" HorizontalAlignment="Left"
+                        Padding="14,6" Click="CopyLicenseKeyButton_Click" />
+            </StackPanel>
 
             <TextBlock Text="Bisher ausgestellte Lizenzen" FontWeight="SemiBold" Margin="0,0,0,6" />
             <ListBox x:Name="LicenseHistoryListBox" Height="160" Margin="0,0,0,16" />

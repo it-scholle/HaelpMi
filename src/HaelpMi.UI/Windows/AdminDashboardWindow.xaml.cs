@@ -9,9 +9,7 @@ using HaelpMi.Core.Networking;
 using HaelpMi.Core.Runtime;
 using HaelpMi.Core.Storage;
 using HaelpMi.UI.Helpers;
-using HaelpMi.UI.Interop;
 using HaelpMi.UI.ViewModels;
-using Microsoft.Win32;
 
 namespace HaelpMi.UI.Windows;
 
@@ -321,31 +319,18 @@ public partial class AdminDashboardWindow : Window
     // Issue #51 (Lizenz-Import im Admin-Dashboard), verdrahtet direkt im #20-Banner: baut
     // auf #19 auf (LicenseImporter prüft über LicenseReader, bevor irgendetwas übernommen
     // wird - eine ungültige Auswahl überschreibt eine bestehende gültige Lizenz nie).
+    //
+    // Issue #54-Nacharbeit (01.09.2026): Lizenz kommt als eingefügter Text statt als
+    // Datei-Auswahl - kein Datei-Dialog mehr an dieser Stelle nötig (löst das dortige
+    // "Zuletzt verwendet"-Problem an der Wurzel, statt es nur per NoRecentFileDialog
+    // abzufangen).
     private void ImportLicenseButton_Click(object sender, RoutedEventArgs e)
     {
-        // Issue #18-Diskussion (Windows-Defender-Fund auf einer "Zuletzt verwendet"-
-        // Verknüpfung): eigener Vista-Dialog statt Microsoft.Win32.OpenFileDialog, damit die
-        // eingespielte Lizenzdatei nicht in "Zuletzt verwendet" landet.
-        var filePath = NoRecentFileDialog.ShowOpen(
-            new System.Windows.Interop.WindowInteropHelper(this).Handle,
-            "Lizenzdatei auswählen",
-            ("Lizenzdatei (*.json)", "*.json"), ("Alle Dateien (*.*)", "*.*"));
-        if (filePath is null)
+        var dialog = new LicenseKeyImportWindow(_context.ImportLicenseKeyText) { Owner = this };
+        if (dialog.ShowDialog() == true)
         {
-            return;
+            RefreshLicenseBanner();
         }
-
-        var result = _context.ImportLicenseFile(filePath);
-        if (!result.Success)
-        {
-            var reason = result.CheckResult.Status == LicenseStatus.Missing
-                ? "Die Datei konnte nicht gelesen werden."
-                : "Die Datei ist keine gültige Lizenz für diese Installation (Signatur oder Kundengruppe passt nicht).";
-            MessageBox.Show(this, reason, "HälpMi - Lizenz einspielen fehlgeschlagen", MessageBoxButton.OK, MessageBoxImage.Error);
-            return;
-        }
-
-        RefreshLicenseBanner();
     }
 
     // ------------------------------------------------------------- User-Installer-Export ---

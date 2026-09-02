@@ -97,6 +97,27 @@ public class LicensingTests
     }
 
     [Fact]
+    public void Load_ReturnsInvalid_WhenExpiryDateIsManuallyExtended()
+    {
+        // Nutzerfrage 01.09.2026: "was hindert mich daran, das Ablaufdatum in der Datei
+        // einfach zu ändern?" - ExpiryDateUtc ist Teil der signierten Felder
+        // (License.GetSigningPayload), eine Änderung daran bricht die Signatur genauso wie
+        // beim UserLimit-Fall oben. Eigener Test statt nur Analogieschluss, weil genau
+        // dieses Feld die konkrete Sorge war.
+        var (privateKey, publicKeyBytes) = GenerateTestKeyPair();
+        var customerGroupId = Guid.NewGuid();
+        var signed = SignLicense(MakeUnsigned(customerGroupId, DateTime.UtcNow.AddDays(-1)), privateKey);
+
+        var tampered = signed with { ExpiryDateUtc = DateTime.UtcNow.AddYears(10) };
+        var path = WriteTempLicenseFile(tampered);
+
+        var result = LicenseReader.Load(path, customerGroupId, publicKeyBytes);
+
+        Assert.Equal(LicenseStatus.Invalid, result.Status);
+        Assert.Null(result.License);
+    }
+
+    [Fact]
     public void Load_ReturnsInvalid_WhenSignedWithADifferentPrivateKey()
     {
         var (_, ownPublicKeyBytes) = GenerateTestKeyPair();
@@ -148,5 +169,53 @@ public class LicensingTests
 
         Assert.Equal(LicenseStatus.Missing, result.Status);
         Assert.Null(result.License);
+    }
+
+    // Issue #54-Nacharbeit (01.09.2026): Lizenz als kompakter Text statt Datei-Anhang.
+    [Fact]
+    public void LoadFromKeyText_ReturnsValid_ForCorrectlySignedKeyText()
+    {
+        var (privateKey, publicKeyBytes) = GenerateTestKeyPair();
+        var customerGroupId = Guid.NewGuid();
+        var signed = SignLicense(MakeUnsigned(customerGroupId, DateTime.UtcNow.AddYears(1)), privateKey);
+        var keyText = LicenseKeyText.Encode(signed);
+
+        var result = LicenseReader.LoadFromKeyText(keyText, customerGroupId, publicKeyBytes);
+
+        Assert.Equal(LicenseStatus.Valid, result.Status);
+        Assert.Equal(LicenseTier.S, result.License!.Tier);
+        Assert.Equal(25, result.License.UserLimit);
+    }
+
+    [Fact]
+    public void LoadFromKeyText_ReturnsInvalid_WhenPayloadSegmentIsManuallyEdited()
+    {
+        // Gleicher Angriff wie Load_ReturnsInvalid_WhenExpiryDateIsManuallyExtended, nur am
+        // Text statt an der JSON-Datei: der mittlere ("Payload") Teil wird verändert, die
+        // Signatur (letzter Teil) bleibt wie erzeugt - genau das Szenario "Datum im
+        // Lizenzschlüssel-Text von Hand ändern".
+        var (privateKey, publicKeyBytes) = GenerateTestKeyPair();
+        var customerGroupId = Guid.NewGuid();
+        var signed = SignLicense(MakeUnsigned(customerGroupId, DateTime.UtcNow.AddDays(-1)), privateKey);
+        var keyText = LicenseKeyText.Encode(signed);
+
+        var segments = keyText.Split('.');
+        var payload = segments[1];
+        segments[1] = payload[..^1] + (payload[^1] == 'A' ? 'B' : 'A');
+        var tampered = string.Join('.', segments);
+
+        var result = LicenseReader.LoadFromKeyText(tampered, customerGroupId, publicKeyBytes);
+
+        Assert.Equal(LicenseStatus.Invalid, result.Status);
+    }
+
+    [Fact]
+    public void LoadFromKeyText_ReturnsInvalid_ForGarbageText()
+    {
+        var (_, publicKeyBytes) = GenerateTestKeyPair();
+
+        var result = LicenseReader.LoadFromKeyText("das ist kein Lizenzschlüssel", Guid.NewGuid(), publicKeyBytes);
+
+        Assert.Equal(LicenseStatus.Invalid, result.Status);
     }
 }

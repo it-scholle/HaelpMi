@@ -59,14 +59,20 @@ public sealed class AdminDashboardContext
 
     /// <summary>
     /// Issue #20: live neu ausgewertet statt gecacht (billiger Dateizugriff + Ed25519-
-    /// Prüfung, siehe #19/LicenseReader) - damit ein per <see cref="ImportLicenseFile"/>
+    /// Prüfung, siehe #19/LicenseReader) - damit ein per <see cref="ImportLicenseKeyText"/>
     /// gerade erst eingespielter Lizenzstand sofort sichtbar wird, ohne das Dashboard neu
     /// zu starten.
     /// </summary>
     public required Func<LicenseCheckResult> GetLicenseStatus { get; init; }
 
-    /// <summary>"Lizenz einspielen"-Button im #20-Banner (Issue #51) - nimmt den vom Windows-Datei-Picker gewählten Pfad entgegen, siehe <see cref="LicenseImporter"/>.</summary>
-    public required Func<string, LicenseImportResult> ImportLicenseFile { get; init; }
+    /// <summary>
+    /// "Lizenz einspielen"-Button im #20-Banner (Issue #51), Text statt Datei-Auswahl seit
+    /// Issue #54-Nacharbeit (01.09.2026) - siehe <see cref="LicenseImporter.ImportFromKeyText(string, Guid)"/>.
+    /// Der ursprüngliche Datei-Import (<see cref="LicenseImporter.Import(string, Guid)"/>)
+    /// bleibt als eigenständige, getestete Fähigkeit bestehen, hängt nur an keinem
+    /// UI-Button mehr.
+    /// </summary>
+    public required Func<string, LicenseImportResult> ImportLicenseKeyText { get; init; }
 }
 
 public sealed record UserInstallerExportResult(bool Success, string? OutputFilePath, string? Error);

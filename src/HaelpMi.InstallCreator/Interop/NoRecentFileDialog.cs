@@ -26,9 +26,12 @@ internal static class NoRecentFileDialog
 {
     private const uint FosForceFileSystem = 0x00000040;
     private const uint FosFileMustExist = 0x00001000;
-    private const uint FosOverwritePrompt = 0x00000002;
     private const uint FosDontAddToRecent = 0x02000000;
 
+    // Nur ShowOpen wird hier noch gebraucht (Signaturschlüssel laden) - ShowSave entfiel mit
+    // Issue #54-Nacharbeit (Lizenz als Text statt Datei, siehe MainWindow.xaml.cs
+    // CreateLicenseButton_Click). FileSaveDialogRcw/AccentButtonStyle-Filter dafür ebenfalls
+    // entfernt statt unbenutzt stehen zu lassen.
     public static string? ShowOpen(IntPtr ownerHwnd, string title, params (string Name, string Spec)[] filters)
     {
         var dialog = (IFileDialog)new FileOpenDialogRcw();
@@ -37,24 +40,6 @@ internal static class NoRecentFileDialog
             dialog.SetTitle(title);
             dialog.SetFileTypes((uint)filters.Length, ToFilterSpecs(filters));
             dialog.SetOptions(FosForceFileSystem | FosFileMustExist | FosDontAddToRecent);
-            return dialog.Show(ownerHwnd) == 0 ? GetResultPath(dialog) : null;
-        }
-        finally
-        {
-            Marshal.ReleaseComObject(dialog);
-        }
-    }
-
-    public static string? ShowSave(IntPtr ownerHwnd, string title, string suggestedFileName, string defaultExtension, params (string Name, string Spec)[] filters)
-    {
-        var dialog = (IFileDialog)new FileSaveDialogRcw();
-        try
-        {
-            dialog.SetTitle(title);
-            dialog.SetFileName(suggestedFileName);
-            dialog.SetDefaultExtension(defaultExtension);
-            dialog.SetFileTypes((uint)filters.Length, ToFilterSpecs(filters));
-            dialog.SetOptions(FosForceFileSystem | FosOverwritePrompt | FosDontAddToRecent);
             return dialog.Show(ownerHwnd) == 0 ? GetResultPath(dialog) : null;
         }
         finally
@@ -75,9 +60,6 @@ internal static class NoRecentFileDialog
 
     [ComImport, Guid("DC1C5A9C-E88A-4dde-A5A1-60F82A20AEF7")]
     private class FileOpenDialogRcw;
-
-    [ComImport, Guid("C0B4E2F3-BA21-4773-8DBA-335EC946EB8B")]
-    private class FileSaveDialogRcw;
 
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Auto, Pack = 4)]
     private struct COMDLG_FILTERSPEC

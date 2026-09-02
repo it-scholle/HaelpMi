@@ -72,6 +72,21 @@ public class LicenseFileSignerTests
         }
     }
 
+    // Issue #54-Nacharbeit (01.09.2026): Lizenz als kompakter Text statt Datei - derselbe
+    // Grund wie bei CreateSigned_VerifiesAgainstRealCoreLicenseReader (unabhängig gebaute
+    // Encode-/Decode-Hälften müssen tatsächlich zusammenpassen, nicht nur laut Doku-Kommentar).
+    [Fact]
+    public void LicenseKeyText_Encode_VerifiesAgainstRealCoreLicenseReader()
+    {
+        var (privateKey, publicKey) = GenerateTestKeyPair();
+        var signed = LicenseFileSigner.CreateSigned(SampleLicense(), privateKey);
+
+        var keyText = LicenseKeyText.Encode(signed);
+
+        var result = HaelpMi.Core.Licensing.LicenseReader.LoadFromKeyText(keyText, signed.CustomerGroupId, publicKey);
+        Assert.Equal(HaelpMi.Core.Licensing.LicenseStatus.Valid, result.Status);
+    }
+
     [Fact]
     public void Verify_WithWrongPublicKey_Fails()
     {

@@ -49,7 +49,47 @@ public static class LicenseReader
             return new LicenseCheckResult(LicenseStatus.Missing, null);
         }
 
-        if (license is null || license.CustomerGroupId != ownCustomerGroupId || !HasValidSignature(license, publicKeyBytes))
+        if (license is null || !HasValidSignature(license, publicKeyBytes))
+        {
+            return new LicenseCheckResult(LicenseStatus.Invalid, null);
+        }
+
+        return Classify(license, ownCustomerGroupId);
+    }
+
+    /// <summary>
+    /// Issue #54-Nacharbeit (01.09.2026): Lizenz als kompakter Text statt Datei-Anhang, siehe
+    /// <see cref="LicenseKeyText"/>. Signatur wird direkt über die aus dem Text dekodierten
+    /// Rohbytes geprüft (nicht über ein aus geparsten Feldern neu zusammengesetztes
+    /// <see cref="License"/>), damit kein Rundungs-/Formatierungsdrift beim erneuten
+    /// Zusammenbauen des Datums die Prüfung verfälschen kann.
+    /// </summary>
+    public static LicenseCheckResult LoadFromKeyText(string keyText, Guid ownCustomerGroupId) =>
+        LoadFromKeyText(keyText, ownCustomerGroupId, LicensePublicKey.Bytes);
+
+    internal static LicenseCheckResult LoadFromKeyText(string keyText, Guid ownCustomerGroupId, byte[] publicKeyBytes)
+    {
+        if (!LicenseKeyText.TryDecode(keyText, out var payloadBytes, out var signatureBytes))
+        {
+            return new LicenseCheckResult(LicenseStatus.Invalid, null);
+        }
+
+        var publicKey = new Ed25519PublicKeyParameters(publicKeyBytes, 0);
+        var verifier = new Ed25519Signer();
+        verifier.Init(false, publicKey);
+        verifier.BlockUpdate(payloadBytes, 0, payloadBytes.Length);
+        if (!verifier.VerifySignature(signatureBytes))
+        {
+            return new LicenseCheckResult(LicenseStatus.Invalid, null);
+        }
+
+        var license = LicenseKeyText.ParsePayload(payloadBytes, Convert.ToBase64String(signatureBytes));
+        return license is null ? new LicenseCheckResult(LicenseStatus.Invalid, null) : Classify(license, ownCustomerGroupId);
+    }
+
+    private static LicenseCheckResult Classify(License license, Guid ownCustomerGroupId)
+    {
+        if (license.CustomerGroupId != ownCustomerGroupId)
         {
             return new LicenseCheckResult(LicenseStatus.Invalid, null);
         }

@@ -1,0 +1,32 @@
+<Window x:Class="HaelpMi.UI.Windows.LicenseKeyImportWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Lizenz einspielen"
+        Width="460" SizeToContent="Height"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize" ShowInTaskbar="False">
+    <!-- Issue #54-Nacharbeit (01.09.2026): Lizenz kommt als eingefügter Text (z. B. aus einer
+         E-Mail) statt als Datei-Anhang - siehe LicenseKeyText/ImportLicenseButton_Click.
+         Kein Datei-Dialog hier, damit "Zuletzt verwendet" gar nicht erst berührt wird. -->
+    <Window.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/HaelpMi.UI;component/Styles/ModernStyles.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </Window.Resources>
+    <StackPanel Margin="20">
+        <TextBlock Text="Lizenz einspielen" FontSize="16" FontWeight="Bold" Margin="0,0,0,10" />
+        <TextBlock TextWrapping="Wrap" Margin="0,0,0,10"
+                   Text="Lizenzschlüssel einfügen (z. B. aus einer E-Mail kopiert):" />
+        <TextBox x:Name="KeyTextBox" AcceptsReturn="True" TextWrapping="Wrap"
+                 Height="80" VerticalScrollBarVisibility="Auto" FontFamily="Consolas" FontSize="11" />
+        <TextBlock x:Name="ErrorText" Foreground="{StaticResource DangerBrush}" FontSize="11"
+                   TextWrapping="Wrap" Margin="0,8,0,0" Visibility="Collapsed" />
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">
+            <Button x:Name="CancelButton" Content="Abbrechen" Padding="14,7" Margin="0,0,8,0" Click="CancelButton_Click" />
+            <Button x:Name="ImportButton" Content="Einspielen" Padding="14,7"
+                    Style="{StaticResource AccentButtonStyle}" Click="ImportButton_Click" />
+        </StackPanel>
+    </StackPanel>
+</Window>

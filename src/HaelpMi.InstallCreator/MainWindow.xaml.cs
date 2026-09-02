@@ -130,54 +130,59 @@ public partial class MainWindow : Window
         // zurücklesen, bevor überhaupt eine Fehlermeldung gezeigt wird - erst wenn AUCH das
         // fehlschlägt, ist es ein echter Fehler.
         var password = PasswordBox.Password;
+        if (TryCopyToClipboardWithRetry(password, out var errorCode))
+        {
+            Log("Passwort in die Zwischenablage kopiert.");
+            return;
+        }
 
-        // Bugfix 11.08.2026 (Fehlerbericht "Kopierfehler erscheint wieder" - live per UI
-        // Automation nachgestellt, echtes HRESULT 0x800401D0/CLIPBRD_E_CANT_OPEN im
-        // Protokoll bestätigt, siehe Chat-Verlauf): kein Regressionsfehler aus der Icon-
-        // Umstellung (dieser gesamte Block war seit dem allerersten Fix unverändert), aber
-        // der bisherige EINE Anlauf (30 Retries × 100ms ≈ 3s, danach 10×100ms Rücklese-
-        // Verify ≈ 1s) reicht nicht, wenn der blockierende Fremdprozess (VM-Zwischenablage-
-        // Synchronisation) länger als dieses gesamte Zeitfenster braucht - alle Retries
-        // liegen dann im selben Blockierungsfenster. Ein zweiter, komplett frischer Anlauf
-        // nach einer kurzen Verschnaufpause (700ms, bewusst außerhalb der engen 100ms-
-        // Taktung) trifft mit guter Wahrscheinlichkeit ein anderes Zeitfenster. Blockiert
-        // die UI dadurch im schlechtesten Fall knapp 9s statt 4s - für einen manuell
-        // angestoßenen Klick in einem internen Entwickler-Werkzeug hinnehmbar.
+        // Erst nach zwei vollständigen Anläufen (siehe TryCopyToClipboardWithRetry) ein
+        // wirklicher Fehlschlag - Nutzer soll wissen, dass das Passwort NICHT sicher kopiert
+        // wurde. "Anzeigen"-Knopf ist der tatsächlich funktionierende Fallback - WPFs
+        // PasswordBox blockt Strg+C absichtlich (Schutz gegen Mitlesen), "manuell
+        // markieren/kopieren" war daher vorher nie umsetzbar.
+        var message = $"Kopieren in die Zwischenablage fehlgeschlagen (HRESULT 0x{errorCode:X8}) - die Zwischenablage blieb auch nach zwei vollständigen Versuchen (je mehrere Sekunden Wiederholungen) dauerhaft von einem anderen Prozess blockiert (z. B. VM-Zwischenablage-Synchronisation). Über den \"Anzeigen\"-Knopf lässt sich das Passwort anzeigen und stattdessen von Hand markieren/kopieren.";
+        Log(message);
+        System.Windows.MessageBox.Show(message, "HälpMi Install-Creator", MessageBoxButton.OK, MessageBoxImage.Warning);
+    }
+
+    /// <summary>
+    /// Kern von <see cref="CopyPasswordButton_Click"/> (siehe dortiger Kommentar für die
+    /// volle Fehler-Vorgeschichte: SetDataObject meldet CLIPBRD_E_CANT_OPEN gelegentlich
+    /// fälschlich, deshalb Rücklese-Verify vor jedem "wirklich fehlgeschlagen") - seit
+    /// Issue #54-Nacharbeit auch für den Lizenzschlüssel-Text wiederverwendet, daher als
+    /// eigene Methode statt dupliziert. Blockiert die UI im schlechtesten Fall knapp 9s statt
+    /// 4s - für einen manuell angestoßenen Klick in einem internen Entwickler-Werkzeug
+    /// hinnehmbar.
+    /// </summary>
+    private static bool TryCopyToClipboardWithRetry(string text, out int lastErrorCode)
+    {
+        lastErrorCode = 0;
         const int maxAttempts = 2;
         for (var attempt = 1; attempt <= maxAttempts; attempt++)
         {
             try
             {
-                System.Windows.Forms.Clipboard.SetDataObject(password, copy: true, retryTimes: 30, retryDelay: 100);
-                Log("Passwort in die Zwischenablage kopiert.");
-                return;
+                System.Windows.Forms.Clipboard.SetDataObject(text, copy: true, retryTimes: 30, retryDelay: 100);
+                return true;
             }
             catch (System.Runtime.InteropServices.ExternalException ex)
             {
-                if (VerifyClipboardEventuallyMatches(password))
+                lastErrorCode = ex.ErrorCode;
+                if (VerifyClipboardEventuallyMatches(text))
                 {
                     // SetDataObject hat sich geirrt (siehe Kommentar oben) - tatsächlich erfolgreich.
-                    Log("Passwort in die Zwischenablage kopiert.");
-                    return;
+                    return true;
                 }
 
                 if (attempt < maxAttempts)
                 {
-                    Log($"Kopieren im {attempt}. Anlauf fehlgeschlagen (HRESULT 0x{ex.ErrorCode:X8}) - neuer Versuch nach kurzer Pause.");
                     System.Threading.Thread.Sleep(700);
-                    continue;
                 }
-
-                // Erst jetzt, nach zwei vollständigen Anläufen, ein wirklicher Fehlschlag -
-                // Nutzer soll wissen, dass das Passwort NICHT sicher kopiert wurde.
-                // "Anzeigen"-Knopf ist der tatsächlich funktionierende Fallback - WPFs
-                // PasswordBox blockt Strg+C absichtlich (Schutz gegen Mitlesen),
-                // "manuell markieren/kopieren" war daher vorher nie umsetzbar.
-                var message = $"Kopieren in die Zwischenablage fehlgeschlagen (HRESULT 0x{ex.ErrorCode:X8}) - die Zwischenablage blieb auch nach zwei vollständigen Versuchen (je mehrere Sekunden Wiederholungen) dauerhaft von einem anderen Prozess blockiert (z. B. VM-Zwischenablage-Synchronisation). Über den \"Anzeigen\"-Knopf lässt sich das Passwort anzeigen und stattdessen von Hand markieren/kopieren.";
-                Log(message);
-                System.Windows.MessageBox.Show(message, "HälpMi Install-Creator", MessageBoxButton.OK, MessageBoxImage.Warning);
             }
         }
+
+        return false;
     }
 
     // Kurzes Zurücklesen mit ein paar Versuchen - der eigentliche Schreibvorgang ist zu
@@ -832,36 +837,23 @@ public partial class MainWindow : Window
         var unsigned = new License(customer.CustomerGroupId, tier, TierPicker.UserLimit, issuedAtUtc, expiryDate, SignatureBase64: string.Empty);
 
         // Bugfix (Nutzerbericht 01.09.2026, "Speichern fehlgeschlagen" ohne sichtbare Meldung):
-        // CreateSigned (falsch formatierte Schlüsseldatei -> BouncyCastle-Ausnahme) und
-        // File.WriteAllText (z. B. UnauthorizedAccessException auf einem Netzlaufwerk, nicht
-        // von IOException abgeleitet) fingen vorher nur teilweise/gar nicht ab - jede nicht
-        // abgefangene Ausnahme landete im globalen DispatcherUnhandledException-Handler
-        // (App.xaml.cs), der sie bewusst nur ins crash.log schreibt und die App weiterlaufen
-        // lässt, ohne den Nutzer zu informieren. Deshalb hier bewusst breit gefangen, mit
-        // Meldung statt stillem Nichts-Passieren.
-        string savedFilePath;
+        // CreateSigned wirft bei einer falsch formatierten Schlüsseldatei eine BouncyCastle-
+        // Ausnahme - jede nicht abgefangene Ausnahme landete im globalen
+        // DispatcherUnhandledException-Handler (App.xaml.cs), der sie bewusst nur ins
+        // crash.log schreibt und die App weiterlaufen lässt, ohne den Nutzer zu informieren.
+        // Deshalb hier gefangen, mit Meldung statt stillem Nichts-Passieren.
+        string licenseKeyText;
         try
         {
             var signed = LicenseFileSigner.CreateSigned(unsigned, _licensePrivateKey);
-
-            // Issue #18-Diskussion (Windows-Defender-Fund auf einer "Zuletzt verwendet"-
-            // Verknüpfung): eigener Vista-Dialog statt Microsoft.Win32.SaveFileDialog, damit
-            // die erstellte Lizenzdatei nicht in "Zuletzt verwendet" landet.
-            var targetPath = Interop.NoRecentFileDialog.ShowSave(
-                new System.Windows.Interop.WindowInteropHelper(this).Handle,
-                "Lizenzdatei speichern", $"{SanitizeForFileName(customer.Kundenname)}-lizenz.json", "json",
-                ("Lizenzdatei (*.json)", "*.json"));
-            if (targetPath is null)
-            {
-                return;
-            }
-
-            WriteLicenseFileWithRetry(targetPath, JsonSerializer.Serialize(signed, new JsonSerializerOptions { WriteIndented = true }));
-            savedFilePath = targetPath;
+            // Issue #54-Nacharbeit (01.09.2026, Nutzerentscheidung): kompakter Text statt
+            // Datei - kein Datei-Dialog mehr nötig, löst damit auch das "Zuletzt verwendet"-
+            // Problem aus der #18-Diskussion an der Wurzel statt es nur abzufangen.
+            licenseKeyText = LicenseKeyText.Encode(signed);
         }
         catch (Exception ex)
         {
-            LicenseStatusText.Text = $"Speichern fehlgeschlagen: {ex.Message}";
+            LicenseStatusText.Text = $"Lizenz erstellen fehlgeschlagen: {ex.Message}";
             CrashLogger.Log("CreateLicenseButton_Click", ex);
             return;
         }
@@ -869,34 +861,28 @@ public partial class MainWindow : Window
         LicenseRegistryStore.Append(new LicenseRegistryEntry(
             Guid.NewGuid(), customer.CustomerGroupId, tier, TierPicker.UserLimit, issuedAtUtc, expiryDate));
 
-        LicenseStatusText.Text = $"Lizenz erstellt: {savedFilePath}";
+        LicenseKeyResultTextBox.Text = licenseKeyText;
+        LicenseKeyResultPanel.Visibility = Visibility.Visible;
+        LicenseStatusText.Text = "Lizenz erstellt.";
         Log($"Lizenz für {customer.Kundenname} erstellt (Tier {tier}, gültig bis {expiryDate:d}).");
         RefreshLicenseHistory();
     }
 
-    // Nutzerbericht 01.09.2026 ("a portion of the file is locked", wiederholt, im selben
-    // Ordner wie der frühere Windows-Defender-Fund WinLNK.GAC!MTB): Echtzeit-Virenschutz
-    // scannt eine frisch geschriebene Datei und hält dabei kurz einen Teil-Lock - bekanntes,
-    // meist binnen Millisekunden bis niedrigen Sekunden vorbeigehendes Muster, kein
-    // Programmierfehler. Kurzer Retry statt Sofort-Abbruch behebt den Regelfall; bleibt die
-    // Sperre bestehen, ist das ein Hinweis auf eine echte Virenschutz-Ausnahme statt eines
-    // Timing-Problems (siehe Ticket-Diskussion: Ausnahme für den Ordner in Windows-Sicherheit
-    // einrichten). Thread.Sleep auf dem UI-Thread ist hier bewusst in Kauf genommen - ein
-    // einmaliger, seltener Klick, kein Dauerbetrieb, maximal ~600ms Wartezeit.
-    private static void WriteLicenseFileWithRetry(string path, string content)
+    private void CopyLicenseKeyButton_Click(object sender, RoutedEventArgs e)
     {
-        const int maxAttempts = 3;
-        for (var attempt = 1; attempt <= maxAttempts; attempt++)
+        if (string.IsNullOrEmpty(LicenseKeyResultTextBox.Text))
         {
-            try
-            {
-                File.WriteAllText(path, content);
-                return;
-            }
-            catch (IOException) when (attempt < maxAttempts)
-            {
-                Thread.Sleep(300);
-            }
+            return;
         }
+
+        if (TryCopyToClipboardWithRetry(LicenseKeyResultTextBox.Text, out var errorCode))
+        {
+            Log("Lizenzschlüssel in die Zwischenablage kopiert.");
+            return;
+        }
+
+        var message = $"Kopieren in die Zwischenablage fehlgeschlagen (HRESULT 0x{errorCode:X8}) - bitte den Text im Feld darüber manuell markieren und kopieren.";
+        Log(message);
+        System.Windows.MessageBox.Show(message, "HälpMi Install-Creator", MessageBoxButton.OK, MessageBoxImage.Warning);
     }
 }

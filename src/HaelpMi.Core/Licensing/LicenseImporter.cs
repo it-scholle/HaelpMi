@@ -17,6 +17,26 @@ public static class LicenseImporter
     internal static LicenseImportResult Import(string sourceFilePath, Guid ownCustomerGroupId, string destinationFilePath, byte[] publicKeyBytes)
     {
         var checkResult = LicenseReader.Load(sourceFilePath, ownCustomerGroupId, publicKeyBytes);
+        return Persist(checkResult, destinationFilePath);
+    }
+
+    /// <summary>
+    /// Issue #54-Nacharbeit: Lizenz als eingefügter Text statt Datei-Import (#51). Interne
+    /// Ablage bleibt unverändert JSON an <see cref="AppPaths.LicenseFilePath"/> - nur der
+    /// Übermittlungsweg zum Admin ändert sich, der bereits getestete Boot-Einlese-Pfad
+    /// (<see cref="LicenseReader.Load(Guid)"/>) bleibt unberührt.
+    /// </summary>
+    public static LicenseImportResult ImportFromKeyText(string keyText, Guid ownCustomerGroupId) =>
+        ImportFromKeyText(keyText, ownCustomerGroupId, AppPaths.LicenseFilePath, LicensePublicKey.Bytes);
+
+    internal static LicenseImportResult ImportFromKeyText(string keyText, Guid ownCustomerGroupId, string destinationFilePath, byte[] publicKeyBytes)
+    {
+        var checkResult = LicenseReader.LoadFromKeyText(keyText, ownCustomerGroupId, publicKeyBytes);
+        return Persist(checkResult, destinationFilePath);
+    }
+
+    private static LicenseImportResult Persist(LicenseCheckResult checkResult, string destinationFilePath)
+    {
         if (checkResult.Status is LicenseStatus.Invalid or LicenseStatus.Missing)
         {
             return new LicenseImportResult(false, checkResult);
