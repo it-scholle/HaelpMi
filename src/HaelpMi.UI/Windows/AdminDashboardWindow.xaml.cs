@@ -319,14 +319,7 @@ public partial class AdminDashboardWindow : Window
         LicenseWarningBanner.Background = warning.Level == LicenseWarningLevel.ExpiringSoon
             ? (Brush)FindResource("WarningBrush")
             : (Brush)FindResource("DangerBrush");
-        LicenseWarningText.Text = warning.Level switch
-        {
-            LicenseWarningLevel.Missing => "Keine Lizenz gefunden. Bitte einen gültigen Lizenzschlüssel einspielen.",
-            LicenseWarningLevel.Invalid => "Lizenz ungültig (beschädigt, manipuliert oder für eine andere Installation ausgestellt). Bitte einen gültigen Lizenzschlüssel einspielen.",
-            LicenseWarningLevel.Expired => $"Lizenz seit {-warning.DaysRemaining} Tag(en) abgelaufen. Bitte eine neue Lizenz einspielen.",
-            LicenseWarningLevel.ExpiringSoon => $"Lizenz läuft in {warning.DaysRemaining} Tag(en) ab. Bitte rechtzeitig eine neue Lizenz einspielen.",
-            _ => string.Empty,
-        };
+        LicenseWarningText.Text = LicenseWarningTextFormatter.Format(warning);
         LicenseWarningBanner.Visibility = Visibility.Visible;
     }
 

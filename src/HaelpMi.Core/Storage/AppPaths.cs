@@ -58,6 +58,9 @@ public static class AppPaths
     /// </summary>
     public static string LicenseFilePath => Path.Combine(RootFolder, "lizenz.json");
 
+    /// <summary>Issue #20-Nacharbeit (Systemstart-Erinnerung): "Später erinnern" - siehe HaelpMi.Core.Licensing.LicenseReminderStateStore.</summary>
+    public static string LicenseReminderStateFilePath => Path.Combine(RootFolder, "license-reminder.json");
+
     public static void EnsureRootExists() => Directory.CreateDirectory(RootFolder);
 
     private sealed class RestoreOnDispose(Action onDispose) : IDisposable

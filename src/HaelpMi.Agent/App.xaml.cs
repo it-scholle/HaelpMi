@@ -159,6 +159,29 @@ public partial class App : System.Windows.Application
         }
 
         StartBackgroundServices();
+        ShowLicenseReminderToastIfNeeded();
+    }
+
+    // Issue #20-Nacharbeit (Nutzerfrage 02.09.2026, "das Popup beim Systemstart - ist das
+    // schon implementiert?"): war es nicht - #20 deckte bisher nur den Dashboard-Banner ab
+    // (nur sichtbar, wenn der Admin das Dashboard ohnehin öffnet), nicht die von Anfang an
+    // im Ticket beschriebene proaktive Erinnerung. Nur für Admin-Geräte (das Popup verweist
+    // aufs Dashboard, das es für User-Rollen gar nicht gibt) und nur, wenn "Später
+    // erinnern" nicht noch aktiv ist.
+    private void ShowLicenseReminderToastIfNeeded()
+    {
+        if (_deployment.Role != Role.Admin || LicenseReminderStateStore.IsSnoozed(DateTime.UtcNow))
+        {
+            return;
+        }
+
+        var warning = LicenseWarningEvaluator.Evaluate(_license, DateTime.UtcNow);
+        if (warning.Level == LicenseWarningLevel.None)
+        {
+            return;
+        }
+
+        new LicenseReminderToastWindow(warning, OpenDashboardDirectly).Show();
     }
 
     private static int? ParseUpdateTestPort(string[] args)
