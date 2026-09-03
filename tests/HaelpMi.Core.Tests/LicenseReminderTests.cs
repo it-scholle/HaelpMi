@@ -64,6 +64,25 @@ public class LicenseReminderTests
         Assert.Contains("in 12 Tag(en) ab", text);
     }
 
+    // Issue #20 (ursprünglicher Ticket-Text: "mit Kontaktdaten") - im ersten Durchgang
+    // übersehen, Nutzervorgabe 03.09.2026 nachgetragen.
+    [Fact]
+    public void Format_NonNoneLevel_IncludesProviderContact()
+    {
+        var text = LicenseWarningTextFormatter.Format(new LicenseWarning(LicenseWarningLevel.ExpiringSoon, 12));
+
+        Assert.Contains(ProviderContact.Email, text);
+        Assert.Contains(ProviderContact.Phone, text);
+    }
+
+    [Fact]
+    public void Format_None_DoesNotIncludeProviderContact()
+    {
+        var text = LicenseWarningTextFormatter.Format(new LicenseWarning(LicenseWarningLevel.None, 200));
+
+        Assert.DoesNotContain(ProviderContact.Email, text);
+    }
+
     [Fact]
     public void Format_None_ReturnsEmptyText()
     {
