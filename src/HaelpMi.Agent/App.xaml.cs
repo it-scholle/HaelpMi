@@ -71,6 +71,9 @@ public partial class App : System.Windows.Application
     /// </summary>
     private LicenseCheckResult _license = null!;
 
+    /// <summary>Nur gesetzt, während das Systemstart-Erinnerungs-Popup offen ist - siehe HandleLicenseRenewedRequestAsync.</summary>
+    private LicenseReminderToastWindow? _licenseReminderToast;
+
     private DiscoveryService? _discovery;
     private AlarmChannel? _listener;
     private AlarmFeedbackChannel? _feedbackChannel;
@@ -181,7 +184,19 @@ public partial class App : System.Windows.Application
             return;
         }
 
-        new LicenseReminderToastWindow(warning, OpenDashboardDirectly).Show();
+        _licenseReminderToast = new LicenseReminderToastWindow(warning, OpenDashboardDirectly);
+        _licenseReminderToast.Closed += (_, _) => _licenseReminderToast = null;
+        _licenseReminderToast.Show();
+    }
+
+    // Nutzerbericht 03.09.2026: nach erfolgreichem "Lizenz einspielen" im Admin-Dashboard
+    // (separater Prozess, siehe HaelpMi.Config) blieb ein noch offenes Erinnerungs-Popup
+    // veraltet stehen - "sobald eine aktive Lizenz erscheint, müssen die veralteten
+    // Meldungen automatisch verschwinden". Config schickt dafür IpcCommandType.LicenseRenewed.
+    private Task<IpcResponse> HandleLicenseRenewedRequestAsync()
+    {
+        _licenseReminderToast?.Close();
+        return Task.FromResult(new IpcResponse(true));
     }
 
     private static int? ParseUpdateTestPort(string[] args)
@@ -288,6 +303,7 @@ public partial class App : System.Windows.Application
         _ipcServer.On(IpcCommandType.Rebroadcast, HandleRebroadcastRequestAsync);
         _ipcServer.On(IpcCommandType.SearchAgain, HandleSearchAgainRequestAsync);
         _ipcServer.On(IpcCommandType.SelfTest, HandleSelfTestRequestAsync);
+        _ipcServer.On(IpcCommandType.LicenseRenewed, HandleLicenseRenewedRequestAsync);
         _ipcServer.Start();
 
         var executablePath = Environment.ProcessPath ?? Process.GetCurrentProcess().MainModule?.FileName ?? string.Empty;

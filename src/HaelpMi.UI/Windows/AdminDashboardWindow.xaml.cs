@@ -337,6 +337,9 @@ public partial class AdminDashboardWindow : Window
         if (dialog.ShowDialog() == true)
         {
             RefreshLicenseBanner();
+            // Nutzerbericht 03.09.2026: ein noch offenes Systemstart-Erinnerungs-Popup
+            // (anderer Prozess, siehe HaelpMi.Agent) blieb bisher veraltet stehen.
+            _context.NotifyLicenseRenewed();
         }
     }
 

@@ -73,6 +73,15 @@ public sealed class AdminDashboardContext
     /// UI-Button mehr.
     /// </summary>
     public required Func<string, LicenseImportDiagnosis> ImportLicenseKeyText { get; init; }
+
+    /// <summary>
+    /// Issue #20-Nacharbeit (Nutzerbericht 03.09.2026): nach erfolgreichem "Lizenz
+    /// einspielen" muss der Agent (separater Prozess) ein noch offenes Systemstart-
+    /// Erinnerungs-Popup selbst schließen können - Fire-and-Forget per IPC
+    /// (IpcCommandType.LicenseRenewed), scheitert best-effort wie
+    /// NotifyLocalAgentOfConfigChange, falls der Agent gerade nicht erreichbar ist.
+    /// </summary>
+    public required Action NotifyLicenseRenewed { get; init; }
 }
 
 public sealed record UserInstallerExportResult(bool Success, string? OutputFilePath, string? Error);

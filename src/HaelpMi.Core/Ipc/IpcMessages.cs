@@ -11,6 +11,14 @@ public enum IpcCommandType
     Rebroadcast,
     SearchAgain,
     SelfTest,
+
+    /// <summary>
+    /// Issue #20-Nacharbeit (Nutzerbericht 03.09.2026): Config schickt dies, sobald ein
+    /// Lizenzschlüssel erfolgreich eingespielt wurde (<c>LicenseImportOutcome.Activated</c>),
+    /// damit der Agent ein noch offenes Systemstart-Erinnerungs-Popup (siehe
+    /// <c>LicenseReminderToastWindow</c>) selbst schließt, statt veraltet stehen zu bleiben.
+    /// </summary>
+    LicenseRenewed,
 }
 
 public sealed record IpcRequest(IpcCommandType Command);

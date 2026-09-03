@@ -459,6 +459,7 @@ public partial class App : System.Windows.Application
             ListAvailableUpdateVersions = () => new UpdatePackageCacheStore().ListAvailableVersions(),
             GetLicenseStatus = () => LicenseReader.Load(deployment.CustomerGroupId, Convert.FromHexString(deployment.LicensePublicKeyHex)),
             ImportLicenseKeyText = keyText => LicenseImporter.ImportFromKeyText(keyText, deployment.CustomerGroupId, Convert.FromHexString(deployment.LicensePublicKeyHex)),
+            NotifyLicenseRenewed = () => _ = ipcClient.SendAsync(IpcCommandType.LicenseRenewed, TimeSpan.FromSeconds(10)),
         };
 
         var window = new AdminDashboardWindow(context);
