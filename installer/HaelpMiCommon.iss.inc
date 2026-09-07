@@ -13,7 +13,7 @@
 #define MyAppName "HälpMi"
 ; Alpha: 0.x until release, per city/product decision - Version 1.0.0 is reserved for
 ; the actual release. Bump the third number for ordinary fixes, second for a feature.
-#define MyAppVersion "0.35.0"
+#define MyAppVersion "0.35.1"
 #define MyAppPublisher "HälpMi contributors"
 #define MyAgentExeName "HaelpMi.Agent.exe"
 #define MyConfigExeName "HaelpMi.Config.exe"
@@ -151,7 +151,11 @@ Filename: "{app}\{#MyAgentExeName}"; Parameters: "--register-autostart"; Flags: 
 ; über den selbstregistrierten Autostart-Task läuft ohnehin schon unelevated, das hier
 ; nur die (bisher inkonsistente) Erstausführung. Der Autostart-Task selbst steht dank der
 ; Zeile oben davor schon fest, auch wenn der hier gestartete Prozess selbst nicht elevated ist.
-Filename: "{app}\{#MyAgentExeName}"; Flags: nowait runasoriginaluser
+;
+; Issue #68: "--post-install" unterdrückt einmalig das Lizenz-Erinnerungs-Popup auf genau
+; diesem Start - ohne den Parameter poppte es schon während der Nutzer noch im
+; Installationsfenster stand, statt erst ab dem nächsten echten Neustart/Login.
+Filename: "{app}\{#MyAgentExeName}"; Parameters: "--post-install"; Flags: nowait runasoriginaluser
 
 ; Postinstall-Haken mit sichtbarem Effekt statt des bisherigen "jetzt starten": beim User
 ; die eigene Konfiguration (Hotkeys/Empfängerkreise stehen dort), beim Admin direkt das

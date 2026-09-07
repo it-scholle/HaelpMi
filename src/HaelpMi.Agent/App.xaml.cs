@@ -165,7 +165,7 @@ public partial class App : System.Windows.Application
         }
 
         StartBackgroundServices();
-        ShowLicenseReminderToastIfNeeded();
+        ShowLicenseReminderToastIfNeeded(isPostInstallStart: IsPostInstallStart(e.Args));
         RefreshLicenseLimitState();
     }
 
@@ -176,9 +176,17 @@ public partial class App : System.Windows.Application
     // Windows-Sitzung das Dashboard überhaupt öffnen dürfte (Issue #10 - das Popup verweist
     // aufs Dashboard, sonst irreführend für einen anderen Nutzer nach Fast User Switching)
     // und nur, wenn "Später erinnern" nicht noch aktiv ist.
-    private void ShowLicenseReminderToastIfNeeded()
+    //
+    // Issue #68: der Installer startet den Agent selbst einmalig direkt nach der
+    // Installation (HaelpMiCommon.iss.inc [Run], mit --post-install) - ohne diesen Filter
+    // poppte das Popup schon während der Nutzer noch im Installationsfenster war, obwohl
+    // eine frische Lizenz zu diesem Zeitpunkt ohnehin meist noch gar nicht eingespielt ist.
+    // Dieser eine installer-getriggerte Start wird deshalb übersprungen; jeder spätere
+    // (echte) Agent-Start - ob per Autostart-Task beim nächsten Neustart/Login oder manuell -
+    // prüft wie gehabt.
+    private void ShowLicenseReminderToastIfNeeded(bool isPostInstallStart)
     {
-        if (!DashboardAccessGuard.CurrentUserMayOpenDashboard(_deployment.Role) || LicenseReminderStateStore.IsSnoozed(DateTime.UtcNow))
+        if (isPostInstallStart || !DashboardAccessGuard.CurrentUserMayOpenDashboard(_deployment.Role) || LicenseReminderStateStore.IsSnoozed(DateTime.UtcNow))
         {
             return;
         }
@@ -291,6 +299,12 @@ public partial class App : System.Windows.Application
     // vorbehalten (siehe TEST-STRATEGY.md) - Testfall dafür ist unten formuliert.
     private static bool ShouldRegisterAutostartOnly(string[] args) =>
         args.Contains("--register-autostart", StringComparer.Ordinal);
+
+    // Issue #68: gesetzt nur auf dem Agent-Start, den der Installer selbst direkt nach der
+    // Installation auslöst (siehe HaelpMiCommon.iss.inc [Run]) - siehe
+    // ShowLicenseReminderToastIfNeeded-Kommentar dort für den Grund.
+    private static bool IsPostInstallStart(string[] args) =>
+        args.Contains("--post-install", StringComparer.Ordinal);
 
     /// <summary>
     /// Testmodus für die Update-Pipeline (Abschnitt 11, per HaelpMi.UpdateService
