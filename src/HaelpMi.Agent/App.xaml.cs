@@ -250,7 +250,16 @@ public partial class App : System.Windows.Application
     private void RefreshLicenseLimitState()
     {
         var disabled = _coordinator!.IsOwnDeviceLicenseDisabled();
-        System.Windows.Application.Current.Dispatcher.Invoke(() =>
+
+        // Bugfix 07.09.2026: BeginInvoke statt Invoke - dieser Aufruf kann von
+        // DiscoveryService's Empfangs-Thread aus kommen (DeviceUpdated/PeerLicenseObserved),
+        // SYNCHRON innerhalb von HandleDatagramAsync. Ein blockierendes Invoke hätte dort im
+        // ungünstigen Fall (UI-Thread gerade mit etwas anderem beschäftigt) die gesamte
+        // Boot-Call-Verarbeitung dieses einen Empfangs-Threads verzögert/blockiert - bei
+        // einem UDP-Empfangsloop, der Nachrichten sequenziell abarbeitet, wirkt sich das auf
+        // ALLE folgenden Boot-Calls aus, nicht nur auf diesen einen. BeginInvoke reiht die
+        // UI-Arbeit nur ein und kehrt sofort zurück.
+        System.Windows.Application.Current.Dispatcher.BeginInvoke(() =>
         {
             if (disabled && _licenseLimitToast is null)
             {
