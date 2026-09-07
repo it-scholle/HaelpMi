@@ -40,4 +40,16 @@ public class LicenseTierLimitsTests
         // im Dropdown statt zweier Einträge mit identischem Limit.
         Assert.Equal("XS/Trial - 10 Nutzer", LicenseTierLimits.GetDisplayLabel(LicenseTier.Trial));
     }
+
+    [Fact]
+    public void GetUserLimit_Custom_ThrowsBecauseLimitComesFromUserInput()
+    {
+        Assert.Throws<InvalidOperationException>(() => LicenseTierLimits.GetUserLimit(LicenseTier.Custom));
+    }
+
+    [Fact]
+    public void GetDisplayLabel_Custom_DoesNotMentionAFixedNumber()
+    {
+        Assert.Equal("Custom - eigene Geräteanzahl", LicenseTierLimits.GetDisplayLabel(LicenseTier.Custom));
+    }
 }

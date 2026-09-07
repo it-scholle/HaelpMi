@@ -777,6 +777,11 @@ public partial class MainWindow : Window
             LicenseStatusText.Text = "Bitte eine Paketgröße wählen.";
             return;
         }
+        if (tier == LicenseTier.Custom && TierPicker.UserLimit is null)
+        {
+            LicenseStatusText.Text = "Bitte bei Custom eine gültige Geräteanzahl eingeben.";
+            return;
+        }
 
         var customer = _selectedLicenseCustomer.Entry;
         var issuedAtUtc = DateTime.UtcNow;

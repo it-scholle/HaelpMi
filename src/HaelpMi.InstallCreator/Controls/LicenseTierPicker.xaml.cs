@@ -1,5 +1,7 @@
+using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 // UseWindowsForms+UseWPF sind in diesem Projekt beide aktiv (Clipboard-Retry in
 // MainWindow.xaml.cs) - UserControl existiert in beiden, daher hier explizit auflösen.
 using UserControl = System.Windows.Controls.UserControl;
@@ -7,8 +9,10 @@ using UserControl = System.Windows.Controls.UserControl;
 namespace HaelpMi.InstallCreator.Controls;
 
 /// <summary>
-/// Auswahl-Control für die Lizenz-Paketgröße (XS/Trial, S, M, L, XL), eingehängt im
-/// Lizenzen-Reiter des Install-Creators (Issue #18).
+/// Auswahl-Control für die Lizenz-Paketgröße (XS/Trial, S, M, L, XL, Custom), eingehängt im
+/// Lizenzen-Reiter des Install-Creators (Issue #18). Bei <see cref="LicenseTier.Custom"/>
+/// blendet sich neben der ComboBox ein Eingabefeld für eine frei gewählte Geräteanzahl ein
+/// (z. B. 2 Geräte für einen VM-Testaufbau) statt einer festen Staffelstufe.
 /// </summary>
 public partial class LicenseTierPicker : UserControl
 {
@@ -51,7 +55,14 @@ public partial class LicenseTierPicker : UserControl
     {
         var picker = (LicenseTierPicker)d;
         var tier = (LicenseTier?)e.NewValue;
-        picker.UserLimit = tier is null ? null : LicenseTierLimits.GetUserLimit(tier.Value);
+
+        picker.CustomLimitTextBox.Visibility = tier == LicenseTier.Custom ? Visibility.Visible : Visibility.Collapsed;
+        picker.UserLimit = tier switch
+        {
+            null => null,
+            LicenseTier.Custom => ParseCustomLimit(picker.CustomLimitTextBox.Text),
+            _ => LicenseTierLimits.GetUserLimit(tier.Value)
+        };
 
         picker._suppressSelectionChanged = true;
         picker.TierComboBox.SelectedItem = tier is null ? null : Options.First(o => o.Tier == tier.Value);
@@ -63,4 +74,21 @@ public partial class LicenseTierPicker : UserControl
         if (_suppressSelectionChanged) return;
         SelectedTier = (TierComboBox.SelectedItem as LicenseTierOption)?.Tier;
     }
+
+    private void CustomLimitTextBox_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        if (SelectedTier != LicenseTier.Custom) return;
+        UserLimit = ParseCustomLimit(CustomLimitTextBox.Text);
+    }
+
+    /// <summary>Nur Ziffern zulassen - eine Geräteanzahl ist nie negativ oder gebrochen.</summary>
+    private void CustomLimitTextBox_PreviewTextInput(object sender, TextCompositionEventArgs e)
+    {
+        e.Handled = !e.Text.All(char.IsDigit);
+    }
+
+    private static int? ParseCustomLimit(string text) =>
+        int.TryParse(text, NumberStyles.None, CultureInfo.InvariantCulture, out var value) && value > 0
+            ? value
+            : null;
 }

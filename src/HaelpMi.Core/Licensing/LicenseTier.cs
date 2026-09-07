@@ -9,6 +9,10 @@ namespace HaelpMi.Core.Licensing;
 /// XS-Pakets "XS/Trial" (siehe <c>LicenseTierLimits.GetDisplayLabel</c> im Install-Creator)
 /// - der Enum-Name selbst bleibt <c>Trial</c>, da er Teil der signierten Bytes ist
 /// (<see cref="License.GetSigningPayload"/>).
+/// <c>Custom</c> (ergänzt für Testlizenzen mit frei wählbarer, auch sehr kleiner
+/// Geräteanzahl, z. B. 2 Geräte für einen VM-Testaufbau) trägt kein festes
+/// <see cref="License.UserLimit"/> - der Wert kommt beim Ausstellen frei aus dem
+/// Install-Creator statt aus einer Staffel.
 /// </summary>
 public enum LicenseTier
 {
@@ -17,4 +21,5 @@ public enum LicenseTier
     M,
     L,
     XL,
+    Custom,
 }

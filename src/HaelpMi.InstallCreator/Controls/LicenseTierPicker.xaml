@@ -12,9 +12,22 @@
         <TextBlock Text="Lizenz-Paketgröße" FontWeight="SemiBold" FontSize="12" />
         <!-- Kein Default-Eintrag (Nutzerwunsch, siehe Issue #18: "kein Default-Lizenz mehr") -
              ItemsSource/Auswahl kommt aus dem Code-Behind statt aus Bindings, damit die
-             Zuordnung Tier -> Nutzerlimit an einer Stelle (LicenseTierLimits) bleibt. -->
-        <ComboBox x:Name="TierComboBox" Margin="0,6,0,0"
-                  DisplayMemberPath="Label"
-                  SelectionChanged="TierComboBox_SelectionChanged" />
+             Zuordnung Tier -> Nutzerlimit an einer Stelle (LicenseTierLimits) bleibt.
+             Zweite Grid-Spalte ist "Auto" und das Eingabefeld darin per Default collapsed -
+             ohne Custom-Auswahl nimmt die ComboBox (Spalte "*") dadurch die volle Breite ein,
+             das Eingabefeld erscheint erst bei Custom rechts daneben. -->
+        <Grid Margin="0,6,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <ComboBox x:Name="TierComboBox" Grid.Column="0"
+                      DisplayMemberPath="Label"
+                      SelectionChanged="TierComboBox_SelectionChanged" />
+            <TextBox x:Name="CustomLimitTextBox" Grid.Column="1" Width="64" Margin="6,0,0,0"
+                     MaxLength="6" Visibility="Collapsed"
+                     PreviewTextInput="CustomLimitTextBox_PreviewTextInput"
+                     TextChanged="CustomLimitTextBox_TextChanged" />
+        </Grid>
     </StackPanel>
 </UserControl>

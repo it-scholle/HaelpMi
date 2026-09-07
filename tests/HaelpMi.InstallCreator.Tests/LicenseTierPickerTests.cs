@@ -1,3 +1,4 @@
+using System.Windows;
 using System.Windows.Controls;
 using HaelpMi.InstallCreator.Controls;
 using Xunit;
@@ -18,14 +19,14 @@ public class LicenseTierPickerTests
     }
 
     [Fact]
-    public void ComboBoxListsAllFiveTiers()
+    public void ComboBoxListsAllSixTiers()
     {
         StaFact.Run(() =>
         {
             var picker = new LicenseTierPicker();
             var comboBox = (ComboBox)picker.FindName("TierComboBox")!;
             var tiers = comboBox.ItemsSource!.Cast<LicenseTierOption>().Select(o => o.Tier).ToList();
-            Assert.Equal(new[] { LicenseTier.Trial, LicenseTier.S, LicenseTier.M, LicenseTier.L, LicenseTier.XL }, tiers);
+            Assert.Equal(new[] { LicenseTier.Trial, LicenseTier.S, LicenseTier.M, LicenseTier.L, LicenseTier.XL, LicenseTier.Custom }, tiers);
         });
     }
 
@@ -80,6 +81,62 @@ public class LicenseTierPickerTests
             var comboBox = (ComboBox)picker.FindName("TierComboBox")!;
             Assert.Null(picker.UserLimit);
             Assert.Null(comboBox.SelectedItem);
+        });
+    }
+
+    [Fact]
+    public void SelectingCustom_ShowsLimitTextBoxAndUserLimitStaysNullUntilTyped()
+    {
+        StaFact.Run(() =>
+        {
+            var picker = new LicenseTierPicker { SelectedTier = LicenseTier.Custom };
+            var textBox = (TextBox)picker.FindName("CustomLimitTextBox")!;
+
+            Assert.Equal(Visibility.Visible, textBox.Visibility);
+            Assert.Null(picker.UserLimit);
+        });
+    }
+
+    [Fact]
+    public void TypingIntoCustomLimitTextBox_UpdatesUserLimit()
+    {
+        StaFact.Run(() =>
+        {
+            var picker = new LicenseTierPicker { SelectedTier = LicenseTier.Custom };
+            var textBox = (TextBox)picker.FindName("CustomLimitTextBox")!;
+
+            textBox.Text = "2";
+
+            Assert.Equal(2, picker.UserLimit);
+        });
+    }
+
+    [Fact]
+    public void TypingInvalidCustomLimit_LeavesUserLimitNull()
+    {
+        StaFact.Run(() =>
+        {
+            var picker = new LicenseTierPicker { SelectedTier = LicenseTier.Custom };
+            var textBox = (TextBox)picker.FindName("CustomLimitTextBox")!;
+
+            textBox.Text = "0";
+
+            Assert.Null(picker.UserLimit);
+        });
+    }
+
+    [Fact]
+    public void SelectingNonCustomTier_HidesLimitTextBox()
+    {
+        StaFact.Run(() =>
+        {
+            var picker = new LicenseTierPicker { SelectedTier = LicenseTier.Custom };
+            var textBox = (TextBox)picker.FindName("CustomLimitTextBox")!;
+
+            picker.SelectedTier = LicenseTier.M;
+
+            Assert.Equal(Visibility.Collapsed, textBox.Visibility);
+            Assert.Equal(75, picker.UserLimit);
         });
     }
 }
