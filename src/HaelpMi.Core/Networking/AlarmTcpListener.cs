@@ -26,6 +26,7 @@ public sealed class AlarmReceivedEventArgs : EventArgs
 public sealed class AlarmTcpListener : IAsyncDisposable
 {
     private readonly Func<LiveIdentity> _identityProvider;
+    private readonly Func<bool>? _isOwnDeviceLicenseDisabled;
     private readonly Action<string>? _audit;
     private TcpListener? _listener;
     private CancellationTokenSource? _cts;
@@ -33,10 +34,18 @@ public sealed class AlarmTcpListener : IAsyncDisposable
 
     public event EventHandler<AlarmReceivedEventArgs>? AlarmReceived;
 
-    public AlarmTcpListener(Func<LiveIdentity> identityProvider, Action<string>? audit = null)
+    /// <param name="isOwnDeviceLicenseDisabled">
+    /// Issue #59/#60: liefert true, solange dieses Gerät lizenzüberschritten ist - eine
+    /// eingehende Verbindung wird dann sofort ohne Antwort geschlossen (nicht gelesen, kein
+    /// Ack), damit das Gerät für andere komplett unerreichbar wirkt statt nur die Anzeige zu
+    /// unterdrücken. Null (Standard) verhält sich wie "nie deaktiviert" - für Tests, die
+    /// diesen Aspekt nicht prüfen.
+    /// </param>
+    public AlarmTcpListener(Func<LiveIdentity> identityProvider, Action<string>? audit = null, Func<bool>? isOwnDeviceLicenseDisabled = null)
     {
         _identityProvider = identityProvider;
         _audit = audit;
+        _isOwnDeviceLicenseDisabled = isOwnDeviceLicenseDisabled;
     }
 
     /// <returns>
@@ -114,6 +123,15 @@ public sealed class AlarmTcpListener : IAsyncDisposable
         using var _ = client;
         try
         {
+            if (_isOwnDeviceLicenseDisabled?.Invoke() == true)
+            {
+                // Issue #60 ("nicht erreichbar sein"): Verbindung wird ohne jede Reaktion
+                // geschlossen - kein Lesen, kein Ack. Aus Sicht des Senders identisch zu
+                // einem nicht erreichbaren Gerät (AlarmSender.SendToOneAsync wertet das
+                // als "nicht bestätigt"), keine Sonderbehandlung dort nötig.
+                return;
+            }
+
             client.ReceiveTimeout = 5000;
             client.SendTimeout = 5000;
             var senderAddress = ((IPEndPoint?)client.Client.RemoteEndPoint)?.Address ?? IPAddress.None;

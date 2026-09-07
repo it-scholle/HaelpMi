@@ -16,7 +16,7 @@ namespace HaelpMi.Core.Tests;
 public class AlarmFeedbackChannelTests
 {
     private static LiveIdentity MakeIdentity(Guid customerGroupId, Guid deviceId) =>
-        new(customerGroupId, deviceId, "PC", "User", "Raum", "1", Role.User, false, "9.9.9", 0);
+        new(customerGroupId, deviceId, "PC", "User", "Raum", "1", Role.User, false, "9.9.9", 0, DateTimeOffset.UtcNow);
 
     [Fact]
     public async Task SecondInstance_BecomesSatellite_AndReceivesOnMyWayRelayedFromPrimary()

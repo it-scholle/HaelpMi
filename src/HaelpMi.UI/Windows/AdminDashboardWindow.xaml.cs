@@ -53,6 +53,9 @@ public partial class AdminDashboardWindow : Window
     // Auswahl mehr, die verloren gehen könnte.
     private sealed record GroupDeviceChoice(Guid DeviceId, string DisplayName, bool IsAssigned);
 
+    /// <summary>Eine Zeile im Lizenzlimit-Banner (Issue #60) - siehe RefreshLicenseLimitBanner.</summary>
+    private sealed record LicenseLimitDeviceRow(Guid DeviceId, string DisplayName);
+
     private readonly AdminDashboardContext _context;
     private SharedConfig _config = null!;
     private List<DeviceChoice> _deviceChoices = new();
@@ -106,6 +109,7 @@ public partial class AdminDashboardWindow : Window
         UpdateUserLabelModeButtons();
         ReloadAll();
         RefreshLicenseBanner();
+        RefreshLicenseLimitBanner();
 
         _deviceFileWatcher.Changed += (_, _) => RefreshDeviceDerivedViews();
         Closed += (_, _) =>
@@ -127,6 +131,7 @@ public partial class AdminDashboardWindow : Window
             .OrderBy(d => d.DisplayName, StringComparer.CurrentCultureIgnoreCase)
             .ToList();
 
+        RefreshLicenseLimitBanner();
         RebuildGroupDevicesPanel();
 
         if (_selectedGroup is not null)
@@ -340,6 +345,34 @@ public partial class AdminDashboardWindow : Window
             // Nutzerbericht 03.09.2026: ein noch offenes Systemstart-Erinnerungs-Popup
             // (anderer Prozess, siehe HaelpMi.Agent) blieb bisher veraltet stehen.
             _context.NotifyLicenseRenewed();
+        }
+    }
+
+    // ----------------------------------------------------- Lizenzlimit-Banner (Issue #60) ---
+
+    // Zeigt jedes bekannte Peer-Gerät, das laut LicenseLimitGuard gerade das
+    // Lizenzkontingent überschreitet und dessen Hinweis noch nicht per "Gelesen"
+    // bestätigt wurde - live neu ausgewertet bei jeder Geräteliste-Änderung (siehe
+    // RefreshDeviceDerivedViews/_deviceFileWatcher), nicht nur beim Öffnen.
+    private void RefreshLicenseLimitBanner()
+    {
+        var disabledDeviceIds = _context.GetDisabledDeviceIds();
+        var rows = _context.LoadDevices()
+            .Where(d => disabledDeviceIds.Contains(d.DeviceId) && !d.LicenseLimitWarningAcknowledged)
+            .Select(d => new LicenseLimitDeviceRow(d.DeviceId, BuildDeviceDisplayName(d, isOwnDevice: false)))
+            .OrderBy(r => r.DisplayName, StringComparer.CurrentCultureIgnoreCase)
+            .ToList();
+
+        LicenseLimitDevicesList.ItemsSource = rows;
+        LicenseLimitBanner.Visibility = rows.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private void AcknowledgeLicenseLimitDevice_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button { Tag: Guid deviceId })
+        {
+            _context.AcknowledgeLicenseLimitWarning(deviceId);
+            RefreshLicenseLimitBanner();
         }
     }
 

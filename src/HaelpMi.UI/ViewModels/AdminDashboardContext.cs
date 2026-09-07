@@ -82,6 +82,16 @@ public sealed class AdminDashboardContext
     /// NotifyLocalAgentOfConfigChange, falls der Agent gerade nicht erreichbar ist.
     /// </summary>
     public required Action NotifyLicenseRenewed { get; init; }
+
+    /// <summary>
+    /// Issue #60: DeviceIds, die laut <see cref="LicenseLimitGuard"/> gerade das
+    /// Lizenzkontingent überschreiten - Grundlage für das Dashboard-Banner "nicht
+    /// lizenziertes Gerät".
+    /// </summary>
+    public required Func<IReadOnlySet<Guid>> GetDisabledDeviceIds { get; init; }
+
+    /// <summary>"Gelesen"-Klick im Lizenzlimit-Banner (Issue #60) - siehe DeviceEntry.LicenseLimitWarningAcknowledged.</summary>
+    public required Action<Guid> AcknowledgeLicenseLimitWarning { get; init; }
 }
 
 public sealed record UserInstallerExportResult(bool Success, string? OutputFilePath, string? Error);

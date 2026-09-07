@@ -45,4 +45,16 @@ public sealed class OwnSettings
 
     /// <summary>False only until the Ersteinrichtung wizard has been completed once (Admin-role) or the first Config-Sync has been applied (User-role).</summary>
     public bool FirstRunCompleted { get; set; }
+
+    /// <summary>
+    /// Erstkontakt-Zeitpunkt dieses Geräts (Issue #59/#60) - Grundlage für
+    /// <see cref="HaelpMi.Core.Licensing.LicenseLimitEvaluator"/>, da ohne zentrale Instanz nur eine
+    /// stabile, von jedem Gerät gleich ermittelbare Reihenfolge entscheiden kann, welche
+    /// Geräte innerhalb des Lizenzkontingents liegen. Wird vom Installer NICHT gesetzt
+    /// (settings.json entsteht dort als reines Pascal-Script, siehe
+    /// HaelpMiCommon.iss.inc) - stattdessen heilt <see cref="Storage.SettingsStore.Load"/>
+    /// einen fehlenden Wert beim allerersten App-Start selbst (Default <c>default</c> =
+    /// "noch nie gesetzt").
+    /// </summary>
+    public DateTimeOffset FirstSeenUtc { get; set; }
 }

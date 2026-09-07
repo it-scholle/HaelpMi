@@ -15,7 +15,7 @@ public class NetworkingTests
     private static readonly JsonSerializerOptions WireOptions = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
 
     private static LiveIdentity MakeIdentity(Guid customerGroupId, Guid deviceId, string computerName = "PC", string user = "User", string room = "Raum", string roomNumber = "1") =>
-        new(customerGroupId, deviceId, computerName, user, room, roomNumber, Role.User, false, "9.9.9", 0);
+        new(customerGroupId, deviceId, computerName, user, room, roomNumber, Role.User, false, "9.9.9", 0, DateTimeOffset.UtcNow);
 
     [Fact]
     public async Task AlarmSender_And_AlarmTcpListener_RoundTrip_OverLoopback()
@@ -91,6 +91,40 @@ public class NetworkingTests
             // Kein Ack, weil der Listener die Nachricht verwirft, bevor er überhaupt antwortet.
             Assert.Equal(0, result.AckedCount);
             await Task.Delay(200);
+            Assert.False(received);
+        }
+        finally
+        {
+            await listener.DisposeAsync();
+        }
+    }
+
+    [Fact]
+    public async Task AlarmTcpListener_OwnDeviceLicenseDisabled_ClosesConnection_WithoutReadingOrAcking()
+    {
+        // Issue #59/#60: ein lizenzüberschrittenes Gerät muss für andere komplett
+        // unerreichbar wirken - keine Verarbeitung, kein Ack, nicht nur eine unterdrückte
+        // Anzeige.
+        var receiverDeviceId = Guid.NewGuid();
+        var receiverIdentity = MakeIdentity(Guid.NewGuid(), receiverDeviceId);
+        var listener = new AlarmTcpListener(() => receiverIdentity, isOwnDeviceLicenseDisabled: () => true);
+
+        var received = false;
+        listener.AlarmReceived += (_, _) => received = true;
+
+        var port = GetFreeTcpPort();
+        listener.Start(port);
+
+        try
+        {
+            var sender = new AlarmSender();
+            var target = new DeviceEntry { DeviceId = receiverDeviceId, IpAddress = "127.0.0.1", TcpPort = port };
+            var identity = MakeIdentity(Guid.NewGuid(), Guid.NewGuid());
+            var profile = new AlarmProfile { Text = "Test" };
+
+            var result = await sender.SendAsync(profile, Guid.NewGuid(), identity, new[] { target });
+
+            Assert.Equal(0, result.AckedCount);
             Assert.False(received);
         }
         finally

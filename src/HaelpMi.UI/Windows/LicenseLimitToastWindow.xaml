@@ -1,0 +1,60 @@
+<Window x:Class="HaelpMi.UI.Windows.LicenseLimitToastWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="HälpMi"
+        Width="360" SizeToContent="Height"
+        WindowStyle="None" ResizeMode="NoResize"
+        ShowInTaskbar="False" Topmost="True"
+        Background="Transparent" AllowsTransparency="True">
+    <!-- Issue #59/#60: Hinweis "Lizenz ausgeschöpft, dieses Gerät ist deaktiviert" - gleiches
+         Toast-Muster wie LicenseReminderToastWindow (unten rechts einschwebend), aber ohne
+         "Später erinnern": der Zustand wird bei jedem Boot-Call neu ermittelt (siehe
+         AlarmFlowCoordinator/LicenseLimitGuard), ein Wegklicken hier unterdrückt also nichts
+         dauerhaft - das Toast erscheint beim nächsten Start unverändert wieder, solange das
+         Gerät noch deaktiviert ist. -->
+    <Window.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/HaelpMi.UI;component/Styles/ModernStyles.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </Window.Resources>
+    <Border x:Name="RootBorder" Background="{StaticResource DangerBrush}" CornerRadius="14" Padding="14,12">
+        <Border.Effect>
+            <DropShadowEffect BlurRadius="14" ShadowDepth="2" Opacity="0.35" />
+        </Border.Effect>
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
+            <StackPanel Grid.Column="0">
+                <TextBlock Text="Lizenz ausgeschöpft" Foreground="White" FontWeight="Bold" FontSize="13" />
+                <TextBlock x:Name="MessageText" Foreground="White" FontSize="12" TextWrapping="Wrap" Margin="0,3,0,10"
+                           Text="Mehr Geräte angemeldet als das Lizenzkontingent erlaubt - dieses Gerät ist deaktiviert und kann keine Alarme senden, bis ein Admin es aktiviert oder eine neue Lizenz eingespielt wird." />
+                <StackPanel x:Name="ButtonsPanel" Orientation="Horizontal">
+                    <Button x:Name="OpenButton" Content="Dashboard öffnen" Padding="10,4" Margin="0,0,8,0"
+                            Background="White" FontWeight="SemiBold" BorderThickness="0" />
+                </StackPanel>
+            </StackPanel>
+
+            <!-- Gezeichnetes Kreuz statt Unicode-Glyph (bekannte Render-Probleme). -->
+            <Button Grid.Column="1" x:Name="CloseButton" Width="20" Height="20" Padding="0"
+                    VerticalAlignment="Top" Background="Transparent" BorderThickness="0" Click="CloseButton_Click">
+                <Grid Width="12" Height="12">
+                    <Rectangle Fill="White" Width="14" Height="2" RenderTransformOrigin="0.5,0.5">
+                        <Rectangle.RenderTransform>
+                            <RotateTransform Angle="45" />
+                        </Rectangle.RenderTransform>
+                    </Rectangle>
+                    <Rectangle Fill="White" Width="14" Height="2" RenderTransformOrigin="0.5,0.5">
+                        <Rectangle.RenderTransform>
+                            <RotateTransform Angle="-45" />
+                        </Rectangle.RenderTransform>
+                    </Rectangle>
+                </Grid>
+            </Button>
+        </Grid>
+    </Border>
+</Window>
