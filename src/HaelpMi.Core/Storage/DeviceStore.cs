@@ -76,7 +76,7 @@ public sealed class DeviceStore
             {
                 existing.FirstSeenUtc = reportedFirstSeen;
             }
-            // Favorite/Notified/Note/IsNew/LicenseLimitWarningAcknowledged sind lokale Entscheidungen und bleiben unangetastet.
+            // Favorite/Notified/Note/IsNew/LicenseLimitWarningAcknowledged/LicenseOverride sind lokale Entscheidungen und bleiben unangetastet.
         }
 
         return devices;

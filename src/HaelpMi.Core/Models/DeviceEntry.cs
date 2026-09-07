@@ -61,7 +61,7 @@ public sealed class DeviceEntry
     /// Zeitpunkt, zu dem dieses Gerät erstmals irgendwo im Kreis gesehen wurde - anders als
     /// <see cref="LastSeenUtc"/> nie überschrieben, außer eine spätere Meldung (Gossip)
     /// belegt einen NOCH früheren Zeitpunkt (siehe DeviceStore.Upsert). Grundlage für
-    /// <see cref="Licensing.LicenseLimitEvaluator"/> (Issue #59/#60): ohne zentrale Instanz
+    /// <see cref="HaelpMi.Core.Licensing.LicenseLimitEvaluator"/> (Issue #59/#60): ohne zentrale Instanz
     /// braucht die Entscheidung "welche Geräte gehören zu den ersten N laut Lizenz" einen
     /// Wert, auf den sich alle Geräte unabhängig voneinander einigen können.
     /// </summary>
@@ -74,4 +74,14 @@ public sealed class DeviceEntry
     /// Hinweis statt der generellen "Neu"-Markierung.
     /// </summary>
     public bool LicenseLimitWarningAcknowledged { get; set; }
+
+    /// <summary>
+    /// Vorbereiteter Erweiterungspunkt für Issue #61 - siehe <see cref="LicenseOverride"/>.
+    /// <see cref="HaelpMi.Core.Licensing.LicenseLimitEvaluator"/> berücksichtigt diesen Wert bereits, aber
+    /// nichts setzt ihn heute je auf etwas anderes als <see cref="LicenseOverride.None"/>:
+    /// weder eine Dashboard-UI noch eine Netzwerk-Propagierung existieren bisher (#61 braucht
+    /// dafür erst die noch fehlende Admin-Rollen-Signaturprüfung). Rein lokal wie
+    /// Favorite/Notified/Note - DeviceStore.Upsert fasst dieses Feld nie an.
+    /// </summary>
+    public LicenseOverride LicenseOverride { get; set; }
 }
