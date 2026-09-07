@@ -7,10 +7,25 @@ namespace HaelpMi.Core.Licensing;
 /// lizenzüberschritten"-Entscheidung (Issue #59/#60, siehe <see cref="LicenseLimitEvaluator"/>
 /// für die reine Regel). Verwendet sowohl im Agent (Sende-/Empfangs-Sperre,
 /// AlarmFlowCoordinator) als auch im Admin-Dashboard (Banner "nicht lizenziertes Gerät").
-/// Fehlt eine gültig signierte Lizenz ganz (Missing/Invalid) gilt kein Limit - dieselbe
-/// "Soft-Expiry, kein Hard-Lock"-Haltung wie beim bestehenden Ablauf-Hinweis (CLAUDE.md):
-/// diese Funktion sperrt nur, wenn eine echte Lizenz ein konkretes Kontingent vorgibt und
-/// das überschritten ist, nie als Nebenwirkung einer fehlenden/kaputten Lizenzdatei.
+///
+/// Zwei Regeln, die anders als der Rest dieser Klasse NICHT aus der reinen
+/// FirstSeenUtc-Rangfolge folgen, sondern hier bewusst vorgeschaltet sind (Nutzerkorrektur
+/// 07.09.2026 nach einem Testaufbau mit 3 unlizenzierten Clients, die trotz Custom-2-Lizenz
+/// alle funktionierten):
+/// - <see cref="Role.Admin"/>-Geräte (Dashboard) zählen nie zum Kontingent und werden nie
+///   deaktiviert - eine Lizenz kann sonst nie repariert werden, wenn ausgerechnet das
+///   Dashboard selbst gesperrt wäre. "Nutzer"-Kontingent (z. B. "Custom: 2 Nutzer") meint
+///   also ausschließlich User-Rolle-Geräte, nie den Admin-Sitz.
+/// - Fehlt eine gültig signierte Lizenz ganz (<see cref="LicenseStatus.Missing"/>/
+///   <see cref="LicenseStatus.Invalid"/>), gilt das Kontingent als 0 statt als unbegrenzt:
+///   ein Gerät ohne jede erkennbare Lizenz darf nie "versehentlich frei laufen", nur weil
+///   ihm (z. B. weil ein späterer Lizenz-Import nie dieses konkrete Gerät erreicht hat -
+///   "Lizenz einspielen" im Dashboard aktualisiert bislang nur das dortige lokale Gerät,
+///   siehe LicenseImporter) schlicht keine Lizenzdatei vorliegt. Eine bereits abgelaufene,
+///   aber einst gültig ausgestellte Lizenz ist davon unberührt (Klassifizierung liefert das
+///   reale UserLimit weiterhin, siehe LicenseReader.Classify) - "Soft-Expiry, kein
+///   Hard-Lock" (CLAUDE.md) gilt unverändert für den Ablauf, nur nicht für eine komplett
+///   fehlende/kaputte Lizenzdatei.
 /// </summary>
 public sealed class LicenseLimitGuard
 {
@@ -28,26 +43,39 @@ public sealed class LicenseLimitGuard
     public bool IsOwnDeviceDisabled()
     {
         var identity = _identityProvider();
-        return !LicenseLimitEvaluator.IsWithinLimit(identity.DeviceId, BuildKnownDevices(identity), _licenseProvider().License?.UserLimit);
+        if (identity.Role == Role.Admin)
+        {
+            return false;
+        }
+
+        return !LicenseLimitEvaluator.IsWithinLimit(identity.DeviceId, BuildKnownDevices(identity), EffectiveUserLimit());
     }
 
     public IReadOnlySet<Guid> GetDisabledDeviceIds()
     {
         var identity = _identityProvider();
-        return LicenseLimitEvaluator.GetDisabledDeviceIds(BuildKnownDevices(identity), _licenseProvider().License?.UserLimit);
+        return LicenseLimitEvaluator.GetDisabledDeviceIds(BuildKnownDevices(identity), EffectiveUserLimit());
     }
 
+    private int? EffectiveUserLimit()
+    {
+        var result = _licenseProvider();
+        return result.Status is LicenseStatus.Missing or LicenseStatus.Invalid ? 0 : result.License?.UserLimit;
+    }
+
+    /// <summary>Nur User-Rolle-Geräte zählen zum Kontingent - Admin-Geräte werden erst gar nicht in den Kandidatenpool aufgenommen (siehe Klassenkommentar).</summary>
     private List<LicenseLimitEvaluator.DeviceSeen> BuildKnownDevices(LiveIdentity identity)
     {
         var devices = _devicesProvider();
-        // Eigenes Gerät trägt nie einen LicenseOverride (LiveIdentity hat kein lokales
-        // DeviceEntry-Pendant, siehe Klassenkommentar bei AdminDashboardContext.LoadOwnDevice)
-        // - vorbereiteter Erweiterungspunkt für Issue #61 gilt bislang nur für Peers.
-        var known = new List<LicenseLimitEvaluator.DeviceSeen>(devices.Count + 1)
+        var known = new List<LicenseLimitEvaluator.DeviceSeen>(devices.Count + 1);
+        if (identity.Role != Role.Admin)
         {
-            new(identity.DeviceId, identity.FirstSeenUtc),
-        };
-        known.AddRange(devices.Select(d => new LicenseLimitEvaluator.DeviceSeen(d.DeviceId, d.FirstSeenUtc, d.LicenseOverride)));
+            known.Add(new(identity.DeviceId, identity.FirstSeenUtc));
+        }
+
+        known.AddRange(devices
+            .Where(d => d.Role != Role.Admin)
+            .Select(d => new LicenseLimitEvaluator.DeviceSeen(d.DeviceId, d.FirstSeenUtc, d.LicenseOverride)));
         return known;
     }
 }
