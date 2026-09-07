@@ -56,4 +56,22 @@ public sealed class DeviceEntry
     public bool IsNew { get; set; } = true;
 
     public DateTimeOffset LastSeenUtc { get; set; }
+
+    /// <summary>
+    /// Zeitpunkt, zu dem dieses Gerät erstmals irgendwo im Kreis gesehen wurde - anders als
+    /// <see cref="LastSeenUtc"/> nie überschrieben, außer eine spätere Meldung (Gossip)
+    /// belegt einen NOCH früheren Zeitpunkt (siehe DeviceStore.Upsert). Grundlage für
+    /// <see cref="Licensing.LicenseLimitEvaluator"/> (Issue #59/#60): ohne zentrale Instanz
+    /// braucht die Entscheidung "welche Geräte gehören zu den ersten N laut Lizenz" einen
+    /// Wert, auf den sich alle Geräte unabhängig voneinander einigen können.
+    /// </summary>
+    public DateTimeOffset FirstSeenUtc { get; set; }
+
+    /// <summary>
+    /// Lokale, im Dashboard gesetzte Bestätigung "gesehen" für den Lizenzlimit-Hinweis
+    /// (Issue #60) - sobald wahr, taucht dieses Gerät nicht mehr im Banner auf, auch wenn es
+    /// weiterhin lizenzüberschritten ist. Analog zu <see cref="IsNew"/>, nur für diesen einen
+    /// Hinweis statt der generellen "Neu"-Markierung.
+    /// </summary>
+    public bool LicenseLimitWarningAcknowledged { get; set; }
 }

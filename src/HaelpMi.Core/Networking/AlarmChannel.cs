@@ -29,9 +29,9 @@ public sealed class AlarmChannel : IAsyncDisposable
 
     public bool IsPrimary { get; private set; }
 
-    public AlarmChannel(Func<LiveIdentity> identityProvider, Action<string>? audit = null)
+    public AlarmChannel(Func<LiveIdentity> identityProvider, Action<string>? audit = null, Func<bool>? isOwnDeviceLicenseDisabled = null)
     {
-        _tcpListener = new AlarmTcpListener(identityProvider, audit);
+        _tcpListener = new AlarmTcpListener(identityProvider, audit, isOwnDeviceLicenseDisabled);
         // Einmal registriert, unabhängig von der Rolle - feuert für eine Satellite-Instanz
         // ohnehin nie, da deren _tcpListener.Start() nie erfolgreich bindet.
         _tcpListener.AlarmReceived += OnPrimaryAlarmReceived;

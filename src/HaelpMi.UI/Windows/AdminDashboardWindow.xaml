@@ -64,19 +64,43 @@
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <!-- Issue #20: Warnung vor Lizenzablauf (gestaffelt - läuft bald ab/abgelaufen/
-             ungültig/fehlt, siehe LicenseWarningEvaluator), Standard Collapsed. Der Import-
-             Button hier ist gleichzeitig Issue #51 (Lizenz-Import im Admin-Dashboard) -
-             bewusst direkt hier statt an einer zweiten Stelle, siehe dortige Begründung. -->
-        <Border Grid.Row="0" x:Name="LicenseWarningBanner" Visibility="Collapsed" Margin="0,0,0,10"
-                Padding="12,8" CornerRadius="4">
-            <DockPanel LastChildFill="True">
-                <Button DockPanel.Dock="Right" x:Name="ImportLicenseButton" Content="Lizenz einspielen"
-                        Padding="12,6" Background="White" BorderThickness="1" Margin="12,0,0,0"
-                        Click="ImportLicenseButton_Click" />
-                <TextBlock x:Name="LicenseWarningText" VerticalAlignment="Center" TextWrapping="Wrap" Foreground="White" FontWeight="SemiBold" />
-            </DockPanel>
-        </Border>
+        <StackPanel Grid.Row="0">
+            <!-- Issue #20: Warnung vor Lizenzablauf (gestaffelt - läuft bald ab/abgelaufen/
+                 ungültig/fehlt, siehe LicenseWarningEvaluator), Standard Collapsed. Der Import-
+                 Button hier ist gleichzeitig Issue #51 (Lizenz-Import im Admin-Dashboard) -
+                 bewusst direkt hier statt an einer zweiten Stelle, siehe dortige Begründung. -->
+            <Border x:Name="LicenseWarningBanner" Visibility="Collapsed" Margin="0,0,0,10"
+                    Padding="12,8" CornerRadius="4">
+                <DockPanel LastChildFill="True">
+                    <Button DockPanel.Dock="Right" x:Name="ImportLicenseButton" Content="Lizenz einspielen"
+                            Padding="12,6" Background="White" BorderThickness="1" Margin="12,0,0,0"
+                            Click="ImportLicenseButton_Click" />
+                    <TextBlock x:Name="LicenseWarningText" VerticalAlignment="Center" TextWrapping="Wrap" Foreground="White" FontWeight="SemiBold" />
+                </DockPanel>
+            </Border>
+
+            <!-- Issue #60: eines oder mehrere neu entdeckte, lizenzüberschrittene Geräte -
+                 pro Gerät per "Gelesen" einzeln ausblendbar (DeviceEntry.LicenseLimitWarningAcknowledged),
+                 taucht bei einem GENUIN neuen Fall wieder auf. Standard Collapsed. -->
+            <Border x:Name="LicenseLimitBanner" Visibility="Collapsed" Margin="0,0,0,10"
+                    Padding="12,8" CornerRadius="4" Background="{StaticResource DangerBrush}">
+                <StackPanel>
+                    <TextBlock Text="Lizenzkontingent überschritten" Foreground="White" FontWeight="Bold" FontSize="13" Margin="0,0,0,4" />
+                    <ItemsControl x:Name="LicenseLimitDevicesList">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <DockPanel LastChildFill="True" Margin="0,2">
+                                    <Button DockPanel.Dock="Right" Content="Gelesen" Padding="10,4" Margin="12,0,0,0"
+                                            Background="White" BorderThickness="0" Tag="{Binding DeviceId}"
+                                            Click="AcknowledgeLicenseLimitDevice_Click" />
+                                    <TextBlock Text="{Binding DisplayName}" Foreground="White" VerticalAlignment="Center" TextWrapping="Wrap" />
+                                </DockPanel>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+            </Border>
+        </StackPanel>
 
         <!-- Nutzerwunsch: eine Datei an den Sysadmin, User-Installer wird bei Bedarf aus dem Dashboard selbst nachgebaut. -->
         <DockPanel Grid.Row="1" Margin="0,0,0,10">

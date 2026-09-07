@@ -100,7 +100,7 @@ public class UpdatesTests
     // seit 04.08.2026 global statt pro Kreis - siehe EditScope.cs für den Hintergrund) ---
 
     private static LiveIdentity MakeIdentity(Guid deviceId) =>
-        new(Guid.NewGuid(), deviceId, "PC", "User", "Raum", "1", Role.User, false, "1.0.0", 0);
+        new(Guid.NewGuid(), deviceId, "PC", "User", "Raum", "1", Role.User, false, "1.0.0", 0, DateTimeOffset.UtcNow);
 
     [Fact]
     public void IsMyTurn_False_WhenNoQuotaSet()

@@ -10,6 +10,12 @@ namespace HaelpMi.Core.Networking.Protocol;
 /// (reine Direkt-Antwort-Discovery kennt sonst nur, wer exakt jetzt gerade mithört). Nur
 /// die für die Geräteliste nötigen Felder, keine lokalen Werte wie Favorite/Notiz - das
 /// bleibt eine rein lokale Entscheidung jedes Geräts (siehe DeviceEntry).
+///
+/// <see cref="FirstSeenUtc"/> (Issue #59/#60): FirstSeenUtc des Gossip-Antragenden für
+/// dieses Gerät, damit auch Drittwissen (nie direkt kontaktiert, nur über Gossip bekannt)
+/// für <see cref="HaelpMi.Core.Licensing.LicenseLimitEvaluator"/> zur Verfügung steht. Optional/nullable
+/// wie <see cref="BootCallMessage.KnownDevices"/> selbst, aus demselben
+/// Kompatibilitätsgrund (ältere Programmversion mitten in einem Rollout).
 /// </summary>
 public sealed record KnownDeviceSummary(
     Guid DeviceId,
@@ -19,4 +25,5 @@ public sealed record KnownDeviceSummary(
     string RoomNumber,
     Role Role,
     string IpAddress,
-    int TcpPort);
+    int TcpPort,
+    DateTimeOffset? FirstSeenUtc = null);

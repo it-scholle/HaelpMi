@@ -48,6 +48,36 @@ public class StorageTests
     }
 
     [Fact]
+    public void SettingsStore_Load_StampsFirstSeenUtc_WhenMissing()
+    {
+        // Issue #59/#60: der Installer setzt FirstSeenUtc nie (settings.json entsteht als
+        // reines Pascal-Script) - Load() muss die Lücke selbst schließen, statt dauerhaft
+        // bei default(DateTimeOffset) zu bleiben (das würde jedes so betroffene Gerät für
+        // immer als "ältestes" einstufen).
+        using var scope = new TestAppDataScope();
+        var store = new SettingsStore();
+        store.Save(new OwnSettings { DeviceId = Guid.NewGuid() });
+
+        var before = DateTimeOffset.UtcNow;
+        var loaded = store.Load();
+        var after = DateTimeOffset.UtcNow;
+
+        Assert.InRange(loaded.FirstSeenUtc, before, after);
+        Assert.Equal(loaded.FirstSeenUtc, store.Load().FirstSeenUtc); // wurde tatsächlich zurückgeschrieben, nicht nur im Rückgabewert gesetzt
+    }
+
+    [Fact]
+    public void SettingsStore_Load_KeepsExistingFirstSeenUtc()
+    {
+        using var scope = new TestAppDataScope();
+        var store = new SettingsStore();
+        var firstSeen = DateTimeOffset.UtcNow.AddDays(-90);
+        store.Save(new OwnSettings { DeviceId = Guid.NewGuid(), FirstSeenUtc = firstSeen });
+
+        Assert.Equal(firstSeen, store.Load().FirstSeenUtc);
+    }
+
+    [Fact]
     public void DeviceStore_RoundTrips_DeviceList()
     {
         using var scope = new TestAppDataScope();
@@ -80,7 +110,7 @@ public class StorageTests
     }
 
     private static DeviceUpsertInfo MakeInfo(string computerName, string user, string roomName, string roomNumber, string ip) =>
-        new(computerName, user, roomName, roomNumber, Role.User, false, ip, AppConstants.AlarmTcpPort);
+        new(computerName, user, roomName, roomNumber, Role.User, false, ip, AppConstants.AlarmTcpPort, null);
 
     [Fact]
     public void Upsert_AddsNewDevice_MarkedAsNew()
@@ -116,6 +146,51 @@ public class StorageTests
         Assert.True(entry.Notified);
         Assert.Equal("wichtig", entry.Note);
         Assert.False(entry.IsNew);
+    }
+
+    [Fact]
+    public void Upsert_NewDevice_FallsBackToLocalReceiveTime_WhenNoFirstSeenUtcReported()
+    {
+        var devices = new List<DeviceEntry>();
+        var seenAt = DateTimeOffset.UtcNow;
+
+        DeviceStore.Upsert(devices, Guid.NewGuid(), MakeInfo("PC-217", "Herr Novak", "Zimmer", "108", "192.168.1.50"), seenAt);
+
+        Assert.Equal(seenAt, devices[0].FirstSeenUtc);
+    }
+
+    [Fact]
+    public void Upsert_NewDevice_UsesReportedFirstSeenUtc_WhenGiven()
+    {
+        var devices = new List<DeviceEntry>();
+        var reportedFirstSeen = DateTimeOffset.UtcNow.AddDays(-30);
+        var info = new DeviceUpsertInfo("PC-217", "Herr Novak", "Zimmer", "108", Role.User, false, "192.168.1.50", AppConstants.AlarmTcpPort, reportedFirstSeen);
+
+        DeviceStore.Upsert(devices, Guid.NewGuid(), info, DateTimeOffset.UtcNow);
+
+        Assert.Equal(reportedFirstSeen, devices[0].FirstSeenUtc);
+    }
+
+    [Fact]
+    public void Upsert_ExistingDevice_CorrectsFirstSeenUtc_OnlyDownward()
+    {
+        var deviceId = Guid.NewGuid();
+        var originalFirstSeen = DateTimeOffset.UtcNow.AddDays(-10);
+        var devices = new List<DeviceEntry> { new() { DeviceId = deviceId, FirstSeenUtc = originalFirstSeen } };
+
+        // Ein späterer (unplausibler, "neuerer") gemeldeter Wert darf FirstSeenUtc nie
+        // erhöhen - Fairness-Grundlage für LicenseLimitEvaluator (Issue #59/#60): ein
+        // länger laufendes Gerät darf durch einen erneuten Kontakt nie "jünger" werden.
+        var laterInfo = new DeviceUpsertInfo("PC", "U", "R", "1", Role.User, false, "1.2.3.4", AppConstants.AlarmTcpPort, DateTimeOffset.UtcNow);
+        DeviceStore.Upsert(devices, deviceId, laterInfo, DateTimeOffset.UtcNow);
+        Assert.Equal(originalFirstSeen, devices[0].FirstSeenUtc);
+
+        // Ein per Gossip nachgelieferter, tatsächlich früherer Zeitpunkt (Drittwissen) DARF
+        // die bisherige Schätzung nach unten korrigieren.
+        var earlierFirstSeen = originalFirstSeen.AddDays(-5);
+        var earlierInfo = new DeviceUpsertInfo("PC", "U", "R", "1", Role.User, false, "1.2.3.4", AppConstants.AlarmTcpPort, earlierFirstSeen);
+        DeviceStore.Upsert(devices, deviceId, earlierInfo, DateTimeOffset.UtcNow);
+        Assert.Equal(earlierFirstSeen, devices[0].FirstSeenUtc);
     }
 
     [Fact]

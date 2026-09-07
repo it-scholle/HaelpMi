@@ -412,6 +412,9 @@ public partial class App : System.Windows.Application
         // einen zusätzlichen Netzwerk-Roundtrip wartet.
         void NotifyLocalAgentOfConfigChange() => _ = ipcClient.SendAsync(IpcCommandType.Rebroadcast, TimeSpan.FromSeconds(10));
 
+        LicenseCheckResult LoadLicense() => LicenseReader.Load(deployment.CustomerGroupId, Convert.FromHexString(deployment.LicensePublicKeyHex));
+        var licenseLimitGuard = new LicenseLimitGuard(IdentityProvider, LoadLicense, deviceStore.Load);
+
         var context = new AdminDashboardContext
         {
             LoadConfig = sharedConfigStore.LoadOrCreate,
@@ -457,9 +460,16 @@ public partial class App : System.Windows.Application
             ReleaseLock = (scopeKind, scopeId) => _editLock.Release(scopeKind, scopeId),
             ExportUserInstaller = ExportUserInstallerAsync,
             ListAvailableUpdateVersions = () => new UpdatePackageCacheStore().ListAvailableVersions(),
-            GetLicenseStatus = () => LicenseReader.Load(deployment.CustomerGroupId, Convert.FromHexString(deployment.LicensePublicKeyHex)),
+            GetLicenseStatus = LoadLicense,
             ImportLicenseKeyText = keyText => LicenseImporter.ImportFromKeyText(keyText, deployment.CustomerGroupId, Convert.FromHexString(deployment.LicensePublicKeyHex)),
             NotifyLicenseRenewed = () => _ = ipcClient.SendAsync(IpcCommandType.LicenseRenewed, TimeSpan.FromSeconds(10)),
+            GetDisabledDeviceIds = licenseLimitGuard.GetDisabledDeviceIds,
+            AcknowledgeLicenseLimitWarning = deviceId =>
+            {
+                var devices = deviceStore.Load();
+                DeviceStore.AcknowledgeLicenseLimitWarning(devices, deviceId);
+                deviceStore.Save(devices);
+            },
         };
 
         var window = new AdminDashboardWindow(context);

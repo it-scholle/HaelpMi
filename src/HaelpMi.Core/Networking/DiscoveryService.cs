@@ -125,7 +125,8 @@ public sealed class DiscoveryService : IAsyncDisposable
             identity.ProgramVersion,
             identity.ConfigVersion,
             DateTimeOffset.UtcNow,
-            knownDevices);
+            knownDevices,
+            identity.FirstSeenUtc);
     }
 
     private async Task ReceiveLoopAsync(UdpClient socket, CancellationToken ct)
@@ -214,7 +215,7 @@ public sealed class DiscoveryService : IAsyncDisposable
             var devices = _deviceStore.Load();
             var info = new DeviceUpsertInfo(
                 message.ComputerName, message.User, message.RoomName, message.RoomNumber,
-                message.Role, message.IsRemoteSession, remoteIp, message.TcpPort);
+                message.Role, message.IsRemoteSession, remoteIp, message.TcpPort, message.FirstSeenUtc);
             DeviceStore.Upsert(devices, message.DeviceId, info, DateTimeOffset.UtcNow);
             updated = devices.First(d => d.DeviceId == message.DeviceId);
 
@@ -233,7 +234,7 @@ public sealed class DiscoveryService : IAsyncDisposable
 
                     var knownInfo = new DeviceUpsertInfo(
                         known.ComputerName, known.User, known.RoomName, known.RoomNumber,
-                        known.Role, false, known.IpAddress, known.TcpPort);
+                        known.Role, false, known.IpAddress, known.TcpPort, known.FirstSeenUtc);
                     DeviceStore.Upsert(devices, known.DeviceId, knownInfo, DateTimeOffset.UtcNow);
                 }
             }
@@ -323,7 +324,7 @@ public sealed class DiscoveryService : IAsyncDisposable
 
         return devices
             .Where(d => d.DeviceId != excludeDeviceId)
-            .Select(d => new KnownDeviceSummary(d.DeviceId, d.ComputerName, d.User, d.RoomName, d.RoomNumber, d.Role, d.IpAddress, d.TcpPort))
+            .Select(d => new KnownDeviceSummary(d.DeviceId, d.ComputerName, d.User, d.RoomName, d.RoomNumber, d.Role, d.IpAddress, d.TcpPort, d.FirstSeenUtc))
             .ToList();
     }
 

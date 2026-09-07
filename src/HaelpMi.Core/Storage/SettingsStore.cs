@@ -24,6 +24,20 @@ public sealed class SettingsStore
                 "Diese Installation wurde nicht korrekt über einen HälpMi-Installer erstellt - bitte neu installieren.");
         }
 
+        // Selbstheilung (Issue #59/#60): der Installer (reines Pascal-Script, siehe
+        // OwnSettings.FirstSeenUtc) setzt dieses Feld nie - trifft sowohl jede echte
+        // Neuinstallation als auch ein Update von einer Version vor Einführung dieses
+        // Felds. Erster Programmstart, der die Lücke bemerkt, stempelt "jetzt" und
+        // schreibt sofort zurück - für eine Neuinstallation praktisch derselbe Zeitpunkt
+        // wie der eigentliche Installationslauf, für ein Update ein einmaliger, bekannter
+        // Ungenauigkeits-Fall (ein länger laufendes Bestandsgerät wirkt für die Dauer
+        // dieses einen Rollouts wie "neu") statt einer aufwendigeren Migration.
+        if (settings.FirstSeenUtc == default)
+        {
+            settings.FirstSeenUtc = DateTimeOffset.UtcNow;
+            Save(settings);
+        }
+
         return settings;
     }
 

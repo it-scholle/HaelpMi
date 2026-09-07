@@ -9,6 +9,9 @@ namespace HaelpMi.Core.Models;
 /// themselves, so they stay agnostic of exactly how "current user"/"is this RDP"/
 /// "program version" are derived - that assembly work happens once, in the hosting app
 /// (HaelpMi.Agent), not scattered across every Core service that needs to announce itself.
+///
+/// <see cref="FirstSeenUtc"/> siehe <see cref="OwnSettings.FirstSeenUtc"/> - Grundlage für
+/// <see cref="HaelpMi.Core.Licensing.LicenseLimitEvaluator"/> (Issue #59/#60).
 /// </summary>
 public sealed record LiveIdentity(
     Guid CustomerGroupId,
@@ -20,4 +23,5 @@ public sealed record LiveIdentity(
     Role Role,
     bool IsRemoteSession,
     string ProgramVersion,
-    int ConfigVersion);
+    int ConfigVersion,
+    DateTimeOffset FirstSeenUtc);

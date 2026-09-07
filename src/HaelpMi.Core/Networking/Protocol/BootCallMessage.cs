@@ -28,6 +28,11 @@ public enum MessageKind
 /// Antwortende hängt seine eigene Geräteliste an, damit der neu startende Announcer auch
 /// von Geräten erfährt, die gerade offline sind. Optional/nullable, damit alte Announces
 /// (die dieses Feld nie setzen) unverändert kompatibel bleiben.
+///
+/// <see cref="FirstSeenUtc"/> (Issue #59/#60): eigener Erstkontakt-Zeitpunkt des Absenders,
+/// Grundlage für <see cref="HaelpMi.Core.Licensing.LicenseLimitEvaluator"/> - siehe
+/// <see cref="Models.DeviceEntry.FirstSeenUtc"/>. Ebenfalls optional/nullable, gleicher
+/// Kompatibilitätsgrund wie <see cref="KnownDevices"/>.
 /// </summary>
 public sealed record BootCallMessage(
     MessageKind Kind,
@@ -43,4 +48,5 @@ public sealed record BootCallMessage(
     string ProgramVersion,
     int ConfigVersion,
     DateTimeOffset SentAtUtc,
-    IReadOnlyList<KnownDeviceSummary>? KnownDevices = null);
+    IReadOnlyList<KnownDeviceSummary>? KnownDevices = null,
+    DateTimeOffset? FirstSeenUtc = null);

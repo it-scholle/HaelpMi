@@ -74,6 +74,9 @@ public partial class App : System.Windows.Application
     /// <summary>Nur gesetzt, während das Systemstart-Erinnerungs-Popup offen ist - siehe HandleLicenseRenewedRequestAsync.</summary>
     private LicenseReminderToastWindow? _licenseReminderToast;
 
+    /// <summary>Issue #59/#60: nur gesetzt, während dieses Gerät als lizenzüberschritten gilt - siehe RefreshLicenseLimitState.</summary>
+    private LicenseLimitToastWindow? _licenseLimitToast;
+
     private DiscoveryService? _discovery;
     private AlarmChannel? _listener;
     private AlarmFeedbackChannel? _feedbackChannel;
@@ -163,6 +166,7 @@ public partial class App : System.Windows.Application
 
         StartBackgroundServices();
         ShowLicenseReminderToastIfNeeded();
+        RefreshLicenseLimitState();
     }
 
     // Issue #20-Nacharbeit (Nutzerfrage 02.09.2026, "das Popup beim Systemstart - ist das
@@ -196,7 +200,38 @@ public partial class App : System.Windows.Application
     private Task<IpcResponse> HandleLicenseRenewedRequestAsync()
     {
         _licenseReminderToast?.Close();
+
+        // Issue #59/#60: ohne Neuladen bliebe eine gerade erst hochgesetzte UserLimit-Grenze
+        // bis zum nächsten Programmneustart wirkungslos - "Aktivierung ... durch neue
+        // Lizenz" (Issue #59) braucht den frischen Stand sofort, nicht erst danach.
+        _license = LicenseReader.Load(_deployment.CustomerGroupId, Convert.FromHexString(_deployment.LicensePublicKeyHex));
+        RefreshLicenseLimitState();
         return Task.FromResult(new IpcResponse(true));
+    }
+
+    /// <summary>
+    /// Issue #59/#60: zeigt/schließt den Lizenzlimit-Toast passend zum aktuellen
+    /// Deaktivierungs-Zustand dieses Geräts - aufgerufen beim Start, bei jedem Boot-Call-
+    /// Update (neues Gerät gesehen, Kontingent könnte sich dadurch geändert haben) und nach
+    /// einem frisch eingespielten Lizenz-Update.
+    /// </summary>
+    private void RefreshLicenseLimitState()
+    {
+        var disabled = _coordinator!.IsOwnDeviceLicenseDisabled();
+        System.Windows.Application.Current.Dispatcher.Invoke(() =>
+        {
+            if (disabled && _licenseLimitToast is null)
+            {
+                Action? openDashboard = _deployment.Role == Role.Admin ? OpenDashboardDirectly : null;
+                _licenseLimitToast = new LicenseLimitToastWindow(openDashboard);
+                _licenseLimitToast.Closed += (_, _) => _licenseLimitToast = null;
+                _licenseLimitToast.Show();
+            }
+            else if (!disabled)
+            {
+                _licenseLimitToast?.Close();
+            }
+        });
     }
 
     private static int? ParseUpdateTestPort(string[] args)
@@ -333,17 +368,22 @@ public partial class App : System.Windows.Application
         _feedbackChannel = new AlarmFeedbackChannel(BuildIdentity, _auditLog.Append);
         _feedbackChannel.Start();
 
-        _coordinator = new AlarmFlowCoordinator(BuildIdentity, () => _settings, _sharedConfigStore.LoadOrCreate, _feedbackChannel);
+        _coordinator = new AlarmFlowCoordinator(BuildIdentity, () => _settings, _sharedConfigStore.LoadOrCreate, () => _license, _feedbackChannel);
 
         _discovery = new DiscoveryService(BuildIdentity, _auditLog.Append);
         _discovery.StartListening();
         _ = _discovery.AnnounceAsync();
 
+        // Issue #59/#60: jeder neu bekannt gewordene Peer kann das eigene Lizenzkontingent
+        // verschieben (mehr bekannte Geräte, evtl. auch ein neuer Peer mit früherem
+        // FirstSeenUtc über Gossip) - Zustand nach jedem Boot-Call-Update neu bewerten.
+        _discovery.DeviceUpdated += (_, _) => RefreshLicenseLimitState();
+
         // Issue #9 (Fast User Switching ohne Logout/Reboot): AlarmChannel entscheidet
         // selbst, ob diese Sitzung den echten TCP-Port hält (Primary) oder als Satellite
         // über den lokalen Relay-Kanal einer anderen Sitzung mitläuft - für den
         // Aufrufer hier kein Unterschied, AlarmReceived feuert in beiden Rollen gleich.
-        _listener = new AlarmChannel(BuildIdentity, _auditLog.Append);
+        _listener = new AlarmChannel(BuildIdentity, _auditLog.Append, () => _coordinator!.IsOwnDeviceLicenseDisabled());
         _listener.AlarmReceived += (_, args) => _coordinator.HandleIncomingAlarmRequest(args);
         _listener.Start();
 
@@ -533,6 +573,11 @@ public partial class App : System.Windows.Application
 
     private async Task<IpcResponse> HandleSelfTestRequestAsync()
     {
+        if (_coordinator!.IsOwnDeviceLicenseDisabled())
+        {
+            return new IpcResponse(false, "Lizenz ausgeschöpft - dieses Gerät ist deaktiviert und kann keine Alarme senden.");
+        }
+
         var config = _sharedConfigStore.LoadOrCreate();
         var profile = config.AlarmProfiles.FirstOrDefault();
         if (profile is null)

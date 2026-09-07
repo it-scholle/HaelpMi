@@ -53,7 +53,7 @@ public class SendingTests
         // direkte Aufruf der richtige, nicht-brüchige Testansatz.
         var customerGroupId = Guid.NewGuid();
         var senderDeviceId = Guid.NewGuid();
-        var senderIdentity = new LiveIdentity(customerGroupId, senderDeviceId, "Sender-PC", "Frau Meier", "Zimmer", "1", Role.User, false, "0.0.0", 0);
+        var senderIdentity = new LiveIdentity(customerGroupId, senderDeviceId, "Sender-PC", "Frau Meier", "Zimmer", "1", Role.User, false, "0.0.0", 0, DateTimeOffset.UtcNow);
 
         var feedbackChannel = new AlarmFeedbackChannel(() => senderIdentity);
         var profile = new AlarmProfile { Text = "Bitte kommen!", ResponseThreshold = 1 };
@@ -104,7 +104,7 @@ public class SendingTests
         // sollen weiterhin als Anzeige-Update relayt werden (Namensliste bleibt korrekt),
         // nur eben mit SenderStillSending=false markiert statt als neue Ping-Welle zu zählen.
         var customerGroupId = Guid.NewGuid();
-        var senderIdentity = new LiveIdentity(customerGroupId, Guid.NewGuid(), "Sender-PC", "Frau Meier", "Zimmer", "1", Role.User, false, "0.0.0", 0);
+        var senderIdentity = new LiveIdentity(customerGroupId, Guid.NewGuid(), "Sender-PC", "Frau Meier", "Zimmer", "1", Role.User, false, "0.0.0", 0, DateTimeOffset.UtcNow);
 
         var feedbackChannel = new AlarmFeedbackChannel(() => senderIdentity);
         var profile = new AlarmProfile { Text = "Bitte kommen!", ResponseThreshold = 1 };

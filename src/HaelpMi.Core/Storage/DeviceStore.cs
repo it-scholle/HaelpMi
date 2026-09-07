@@ -2,7 +2,13 @@ using HaelpMi.Core.Models;
 
 namespace HaelpMi.Core.Storage;
 
-/// <summary>The subset of a boot-call/announce that gets written into a <see cref="DeviceEntry"/> on upsert.</summary>
+/// <summary>
+/// The subset of a boot-call/announce that gets written into a <see cref="DeviceEntry"/> on upsert.
+/// <paramref name="FirstSeenUtc"/> ist der vom meldenden Gerät selbst behauptete Erstkontakt-
+/// Zeitpunkt (siehe <see cref="DeviceEntry.FirstSeenUtc"/>) - null bei einem Absender ohne
+/// dieses Feld (ältere Programmversion mitten in einem Rollout), dann fällt Upsert auf den
+/// lokalen Empfangszeitpunkt zurück.
+/// </summary>
 public sealed record DeviceUpsertInfo(
     string ComputerName,
     string User,
@@ -11,7 +17,8 @@ public sealed record DeviceUpsertInfo(
     Role Role,
     bool IsRemoteSession,
     string IpAddress,
-    int TcpPort);
+    int TcpPort,
+    DateTimeOffset? FirstSeenUtc);
 
 /// <summary>Loads/saves the locally known list of other devices (FR-18, 5.4).</summary>
 public sealed class DeviceStore
@@ -44,6 +51,7 @@ public sealed class DeviceStore
                 IpAddress = info.IpAddress,
                 TcpPort = info.TcpPort,
                 LastSeenUtc = seenAtUtc,
+                FirstSeenUtc = info.FirstSeenUtc ?? seenAtUtc,
                 IsNew = true,
             });
         }
@@ -58,7 +66,17 @@ public sealed class DeviceStore
             existing.IpAddress = info.IpAddress;
             existing.TcpPort = info.TcpPort;
             existing.LastSeenUtc = seenAtUtc;
-            // Favorite/Notified/Note/IsNew are local decisions and are deliberately left untouched.
+            // FirstSeenUtc nur nach UNTEN korrigieren, nie nach oben: eine dritte Quelle
+            // (Gossip) kann einen echten, früheren Zeitpunkt nachliefern als die bisher
+            // gespeicherte Schätzung (z. B. lokaler Empfangszeitpunkt-Fallback beim
+            // allerersten Kontakt) - niemals umgekehrt, sonst würde ein länger laufendes
+            // Gerät nachträglich als "neuer" umgewertet (Fairness-Grundlage für
+            // LicenseLimitEvaluator, Issue #59/#60).
+            if (info.FirstSeenUtc is { } reportedFirstSeen && reportedFirstSeen < existing.FirstSeenUtc)
+            {
+                existing.FirstSeenUtc = reportedFirstSeen;
+            }
+            // Favorite/Notified/Note/IsNew/LicenseLimitWarningAcknowledged sind lokale Entscheidungen und bleiben unangetastet.
         }
 
         return devices;
@@ -75,6 +93,16 @@ public sealed class DeviceStore
         if (entry is not null)
         {
             entry.IsNew = false;
+        }
+    }
+
+    /// <summary>"Gelesen" im Admin-Dashboard-Lizenzlimit-Banner (Issue #60) - siehe DeviceEntry.LicenseLimitWarningAcknowledged.</summary>
+    public static void AcknowledgeLicenseLimitWarning(List<DeviceEntry> devices, Guid deviceId)
+    {
+        var entry = devices.FirstOrDefault(d => d.DeviceId == deviceId);
+        if (entry is not null)
+        {
+            entry.LicenseLimitWarningAcknowledged = true;
         }
     }
 

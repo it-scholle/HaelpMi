@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using HaelpMi.Core.Audio;
 using HaelpMi.Core.Interop;
+using HaelpMi.Core.Licensing;
 using HaelpMi.Core.Models;
 using HaelpMi.Core.Networking;
 using HaelpMi.Core.Networking.Protocol;
@@ -32,12 +33,14 @@ public sealed class AlarmFlowCoordinator
     private readonly AlarmSender _sender;
     private readonly DeviceStore _deviceStore = new();
     private readonly MultiDeviceAlarmPlayer _audioPlayer;
+    private readonly LicenseLimitGuard _licenseLimitGuard;
     private readonly ConcurrentDictionary<Guid, AlarmPopupWindow> _openPopups = new();
 
     public AlarmFlowCoordinator(
         Func<LiveIdentity> identityProvider,
         Func<OwnSettings> settingsProvider,
         Func<SharedConfig> sharedConfigProvider,
+        Func<LicenseCheckResult> licenseProvider,
         AlarmFeedbackChannel feedbackChannel)
     {
         _identityProvider = identityProvider;
@@ -46,8 +49,12 @@ public sealed class AlarmFlowCoordinator
         _feedbackChannel = feedbackChannel;
         _sender = new AlarmSender(_auditLog.Append);
         _audioPlayer = new MultiDeviceAlarmPlayer(_auditLog.Append);
+        _licenseLimitGuard = new LicenseLimitGuard(identityProvider, licenseProvider, _deviceStore.Load);
         _feedbackChannel.StatusRelayReceived += (_, relay) => HandleStatusRelay(relay);
     }
+
+    /// <summary>Issue #59/#60: true, solange dieses Gerät wegen Lizenzüberschreitung deaktiviert ist.</summary>
+    public bool IsOwnDeviceLicenseDisabled() => _licenseLimitGuard.IsOwnDeviceDisabled();
 
     /// <summary>Called from the TCP listener's background thread when an alarm arrives (FR-9/FR-47).</summary>
     public void HandleIncomingAlarmRequest(AlarmReceivedEventArgs args)
@@ -133,10 +140,26 @@ public sealed class AlarmFlowCoordinator
     /// <summary>Hotkey-triggered send for one <see cref="AlarmProfile"/> (FR-50): resolves this sender's asymmetric recipient set and starts a repeating session.</summary>
     public void TriggerAlarmProfile(AlarmProfile profile)
     {
+        if (_licenseLimitGuard.IsOwnDeviceDisabled())
+        {
+            ShowLicenseLimitBlockedMessage();
+            return;
+        }
+
         var identity = _identityProvider();
         var devices = _deviceStore.Load();
         var groups = _sharedConfigProvider().DeviceGroups;
         var targets = RecipientResolver.ResolveRecipientsForSender(profile, identity.DeviceId, identity.RoomNumber, devices, groups, excludeSender: true);
+
+        // Issue #60: lizenzüberschrittene Empfänger sind für andere unerreichbar (siehe
+        // AlarmTcpListener) - sie erst gar nicht anschreiben, statt einen strukturell nie
+        // bestätigbaren Verbindungsversuch zu zählen.
+        var disabledDeviceIds = _licenseLimitGuard.GetDisabledDeviceIds();
+        if (disabledDeviceIds.Count > 0)
+        {
+            targets = targets.Where(t => !disabledDeviceIds.Contains(t.DeviceId)).ToList();
+        }
+
         if (targets.Count == 0)
         {
             return; // nothing to send, nothing to show (Teil 2, Abschnitt 4: an empty recipient set is a valid, if useless, admin configuration)
@@ -151,6 +174,13 @@ public sealed class AlarmFlowCoordinator
 
         _ = RunSessionAsync(session);
     }
+
+    private static void ShowLicenseLimitBlockedMessage() =>
+        System.Windows.MessageBox.Show(
+            "Die Lizenz ist ausgeschöpft (mehr Geräte angemeldet als das Lizenzkontingent erlaubt). " +
+            "Dieses Gerät ist deaktiviert und kann keine Alarme senden, bis ein Admin es im Dashboard " +
+            "aktiviert oder eine neue Lizenz eingespielt wird.",
+            "HälpMi - Lizenz ausgeschöpft", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Warning);
 
     private static async Task RunSessionAsync(RepeatingAlarmSession session)
     {
@@ -179,6 +209,11 @@ public sealed class AlarmFlowCoordinator
     /// </summary>
     public Task<bool> SendSelfTestAsync(AlarmProfile profile)
     {
+        if (_licenseLimitGuard.IsOwnDeviceDisabled())
+        {
+            return Task.FromResult(false);
+        }
+
         var identity = _identityProvider();
         var selfTarget = new DeviceEntry
         {
