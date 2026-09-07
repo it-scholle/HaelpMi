@@ -104,7 +104,7 @@ public partial class App : System.Windows.Application
             {
                 try
                 {
-                    wantsDashboard = new SettingsStore().Load().Role == Role.Admin;
+                    wantsDashboard = DashboardAccessGuard.CurrentUserMayOpenDashboard(new SettingsStore().Load().Role);
                 }
                 catch (Exception)
                 {
@@ -176,7 +176,7 @@ public partial class App : System.Windows.Application
         // normale Fenster, falls das Dashboard z. B. wegen eines belegten Edit-Locks nicht
         // geöffnet werden kann - sonst liefe der Prozess sonst fensterlos weiter (kein
         // "letztes Fenster geschlossen"-Ereignis, das den Shutdown auslösen würde).
-        if (e.Args.Contains("--open-dashboard") && settings.Role == Role.Admin)
+        if (e.Args.Contains("--open-dashboard") && DashboardAccessGuard.CurrentUserMayOpenDashboard(settings.Role))
         {
             bool opened;
             try
@@ -362,7 +362,9 @@ public partial class App : System.Windows.Application
             RequestRebroadcast = async () => (await ipcClient.SendAsync(IpcCommandType.Rebroadcast, TimeSpan.FromSeconds(10))).Success,
             RequestSearchAgain = async () => (await ipcClient.SendAsync(IpcCommandType.SearchAgain, TimeSpan.FromSeconds(10))).Success,
             RequestSelfTest = async () => (await ipcClient.SendAsync(IpcCommandType.SelfTest, TimeSpan.FromSeconds(10))).Success,
-            OpenAdminDashboard = settings.Role == Role.Admin
+            // Issue #10: nur beim installierenden Windows-Nutzer, nicht bei jedem, der auf
+            // diesem Admin-Gerät angemeldet ist (Fast User Switching).
+            OpenAdminDashboard = DashboardAccessGuard.CurrentUserMayOpenDashboard(settings.Role)
                 ? () => OpenAdminDashboardAsync(settingsStore, deployment, deviceStore)
                 : null,
         };

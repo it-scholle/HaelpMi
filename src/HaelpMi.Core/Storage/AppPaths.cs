@@ -44,6 +44,13 @@ public static class AppPaths
     public static string DeploymentInfoFilePath => Path.Combine(AppContext.BaseDirectory, "deployment.json");
 
     /// <summary>
+    /// Wie <see cref="DeploymentInfoFilePath"/> vom Installer geschrieben, aber erst zur
+    /// tatsächlichen Installationszeit bekannt (welcher Windows-Nutzer Setup.exe ausführt),
+    /// nicht beim Bauen im Install-Creator - siehe Issue #10, DashboardAccessGuard.
+    /// </summary>
+    public static string InstalledByInfoFilePath => Path.Combine(AppContext.BaseDirectory, "installed-by.json");
+
+    /// <summary>
     /// Root-Bugfix (Fehlerbericht "Lizenz einspielen gibt keine Rückmeldung", 02.09.2026):
     /// eine Lizenz beschreibt zwar wie <see cref="DeploymentInfoFilePath"/> die
     /// Installation, MUSS aber - anders als deployment.json, das nur
