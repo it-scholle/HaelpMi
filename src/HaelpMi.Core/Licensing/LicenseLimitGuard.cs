@@ -40,11 +40,14 @@ public sealed class LicenseLimitGuard
     private List<LicenseLimitEvaluator.DeviceSeen> BuildKnownDevices(LiveIdentity identity)
     {
         var devices = _devicesProvider();
+        // Eigenes Gerät trägt nie einen LicenseOverride (LiveIdentity hat kein lokales
+        // DeviceEntry-Pendant, siehe Klassenkommentar bei AdminDashboardContext.LoadOwnDevice)
+        // - vorbereiteter Erweiterungspunkt für Issue #61 gilt bislang nur für Peers.
         var known = new List<LicenseLimitEvaluator.DeviceSeen>(devices.Count + 1)
         {
             new(identity.DeviceId, identity.FirstSeenUtc),
         };
-        known.AddRange(devices.Select(d => new LicenseLimitEvaluator.DeviceSeen(d.DeviceId, d.FirstSeenUtc)));
+        known.AddRange(devices.Select(d => new LicenseLimitEvaluator.DeviceSeen(d.DeviceId, d.FirstSeenUtc, d.LicenseOverride)));
         return known;
     }
 }
