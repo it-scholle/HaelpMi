@@ -228,6 +228,86 @@ public class StorageTests
         Assert.False(devices[0].IsNew); // a later re-announce must not re-highlight an already-acknowledged device
     }
 
+    // --- Issue #61: LicenseOverride-Gossip-Merge ("neuester Zeitstempel gewinnt") ---
+
+    [Fact]
+    public void Upsert_SelfReport_NeverTouchesExistingLicenseOverride()
+    {
+        var deviceId = Guid.NewGuid();
+        var setAt = DateTimeOffset.UtcNow;
+        var devices = new List<DeviceEntry>
+        {
+            new() { DeviceId = deviceId, ComputerName = "PC", LicenseOverride = LicenseOverride.ForceDisabled, LicenseOverrideSetAtUtc = setAt },
+        };
+
+        // Ein Selbstbericht (Override == null, wie bei einem direkten Boot-Call-Announce) darf
+        // eine bereits bekannte Fremdmeinung nie überschreiben - ein Gerät kennt seine eigene
+        // Override-Entscheidung nicht.
+        DeviceStore.Upsert(devices, deviceId, MakeInfo("PC", "U", "R", "1", "1.2.3.4"), DateTimeOffset.UtcNow);
+
+        Assert.Equal(LicenseOverride.ForceDisabled, devices[0].LicenseOverride);
+        Assert.Equal(setAt, devices[0].LicenseOverrideSetAtUtc);
+    }
+
+    [Fact]
+    public void Upsert_GossipOverride_AppliesWhenNewerThanLocal()
+    {
+        var deviceId = Guid.NewGuid();
+        var devices = new List<DeviceEntry>
+        {
+            new() { DeviceId = deviceId, LicenseOverride = LicenseOverride.None, LicenseOverrideSetAtUtc = null },
+        };
+
+        var newerInfo = new DeviceUpsertInfo("PC", "U", "R", "1", Role.User, false, "1.2.3.4", AppConstants.AlarmTcpPort,
+            null, LicenseOverride.ForceDisabled, DateTimeOffset.UtcNow);
+        DeviceStore.Upsert(devices, deviceId, newerInfo, DateTimeOffset.UtcNow);
+
+        Assert.Equal(LicenseOverride.ForceDisabled, devices[0].LicenseOverride);
+    }
+
+    [Fact]
+    public void Upsert_GossipOverride_IgnoredWhenOlderThanLocal()
+    {
+        var deviceId = Guid.NewGuid();
+        var localSetAt = DateTimeOffset.UtcNow;
+        var devices = new List<DeviceEntry>
+        {
+            new() { DeviceId = deviceId, LicenseOverride = LicenseOverride.ForceEnabled, LicenseOverrideSetAtUtc = localSetAt },
+        };
+
+        var staleInfo = new DeviceUpsertInfo("PC", "U", "R", "1", Role.User, false, "1.2.3.4", AppConstants.AlarmTcpPort,
+            null, LicenseOverride.ForceDisabled, localSetAt.AddMinutes(-5));
+        DeviceStore.Upsert(devices, deviceId, staleInfo, DateTimeOffset.UtcNow);
+
+        Assert.Equal(LicenseOverride.ForceEnabled, devices[0].LicenseOverride); // ein älterer Gossip-Stand darf eine neuere lokale Entscheidung nicht zurückdrehen
+    }
+
+    [Fact]
+    public void SetLicenseOverride_SetsValueAndTimestamp_UnconditionallyLocal()
+    {
+        var deviceId = Guid.NewGuid();
+        var devices = new List<DeviceEntry> { new() { DeviceId = deviceId } };
+        var setAt = DateTimeOffset.UtcNow;
+
+        DeviceStore.SetLicenseOverride(devices, deviceId, LicenseOverride.ForceDisabled, setAt);
+
+        Assert.Equal(LicenseOverride.ForceDisabled, devices[0].LicenseOverride);
+        Assert.Equal(setAt, devices[0].LicenseOverrideSetAtUtc);
+    }
+
+    [Fact]
+    public void Remove_DeletesOnlyTheMatchingDevice()
+    {
+        var keepId = Guid.NewGuid();
+        var removeId = Guid.NewGuid();
+        var devices = new List<DeviceEntry> { new() { DeviceId = keepId }, new() { DeviceId = removeId } };
+
+        DeviceStore.Remove(devices, removeId);
+
+        Assert.Single(devices);
+        Assert.Equal(keepId, devices[0].DeviceId);
+    }
+
     [Fact]
     public void OrderForDisplay_PutsFavoritesFirst()
     {

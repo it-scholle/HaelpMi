@@ -13,7 +13,6 @@ public sealed class ConfigWindowContext
     public required Func<OwnSettings> LoadSettings { get; init; }
     public required Action<OwnSettings> SaveSettings { get; init; }
     public required Func<List<DeviceEntry>> LoadDevices { get; init; }
-    public required Action<List<DeviceEntry>> SaveDevices { get; init; }
 
     /// <summary>
     /// Bugfix 08.08.2026: LoadDevices enthält nur über Boot-Call entdeckte PEERS, nie das

@@ -53,6 +53,9 @@ public sealed class LicenseLimitGuard
         return LicenseLimitEvaluator.GetDisabledDeviceIds(BuildKnownDevices(identity), EffectiveUserLimit());
     }
 
+    /// <summary>Issue #61 (Geräte-Tab "x/y lizenziert"): dieselbe Regel wie <see cref="GetDisabledDeviceIds"/>, hier nur als reiner Anzeigewert.</summary>
+    public int? GetEffectiveUserLimit() => EffectiveUserLimit();
+
     private int? EffectiveUserLimit()
     {
         var result = _licenseProvider();

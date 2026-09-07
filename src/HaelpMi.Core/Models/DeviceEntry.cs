@@ -76,12 +76,25 @@ public sealed class DeviceEntry
     public bool LicenseLimitWarningAcknowledged { get; set; }
 
     /// <summary>
-    /// Vorbereiteter Erweiterungspunkt für Issue #61 - siehe <see cref="LicenseOverride"/>.
-    /// <see cref="HaelpMi.Core.Licensing.LicenseLimitEvaluator"/> berücksichtigt diesen Wert bereits, aber
-    /// nichts setzt ihn heute je auf etwas anderes als <see cref="LicenseOverride.None"/>:
-    /// weder eine Dashboard-UI noch eine Netzwerk-Propagierung existieren bisher (#61 braucht
-    /// dafür erst die noch fehlende Admin-Rollen-Signaturprüfung). Rein lokal wie
-    /// Favorite/Notified/Note - DeviceStore.Upsert fasst dieses Feld nie an.
+    /// Manuelle Admin-Entscheidung "aktivieren/deaktivieren" im Geräte-Tab des Dashboards
+    /// (Issue #61) - siehe <see cref="LicenseOverride"/> und
+    /// <see cref="HaelpMi.Core.Licensing.LicenseLimitEvaluator"/>, das diesen Wert auswertet.
+    /// Anders als Favorite/Notified/Note ist das keine rein lokale Entscheidung: eine
+    /// Deaktivierung soll auch für Peers gelten, die dasselbe Gerät kennen - siehe
+    /// <see cref="LicenseOverrideSetAtUtc"/> für die Verbreitung. Ein Gerät setzt diesen
+    /// Wert nie über sich selbst (nur ein Admin über ein ANDERES Gerät), deshalb fasst
+    /// DeviceStore.Upsert ihn beim Selbstbericht des betroffenen Geräts nie an.
     /// </summary>
     public LicenseOverride LicenseOverride { get; set; }
+
+    /// <summary>
+    /// Zeitpunkt der letzten <see cref="LicenseOverride"/>-Entscheidung, null solange noch
+    /// nie ein Admin dieses Gerät manuell aktiviert/deaktiviert hat. Ohne zentrale Instanz
+    /// oder Admin-Signatur (siehe CLAUDE.md - diese Infrastruktur existiert auf diesem
+    /// Versionsstand nicht) ist "neuester Zeitstempel gewinnt" die einzige Konfliktregel,
+    /// falls zwei Admins gegensätzlich entscheiden: DeviceStore.Upsert übernimmt eine per
+    /// Gossip gemeldete Fremdmeinung nur, wenn ihr Zeitstempel neuer ist als der lokal
+    /// bekannte (Nutzer-Präferenz: Zeitstempel statt bloßem Bool für so einen Zustand).
+    /// </summary>
+    public DateTimeOffset? LicenseOverrideSetAtUtc { get; set; }
 }

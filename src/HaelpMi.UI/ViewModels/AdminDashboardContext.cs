@@ -90,8 +90,29 @@ public sealed class AdminDashboardContext
     /// </summary>
     public required Func<IReadOnlySet<Guid>> GetDisabledDeviceIds { get; init; }
 
+    /// <summary>Issue #61 (Geräte-Tab "x/y lizenziert"): das "y" - null bei unbegrenzter Lizenz (XL).</summary>
+    public required Func<int?> GetLicenseSeatLimit { get; init; }
+
     /// <summary>"Gelesen"-Klick im Lizenzlimit-Banner (Issue #60) - siehe DeviceEntry.LicenseLimitWarningAcknowledged.</summary>
     public required Action<Guid> AcknowledgeLicenseLimitWarning { get; init; }
+
+    /// <summary>
+    /// Toggle im Geräte-Tab (Issue #61): setzt <see cref="DeviceEntry.LicenseOverride"/>
+    /// lokal (mit aktuellem Zeitstempel, siehe DeviceStore.SetLicenseOverride) und stößt
+    /// danach denselben "Erneut suchen"-Announce an, den auch der manuelle Knopf in
+    /// ConfigWindow auslöst (IpcCommandType.SearchAgain) - die neue Entscheidung erreicht
+    /// Peers dadurch sofort per Gossip statt erst beim nächsten passiven Boot-Call-Kontakt.
+    /// </summary>
+    public required Action<Guid, LicenseOverride> SetDeviceLicenseOverride { get; init; }
+
+    /// <summary>"Löschen" im Geräte-Tab (Issue #61) - siehe DeviceStore.Remove für die (bewusst rein lokale) Semantik.</summary>
+    public required Action<Guid> DeleteDevice { get; init; }
+
+    /// <summary>Notiz-Feld im Geräte-Tab (Issue #61) - rein lokal wie bisher, kein Gossip (siehe DeviceEntry.Note).</summary>
+    public required Action<Guid, string> SetDeviceNote { get; init; }
+
+    /// <summary>"Erneut suchen" im Geräte-Tab (Issue #61) - identischer IPC-Weg wie ConfigWindowContext.RequestSearchAgain.</summary>
+    public required Func<Task<bool>> RequestSearchAgain { get; init; }
 }
 
 public sealed record UserInstallerExportResult(bool Success, string? OutputFilePath, string? Error);

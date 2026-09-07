@@ -239,6 +239,8 @@ public sealed class DiscoveryService : IAsyncDisposable
         try
         {
             var devices = _deviceStore.Load();
+            // Kein Override hier (bleibt null): ein Gerät berichtet nie eine Meinung über
+            // sich selbst - siehe DeviceUpsertInfo.
             var info = new DeviceUpsertInfo(
                 message.ComputerName, message.User, message.RoomName, message.RoomNumber,
                 message.Role, message.IsRemoteSession, remoteIp, message.TcpPort, message.FirstSeenUtc);
@@ -258,9 +260,13 @@ public sealed class DiscoveryService : IAsyncDisposable
                         continue;
                     }
 
+                    // Issue #61: Drittwissen trägt eine Override-Fremdmeinung mit (siehe
+                    // KnownDeviceSummary) - Upsert wendet sie per "neuester Zeitstempel
+                    // gewinnt" auf den lokalen Stand an.
                     var knownInfo = new DeviceUpsertInfo(
                         known.ComputerName, known.User, known.RoomName, known.RoomNumber,
-                        known.Role, false, known.IpAddress, known.TcpPort, known.FirstSeenUtc);
+                        known.Role, false, known.IpAddress, known.TcpPort, known.FirstSeenUtc,
+                        known.Override, known.OverrideSetAtUtc);
                     DeviceStore.Upsert(devices, known.DeviceId, knownInfo, DateTimeOffset.UtcNow);
                 }
             }
@@ -385,7 +391,7 @@ public sealed class DiscoveryService : IAsyncDisposable
 
         return devices
             .Where(d => d.DeviceId != excludeDeviceId)
-            .Select(d => new KnownDeviceSummary(d.DeviceId, d.ComputerName, d.User, d.RoomName, d.RoomNumber, d.Role, d.IpAddress, d.TcpPort, d.FirstSeenUtc))
+            .Select(d => new KnownDeviceSummary(d.DeviceId, d.ComputerName, d.User, d.RoomName, d.RoomNumber, d.Role, d.IpAddress, d.TcpPort, d.FirstSeenUtc, d.LicenseOverride, d.LicenseOverrideSetAtUtc))
             .ToList();
     }
 
