@@ -21,6 +21,11 @@ internal static class MessageValidation
     // die zusätzliche Plausibilitätsprüfung auf bereits erfolgreich geparste Daten.
     private const int MaxKnownDevicesCount = 1000;
 
+    // Issue #59/#60-Nachtrag: eine echte Lizenz-Textkodierung liegt praktisch immer deutlich
+    // darunter (Base64Url eines festen Signatur-/Feldsatzes) - großzügige, aber endliche
+    // Grenze, analog zu MaxKnownDevicesCount oben.
+    private const int MaxLicenseKeyTextLength = 2000;
+
     public static bool IsPlausible(this BootCallMessage message) =>
         message.CustomerGroupId != Guid.Empty &&
         message.DeviceId != Guid.Empty &&
@@ -32,7 +37,8 @@ internal static class MessageValidation
         message.ProgramVersion.Length <= MaxVersionStringLength &&
         Enum.IsDefined(message.Role) &&
         Enum.IsDefined(message.Kind) &&
-        (message.KnownDevices is null || IsPlausible(message.KnownDevices));
+        (message.KnownDevices is null || IsPlausible(message.KnownDevices)) &&
+        (message.LicenseKeyText is null || message.LicenseKeyText.Length <= MaxLicenseKeyTextLength);
 
     private static bool IsPlausible(IReadOnlyList<KnownDeviceSummary> knownDevices) =>
         knownDevices.Count <= MaxKnownDevicesCount &&

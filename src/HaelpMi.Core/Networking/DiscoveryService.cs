@@ -20,6 +20,13 @@ public sealed class PeerConfigVersionInfo
     public required int ConfigVersion { get; init; }
 }
 
+/// <summary>Siehe <see cref="DiscoveryService.PeerLicenseObserved"/>.</summary>
+public sealed class PeerLicenseInfo
+{
+    public required Guid DeviceId { get; init; }
+    public required string LicenseKeyText { get; init; }
+}
+
 /// <summary>
 /// UDP boot-call discovery (Phase 1 5.5/FR-21/22/23, Teil 2 Abschnitt 9): one socket
 /// bound to <see cref="AppConstants.DiscoveryUdpPort"/> both sends the once-per-startup
@@ -38,6 +45,7 @@ public sealed class PeerConfigVersionInfo
 public sealed class DiscoveryService : IAsyncDisposable
 {
     private readonly Func<LiveIdentity> _identityProvider;
+    private readonly Func<string?>? _ownLicenseKeyTextProvider;
     private readonly int _discoveryPort;
     private readonly DeviceStore _deviceStore = new();
     private readonly SemaphoreSlim _storeLock = new(1, 1);
@@ -67,12 +75,29 @@ public sealed class DiscoveryService : IAsyncDisposable
     /// </summary>
     public event EventHandler<PeerConfigVersionInfo>? PeerConfigVersionObserved;
 
+    /// <summary>
+    /// Issue #59/#60-Nachtrag "Lizenz sofort verteilen": feuert für JEDEN Boot-Call, der
+    /// eine Lizenz mitbringt (<see cref="BootCallMessage.LicenseKeyText"/>) - bewusst OHNE
+    /// Vorfilterung "ist die neuer als meine eigene", anders als bei
+    /// <see cref="PeerConfigVersionObserved"/>: DiscoveryService kennt weder den
+    /// Prüfschlüssel noch die eigene aktuell geladene Lizenz, die Entscheidung "übernehmen
+    /// oder verwerfen" liegt komplett beim Abonnenten (siehe LicenseImporter.TryAdoptFromPeer).
+    /// </summary>
+    public event EventHandler<PeerLicenseInfo>? PeerLicenseObserved;
+
     /// <param name="discoveryPort">Overridable only for tests - production always uses <see cref="AppConstants.DiscoveryUdpPort"/> so every device agrees on one port.</param>
-    public DiscoveryService(Func<LiveIdentity> identityProvider, Action<string>? audit = null, int? discoveryPort = null)
+    /// <param name="ownLicenseKeyTextProvider">
+    /// Issue #59/#60-Nachtrag: liefert die eigene, aktuell geladene Lizenz als Text (oder
+    /// null, falls keine vorliegt) - wird an jeden ausgehenden Boot-Call angehängt, damit
+    /// Peers ohne (aktuelle) Lizenz sie übernehmen können. Optional, damit bestehende
+    /// Aufrufer/Tests unverändert kompilieren.
+    /// </param>
+    public DiscoveryService(Func<LiveIdentity> identityProvider, Action<string>? audit = null, int? discoveryPort = null, Func<string?>? ownLicenseKeyTextProvider = null)
     {
         _identityProvider = identityProvider;
         _audit = audit;
         _discoveryPort = discoveryPort ?? AppConstants.DiscoveryUdpPort;
+        _ownLicenseKeyTextProvider = ownLicenseKeyTextProvider;
     }
 
     /// <summary>Binds the socket and starts the background receive loop. Call once at Agent startup.</summary>
@@ -126,7 +151,8 @@ public sealed class DiscoveryService : IAsyncDisposable
             identity.ConfigVersion,
             DateTimeOffset.UtcNow,
             knownDevices,
-            identity.FirstSeenUtc);
+            identity.FirstSeenUtc,
+            _ownLicenseKeyTextProvider?.Invoke());
     }
 
     private async Task ReceiveLoopAsync(UdpClient socket, CancellationToken ct)
@@ -256,6 +282,15 @@ public sealed class DiscoveryService : IAsyncDisposable
                 DeviceId = message.DeviceId,
                 ProgramVersion = message.ProgramVersion,
                 ConfigVersion = message.ConfigVersion,
+            });
+        }
+
+        if (message.LicenseKeyText is { Length: > 0 })
+        {
+            PeerLicenseObserved?.Invoke(this, new PeerLicenseInfo
+            {
+                DeviceId = message.DeviceId,
+                LicenseKeyText = message.LicenseKeyText,
             });
         }
 
