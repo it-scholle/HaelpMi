@@ -311,6 +311,80 @@
         <Setter Property="FontFamily" Value="{StaticResource AppFontFamily}" />
     </Style>
 
+    <!-- Issue #12: die native Windows-Scrollbar (breiter grauer Balken, quadratische Pfeil-
+         Buttons) wirkte neben dem restlichen flachen Apple-artigen Look wie ein Fremdkörper.
+         Schmaler, randloser Thumb ohne Pfeil-Buttons/Track-Hintergrund, wie in den meisten
+         modernen Apps - Repeat-Buttons bleiben für Klick-auf-Track/PageUp-Down funktional
+         erhalten, nur unsichtbar (Transparent statt gezeichnet). -->
+    <Style x:Key="ModernScrollBarThumbStyle" TargetType="Thumb">
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Thumb">
+                    <Border x:Name="Bd" Background="{StaticResource HairlineBrush}" CornerRadius="4"
+                            Margin="2" SnapsToDevicePixels="True" />
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Bd" Property="Background" Value="{StaticResource TextSecondaryBrush}" />
+                        </Trigger>
+                        <Trigger Property="IsDragging" Value="True">
+                            <Setter TargetName="Bd" Property="Background" Value="{StaticResource AccentBrush}" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- Zwei getrennte ControlTemplates statt eines gemeinsamen: Track.IsDirectionReversed
+         gibt es nur an Track selbst, nicht als TemplateBinding von ScrollBar abrufbar - beim
+         Scrollen nach unten (vertikal) muss der Thumb sich entgegen der Werterichtung bewegen
+         (True), horizontal nicht (False), das lässt sich nicht in einem Template per Binding
+         ausdrücken. -->
+    <ControlTemplate x:Key="ModernScrollBarVerticalTemplate" TargetType="ScrollBar">
+        <Grid Background="{TemplateBinding Background}">
+            <Track x:Name="PART_Track" IsDirectionReversed="True">
+                <Track.DecreaseRepeatButton>
+                    <RepeatButton Command="ScrollBar.PageUpCommand" Background="Transparent" BorderThickness="0" />
+                </Track.DecreaseRepeatButton>
+                <Track.IncreaseRepeatButton>
+                    <RepeatButton Command="ScrollBar.PageDownCommand" Background="Transparent" BorderThickness="0" />
+                </Track.IncreaseRepeatButton>
+                <Track.Thumb>
+                    <Thumb Style="{StaticResource ModernScrollBarThumbStyle}" />
+                </Track.Thumb>
+            </Track>
+        </Grid>
+    </ControlTemplate>
+
+    <ControlTemplate x:Key="ModernScrollBarHorizontalTemplate" TargetType="ScrollBar">
+        <Grid Background="{TemplateBinding Background}">
+            <Track x:Name="PART_Track" IsDirectionReversed="False">
+                <Track.DecreaseRepeatButton>
+                    <RepeatButton Command="ScrollBar.PageLeftCommand" Background="Transparent" BorderThickness="0" />
+                </Track.DecreaseRepeatButton>
+                <Track.IncreaseRepeatButton>
+                    <RepeatButton Command="ScrollBar.PageRightCommand" Background="Transparent" BorderThickness="0" />
+                </Track.IncreaseRepeatButton>
+                <Track.Thumb>
+                    <Thumb Style="{StaticResource ModernScrollBarThumbStyle}" />
+                </Track.Thumb>
+            </Track>
+        </Grid>
+    </ControlTemplate>
+
+    <Style TargetType="ScrollBar">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="Width" Value="10" />
+        <Setter Property="Template" Value="{StaticResource ModernScrollBarVerticalTemplate}" />
+        <Style.Triggers>
+            <Trigger Property="Orientation" Value="Horizontal">
+                <Setter Property="Width" Value="Auto" />
+                <Setter Property="Height" Value="10" />
+                <Setter Property="Template" Value="{StaticResource ModernScrollBarHorizontalTemplate}" />
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+
     <Style TargetType="TabControl">
         <Setter Property="Background" Value="Transparent" />
         <Setter Property="BorderThickness" Value="0" />
