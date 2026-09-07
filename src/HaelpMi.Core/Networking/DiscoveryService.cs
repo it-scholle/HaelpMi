@@ -273,39 +273,65 @@ public sealed class DiscoveryService : IAsyncDisposable
         }
 
         _audit?.Invoke($"discovery {message.Kind} deviceId={message.DeviceId}");
-        DeviceUpdated?.Invoke(this, updated);
+        RaiseObserver(() => DeviceUpdated?.Invoke(this, updated), nameof(DeviceUpdated));
 
         if (message.ProgramVersion != ownIdentity.ProgramVersion)
         {
-            PeerVersionObserved?.Invoke(this, new PeerVersionInfo
+            RaiseObserver(() => PeerVersionObserved?.Invoke(this, new PeerVersionInfo
             {
                 DeviceId = message.DeviceId,
                 ProgramVersion = message.ProgramVersion,
                 ConfigVersion = message.ConfigVersion,
-            });
+            }), nameof(PeerVersionObserved));
         }
 
         if (message.LicenseKeyText is { Length: > 0 })
         {
-            PeerLicenseObserved?.Invoke(this, new PeerLicenseInfo
+            RaiseObserver(() => PeerLicenseObserved?.Invoke(this, new PeerLicenseInfo
             {
                 DeviceId = message.DeviceId,
                 LicenseKeyText = message.LicenseKeyText,
-            });
+            }), nameof(PeerLicenseObserved));
         }
 
         if (message.ConfigVersion > ownIdentity.ConfigVersion)
         {
-            PeerConfigVersionObserved?.Invoke(this, new PeerConfigVersionInfo
+            RaiseObserver(() => PeerConfigVersionObserved?.Invoke(this, new PeerConfigVersionInfo
             {
                 DeviceId = message.DeviceId,
                 ConfigVersion = message.ConfigVersion,
-            });
+            }), nameof(PeerConfigVersionObserved));
         }
 
+        // Muss auf jeden Fall laufen, unabhängig davon, ob einer der obigen Beobachter
+        // (insbesondere PeerLicenseObserved - Datei-I/O + Signaturprüfung im Abonnenten,
+        // siehe HaelpMi.Agent) fehlgeschlagen ist - siehe RaiseObserver-Begründung.
         if (message.Kind == MessageKind.Announce)
         {
             await ReplyDirectlyAsync(result.RemoteEndPoint, message.DeviceId, ct);
+        }
+    }
+
+    /// <summary>
+    /// Bugfix (Fehlerbericht 07.09.2026, "Config kommt nach Lizenz-Freischaltung nicht mehr
+    /// an"): ein Abonnent von <see cref="PeerLicenseObserved"/> (HaelpMi.Agent, Datei-I/O +
+    /// Signaturprüfung) kann fehlschlagen - eine ungefangene Exception dort hätte bisher die
+    /// GESAMTE restliche Verarbeitung DIESES Boot-Calls abgebrochen, inklusive
+    /// <see cref="PeerConfigVersionObserved"/> und der Antwort in <see cref="ReplyDirectlyAsync"/>
+    /// (beide standen im Code danach). Jedes Beobachter-Event bekommt jetzt seinen eigenen
+    /// Fehlerkreis - ein kaputter Abonnent verliert nur sein eigenes Signal, nie die Signale
+    /// der anderen oder die Boot-Call-Antwort selbst (gleiche NFR-1-Haltung wie beim äußeren
+    /// Fang in ReceiveLoopAsync, nur granularer statt den ganzen Datagramm-Durchlauf zu opfern).
+    /// </summary>
+    private void RaiseObserver(Action raise, string observerName)
+    {
+        try
+        {
+            raise();
+        }
+        catch (Exception ex)
+        {
+            _audit?.Invoke($"discovery observer '{observerName}' fehlgeschlagen: {ex.Message}");
         }
     }
 

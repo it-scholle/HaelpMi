@@ -391,6 +391,49 @@ public class NetworkingTests
         Assert.Equal(licenseKeyText, observed.LicenseKeyText);
     }
 
+    // Regressionsschutz (Fehlerbericht 07.09.2026, "Config kommt nach Lizenz-Freischaltung
+    // nicht mehr an"): PeerLicenseObserved stand im Code VOR PeerConfigVersionObserved und
+    // der Boot-Call-Antwort - ein werfender Abonnent (HaelpMi.Agent's Lizenz-Übernahme,
+    // Datei-I/O + Signaturprüfung) hätte beides für JEDEN Boot-Call verhindert, der eine
+    // Lizenz mitbringt, sobald irgendein Gerät im Kreis eine geladen hat.
+    [Fact]
+    public async Task DiscoveryService_ThrowingPeerLicenseObserver_StillRaisesConfigVersionObserved_AndStillReplies()
+    {
+        using var scope = new TestAppDataScope();
+        var discoveryPort = GetFreeUdpPort();
+        var customerGroupId = Guid.NewGuid();
+        var ownIdentity = MakeIdentity(customerGroupId, Guid.NewGuid());
+        var licenseKeyText = MakeSignedLicenseKeyText(customerGroupId);
+
+        var configVersionObservedSignal = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        await using var discovery = new DiscoveryService(() => ownIdentity, discoveryPort: discoveryPort);
+        discovery.PeerLicenseObserved += (_, _) => throw new InvalidOperationException("simulierter Abonnenten-Fehler (z. B. Datei gerade gesperrt)");
+        discovery.PeerConfigVersionObserved += (_, _) => configVersionObservedSignal.TrySetResult();
+        discovery.StartListening();
+
+        using var peerSocket = new UdpClient(0) { EnableBroadcast = true };
+        peerSocket.Client.ReceiveTimeout = 5000;
+        var peerDeviceId = Guid.NewGuid();
+        var announce = new BootCallMessage(
+            MessageKind.Announce, customerGroupId, peerDeviceId, "PC-ADMIN", "Admin", "Leitstelle", "0",
+            Role.Admin, false, 51999, "9.9.9", 5 /* neuer als unsere 0 */, DateTimeOffset.UtcNow, LicenseKeyText: licenseKeyText);
+        var announceBytes = JsonSerializer.SerializeToUtf8Bytes(announce, WireOptions);
+        await peerSocket.SendAsync(announceBytes, announceBytes.Length, new IPEndPoint(IPAddress.Loopback, discoveryPort));
+
+        // PeerConfigVersionObserved (steht im Code NACH PeerLicenseObserved) muss trotz des
+        // werfenden Lizenz-Abonnenten feuern ...
+        await configVersionObservedSignal.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+        // ... und der Announcer muss trotzdem eine direkte Antwort bekommen (sonst lernt er
+        // nie von uns, obwohl wir online sind).
+        var replyResult = await peerSocket.ReceiveAsync().WaitAsync(TimeSpan.FromSeconds(5));
+        var reply = JsonSerializer.Deserialize<BootCallMessage>(replyResult.Buffer, WireOptions);
+        Assert.NotNull(reply);
+        Assert.Equal(MessageKind.Reply, reply!.Kind);
+        Assert.Equal(ownIdentity.DeviceId, reply.DeviceId);
+    }
+
     [Fact]
     public async Task ConfigSyncService_PullsAndAppliesNewerConfig_WhenPeerConfigVersionObserved()
     {
