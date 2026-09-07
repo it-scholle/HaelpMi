@@ -21,6 +21,14 @@ public static class LicenseWarningTextFormatter
             _ => string.Empty,
         };
 
+        if (LicenseEditLockEvaluator.IsEditingLocked(warning.Level))
+        {
+            // Issue #77: die laufende Konfiguration bleibt aktiv, nur die Bearbeitung hier im
+            // Dashboard ist gesperrt - ohne diesen Hinweis wirkt das ausgegraute Dashboard wie
+            // ein Fehler statt einer bewussten Sperre.
+            message += " Bearbeitung ist bis dahin gesperrt, die laufende Konfiguration bleibt unverändert aktiv.";
+        }
+
         return warning.Level == LicenseWarningLevel.None
             ? message
             : $"{message}{Environment.NewLine}Kontakt: {ProviderContact.DisplayText}";
