@@ -165,8 +165,19 @@ public partial class App : System.Windows.Application
         }
 
         StartBackgroundServices();
-        ShowLicenseReminderToastIfNeeded(isPostInstallStart: IsPostInstallStart(e.Args));
-        RefreshLicenseLimitState();
+        var isPostInstallStart = IsPostInstallStart(e.Args);
+        ShowLicenseReminderToastIfNeeded(isPostInstallStart);
+        // Issue #68-Nacharbeit: eine frische Installation hat noch keine Lizenzdatei
+        // (LicenseStatus.Missing -> effektives Nutzerlimit 0, siehe
+        // LicenseLimitGuard.EffectiveUserLimit) - ohne diesen Filter poppte der
+        // Lizenzlimit-Toast unten ebenfalls schon beim Installer-Start auf, obwohl noch gar
+        // keine Lizenz eingespielt sein kann. Spätere echte Auslöser (Boot-Call/DeviceUpdated,
+        // PeerLicenseObserved, Lizenz-Import) rufen RefreshLicenseLimitState() unabhängig
+        // davon ganz normal weiter auf.
+        if (!isPostInstallStart)
+        {
+            RefreshLicenseLimitState();
+        }
     }
 
     // Issue #20-Nacharbeit (Nutzerfrage 02.09.2026, "das Popup beim Systemstart - ist das
@@ -301,8 +312,8 @@ public partial class App : System.Windows.Application
         args.Contains("--register-autostart", StringComparer.Ordinal);
 
     // Issue #68: gesetzt nur auf dem Agent-Start, den der Installer selbst direkt nach der
-    // Installation auslöst (siehe HaelpMiCommon.iss.inc [Run]) - siehe
-    // ShowLicenseReminderToastIfNeeded-Kommentar dort für den Grund.
+    // Installation auslöst (siehe HaelpMiCommon.iss.inc [Run]) - unterdrückt auf diesem einen
+    // Start sowohl den Lizenz-Erinnerungs- als auch den Lizenzlimit-Toast, siehe OnStartup.
     private static bool IsPostInstallStart(string[] args) =>
         args.Contains("--post-install", StringComparer.Ordinal);
 
