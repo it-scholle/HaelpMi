@@ -16,6 +16,14 @@ namespace HaelpMi.Core.Networking.Protocol;
 /// für <see cref="HaelpMi.Core.Licensing.LicenseLimitEvaluator"/> zur Verfügung steht. Optional/nullable
 /// wie <see cref="BootCallMessage.KnownDevices"/> selbst, aus demselben
 /// Kompatibilitätsgrund (ältere Programmversion mitten in einem Rollout).
+///
+/// <see cref="Override"/>/<see cref="OverrideSetAtUtc"/> (Issue #61): verbreitet eine im
+/// Geräte-Tab getroffene Admin-Entscheidung ("deaktivieren/aktivieren") an Geräte, die den
+/// Antragenden selbst nie direkt kontaktiert haben - derselbe Gossip-Mechanismus wie
+/// <see cref="FirstSeenUtc"/>, mit "neuester Zeitstempel gewinnt" als Konfliktregel (siehe
+/// DeviceStore.Upsert). Ohne eigene Admin-Signaturprüfung auf diesem Versionsstand
+/// (CLAUDE.md) auf demselben Vertrauensniveau wie <see cref="Role"/> selbst - eine
+/// unauthentifizierte, aber plausible Selbst-/Fremdauskunft, kein härteres Sicherheitsziel.
 /// </summary>
 public sealed record KnownDeviceSummary(
     Guid DeviceId,
@@ -26,4 +34,6 @@ public sealed record KnownDeviceSummary(
     Role Role,
     string IpAddress,
     int TcpPort,
-    DateTimeOffset? FirstSeenUtc = null);
+    DateTimeOffset? FirstSeenUtc = null,
+    LicenseOverride Override = LicenseOverride.None,
+    DateTimeOffset? OverrideSetAtUtc = null);

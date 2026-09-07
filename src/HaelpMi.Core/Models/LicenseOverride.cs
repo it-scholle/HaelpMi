@@ -1,13 +1,10 @@
 namespace HaelpMi.Core.Models;
 
 /// <summary>
-/// Vorbereiteter Erweiterungspunkt für Issue #61 (manuelles Deaktivieren/Freigeben eines
-/// Geräts im Admin-Dashboard, Meilenstein release-2.0) - siehe
-/// <see cref="DeviceEntry.LicenseOverride"/> und <see cref="Licensing.LicenseLimitEvaluator"/>.
-/// Heute noch ohne jede UI, Netzwerk-Propagierung oder Signaturprüfung angebunden (bleibt
-/// #61 vorbehalten, braucht die noch fehlende Admin-Rollen-Signatur-Infrastruktur) - nur der
-/// Rechenkern kennt diesen Wert bereits, damit #61 später nicht mehr die bereits gemergte
-/// Kernlogik aus Issue #59/#60 anfassen muss.
+/// Manuelles Deaktivieren/Freigeben eines Geräts im Geräte-Tab des Admin-Dashboards
+/// (Issue #61) - siehe <see cref="DeviceEntry.LicenseOverride"/> und
+/// <see cref="Licensing.LicenseLimitEvaluator"/> für die Auswertung, <see cref="DeviceEntry.LicenseOverrideSetAtUtc"/>
+/// für die Gossip-Verbreitung an andere Geräte.
 /// </summary>
 public enum LicenseOverride
 {

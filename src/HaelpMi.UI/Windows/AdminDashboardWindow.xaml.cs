@@ -1,6 +1,7 @@
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
 using HaelpMi.Core.Licensing;
@@ -56,6 +57,11 @@ public partial class AdminDashboardWindow : Window
     /// <summary>Eine Zeile im Lizenzlimit-Banner (Issue #60) - siehe RefreshLicenseLimitBanner.</summary>
     private sealed record LicenseLimitDeviceRow(Guid DeviceId, string DisplayName);
 
+    /// <summary>Eine Zeile im Geräte-Tab (Issue #61) - siehe RefreshDevicesTab.</summary>
+    private sealed record DeviceRow(
+        Guid DeviceId, string ComputerName, string RoomDisplay, string User, string Note,
+        bool IsNew, bool IsAdmin, bool IsActive, bool IsLicenseExceeded, bool CanToggle, bool CanDelete, string ToggleTooltip);
+
     private readonly AdminDashboardContext _context;
     private SharedConfig _config = null!;
     private List<DeviceChoice> _deviceChoices = new();
@@ -110,6 +116,7 @@ public partial class AdminDashboardWindow : Window
         ReloadAll();
         RefreshLicenseBanner();
         RefreshLicenseLimitBanner();
+        RefreshDevicesTab();
 
         _deviceFileWatcher.Changed += (_, _) => RefreshDeviceDerivedViews();
         Closed += (_, _) =>
@@ -132,6 +139,7 @@ public partial class AdminDashboardWindow : Window
             .ToList();
 
         RefreshLicenseLimitBanner();
+        RefreshDevicesTab();
         RebuildGroupDevicesPanel();
 
         if (_selectedGroup is not null)
@@ -381,6 +389,97 @@ public partial class AdminDashboardWindow : Window
         {
             _context.AcknowledgeLicenseLimitWarning(deviceId);
             RefreshLicenseLimitBanner();
+        }
+    }
+
+    // --------------------------------------------------------------------- Geräte-Tab (#61) ---
+
+    private void RefreshDevicesTab()
+    {
+        var ownDevice = _context.LoadOwnDevice();
+        var devices = _context.LoadDevices().Append(ownDevice).ToList();
+        var disabledDeviceIds = _context.GetDisabledDeviceIds();
+
+        var rows = devices
+            .Select(d =>
+            {
+                var isOwnDevice = d.DeviceId == ownDevice.DeviceId;
+                var isActive = !disabledDeviceIds.Contains(d.DeviceId);
+                var canToggle = !isOwnDevice && d.Role != Role.Admin;
+                var toggleTooltip = isOwnDevice
+                    ? "Dieses Gerät kann nicht deaktiviert werden."
+                    : d.Role == Role.Admin
+                        ? "Admin-Geräte zählen immer als aktiv."
+                        : isActive
+                            ? "Aktiv - anklicken zum Deaktivieren."
+                            : "Deaktiviert - anklicken zum Aktivieren.";
+
+                return new DeviceRow(
+                    d.DeviceId, d.ComputerName,
+                    string.IsNullOrWhiteSpace(d.RoomName) ? "kein Raum" : $"{d.RoomName} ({d.RoomNumber})",
+                    d.User, d.Note, d.IsNew, d.Role == Role.Admin, isActive,
+                    IsLicenseExceeded: !isActive && d.LicenseOverride == LicenseOverride.None,
+                    CanToggle: canToggle, CanDelete: !isOwnDevice, ToggleTooltip: toggleTooltip);
+            })
+            .OrderByDescending(r => r.IsNew)
+            .ThenBy(r => r.ComputerName, StringComparer.CurrentCultureIgnoreCase)
+            .ToList();
+
+        DevicesList.ItemsSource = rows;
+
+        var activeCount = rows.Count(r => r.IsActive);
+        var seatLimit = _context.GetLicenseSeatLimit();
+        LicenseSeatCountText.Text = seatLimit is { } limit ? $"{activeCount}/{limit} lizenziert" : $"{activeCount}/∞ lizenziert";
+    }
+
+    private void DeviceActiveToggle_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not ToggleButton { Tag: Guid deviceId } toggle)
+        {
+            return;
+        }
+
+        // IsChecked spiegelt bereits den neuen (vom Nutzer gewünschten) Zustand wider, bevor
+        // Click feuert (Standardverhalten von ToggleButton) - RefreshDevicesTab() unten baut
+        // die Liste ohnehin komplett aus dem tatsächlich gespeicherten Stand neu auf.
+        var newOverride = toggle.IsChecked == true ? LicenseOverride.ForceEnabled : LicenseOverride.ForceDisabled;
+        _context.SetDeviceLicenseOverride(deviceId, newOverride);
+        RefreshDevicesTab();
+    }
+
+    private void DeleteDeviceButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button { Tag: Guid deviceId })
+        {
+            _context.DeleteDevice(deviceId);
+            RefreshDevicesTab();
+        }
+    }
+
+    private void DeviceNoteBox_LostFocus(object sender, RoutedEventArgs e)
+    {
+        if (sender is TextBox { Tag: Guid deviceId } textBox)
+        {
+            _context.SetDeviceNote(deviceId, textBox.Text);
+        }
+    }
+
+    private async void DevicesSearchAgainButton_Click(object sender, RoutedEventArgs e)
+    {
+        DevicesSearchAgainButton.IsEnabled = false;
+        try
+        {
+            await _context.RequestSearchAgain();
+            await Task.Delay(500); // kurze Gnadenfrist, bis Antworten eintreffen (wie ConfigWindow.SearchAgainButton_Click)
+            RefreshDevicesTab();
+        }
+        catch (Exception ex)
+        {
+            ActionErrorHandler.Show(this, "Erneut suchen", ex);
+        }
+        finally
+        {
+            DevicesSearchAgainButton.IsEnabled = true;
         }
     }
 

@@ -422,4 +422,54 @@
         </Setter>
     </Style>
 
+    <!-- Issue #61 (Geräte-Tab): moderner Ein/Aus-Schalter statt nativer CheckBox - Track-
+         Background steht bewusst als literale Farbe statt StaticResource, weil eine über
+         StaticResource aufgelöste Brush für die ColorAnimation eingefroren wäre (Farben
+         entsprechen AccentBrush/HairlineBrush). -->
+    <Style x:Key="ToggleSwitchStyle" TargetType="ToggleButton">
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ToggleButton">
+                    <Border x:Name="Track" Width="40" Height="22" CornerRadius="11" Background="#D2D2D7">
+                        <Border x:Name="Thumb" Width="18" Height="18" CornerRadius="9" Background="White"
+                                HorizontalAlignment="Left" Margin="2,0,0,0">
+                            <Border.RenderTransform>
+                                <TranslateTransform x:Name="ThumbTransform" X="0" />
+                            </Border.RenderTransform>
+                            <Border.Effect>
+                                <DropShadowEffect Color="Black" Opacity="0.25" BlurRadius="3" ShadowDepth="1" />
+                            </Border.Effect>
+                        </Border>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsChecked" Value="True">
+                            <Trigger.EnterActions>
+                                <BeginStoryboard>
+                                    <Storyboard>
+                                        <ColorAnimation Storyboard.TargetName="Track" Storyboard.TargetProperty="(Border.Background).(SolidColorBrush.Color)"
+                                                        To="#0071E3" Duration="0:0:0.12" />
+                                        <DoubleAnimation Storyboard.TargetName="ThumbTransform" Storyboard.TargetProperty="X" To="18" Duration="0:0:0.12" />
+                                    </Storyboard>
+                                </BeginStoryboard>
+                            </Trigger.EnterActions>
+                            <Trigger.ExitActions>
+                                <BeginStoryboard>
+                                    <Storyboard>
+                                        <ColorAnimation Storyboard.TargetName="Track" Storyboard.TargetProperty="(Border.Background).(SolidColorBrush.Color)"
+                                                        To="#D2D2D7" Duration="0:0:0.12" />
+                                        <DoubleAnimation Storyboard.TargetName="ThumbTransform" Storyboard.TargetProperty="X" To="0" Duration="0:0:0.12" />
+                                    </Storyboard>
+                                </BeginStoryboard>
+                            </Trigger.ExitActions>
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter TargetName="Track" Property="Opacity" Value="0.5" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
 </ResourceDictionary>

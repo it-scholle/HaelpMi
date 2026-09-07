@@ -1,4 +1,3 @@
-using System.Collections.ObjectModel;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -15,14 +14,14 @@ namespace HaelpMi.UI.Windows;
 /// The local settings window (FR-16/FR-18), reworked for Teil 2, Abschnitt 2: Raum,
 /// Computername, Kreis und Rolle sind jetzt reine Admin-Dashboard-Daten und werden hier
 /// nur noch angezeigt, nicht mehr editiert - siehe <see cref="OwnSettings"/>. Der einzige
-/// verbliebene lokal editierbare Wert ist der eingehende Signalton; "Individuell"
-/// (bekannte Geräte, FR-18) bleibt unverändert.
+/// verbliebene lokal editierbare Wert ist der eingehende Signalton; die frühere
+/// "Individuell"-Geräteliste (FR-18) ist mit Issue #61 in den Geräte-Tab des
+/// Admin-Dashboards umgezogen (dort mit echter Verwaltungsmöglichkeit statt reiner Anzeige).
 /// </summary>
 public partial class ConfigWindow : Window
 {
     private readonly ConfigWindowContext _context;
     private OwnSettings _settings = null!;
-    private ObservableCollection<DeviceEntry> _devices = new();
     private bool _isLoadingGeneral;
 
     private sealed record MyAlarmChoice(string Name, string HotkeyText, string RecipientsText);
@@ -47,11 +46,10 @@ public partial class ConfigWindow : Window
         }
 
         LoadGeneralFromDisk();
-        ReloadDevicesFromDisk();
         RebuildMyAlarms();
 
-        Activated += (_, _) => { ReloadDevicesFromDisk(); RebuildMyAlarms(); };
-        _deviceFileWatcher.Changed += (_, _) => { ReloadDevicesFromDisk(); RebuildMyAlarms(); };
+        Activated += (_, _) => RebuildMyAlarms();
+        _deviceFileWatcher.Changed += (_, _) => RebuildMyAlarms();
         _configFileWatcher.Changed += (_, _) => RebuildMyAlarms();
         Closed += (_, _) =>
         {
@@ -235,62 +233,6 @@ public partial class ConfigWindow : Window
         }
     }
 
-    private void ReloadDevicesFromDisk()
-    {
-        // Commit any in-progress Notiz edit first, so a manual/activation-triggered
-        // refresh never silently discards a keystroke the user just made.
-        DevicesGrid.CommitEdit(DataGridEditingUnit.Row, true);
-
-        var devices = _context.LoadDevices();
-        var ordered = DeviceStore.OrderForDisplay(devices).ToList();
-        _devices = new ObservableCollection<DeviceEntry>(ordered);
-        DevicesGrid.ItemsSource = _devices;
-    }
-
-    private void PersistDevicesAndReload()
-    {
-        try
-        {
-            _context.SaveDevices(_devices.ToList());
-            ReloadDevicesFromDisk();
-        }
-        catch (Exception ex)
-        {
-            ActionErrorHandler.Show(this, "Geräteliste speichern", ex);
-        }
-    }
-
-    // Nutzerwunsch 05.08.2026: "Benachrichtigen"-Checkbox entfernt (siehe XAML-Kommentar) -
-    // die quittierte "NEU" bisher nebenbei mit (FR-25: "consciously set or left"). Ersatz:
-    // eine Zeile anzuklicken zählt jetzt als "gesehen". Dispatcher.BeginInvoke statt einem
-    // direkten PersistDevicesAndReload()-Aufruf, aus demselben Grund wie beim Notiz-Feld
-    // unten - ein sofortiges ItemsSource-Neuzuweisen mitten aus der DataGrid-eigenen
-    // SelectionChanged-Verarbeitung heraus ist derselbe WPF-Reentrancy-Risikofall.
-    private void DevicesGrid_SelectionChanged(object sender, SelectionChangedEventArgs e)
-    {
-        if (DevicesGrid.SelectedItem is DeviceEntry { IsNew: true } entry)
-        {
-            entry.IsNew = false;
-            Dispatcher.BeginInvoke(new Action(PersistDevicesAndReload));
-        }
-    }
-
-    private void DevicesGrid_CellEditEnding(object sender, DataGridCellEditEndingEventArgs e)
-    {
-        if (e.EditAction != DataGridEditAction.Commit)
-        {
-            return;
-        }
-
-        if (e.Row.Item is not DeviceEntry entry || e.EditingElement is not TextBox textBox)
-        {
-            return;
-        }
-
-        entry.Note = textBox.Text;
-        Dispatcher.BeginInvoke(new Action(PersistDevicesAndReload));
-    }
-
     private async void SearchAgainButton_Click(object sender, RoutedEventArgs e)
     {
         SearchAgainButton.IsEnabled = false;
@@ -298,7 +240,7 @@ public partial class ConfigWindow : Window
         {
             await _context.RequestSearchAgain();
             await Task.Delay(500); // brief grace period for replies to arrive before reloading (FR-20)
-            ReloadDevicesFromDisk();
+            RebuildMyAlarms();
         }
         catch (Exception ex)
         {

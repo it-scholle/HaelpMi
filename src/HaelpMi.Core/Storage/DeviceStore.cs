@@ -8,6 +8,12 @@ namespace HaelpMi.Core.Storage;
 /// Zeitpunkt (siehe <see cref="DeviceEntry.FirstSeenUtc"/>) - null bei einem Absender ohne
 /// dieses Feld (ältere Programmversion mitten in einem Rollout), dann fällt Upsert auf den
 /// lokalen Empfangszeitpunkt zurück.
+///
+/// <paramref name="Override"/>/<paramref name="OverrideSetAtUtc"/> (Issue #61): eine
+/// Fremdmeinung über <see cref="DeviceEntry.LicenseOverride"/, nur aus Gossip-Drittwissen
+/// (<see cref="Protocol.KnownDeviceSummary"/>) befüllt - ein Gerät berichtet nie über sich
+/// selbst, deshalb bleibt dieses Feld beim direkten Selbstbericht des betroffenen Geräts
+/// null ("nicht anfassen"). Siehe <see cref="Upsert"/> für die Merge-Regel.
 /// </summary>
 public sealed record DeviceUpsertInfo(
     string ComputerName,
@@ -18,7 +24,9 @@ public sealed record DeviceUpsertInfo(
     bool IsRemoteSession,
     string IpAddress,
     int TcpPort,
-    DateTimeOffset? FirstSeenUtc);
+    DateTimeOffset? FirstSeenUtc,
+    LicenseOverride? Override = null,
+    DateTimeOffset? OverrideSetAtUtc = null);
 
 /// <summary>Loads/saves the locally known list of other devices (FR-18, 5.4).</summary>
 public sealed class DeviceStore
@@ -53,6 +61,8 @@ public sealed class DeviceStore
                 LastSeenUtc = seenAtUtc,
                 FirstSeenUtc = info.FirstSeenUtc ?? seenAtUtc,
                 IsNew = true,
+                LicenseOverride = info.Override ?? LicenseOverride.None,
+                LicenseOverrideSetAtUtc = info.Override is not null ? info.OverrideSetAtUtc : null,
             });
         }
         else
@@ -76,11 +86,47 @@ public sealed class DeviceStore
             {
                 existing.FirstSeenUtc = reportedFirstSeen;
             }
-            // Favorite/Notified/Note/IsNew/LicenseLimitWarningAcknowledged/LicenseOverride sind lokale Entscheidungen und bleiben unangetastet.
+
+            // LicenseOverride (Issue #61): "neuester Zeitstempel gewinnt" - übernimmt eine
+            // per Gossip gemeldete Fremdmeinung (info.Override != null, siehe DeviceUpsertInfo)
+            // nur, wenn sie neuer ist als die lokal bekannte Entscheidung, nie umgekehrt.
+            // Ein Selbstbericht (info.Override == null) lässt den lokalen Stand unangetastet.
+            if (info.Override is { } reportedOverride
+                && (existing.LicenseOverrideSetAtUtc is null || info.OverrideSetAtUtc > existing.LicenseOverrideSetAtUtc))
+            {
+                existing.LicenseOverride = reportedOverride;
+                existing.LicenseOverrideSetAtUtc = info.OverrideSetAtUtc;
+            }
+            // Favorite/Notified/Note/IsNew/LicenseLimitWarningAcknowledged sind lokale Entscheidungen und bleiben unangetastet.
         }
 
         return devices;
     }
+
+    /// <summary>
+    /// Lokale Admin-Entscheidung im Geräte-Tab (Issue #61) - setzt Override + Zeitstempel
+    /// unbedingt (ein bewusster Klick des hiesigen Admins gewinnt immer lokal); die
+    /// Verbreitung an Peers läuft danach über den normalen Gossip-Pfad
+    /// (<see cref="Protocol.KnownDeviceSummary"/>, siehe DiscoveryService).
+    /// </summary>
+    public static void SetLicenseOverride(List<DeviceEntry> devices, Guid deviceId, LicenseOverride value, DateTimeOffset setAtUtc)
+    {
+        var entry = devices.FirstOrDefault(d => d.DeviceId == deviceId);
+        if (entry is not null)
+        {
+            entry.LicenseOverride = value;
+            entry.LicenseOverrideSetAtUtc = setAtUtc;
+        }
+    }
+
+    /// <summary>
+    /// "Löschen" im Geräte-Tab (Issue #61) - rein lokal, keine Tombstone-Verbreitung: ein
+    /// noch existierendes/wieder online kommendes Gerät wird beim nächsten eigenen Boot-Call
+    /// oder Gossip eines dritten Geräts ganz normal neu aufgenommen. Gedacht für tatsächlich
+    /// deinstallierte Geräte, die ohnehin nicht mehr melden.
+    /// </summary>
+    public static void Remove(List<DeviceEntry> devices, Guid deviceId) =>
+        devices.RemoveAll(d => d.DeviceId == deviceId);
 
     /// <summary>
     /// Clears the "Neu" highlight once the Notified checkbox has been consciously set or

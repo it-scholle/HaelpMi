@@ -332,7 +332,6 @@ public partial class App : System.Windows.Application
             LoadSettings = settingsStore.Load,
             SaveSettings = settingsStore.Save,
             LoadDevices = deviceStore.Load,
-            SaveDevices = deviceStore.Save,
             // Bugfix 08.08.2026 (Fehlerbericht "ich komme gar nicht in die Auswahl" -
             // "Meine Alarme" blieb leer, obwohl im Dashboard ein passendes Profil samt
             // Sender-/Empfänger-Zuordnung für genau dieses Gerät existierte): LoadDevices
@@ -466,11 +465,39 @@ public partial class App : System.Windows.Application
             ImportLicenseKeyText = keyText => LicenseImporter.ImportFromKeyText(keyText, deployment.CustomerGroupId, Convert.FromHexString(deployment.LicensePublicKeyHex)),
             NotifyLicenseRenewed = () => _ = ipcClient.SendAsync(IpcCommandType.LicenseRenewed, TimeSpan.FromSeconds(10)),
             GetDisabledDeviceIds = licenseLimitGuard.GetDisabledDeviceIds,
+            GetLicenseSeatLimit = licenseLimitGuard.GetEffectiveUserLimit,
             AcknowledgeLicenseLimitWarning = deviceId =>
             {
                 var devices = deviceStore.Load();
                 DeviceStore.AcknowledgeLicenseLimitWarning(devices, deviceId);
                 deviceStore.Save(devices);
+            },
+            // Issue #61: lokal setzen und sofort weiter ausstrahlen (SearchAgain löst
+            // ohnehin schon einen vollen Discovery-Announce inkl. KnownDevices-Gossip aus,
+            // siehe DiscoveryService.AnnounceAsync/HandleSearchAgainRequestAsync).
+            SetDeviceLicenseOverride = (deviceId, value) =>
+            {
+                var devices = deviceStore.Load();
+                DeviceStore.SetLicenseOverride(devices, deviceId, value, DateTimeOffset.UtcNow);
+                deviceStore.Save(devices);
+                _ = ipcClient.SendAsync(IpcCommandType.SearchAgain, TimeSpan.FromSeconds(10));
+            },
+            DeleteDevice = deviceId =>
+            {
+                var devices = deviceStore.Load();
+                DeviceStore.Remove(devices, deviceId);
+                deviceStore.Save(devices);
+            },
+            RequestSearchAgain = async () => (await ipcClient.SendAsync(IpcCommandType.SearchAgain, TimeSpan.FromSeconds(10))).Success,
+            SetDeviceNote = (deviceId, note) =>
+            {
+                var devices = deviceStore.Load();
+                var entry = devices.FirstOrDefault(d => d.DeviceId == deviceId);
+                if (entry is not null)
+                {
+                    entry.Note = note;
+                    deviceStore.Save(devices);
+                }
             },
         };
 
