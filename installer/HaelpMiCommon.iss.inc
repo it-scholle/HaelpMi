@@ -13,7 +13,7 @@
 #define MyAppName "HälpMi"
 ; Alpha: 0.x until release, per city/product decision - Version 1.0.0 is reserved for
 ; the actual release. Bump the third number for ordinary fixes, second for a feature.
-#define MyAppVersion "0.34.2"
+#define MyAppVersion "0.35.0"
 #define MyAppPublisher "HälpMi contributors"
 #define MyAgentExeName "HaelpMi.Agent.exe"
 #define MyConfigExeName "HaelpMi.Config.exe"
@@ -105,7 +105,12 @@ Source: "UserInstallerPayload\HaelpMi-User-Setup.exe"; DestDir: "{app}"; Flags: 
 ; Admin-Installer: derselbe Prozess, aber mit --open-dashboard direkt ins Dashboard, daher
 ; auch anders benannt, damit der Unterschied schon am Startmenü-Eintrag sichtbar ist.
 #ifdef HaelpMiAdminInstall
-Name: "{group}\HälpMi Dashboard"; Filename: "{app}\{#MyConfigExeName}"; Parameters: "--open-dashboard"
+; Issue #10: bewusst {userprograms} statt {group} (das unter PrivilegesRequired=admin im
+; gemeinsamen Startmenü liegt) - dieser Eintrag darf nur beim installierenden Windows-
+; Nutzer sichtbar sein. Die eigentliche Zugriffssperre ist die Laufzeit-Prüfung in
+; HaelpMi.Config (DashboardAccessGuard, siehe --open-dashboard-Behandlung in
+; HaelpMi.Config/App.xaml.cs) - dieser Eintrag ist nur die dazu passende Sichtbarkeit.
+Name: "{userprograms}\{#MyAppName}\HälpMi Dashboard"; Filename: "{app}\{#MyConfigExeName}"; Parameters: "--open-dashboard"
 #else
 Name: "{group}\HälpMi Konfiguration"; Filename: "{app}\{#MyConfigExeName}"
 #endif
@@ -465,6 +470,26 @@ begin
   SaveJsonUtf8(ExpandConstant('{app}\deployment.json'), Json);
 end;
 
+// Issue #10: das Admin-Dashboard darf nur beim installierenden Windows-Nutzer sichtbar/
+// startbar sein - anders als deployment.json (WriteDeploymentJson, compile-time-konstant)
+// erst zur Installationszeit bekannt, welcher Windows-Nutzer das ist. Write-once wie
+// settings.json (siehe Aufrufstelle in CurStepChanged) - sonst könnte ein einfaches
+// "Reparieren" durch einen anderen Windows-Nutzer die Dashboard-Berechtigung stillschweigend
+// umziehen. {username} liefert laut Inno-Setup-Doku den Namen des gerade angemeldeten,
+// diesen Installer ausführenden Nutzers - identisches Format zu Environment.UserName, mit
+// dem HaelpMi.Core.Runtime.DashboardAccessGuard es zur Laufzeit vergleicht.
+procedure WriteInstalledByJson();
+var
+  Json: String;
+begin
+  Json :=
+    '{' + #13#10 +
+    '  "InstallingUserName": "' + JsonEscape(ExpandConstant('{username}')) + '"' + #13#10 +
+    '}';
+
+  SaveJsonUtf8(ExpandConstant('{app}\installed-by.json'), Json);
+end;
+
 procedure InitializeWizard();
 begin
   RoomPage := CreateInputQueryPage(wpSelectDir,
@@ -552,6 +577,11 @@ begin
   begin
     if not FileExists(ExpandConstant('{commonappdata}\HaelpMi\settings.json')) then
       WriteSettingsJson();
+
+    // Issue #10: write-once wie settings.json oben (siehe Kommentar bei
+    // WriteInstalledByJson) - nicht bei jedem Lauf neu, anders als deployment.json unten.
+    if not FileExists(ExpandConstant('{app}\installed-by.json')) then
+      WriteInstalledByJson();
 
     // Compile-time-konstant für diesen Installer-Build - anders als settings.json bei
     // JEDEM Lauf neu geschrieben (siehe Kommentar bei WriteDeploymentJson).

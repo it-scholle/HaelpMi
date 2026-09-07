@@ -172,12 +172,13 @@ public partial class App : System.Windows.Application
     // Issue #20-Nacharbeit (Nutzerfrage 02.09.2026, "das Popup beim Systemstart - ist das
     // schon implementiert?"): war es nicht - #20 deckte bisher nur den Dashboard-Banner ab
     // (nur sichtbar, wenn der Admin das Dashboard ohnehin öffnet), nicht die von Anfang an
-    // im Ticket beschriebene proaktive Erinnerung. Nur für Admin-Geräte (das Popup verweist
-    // aufs Dashboard, das es für User-Rollen gar nicht gibt) und nur, wenn "Später
-    // erinnern" nicht noch aktiv ist.
+    // im Ticket beschriebene proaktive Erinnerung. Nur wenn der Agent-Prozess dieser
+    // Windows-Sitzung das Dashboard überhaupt öffnen dürfte (Issue #10 - das Popup verweist
+    // aufs Dashboard, sonst irreführend für einen anderen Nutzer nach Fast User Switching)
+    // und nur, wenn "Später erinnern" nicht noch aktiv ist.
     private void ShowLicenseReminderToastIfNeeded()
     {
-        if (_deployment.Role != Role.Admin || LicenseReminderStateStore.IsSnoozed(DateTime.UtcNow))
+        if (!DashboardAccessGuard.CurrentUserMayOpenDashboard(_deployment.Role) || LicenseReminderStateStore.IsSnoozed(DateTime.UtcNow))
         {
             return;
         }
@@ -506,12 +507,14 @@ public partial class App : System.Windows.Application
         // Nutzerwunsch 06.08.2026: "HälpMi öffnen" beschrieb nicht, was dahinter passiert -
         // für den User-Fall (eigene Hotkeys/Empfängerkreise) ist "konfigurieren" treffender.
         menu.Items.Add("HälpMi konfigurieren", null, (_, _) => OpenConfigOrDashboard());
-        if (_deployment.Role == Role.Admin)
+        if (DashboardAccessGuard.CurrentUserMayOpenDashboard(_deployment.Role))
         {
             // Nutzerwunsch 06.08.2026: Admin soll das Dashboard direkt aus dem Tray
             // erreichen, ohne erst über die normale Konfiguration den dortigen Dashboard-
             // Button suchen zu müssen - identischer Aufruf wie der Start-Menü-Eintrag
-            // "HälpMi Dashboard" (siehe installer/HaelpMiCommon.iss.inc).
+            // "HälpMi Dashboard" (siehe installer/HaelpMiCommon.iss.inc). Issue #10: nur
+            // beim installierenden Windows-Nutzer - der Agent läuft laut Issue #9 zwar für
+            // jede angemeldete Sitzung, dieser Menüpunkt darf dort trotzdem nicht auftauchen.
             menu.Items.Add("Dashboard öffnen", null, (_, _) => OpenDashboardDirectly());
         }
         // Issue #6: allen Rollen zugänglich, deshalb außerhalb des Admin-Ifs oben - anders
