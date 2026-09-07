@@ -314,6 +314,7 @@ public partial class AdminDashboardWindow : Window
         }
 
         var warning = LicenseWarningEvaluator.Evaluate(checkResult, DateTime.UtcNow);
+        ApplyLicenseEditLock(warning);
 
         if (warning.Level == LicenseWarningLevel.None)
         {
@@ -326,6 +327,21 @@ public partial class AdminDashboardWindow : Window
             : (Brush)FindResource("DangerBrush");
         LicenseWarningText.Text = LicenseWarningTextFormatter.Format(warning);
         LicenseWarningBanner.Visibility = Visibility.Visible;
+    }
+
+    /// <summary>
+    /// Issue #77: ohne gültige Lizenz bleibt die laufende Konfiguration unverändert aktiv
+    /// (CLAUDE.md "Soft-Expiry, kein Hard-Lock" gilt für den Betrieb) - die Bearbeitung hier
+    /// im Dashboard wird aber komplett gesperrt. MainTabControl deaktivieren genügt: dasselbe
+    /// IsEnabled-Kaskadenprinzip wie beim exklusiven Edit-Lock (GroupDetailPanel/
+    /// ProfileFieldsPanel/SenderRecipientPanel oben) - ein enthaltenes Panel, das gerade selbst
+    /// IsEnabled=true gesetzt hat, bleibt trotzdem effektiv deaktiviert, solange ein Vorfahre
+    /// deaktiviert ist. Das Lizenz-Banner selbst (Grid.Row 0) hängt nicht unter MainTabControl
+    /// und bleibt dadurch immer bedienbar - sonst gäbe es keinen Ausweg aus der Sperre.
+    /// </summary>
+    private void ApplyLicenseEditLock(LicenseWarning warning)
+    {
+        MainTabControl.IsEnabled = !LicenseEditLockEvaluator.IsEditingLocked(warning.Level);
     }
 
     // Issue #51 (Lizenz-Import im Admin-Dashboard), verdrahtet direkt im #20-Banner: baut

@@ -88,4 +88,24 @@ public class LicenseReminderTests
     {
         Assert.Equal(string.Empty, LicenseWarningTextFormatter.Format(new LicenseWarning(LicenseWarningLevel.None, 200)));
     }
+
+    // Issue #77 (Admin-Dashboard-Bearbeitung ohne gültige Lizenz sperren).
+    [Theory]
+    [InlineData(LicenseWarningLevel.Missing, null)]
+    [InlineData(LicenseWarningLevel.Invalid, null)]
+    [InlineData(LicenseWarningLevel.Expired, -5)]
+    public void Format_LockedLevels_MentionEditingLock(LicenseWarningLevel level, int? daysRemaining)
+    {
+        var text = LicenseWarningTextFormatter.Format(new LicenseWarning(level, daysRemaining));
+
+        Assert.Contains("Bearbeitung ist bis dahin gesperrt", text);
+    }
+
+    [Fact]
+    public void Format_ExpiringSoon_DoesNotMentionEditingLock()
+    {
+        var text = LicenseWarningTextFormatter.Format(new LicenseWarning(LicenseWarningLevel.ExpiringSoon, 12));
+
+        Assert.DoesNotContain("Bearbeitung ist bis dahin gesperrt", text);
+    }
 }
