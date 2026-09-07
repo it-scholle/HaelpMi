@@ -6,9 +6,10 @@ namespace HaelpMi.Core.Tests;
 
 /// <summary>
 /// Issue #59/#60-Nachtrag (Nutzerbericht 07.09.2026): ein Testaufbau mit einer Custom-2-
-/// Lizenz plus 3 weiteren Clients blieb komplett unblockiert, weil (a) ein Gerät ohne jede
-/// erkennbare Lizenz bisher als "unbegrenzt" statt als "0 Plätze" behandelt wurde und (b)
-/// unklar war, ob das Dashboard selbst je zum Kontingent zählen sollte. Deckt beide Fixe ab.
+/// Lizenz plus 3 weiteren Clients blieb komplett unblockiert, weil ein Gerät ohne jede
+/// erkennbare Lizenz bisher als "unbegrenzt" statt als "0 Plätze" behandelt wurde. Deckt das
+/// ab, plus die Nutzerkorrektur vom selben Tag: der Admin-Sitz zählt zum Kontingent (belegt
+/// einen Platz), wird aber nie selbst deaktiviert.
 /// </summary>
 public class LicenseLimitGuardTests
 {
@@ -99,16 +100,16 @@ public class LicenseLimitGuardTests
     }
 
     [Fact]
-    public void IsOwnDeviceDisabled_True_ForNewestUserDevice_WhenCustomTwoDeviceLimitIsExceeded()
+    public void IsOwnDeviceDisabled_True_ForNewestUserDevices_WhenCustomTwoDeviceLimitIsExceeded_AdminIncluded()
     {
         // Nachstellung des gemeldeten Testaufbaus: Custom-Lizenz mit 2 Nutzern, Dashboard
-        // (Admin) zählt nicht mit, 3 User-Geräte kämpfen um 2 Plätze - die beiden ältesten
-        // bleiben aktiv, das jüngste wird deaktiviert.
+        // (Admin) belegt einen der zwei Plätze - nur das älteste User-Gerät bleibt aktiv,
+        // nicht zwei (Nutzerkorrektur 07.09.2026: "Admin + 2 User" war zu viel).
         var now = DateTimeOffset.UtcNow;
         var oldestId = Guid.NewGuid();
         var middleId = Guid.NewGuid();
         var newestId = Guid.NewGuid();
-        var admin = new DeviceEntry { DeviceId = Guid.NewGuid(), Role = Role.Admin, FirstSeenUtc = now.AddDays(-10) }; // Dashboard, zählt nicht mit
+        var admin = new DeviceEntry { DeviceId = Guid.NewGuid(), Role = Role.Admin, FirstSeenUtc = now.AddDays(-10) };
         var oldest = new DeviceEntry { DeviceId = oldestId, Role = Role.User, FirstSeenUtc = now.AddDays(-3) };
         var middle = new DeviceEntry { DeviceId = middleId, Role = Role.User, FirstSeenUtc = now.AddDays(-2) };
         var newest = new DeviceEntry { DeviceId = newestId, Role = Role.User, FirstSeenUtc = now.AddDays(-1) };
@@ -122,7 +123,29 @@ public class LicenseLimitGuardTests
         var newestGuard = new LicenseLimitGuard(() => MakeIdentity(newestId, Role.User, now.AddDays(-1)), License, () => new List<DeviceEntry> { admin, oldest, middle });
 
         Assert.False(oldestGuard.IsOwnDeviceDisabled());
-        Assert.False(middleGuard.IsOwnDeviceDisabled());
+        Assert.True(middleGuard.IsOwnDeviceDisabled());
         Assert.True(newestGuard.IsOwnDeviceDisabled());
+    }
+
+    [Fact]
+    public void IsOwnDeviceDisabled_AdminCountsAsOneOfTheContingentSlots()
+    {
+        // Wörtlicher Nutzerbericht 07.09.2026: "bei meinem 2er Kontingent hatte ich eben
+        // 1 Admin + 2 User, bevor die Lizenzgrenze gegriffen hat" - das war falsch, richtig
+        // ist "Admin + 1 User" als Maximum bei Custom-2.
+        var now = DateTimeOffset.UtcNow;
+        var admin = new DeviceEntry { DeviceId = Guid.NewGuid(), Role = Role.Admin, FirstSeenUtc = now.AddDays(-10) };
+        var firstUserId = Guid.NewGuid();
+        var secondUserId = Guid.NewGuid();
+        var firstUser = new DeviceEntry { DeviceId = firstUserId, Role = Role.User, FirstSeenUtc = now.AddDays(-2) };
+        var secondUser = new DeviceEntry { DeviceId = secondUserId, Role = Role.User, FirstSeenUtc = now.AddDays(-1) };
+
+        LicenseCheckResult License() => ValidLicense(2);
+
+        var firstUserGuard = new LicenseLimitGuard(() => MakeIdentity(firstUserId, Role.User, now.AddDays(-2)), License, () => new List<DeviceEntry> { admin, secondUser });
+        var secondUserGuard = new LicenseLimitGuard(() => MakeIdentity(secondUserId, Role.User, now.AddDays(-1)), License, () => new List<DeviceEntry> { admin, firstUser });
+
+        Assert.False(firstUserGuard.IsOwnDeviceDisabled()); // Admin + 1. User = beide Plätze belegt, passt
+        Assert.True(secondUserGuard.IsOwnDeviceDisabled()); // dritter Beteiligter (Admin zählt mit) - überzählig
     }
 }

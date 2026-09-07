@@ -9,13 +9,14 @@ namespace HaelpMi.Core.Licensing;
 /// AlarmFlowCoordinator) als auch im Admin-Dashboard (Banner "nicht lizenziertes Gerät").
 ///
 /// Zwei Regeln, die anders als der Rest dieser Klasse NICHT aus der reinen
-/// FirstSeenUtc-Rangfolge folgen, sondern hier bewusst vorgeschaltet sind (Nutzerkorrektur
-/// 07.09.2026 nach einem Testaufbau mit 3 unlizenzierten Clients, die trotz Custom-2-Lizenz
-/// alle funktionierten):
-/// - <see cref="Role.Admin"/>-Geräte (Dashboard) zählen nie zum Kontingent und werden nie
-///   deaktiviert - eine Lizenz kann sonst nie repariert werden, wenn ausgerechnet das
-///   Dashboard selbst gesperrt wäre. "Nutzer"-Kontingent (z. B. "Custom: 2 Nutzer") meint
-///   also ausschließlich User-Rolle-Geräte, nie den Admin-Sitz.
+/// FirstSeenUtc-Rangfolge folgen, sondern hier bewusst vorgeschaltet sind:
+/// - <see cref="Role.Admin"/>-Geräte (Dashboard) werden nie deaktiviert - eine Lizenz kann
+///   sonst nie repariert werden, wenn ausgerechnet das Dashboard selbst gesperrt wäre. Sie
+///   ZÄHLEN aber weiterhin zum Kontingent (Nutzerkorrektur 07.09.2026, nach einem
+///   Testaufbau: "Admin + 2 User" passte bei einer Custom-2-Lizenz, sollte aber "Admin + 1
+///   User" als Maximum sein) - technisch derselbe Mechanismus wie
+///   <see cref="LicenseOverride.ForceEnabled"/> (siehe <see cref="LicenseLimitEvaluator"/>):
+///   immer aktiv, belegt aber trotzdem einen Platz.
 /// - Fehlt eine gültig signierte Lizenz ganz (<see cref="LicenseStatus.Missing"/>/
 ///   <see cref="LicenseStatus.Invalid"/>), gilt das Kontingent als 0 statt als unbegrenzt:
 ///   ein Gerät ohne jede erkennbare Lizenz darf nie "versehentlich frei laufen", nur weil
@@ -43,11 +44,6 @@ public sealed class LicenseLimitGuard
     public bool IsOwnDeviceDisabled()
     {
         var identity = _identityProvider();
-        if (identity.Role == Role.Admin)
-        {
-            return false;
-        }
-
         return !LicenseLimitEvaluator.IsWithinLimit(identity.DeviceId, BuildKnownDevices(identity), EffectiveUserLimit());
     }
 
@@ -63,19 +59,20 @@ public sealed class LicenseLimitGuard
         return result.Status is LicenseStatus.Missing or LicenseStatus.Invalid ? 0 : result.License?.UserLimit;
     }
 
-    /// <summary>Nur User-Rolle-Geräte zählen zum Kontingent - Admin-Geräte werden erst gar nicht in den Kandidatenpool aufgenommen (siehe Klassenkommentar).</summary>
+    /// <summary>Admin-Rolle-Geräte gehen als ForceEnabled in den Pool ein (siehe Klassenkommentar) - zählen mit, werden aber nie deaktiviert.</summary>
     private List<LicenseLimitEvaluator.DeviceSeen> BuildKnownDevices(LiveIdentity identity)
     {
         var devices = _devicesProvider();
-        var known = new List<LicenseLimitEvaluator.DeviceSeen>(devices.Count + 1);
-        if (identity.Role != Role.Admin)
+        var known = new List<LicenseLimitEvaluator.DeviceSeen>(devices.Count + 1)
         {
-            known.Add(new(identity.DeviceId, identity.FirstSeenUtc));
-        }
+            new(identity.DeviceId, identity.FirstSeenUtc, EffectiveOverride(identity.Role, LicenseOverride.None)),
+        };
 
-        known.AddRange(devices
-            .Where(d => d.Role != Role.Admin)
-            .Select(d => new LicenseLimitEvaluator.DeviceSeen(d.DeviceId, d.FirstSeenUtc, d.LicenseOverride)));
+        known.AddRange(devices.Select(d =>
+            new LicenseLimitEvaluator.DeviceSeen(d.DeviceId, d.FirstSeenUtc, EffectiveOverride(d.Role, d.LicenseOverride))));
         return known;
     }
+
+    private static LicenseOverride EffectiveOverride(Role role, LicenseOverride storedOverride) =>
+        role == Role.Admin ? LicenseOverride.ForceEnabled : storedOverride;
 }
