@@ -342,6 +342,14 @@ public partial class AdminDashboardWindow : Window
         if (dialog.ShowDialog() == true)
         {
             RefreshLicenseBanner();
+
+            // Nutzerwunsch 07.09.2026: bisher fehlte dieser Aufruf hier komplett - eine
+            // frisch importierte, jetzt ausreichende Lizenz ließ das Lizenzlimit-Banner
+            // unverändert bis zur nächsten Geräteliste-Änderung stehen, obwohl
+            // GetDisabledDeviceIds() (rein aus der eigenen Lizenz + bekannten Peers
+            // berechnet) sofort ein anderes Ergebnis geliefert hätte.
+            RefreshLicenseLimitBanner();
+
             // Nutzerbericht 03.09.2026: ein noch offenes Systemstart-Erinnerungs-Popup
             // (anderer Prozess, siehe HaelpMi.Agent) blieb bisher veraltet stehen.
             _context.NotifyLicenseRenewed();

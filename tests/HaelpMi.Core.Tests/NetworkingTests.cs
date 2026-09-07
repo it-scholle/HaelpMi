@@ -1,10 +1,15 @@
 using System.Net;
 using System.Net.Sockets;
 using System.Text.Json;
+using HaelpMi.Core.Licensing;
 using HaelpMi.Core.Models;
 using HaelpMi.Core.Networking;
 using HaelpMi.Core.Networking.Protocol;
 using HaelpMi.Core.Storage;
+using Org.BouncyCastle.Crypto.Generators;
+using Org.BouncyCastle.Crypto.Parameters;
+using Org.BouncyCastle.Crypto.Signers;
+using Org.BouncyCastle.Security;
 using Xunit;
 
 namespace HaelpMi.Core.Tests;
@@ -13,6 +18,26 @@ namespace HaelpMi.Core.Tests;
 public class NetworkingTests
 {
     private static readonly JsonSerializerOptions WireOptions = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
+
+    // Für DiscoveryService_PeerWithLicense_RaisesPeerLicenseObserved unten - gleiches
+    // Signier-Muster wie LicenseWarningAndImportTests.GenerateTestKeyPair/SignLicense,
+    // hier dupliziert statt geteilt (keine gemeinsame private Test-Infrastruktur zwischen
+    // Testklassen in diesem Repo).
+    private static string MakeSignedLicenseKeyText(Guid customerGroupId)
+    {
+        var generator = new Ed25519KeyPairGenerator();
+        generator.Init(new Ed25519KeyGenerationParameters(new SecureRandom()));
+        var keyPair = generator.GenerateKeyPair();
+        var privateKey = (Ed25519PrivateKeyParameters)keyPair.Private;
+
+        var unsigned = new License(customerGroupId, LicenseTier.Custom, 2, DateTime.UtcNow.AddDays(-1), DateTime.UtcNow.AddYears(1), SignatureBase64: string.Empty);
+        var payload = unsigned.GetSigningPayload();
+        var signer = new Ed25519Signer();
+        signer.Init(true, privateKey);
+        signer.BlockUpdate(payload, 0, payload.Length);
+        var signed = unsigned with { SignatureBase64 = Convert.ToBase64String(signer.GenerateSignature()) };
+        return LicenseKeyText.Encode(signed);
+    }
 
     private static LiveIdentity MakeIdentity(Guid customerGroupId, Guid deviceId, string computerName = "PC", string user = "User", string room = "Raum", string roomNumber = "1") =>
         new(customerGroupId, deviceId, computerName, user, room, roomNumber, Role.User, false, "9.9.9", 0, DateTimeOffset.UtcNow);
@@ -329,6 +354,41 @@ public class NetworkingTests
         Assert.NotNull(observed);
         Assert.Equal(peerDeviceId, observed!.DeviceId);
         Assert.Equal(5, observed.ConfigVersion);
+    }
+
+    [Fact]
+    public async Task DiscoveryService_PeerWithLicense_RaisesPeerLicenseObserved()
+    {
+        // Issue #59/#60-Nachtrag "Lizenz sofort verteilen" (Nutzerbericht 07.09.2026).
+        using var scope = new TestAppDataScope();
+        var discoveryPort = GetFreeUdpPort();
+        var customerGroupId = Guid.NewGuid();
+        var ownIdentity = MakeIdentity(customerGroupId, Guid.NewGuid());
+        var licenseKeyText = MakeSignedLicenseKeyText(customerGroupId);
+
+        PeerLicenseInfo? observed = null;
+        var observedSignal = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        await using var discovery = new DiscoveryService(() => ownIdentity, discoveryPort: discoveryPort);
+        discovery.PeerLicenseObserved += (_, info) =>
+        {
+            observed = info;
+            observedSignal.TrySetResult();
+        };
+        discovery.StartListening();
+
+        using var peerSocket = new UdpClient(0) { EnableBroadcast = true };
+        var peerDeviceId = Guid.NewGuid();
+        var announce = new BootCallMessage(
+            MessageKind.Announce, customerGroupId, peerDeviceId, "PC-ADMIN", "Admin", "Leitstelle", "0",
+            Role.Admin, false, 51999, "9.9.9", 0, DateTimeOffset.UtcNow, LicenseKeyText: licenseKeyText);
+        var announceBytes = JsonSerializer.SerializeToUtf8Bytes(announce, WireOptions);
+        await peerSocket.SendAsync(announceBytes, announceBytes.Length, new IPEndPoint(IPAddress.Loopback, discoveryPort));
+
+        await observedSignal.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.NotNull(observed);
+        Assert.Equal(peerDeviceId, observed!.DeviceId);
+        Assert.Equal(licenseKeyText, observed.LicenseKeyText);
     }
 
     [Fact]

@@ -230,4 +230,95 @@ public class LicenseWarningAndImportTests
         var diagnosis = LicenseImporter.ImportFromKeyText(keyText, customerGroupId, destinationPath, malformedPublicKey);
         Assert.Equal(LicenseImportOutcome.NotRecognized, diagnosis.Outcome);
     }
+
+    // --------------------------------------------------- LicenseImporter.TryAdoptFromPeer ---
+    // Issue #59/#60-Nachtrag "Lizenz sofort verteilen" (Nutzerbericht 07.09.2026).
+
+    [Fact]
+    public void TryAdoptFromPeer_Adopts_WhenNoLicenseHeldYet()
+    {
+        var (privateKey, publicKeyBytes) = GenerateTestKeyPair();
+        var customerGroupId = Guid.NewGuid();
+        var signed = SignLicense(MakeUnsigned(customerGroupId, DateTime.UtcNow.AddYears(1)), privateKey);
+        var keyText = LicenseKeyText.Encode(signed);
+        var destinationPath = Path.Combine(Path.GetTempPath(), $"lizenz-peer-dst-{Guid.NewGuid():N}.json");
+
+        var adopted = LicenseImporter.TryAdoptFromPeer(keyText, customerGroupId, destinationPath, publicKeyBytes, currentLicense: null);
+
+        Assert.True(adopted);
+        Assert.True(File.Exists(destinationPath));
+    }
+
+    [Fact]
+    public void TryAdoptFromPeer_Adopts_ExpiredLicense_UnlikeManualImportFromKeyText()
+    {
+        // Anders als ImportFromKeyText (Nutzervorgabe: manueller Import lehnt einen frisch
+        // eingefügten, schon toten Schlüssel ab) - Soft-Expiry gilt für die automatische
+        // P2P-Übernahme wie beim Datei-Import, siehe Klassenkommentar an TryAdoptFromPeer.
+        var (privateKey, publicKeyBytes) = GenerateTestKeyPair();
+        var customerGroupId = Guid.NewGuid();
+        var signed = SignLicense(MakeUnsigned(customerGroupId, DateTime.UtcNow.AddDays(-1)), privateKey);
+        var keyText = LicenseKeyText.Encode(signed);
+        var destinationPath = Path.Combine(Path.GetTempPath(), $"lizenz-peer-dst-{Guid.NewGuid():N}.json");
+
+        var adopted = LicenseImporter.TryAdoptFromPeer(keyText, customerGroupId, destinationPath, publicKeyBytes, currentLicense: null);
+
+        Assert.True(adopted);
+    }
+
+    [Fact]
+    public void TryAdoptFromPeer_Adopts_WhenPeerLicenseIsNewerThanOwnCurrentOne()
+    {
+        var (privateKey, publicKeyBytes) = GenerateTestKeyPair();
+        var customerGroupId = Guid.NewGuid();
+        var older = SignLicense(MakeUnsigned(customerGroupId, DateTime.UtcNow.AddYears(1)) with { IssuedAtUtc = DateTime.UtcNow.AddDays(-10) }, privateKey);
+        var newer = SignLicense(MakeUnsigned(customerGroupId, DateTime.UtcNow.AddYears(1)) with { IssuedAtUtc = DateTime.UtcNow }, privateKey);
+        var destinationPath = Path.Combine(Path.GetTempPath(), $"lizenz-peer-dst-{Guid.NewGuid():N}.json");
+
+        var adopted = LicenseImporter.TryAdoptFromPeer(LicenseKeyText.Encode(newer), customerGroupId, destinationPath, publicKeyBytes, currentLicense: older);
+
+        Assert.True(adopted);
+    }
+
+    [Fact]
+    public void TryAdoptFromPeer_Rejects_WhenPeerLicenseIsNotNewerThanOwnCurrentOne()
+    {
+        // Schützt vor Downgrade-Flapping durch eine ältere, aus dem Cache eines langsameren
+        // Peers stammende Kopie (siehe Klassenkommentar).
+        var (privateKey, publicKeyBytes) = GenerateTestKeyPair();
+        var customerGroupId = Guid.NewGuid();
+        var current = SignLicense(MakeUnsigned(customerGroupId, DateTime.UtcNow.AddYears(1)) with { IssuedAtUtc = DateTime.UtcNow }, privateKey);
+        var older = SignLicense(MakeUnsigned(customerGroupId, DateTime.UtcNow.AddYears(1)) with { IssuedAtUtc = DateTime.UtcNow.AddDays(-10) }, privateKey);
+        var destinationPath = Path.Combine(Path.GetTempPath(), $"lizenz-peer-dst-{Guid.NewGuid():N}.json");
+
+        var adopted = LicenseImporter.TryAdoptFromPeer(LicenseKeyText.Encode(older), customerGroupId, destinationPath, publicKeyBytes, currentLicense: current);
+
+        Assert.False(adopted);
+        Assert.False(File.Exists(destinationPath));
+    }
+
+    [Fact]
+    public void TryAdoptFromPeer_Rejects_ForWrongCustomerGroup()
+    {
+        var (privateKey, publicKeyBytes) = GenerateTestKeyPair();
+        var signed = SignLicense(MakeUnsigned(Guid.NewGuid(), DateTime.UtcNow.AddYears(1)), privateKey);
+        var destinationPath = Path.Combine(Path.GetTempPath(), $"lizenz-peer-dst-{Guid.NewGuid():N}.json");
+
+        var adopted = LicenseImporter.TryAdoptFromPeer(LicenseKeyText.Encode(signed), Guid.NewGuid(), destinationPath, publicKeyBytes, currentLicense: null);
+
+        Assert.False(adopted);
+        Assert.False(File.Exists(destinationPath));
+    }
+
+    [Fact]
+    public void TryAdoptFromPeer_Rejects_ForTamperedOrGarbageText()
+    {
+        var (_, publicKeyBytes) = GenerateTestKeyPair();
+        var destinationPath = Path.Combine(Path.GetTempPath(), $"lizenz-peer-dst-{Guid.NewGuid():N}.json");
+
+        var adopted = LicenseImporter.TryAdoptFromPeer("kein Lizenzschlüssel", Guid.NewGuid(), destinationPath, publicKeyBytes, currentLicense: null);
+
+        Assert.False(adopted);
+        Assert.False(File.Exists(destinationPath));
+    }
 }

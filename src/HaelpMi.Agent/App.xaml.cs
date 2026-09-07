@@ -206,7 +206,39 @@ public partial class App : System.Windows.Application
         // Lizenz" (Issue #59) braucht den frischen Stand sofort, nicht erst danach.
         _license = LicenseReader.Load(_deployment.CustomerGroupId, Convert.FromHexString(_deployment.LicensePublicKeyHex));
         RefreshLicenseLimitState();
+
+        // Nutzerwunsch 07.09.2026 ("Update soll sofort an alle Geräte verteilt werden"): der
+        // nächste Announce führt die frisch importierte Lizenz jetzt schon mit (siehe
+        // BuildIdentity-Verdrahtung von DiscoveryService unten) - nicht erst beim nächsten
+        // natürlichen Boot-Call warten, sondern sofort selbst einen anstoßen.
+        _ = _discovery?.AnnounceAsync();
         return Task.FromResult(new IpcResponse(true));
+    }
+
+    /// <summary>
+    /// Issue #59/#60-Nachtrag "Lizenz sofort verteilen": ein Peer hat in seinem Boot-Call
+    /// eine Lizenz mitgeteilt - eigenständig nachprüfen (Signatur + Kundengruppe, siehe
+    /// LicenseImporter.TryAdoptFromPeer) und nur bei echtem Zugewinn (keine eigene Lizenz
+    /// oder die mitgeteilte ist neuer) übernehmen. Betrifft typischerweise ein Gerät, das
+    /// bisher als lizenzlos/lizenzüberschritten galt und jetzt durch die frisch importierte
+    /// Lizenz des Admins wieder ins Kontingent passt.
+    /// </summary>
+    private void OnPeerLicenseObserved(object? sender, PeerLicenseInfo info)
+    {
+        var adopted = LicenseImporter.TryAdoptFromPeer(
+            info.LicenseKeyText, _deployment.CustomerGroupId, Convert.FromHexString(_deployment.LicensePublicKeyHex), _license.License);
+        if (!adopted)
+        {
+            return;
+        }
+
+        _license = LicenseReader.Load(_deployment.CustomerGroupId, Convert.FromHexString(_deployment.LicensePublicKeyHex));
+        RefreshLicenseLimitState();
+        _auditLog.Append($"Lizenz von Peer deviceId={info.DeviceId} übernommen (IssuedAtUtc={_license.License?.IssuedAtUtc:O})");
+
+        // Weiterverbreiten (Gossip-Welle, wie Config-Sync): Peers, die diesen direkten
+        // Kontakt verpasst haben, lernen die Lizenz beim nächsten Announce von UNS.
+        _ = _discovery?.AnnounceAsync();
     }
 
     /// <summary>
@@ -370,7 +402,8 @@ public partial class App : System.Windows.Application
 
         _coordinator = new AlarmFlowCoordinator(BuildIdentity, () => _settings, _sharedConfigStore.LoadOrCreate, () => _license, _feedbackChannel);
 
-        _discovery = new DiscoveryService(BuildIdentity, _auditLog.Append);
+        _discovery = new DiscoveryService(BuildIdentity, _auditLog.Append, ownLicenseKeyTextProvider: () =>
+            _license.License is null ? null : LicenseKeyText.Encode(_license.License));
         _discovery.StartListening();
         _ = _discovery.AnnounceAsync();
 
@@ -378,6 +411,9 @@ public partial class App : System.Windows.Application
         // verschieben (mehr bekannte Geräte, evtl. auch ein neuer Peer mit früherem
         // FirstSeenUtc über Gossip) - Zustand nach jedem Boot-Call-Update neu bewerten.
         _discovery.DeviceUpdated += (_, _) => RefreshLicenseLimitState();
+
+        // Issue #59/#60-Nachtrag "Lizenz sofort verteilen".
+        _discovery.PeerLicenseObserved += OnPeerLicenseObserved;
 
         // Issue #9 (Fast User Switching ohne Logout/Reboot): AlarmChannel entscheidet
         // selbst, ob diese Sitzung den echten TCP-Port hält (Primary) oder als Satellite

@@ -33,6 +33,12 @@ public enum MessageKind
 /// Grundlage für <see cref="HaelpMi.Core.Licensing.LicenseLimitEvaluator"/> - siehe
 /// <see cref="Models.DeviceEntry.FirstSeenUtc"/>. Ebenfalls optional/nullable, gleicher
 /// Kompatibilitätsgrund wie <see cref="KnownDevices"/>.
+///
+/// <see cref="LicenseKeyText"/> (Issue #59/#60-Nachtrag "Lizenz sofort verteilen"): die
+/// aktuell beim Absender geladene Lizenz, textkodiert (<see cref="HaelpMi.Core.Licensing.LicenseKeyText.Encode"/>) -
+/// null, wenn der Absender selbst keine (mehr) hat. Selbstsignierend, daher ohne
+/// zusätzliche Vertrauensinfrastruktur sicher gossip-fähig: jeder Empfänger prüft die
+/// Signatur selbst nach, bevor er sie übernimmt (siehe DiscoveryService.HandleDatagramAsync).
 /// </summary>
 public sealed record BootCallMessage(
     MessageKind Kind,
@@ -49,4 +55,5 @@ public sealed record BootCallMessage(
     int ConfigVersion,
     DateTimeOffset SentAtUtc,
     IReadOnlyList<KnownDeviceSummary>? KnownDevices = null,
-    DateTimeOffset? FirstSeenUtc = null);
+    DateTimeOffset? FirstSeenUtc = null,
+    string? LicenseKeyText = null);

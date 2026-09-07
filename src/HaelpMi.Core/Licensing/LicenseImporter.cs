@@ -59,6 +59,37 @@ public static class LicenseImporter
         return new LicenseImportDiagnosis(LicenseImportOutcome.Activated, license);
     }
 
+    /// <summary>
+    /// P2P-Übernahme einer per Boot-Call von einem Peer mitgeteilten Lizenz (Issue #59/#60-
+    /// Nachtrag "Lizenz sofort verteilen"): anders als <see cref="ImportFromKeyText"/>
+    /// (manueller Admin-Import) wird eine bereits abgelaufene Lizenz hier NICHT abgelehnt
+    /// (Soft-Expiry gilt auch hier, wie beim Datei-Import oben) - ein Peer, der zufällig als
+    /// Erster antwortet, könnte sonst eine eigentlich gültige, nur zufällig zuerst gesehene
+    /// abgelaufene Momentaufnahme systematisch blockieren. Übernimmt nur, wenn Signatur und
+    /// Kundengruppe passen UND die mitgeteilte Lizenz laut IssuedAtUtc echt neuer ist als die
+    /// eigene (oder noch gar keine eigene vorliegt) - vermeidet Downgrade-Flapping durch eine
+    /// ältere, aus dem Cache eines langsameren Peers stammende Kopie.
+    /// </summary>
+    public static bool TryAdoptFromPeer(string keyText, Guid ownCustomerGroupId, byte[] publicKeyBytes, License? currentLicense) =>
+        TryAdoptFromPeer(keyText, ownCustomerGroupId, AppPaths.LicenseFilePath, publicKeyBytes, currentLicense);
+
+    internal static bool TryAdoptFromPeer(string keyText, Guid ownCustomerGroupId, string destinationFilePath, byte[] publicKeyBytes, License? currentLicense)
+    {
+        var checkResult = LicenseReader.LoadFromKeyText(keyText, ownCustomerGroupId, publicKeyBytes);
+        if (checkResult.License is null)
+        {
+            return false; // nicht lesbar, Signatur ungültig, oder falsche Kundengruppe
+        }
+
+        if (currentLicense is not null && checkResult.License.IssuedAtUtc <= currentLicense.IssuedAtUtc)
+        {
+            return false; // eigene Lizenz ist schon mindestens genauso aktuell
+        }
+
+        JsonFileStore.Save(destinationFilePath, checkResult.License);
+        return true;
+    }
+
     private static LicenseImportResult Persist(LicenseCheckResult checkResult, string destinationFilePath)
     {
         if (checkResult.Status is LicenseStatus.Invalid or LicenseStatus.Missing)
