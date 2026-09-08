@@ -2,9 +2,10 @@ namespace HaelpMi.InstallCreator;
 
 /// <summary>
 /// **Regel (Nutzerentscheidung 01.09.2026): jede Zwischenablage-Kopie in diesem Projekt läuft
-/// über <see cref="TryCopy"/>, nie über einen direkten Clipboard-Aufruf.** Grund, ausführlich
-/// hier statt an jeder Aufrufstelle wiederholt (siehe ursprüngliche Fehlerbericht-Kette vom
-/// 06./11.08.2026 zum Passwort-Kopieren-Knopf für die volle Vorgeschichte):
+/// über <see cref="TryCopyAsync"/>, nie über einen direkten Clipboard-Aufruf.** Grund,
+/// ausführlich hier statt an jeder Aufrufstelle wiederholt (siehe ursprüngliche
+/// Fehlerbericht-Kette vom 06./11.08.2026 zum Passwort-Kopieren-Knopf für die volle
+/// Vorgeschichte):
 ///
 /// System.Windows.Clipboard (WPF-eigen) wirft auf einem STA-Thread ohne eigene
 /// Windows-Nachrichtenschleife zuverlässig eine Exception, obwohl der Schreibvorgang auf
@@ -15,47 +16,54 @@ namespace HaelpMi.InstallCreator;
 /// eigentliche Schreibvorgang längst angekommen ist - deshalb das Rücklese-Verify vor jedem
 /// "wirklich fehlgeschlagen".
 ///
-/// Nachtrag 08.09.2026 (Fehlerbericht "immer noch ~20s Programm-Hänger trotz Fix"): der obige
-/// retryTimes/retryDelay-Parameter deckt nur ein kurzes "busy, bitte nochmal versuchen" ab.
-/// Hält ein fremder Prozess (z. B. VM-Zwischenablage-Synchronisation) die Zwischenablage
-/// tatsächlich länger blockiert, kann der einzelne SetDataObject-Aufruf selbst - nicht nur die
-/// Pause zwischen zwei Versuchen - viele Sekunden lang im Win32/OLE-Aufruf hängen bleiben; kein
-/// retryTimes-Wert kann die Dauer eines einzelnen bereits blockierenden Aufrufs begrenzen. Der
-/// vorherige zweite Voll-Anlauf (weiterer SetDataObject-Aufruf + erneutes Rücklese-Verify)
-/// verdoppelte diese unbegrenzte Wartezeit nur, ohne sie zu begrenzen. Deshalb läuft der
-/// eigentliche Kopierversuch jetzt auf einem eigenen Hintergrund-Thread; das UI wartet über
-/// <see cref="Thread.Join(int)"/> höchstens <see cref="TotalTimeoutMs"/> darauf - danach gilt
-/// der Versuch als fehlgeschlagen und das UI ist wieder bedienbar, unabhängig davon, wie lange
-/// der Fremdprozess die Zwischenablage noch blockiert. Der Hintergrund-Thread selbst läuft als
-/// Daemon (<see cref="Thread.IsBackground"/>) unbeobachtet weiter oder stirbt mit dem Prozess -
-/// kein Leck, da Kopierversuche nicht gehäuft auftreten.
+/// Nachtrag 08.09.2026, erster Anlauf ("immer noch ~20s Programm-Hänger trotz Fix"): ein
+/// fremder Prozess (hier: UTM-Zwischenablage-Synchronisation zwischen macOS-Host und
+/// Windows-Gast) kann die Zwischenablage tatsächlich blockieren - dann hängt der einzelne
+/// SetDataObject-Aufruf selbst, nicht nur die Pause zwischen zwei Versuchen, im Win32/OLE-Call
+/// fest. Erster Versuch, das zu begrenzen: der Kopierversuch lief auf einem Hintergrund-Thread,
+/// das UI wartete aber weiterhin synchron (<see cref="Thread.Join(int)"/>) mit hartem
+/// Zeitlimit darauf.
+///
+/// Nachtrag 08.09.2026, zweiter Anlauf (Fehlerbericht "meldet jetzt HRESULT 0x00000000, kopiert
+/// aber gar nichts mehr"): die UTM-Blockade dauert regelmäßig länger als jedes UI-verträgliche
+/// Zeitlimit - ein hartes Limit bedeutet dann nur noch "gibt garantiert zu früh auf", nie
+/// "funktioniert". Der eigentliche Fehler war, überhaupt synchron auf den Hintergrund-Thread zu
+/// warten: <see cref="TryCopyAsync"/> gibt der aufrufenden UI die Kontrolle sofort zurück
+/// (kein <c>Join</c> mehr), das Ergebnis kommt per <see cref="Task"/>, wenn es vorliegt - das UI
+/// friert dadurch gar nicht mehr ein, unabhängig davon, wie lange der Fremdprozess tatsächlich
+/// braucht. <see cref="TotalTimeoutMs"/> ist dadurch keine UI-Wartegrenze mehr, sondern nur
+/// noch eine Absicherung gegen einen für immer blockierten Hintergrund-Thread (der sonst bis
+/// zum Prozessende offen bliebe) - kann daher grosszügig bemessen sein.
 /// </summary>
 internal static class ClipboardCopier
 {
-    private const int TotalTimeoutMs = 2500;
+    private const int TotalTimeoutMs = 15000;
     private const int SetDataRetryTimes = 10;
     private const int SetDataRetryDelayMs = 100;
     private const int VerifyAttempts = 5;
     private const int VerifyDelayMs = 100;
 
-    public static bool TryCopy(string text, out int lastErrorCode)
+    public static Task<(bool Success, int ErrorCode)> TryCopyAsync(string text)
     {
-        var outcome = new CopyOutcome();
-        var worker = new System.Threading.Thread(() => RunCopy(text, outcome)) { IsBackground = true };
+        var completion = new TaskCompletionSource<(bool Success, int ErrorCode)>();
+
+        var worker = new System.Threading.Thread(() =>
+        {
+            var outcome = new CopyOutcome();
+            RunCopy(text, outcome);
+            completion.TrySetResult((outcome.Success, outcome.ErrorCode));
+        })
+        { IsBackground = true };
         worker.SetApartmentState(System.Threading.ApartmentState.STA);
         worker.Start();
 
-        if (!worker.Join(TotalTimeoutMs))
-        {
-            // Fremdprozess blockiert die Zwischenablage länger als hinnehmbar - UI nicht länger
-            // aufhalten, siehe Klassenkommentar. Kein spezifischer HRESULT bekannt, da der
-            // Aufruf selbst nie zurückgekehrt ist.
-            lastErrorCode = 0;
-            return false;
-        }
+        // Falls der Thread nie zurückkehrt (siehe Klassenkommentar): den Task trotzdem
+        // irgendwann auflösen, statt ihn bis zum Prozessende offen zu lassen.
+        _ = Task.Delay(TotalTimeoutMs).ContinueWith(
+            _ => completion.TrySetResult((false, 0)),
+            TaskScheduler.Default);
 
-        lastErrorCode = outcome.ErrorCode;
-        return outcome.Success;
+        return completion.Task;
     }
 
     private static void RunCopy(string text, CopyOutcome outcome)

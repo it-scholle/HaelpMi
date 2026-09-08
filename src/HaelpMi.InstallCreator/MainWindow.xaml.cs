@@ -97,16 +97,22 @@ public partial class MainWindow : Window
         return builder.ToString();
     }
 
-    private void CopyPasswordButton_Click(object sender, RoutedEventArgs e)
+    private async void CopyPasswordButton_Click(object sender, RoutedEventArgs e)
     {
         if (string.IsNullOrEmpty(PasswordBox.Password))
         {
             return;
         }
 
-        // Siehe ClipboardCopier-Klassenkommentar für die Begründung von Retry+Verify+Timeout.
+        // Siehe ClipboardCopier-Klassenkommentar: TryCopyAsync blockiert das UI nicht mehr,
+        // Knopf während des Wartens deaktivieren, damit kein Doppelklick zwei Versuche
+        // gegeneinander laufen lässt.
         var password = PasswordBox.Password;
-        if (ClipboardCopier.TryCopy(password, out var errorCode))
+        CopyPasswordButton.IsEnabled = false;
+        var (success, errorCode) = await ClipboardCopier.TryCopyAsync(password);
+        CopyPasswordButton.IsEnabled = true;
+
+        if (success)
         {
             Log("Passwort in die Zwischenablage kopiert.");
             return;
@@ -860,39 +866,55 @@ public partial class MainWindow : Window
         LicenseHistoryListBox.SelectedIndex = 0;
     }
 
-    private void CopyLicenseKeyButton_Click(object sender, RoutedEventArgs e)
+    private async void CopyLicenseKeyButton_Click(object sender, RoutedEventArgs e)
     {
         if (!string.IsNullOrEmpty(LicenseKeyResultTextBox.Text))
         {
-            CopyLicenseKeyTextWithFeedback(LicenseKeyResultTextBox.Text);
+            await CopyLicenseKeyTextWithFeedback(LicenseKeyResultTextBox.Text, CopyLicenseKeyButton);
         }
     }
 
     // Nutzerwunsch 08.09.2026: ein Klick in das Ergebnisfeld selbst kopiert den ganzen
     // Schlüssel direkt mit, ohne den Knopf darunter treffen zu müssen - eigenes manuelles
-    // Markieren bleibt trotzdem möglich (Event wird nicht abgefangen).
-    private void LicenseKeyResultTextBox_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    // Markieren bleibt trotzdem möglich (Event wird nicht abgefangen). Kein Knopf zum
+    // Deaktivieren während des Wartens - das Textfeld selbst bleibt bewusst bedienbar.
+    private async void LicenseKeyResultTextBox_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
         if (!string.IsNullOrEmpty(LicenseKeyResultTextBox.Text))
         {
-            CopyLicenseKeyTextWithFeedback(LicenseKeyResultTextBox.Text);
+            await CopyLicenseKeyTextWithFeedback(LicenseKeyResultTextBox.Text);
         }
     }
 
     // Nutzerwunsch 01.09.2026: Kopieren-Knopf pro Historien-Zeile (siehe LicenseHistoryItem)
     // nutzt denselben Ablauf wie der Haupt-Kopieren-Knopf oben - ein bereits ausgestellter
     // Schlüssel lässt sich damit erneut kopieren/versenden, ohne ihn neu zu signieren.
-    private void HistoryCopyButton_Click(object sender, RoutedEventArgs e)
+    private async void HistoryCopyButton_Click(object sender, RoutedEventArgs e)
     {
         if (((System.Windows.FrameworkElement)sender).DataContext is LicenseHistoryItem item)
         {
-            CopyLicenseKeyTextWithFeedback(item.KeyText);
+            await CopyLicenseKeyTextWithFeedback(item.KeyText, sender as System.Windows.Controls.Primitives.ButtonBase);
         }
     }
 
-    private void CopyLicenseKeyTextWithFeedback(string keyText)
+    // Siehe ClipboardCopier-Klassenkommentar: TryCopyAsync blockiert das UI nicht mehr,
+    // auslösenden Knopf (falls vorhanden) während des Wartens deaktivieren, damit kein
+    // Doppelklick zwei Versuche gegeneinander laufen lässt.
+    private async Task CopyLicenseKeyTextWithFeedback(string keyText, System.Windows.Controls.Primitives.ButtonBase? triggerButton = null)
     {
-        if (ClipboardCopier.TryCopy(keyText, out var errorCode))
+        if (triggerButton is not null)
+        {
+            triggerButton.IsEnabled = false;
+        }
+
+        var (success, errorCode) = await ClipboardCopier.TryCopyAsync(keyText);
+
+        if (triggerButton is not null)
+        {
+            triggerButton.IsEnabled = true;
+        }
+
+        if (success)
         {
             Log("Lizenzschlüssel in die Zwischenablage kopiert.");
             return;
