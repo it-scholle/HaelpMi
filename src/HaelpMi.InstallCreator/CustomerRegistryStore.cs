@@ -28,8 +28,15 @@ internal static class CustomerRegistryStore
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "HaelpMi.InstallCreator");
 
-    private static readonly string RegistryFilePath = Path.Combine(BaseDirectory, "kundenregister.json");
-    private static readonly string TestRegistryFilePath = Path.Combine(BaseDirectory, "test-kundenregister.json");
+    private static readonly string DefaultRegistryFilePath = Path.Combine(BaseDirectory, "kundenregister.json");
+    private static readonly string DefaultTestRegistryFilePath = Path.Combine(BaseDirectory, "test-kundenregister.json");
+
+    /// <summary>Test-Hooks (siehe HaelpMi.InstallCreator.Tests) - gleiches Prinzip wie LicenseKeyPairStore.RegistryFilePathOverride.</summary>
+    internal static string? RegistryFilePathOverride { private get; set; }
+    internal static string? TestRegistryFilePathOverride { private get; set; }
+
+    private static string RegistryFilePath => RegistryFilePathOverride ?? DefaultRegistryFilePath;
+    private static string TestRegistryFilePath => TestRegistryFilePathOverride ?? DefaultTestRegistryFilePath;
 
     // Vorgänger-Datei aus #39 (reiner Zähler, keine Einträge) - nur noch für die einmalige
     // Migration gelesen, damit die Produktiv-Nummerierung beim ersten Start mit dem neuen
@@ -95,6 +102,15 @@ internal static class CustomerRegistryStore
 
     public static List<CustomerRegistryEntry> Load(bool isTestInstaller) =>
         Load(isTestInstaller ? TestRegistryFilePath : RegistryFilePath);
+
+    /// <summary>
+    /// Bereits bekannte Kundennummer erneut eingegeben (z. B. Installer-Neubau für denselben
+    /// Kunden) → dieselbe CustomerGroupId liefern statt einer neuen. Sonst würde ein Rebuild
+    /// bereits ausgegebene Lizenzen entwerten, weil deren Signatur an die CustomerGroupId und
+    /// das dazu gehörige Schlüsselpaar gebunden ist (siehe LicenseKeyPairStore).
+    /// </summary>
+    public static Guid ResolveCustomerGroupId(bool isTestInstaller, int kundennummer) =>
+        Load(isTestInstaller).FirstOrDefault(e => e.Kundennummer == kundennummer)?.CustomerGroupId ?? Guid.NewGuid();
 
     private static List<CustomerRegistryEntry> Load(string path)
     {
