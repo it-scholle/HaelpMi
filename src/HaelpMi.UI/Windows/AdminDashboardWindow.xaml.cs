@@ -342,16 +342,24 @@ public partial class AdminDashboardWindow : Window
     /// <summary>
     /// Issue #77: ohne gültige Lizenz bleibt die laufende Konfiguration unverändert aktiv
     /// (CLAUDE.md "Soft-Expiry, kein Hard-Lock" gilt für den Betrieb) - die Bearbeitung hier
-    /// im Dashboard wird aber komplett gesperrt. MainTabControl deaktivieren genügt: dasselbe
-    /// IsEnabled-Kaskadenprinzip wie beim exklusiven Edit-Lock (GroupDetailPanel/
-    /// ProfileFieldsPanel/SenderRecipientPanel oben) - ein enthaltenes Panel, das gerade selbst
-    /// IsEnabled=true gesetzt hat, bleibt trotzdem effektiv deaktiviert, solange ein Vorfahre
-    /// deaktiviert ist. Das Lizenz-Banner selbst (Grid.Row 0) hängt nicht unter MainTabControl
-    /// und bleibt dadurch immer bedienbar - sonst gäbe es keinen Ausweg aus der Sperre.
+    /// im Dashboard wird aber komplett gesperrt. Issue #84-Nacharbeit (Nutzerkorrektur
+    /// 08.09.2026): die Sperre saß ursprünglich am MainTabControl selbst - das deaktivierte
+    /// auch das bloße Umschalten zwischen den Reitern, die sollen aber immer erreichbar
+    /// bleiben ("alles muss sichtbar sein"). Greift jetzt eine Ebene tiefer, am
+    /// Inhaltsbereich jedes betroffenen Reiters (ProfileTabContent/GroupsTabContent) -
+    /// dasselbe IsEnabled-Kaskadenprinzip wie beim exklusiven Edit-Lock (GroupDetailPanel/
+    /// ProfileFieldsPanel/SenderRecipientPanel darunter): ein enthaltenes Panel, das gerade
+    /// selbst IsEnabled=true gesetzt hat, bleibt trotzdem effektiv deaktiviert, solange sein
+    /// jeweiliger Vorfahre hier deaktiviert ist. Das Lizenz-Banner selbst (Grid.Row 0) hängt
+    /// unter keinem der beiden und bleibt dadurch immer bedienbar - sonst gäbe es keinen
+    /// Ausweg aus der Sperre. Geräte-Tab (#61) bewusst nicht betroffen - dort regelt
+    /// DeviceActivationGate das Lizenzkontingent bereits eigenständig.
     /// </summary>
     private void ApplyLicenseEditLock(LicenseWarning warning)
     {
-        MainTabControl.IsEnabled = !LicenseEditLockEvaluator.IsEditingLocked(warning.Level);
+        var isEnabled = !LicenseEditLockEvaluator.IsEditingLocked(warning.Level);
+        ProfileTabContent.IsEnabled = isEnabled;
+        GroupsTabContent.IsEnabled = isEnabled;
     }
 
     // Issue #51 (Lizenz-Import im Admin-Dashboard), verdrahtet direkt im #20-Banner: baut
