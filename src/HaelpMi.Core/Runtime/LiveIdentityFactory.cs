@@ -27,5 +27,7 @@ public static class LiveIdentityFactory
         RemoteSessionDetector.IsCurrentSessionRemote(),
         CurrentProgramVersion,
         settings.AppliedConfigVersion,
-        settings.FirstSeenUtc);
+        settings.FirstSeenUtc,
+        settings.LicenseOverride,
+        settings.LicenseOverrideSetAtUtc);
 }

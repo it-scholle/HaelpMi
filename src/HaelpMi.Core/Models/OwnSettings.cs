@@ -57,4 +57,18 @@ public sealed class OwnSettings
     /// "noch nie gesetzt").
     /// </summary>
     public DateTimeOffset FirstSeenUtc { get; set; }
+
+    /// <summary>
+    /// Issue #61-Nachtrag (Propagierungs-Bugfix 08.09.2026): eine im Geräte-Tab getroffene
+    /// Admin-Entscheidung ÜBER DIESES Gerät - im Gegensatz zu allen anderen Feldern dieser
+    /// Klasse nie lokal eingegeben, sondern ausschließlich per Gossip von einem Dritten
+    /// gelernt (siehe DiscoveryService.OwnLicenseOverrideObserved), weil ein Gerät seine
+    /// eigene Override-Entscheidung naturgemäß nicht selbst kennt. <see cref="Licensing.LicenseLimitGuard"/>
+    /// liest dies für die eigene Rangfolge-Position statt eines hartkodierten
+    /// <see cref="LicenseOverride.None"/>.
+    /// </summary>
+    public LicenseOverride LicenseOverride { get; set; }
+
+    /// <summary>Zeitstempel der letzten Übernahme - "neuester Zeitstempel gewinnt" bei widersprüchlichen Gossip-Meldungen, siehe DeviceEntry.LicenseOverrideSetAtUtc für dieselbe Regel.</summary>
+    public DateTimeOffset? LicenseOverrideSetAtUtc { get; set; }
 }
