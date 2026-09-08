@@ -75,4 +75,48 @@ public class CustomerRegistryStoreTests : IDisposable
 
         Assert.Equal(firstGroupId, resolved);
     }
+
+    [Fact]
+    public void LoadDistinctByKundennummer_CollapsesMultipleBuildsOfSameKundennummer_ToOneEntry()
+    {
+        var groupId = Guid.NewGuid();
+        CustomerRegistryStore.Append(isTestInstaller: false, new CustomerRegistryEntry(
+            10001, groupId, "Musterkunde", new DateTime(2026, 1, 1), Kontakt: null));
+        CustomerRegistryStore.Append(isTestInstaller: false, new CustomerRegistryEntry(
+            10001, groupId, "Musterkunde", new DateTime(2026, 2, 1), Kontakt: null));
+
+        var entries = CustomerRegistryStore.LoadDistinctByKundennummer(isTestInstaller: false);
+
+        Assert.Single(entries);
+    }
+
+    [Fact]
+    public void LoadDistinctByKundennummer_KeepsTheOldestEntry_ForARebuiltKundennummer()
+    {
+        var groupId = Guid.NewGuid();
+        var erstesErstelltAm = new DateTime(2026, 1, 1);
+        CustomerRegistryStore.Append(isTestInstaller: false, new CustomerRegistryEntry(
+            10001, groupId, "Musterkunde", erstesErstelltAm, Kontakt: null));
+        CustomerRegistryStore.Append(isTestInstaller: false, new CustomerRegistryEntry(
+            10001, groupId, "Musterkunde", new DateTime(2026, 2, 1), Kontakt: null));
+
+        var entry = Assert.Single(CustomerRegistryStore.LoadDistinctByKundennummer(isTestInstaller: false));
+
+        Assert.Equal(erstesErstelltAm, entry.ErstelltAm);
+    }
+
+    [Fact]
+    public void LoadDistinctByKundennummer_KeepsUnrelatedKundennummernSeparate()
+    {
+        CustomerRegistryStore.Append(isTestInstaller: false, new CustomerRegistryEntry(
+            10001, Guid.NewGuid(), "Erster Kunde", DateTime.Now, Kontakt: null));
+        CustomerRegistryStore.Append(isTestInstaller: false, new CustomerRegistryEntry(
+            10002, Guid.NewGuid(), "Zweiter Kunde", DateTime.Now, Kontakt: null));
+
+        var entries = CustomerRegistryStore.LoadDistinctByKundennummer(isTestInstaller: false);
+
+        Assert.Equal(2, entries.Count);
+        Assert.Contains(entries, e => e.Kundennummer == 10001);
+        Assert.Contains(entries, e => e.Kundennummer == 10002);
+    }
 }

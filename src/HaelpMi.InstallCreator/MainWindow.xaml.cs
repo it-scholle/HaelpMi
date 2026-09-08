@@ -720,8 +720,8 @@ public partial class MainWindow : Window
     // angelegten Kunden direkt an, statt ihn nur unsichtbar in die Liste zu mischen.
     private void PopulateLicenseCustomers(Guid? selectCustomerGroupId = null)
     {
-        var items = CustomerRegistryStore.Load(isTestInstaller: false).Select(e => new CustomerListItem(e, false))
-            .Concat(CustomerRegistryStore.Load(isTestInstaller: true).Select(e => new CustomerListItem(e, true)))
+        var items = CustomerRegistryStore.LoadDistinctByKundennummer(isTestInstaller: false).Select(e => new CustomerListItem(e, false))
+            .Concat(CustomerRegistryStore.LoadDistinctByKundennummer(isTestInstaller: true).Select(e => new CustomerListItem(e, true)))
             .OrderByDescending(i => i.Entry.ErstelltAm)
             .ToList();
         LicenseCustomerListBox.ItemsSource = items;

@@ -112,6 +112,19 @@ internal static class CustomerRegistryStore
     public static Guid ResolveCustomerGroupId(bool isTestInstaller, int kundennummer) =>
         Load(isTestInstaller).FirstOrDefault(e => e.Kundennummer == kundennummer)?.CustomerGroupId ?? Guid.NewGuid();
 
+    /// <summary>
+    /// Für den Lizenzen-Reiter (Nutzerwunsch 08.09.2026): mehrere Installer-Builds für dieselbe
+    /// Kundennummer (siehe <see cref="ResolveCustomerGroupId"/>) landen weiterhin als je ein
+    /// eigener Eintrag im Register (Build-Historie), sollen dort aber nur einmal auftauchen -
+    /// der älteste Eintrag pro Kundennummer bleibt bestehen statt bei jedem Neubau in der
+    /// Liste einen weiteren, aktuelleren Eintrag zu erzeugen.
+    /// </summary>
+    public static List<CustomerRegistryEntry> LoadDistinctByKundennummer(bool isTestInstaller) =>
+        Load(isTestInstaller)
+            .GroupBy(e => e.Kundennummer)
+            .Select(g => g.OrderBy(e => e.ErstelltAm).First())
+            .ToList();
+
     private static List<CustomerRegistryEntry> Load(string path)
     {
         try
