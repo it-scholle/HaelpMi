@@ -225,10 +225,12 @@ public partial class MainWindow : Window
             return;
         }
 
-        var customerGroupId = Guid.NewGuid(); // FR-49: fest für dieses Admin-Installer-Paket und jeden späteren daraus exportierten User-Installer
         TryParseCustomerNumberText(CustomerNumberBox.Text, out var customerNumber); // von TryValidate oben bereits geprüft
-        var password = PasswordBox.Password;
         var isTestInstaller = TestInstallerCheckBox.IsChecked == true;
+        // FR-49 + Nutzerwunsch 08.09.2026: bei bereits bekannter Kundennummer dieselbe
+        // CustomerGroupId wiederverwenden statt einer neuen (siehe ResolveCustomerGroupId).
+        var customerGroupId = CustomerRegistryStore.ResolveCustomerGroupId(isTestInstaller, customerNumber);
+        var password = PasswordBox.Password;
         var customerNameOrTestLabel = CustomerNameBox.Text.Trim();
 
         SetBusy(true);
@@ -296,13 +298,24 @@ public partial class MainWindow : Window
         Log("--- Installer werden erstellt ---");
         Log($"Kunden-Gruppen-ID: {customerGroupId}");
 
-        // Issue #56: eigenes Lizenzsignatur-Schlüsselpaar für DIESE Kundengruppe, genau
-        // einmal hier erzeugt (im selben Moment wie die CustomerGroupId selbst) - der
-        // private Teil bleibt lokal (LicenseKeyPairStore), der öffentliche geht unten per
-        // ISCC-Define in beide Installer-Varianten.
-        var (licensePrivateKeyBytes, licensePublicKeyHex) = LicenseFileSigner.GenerateKeyPair();
-        LicenseKeyPairStore.Append(new LicenseKeyPairEntry(
-            customerGroupId, Convert.ToBase64String(licensePrivateKeyBytes), licensePublicKeyHex, DateTime.Now));
+        // Issue #56: eigenes Lizenzsignatur-Schlüsselpaar pro Kundengruppe. Existiert für diese
+        // CustomerGroupId (bekannte Kundennummer, siehe ResolveCustomerGroupId) bereits eines,
+        // wird es wiederverwendet statt neu erzeugt - sonst würde der neu eingebettete
+        // öffentliche Schlüssel nicht mehr zur Signatur bereits ausgegebener Lizenzen passen.
+        var existingKeyPair = LicenseKeyPairStore.Find(customerGroupId);
+        string licensePublicKeyHex;
+        if (existingKeyPair is not null)
+        {
+            licensePublicKeyHex = existingKeyPair.PublicKeyHex;
+            Log("Bekannte Kundennummer: bestehendes Lizenz-Schlüsselpaar wird wiederverwendet.");
+        }
+        else
+        {
+            var (licensePrivateKeyBytes, newPublicKeyHex) = LicenseFileSigner.GenerateKeyPair();
+            LicenseKeyPairStore.Append(new LicenseKeyPairEntry(
+                customerGroupId, Convert.ToBase64String(licensePrivateKeyBytes), newPublicKeyHex, DateTime.Now));
+            licensePublicKeyHex = newPublicKeyHex;
+        }
         Log($"Kundennummer: {CustomerRegistryStore.FormatDisplay(customerNumber, isTestInstaller)}");
         Log($"Test-Installer: {(isTestInstaller ? "ja" : "nein")}");
         if (isTestInstaller && customerNameOrTestLabel.Length > 0)
