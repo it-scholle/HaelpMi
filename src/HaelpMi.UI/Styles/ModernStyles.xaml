@@ -422,10 +422,19 @@
         </Setter>
     </Style>
 
-    <!-- Issue #61 (Geräte-Tab): moderner Ein/Aus-Schalter statt nativer CheckBox - Track-
-         Background steht bewusst als literale Farbe statt StaticResource, weil eine über
-         StaticResource aufgelöste Brush für die ColorAnimation eingefroren wäre (Farben
-         entsprechen AccentBrush/HairlineBrush). -->
+    <!-- Issue #61 (Geräte-Tab): moderner Ein/Aus-Schalter statt nativer CheckBox.
+         Issue #61-Nacharbeit (Nutzerbericht 08.09.2026, "Toggles flackern"): der
+         Ein/Aus-Zustand steht jetzt über reine (nicht animierte) Trigger-Setter statt einer
+         bei jedem Container-Neuaufbau erneut abgespielten Storyboard-Animation - eine neu
+         erzeugte ToggleButton-Instanz (jede Aktualisierung im Geräte-Tab setzt
+         DevicesList.ItemsSource komplett neu, z. B. bei jedem eingehenden Gossip-Update über
+         _deviceFileWatcher) zeigte davor erst kurz den optischen Aus-Zustand des Templates,
+         bevor die Animation zum eigentlichen (bereits beim Erzeugen bekannten) Zustand
+         hinüberblendete - das war das gemeldete Flackern. Ein Setter greift dagegen sofort
+         beim ersten gerenderten Frame. Thumb-Position läuft dafür über
+         HorizontalAlignment/Margin statt der vorherigen TranslateTransform - ein Setter kann
+         (anders als ein Storyboard) keinen verschachtelten Transform namentlich adressieren,
+         nur echte Elemente wie diesen Border selbst. -->
     <Style x:Key="ToggleSwitchStyle" TargetType="ToggleButton">
         <Setter Property="Cursor" Value="Hand" />
         <Setter Property="Template">
@@ -434,9 +443,6 @@
                     <Border x:Name="Track" Width="40" Height="22" CornerRadius="11" Background="#D2D2D7">
                         <Border x:Name="Thumb" Width="18" Height="18" CornerRadius="9" Background="White"
                                 HorizontalAlignment="Left" Margin="2,0,0,0">
-                            <Border.RenderTransform>
-                                <TranslateTransform x:Name="ThumbTransform" X="0" />
-                            </Border.RenderTransform>
                             <Border.Effect>
                                 <DropShadowEffect Color="Black" Opacity="0.25" BlurRadius="3" ShadowDepth="1" />
                             </Border.Effect>
@@ -444,24 +450,9 @@
                     </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsChecked" Value="True">
-                            <Trigger.EnterActions>
-                                <BeginStoryboard>
-                                    <Storyboard>
-                                        <ColorAnimation Storyboard.TargetName="Track" Storyboard.TargetProperty="(Border.Background).(SolidColorBrush.Color)"
-                                                        To="#0071E3" Duration="0:0:0.12" />
-                                        <DoubleAnimation Storyboard.TargetName="ThumbTransform" Storyboard.TargetProperty="X" To="18" Duration="0:0:0.12" />
-                                    </Storyboard>
-                                </BeginStoryboard>
-                            </Trigger.EnterActions>
-                            <Trigger.ExitActions>
-                                <BeginStoryboard>
-                                    <Storyboard>
-                                        <ColorAnimation Storyboard.TargetName="Track" Storyboard.TargetProperty="(Border.Background).(SolidColorBrush.Color)"
-                                                        To="#D2D2D7" Duration="0:0:0.12" />
-                                        <DoubleAnimation Storyboard.TargetName="ThumbTransform" Storyboard.TargetProperty="X" To="0" Duration="0:0:0.12" />
-                                    </Storyboard>
-                                </BeginStoryboard>
-                            </Trigger.ExitActions>
+                            <Setter TargetName="Track" Property="Background" Value="#0071E3" />
+                            <Setter TargetName="Thumb" Property="HorizontalAlignment" Value="Right" />
+                            <Setter TargetName="Thumb" Property="Margin" Value="0,0,2,0" />
                         </Trigger>
                         <Trigger Property="IsEnabled" Value="False">
                             <Setter TargetName="Track" Property="Opacity" Value="0.5" />
