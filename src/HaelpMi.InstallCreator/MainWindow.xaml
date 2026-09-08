@@ -233,7 +233,9 @@
                            FontWeight="SemiBold" FontSize="12" Margin="0,0,0,6" />
                 <TextBox x:Name="LicenseKeyResultTextBox" IsReadOnly="True" TextWrapping="Wrap"
                          AcceptsReturn="True" Height="70" VerticalScrollBarVisibility="Auto"
-                         FontFamily="Consolas" FontSize="11" Margin="0,0,0,8" />
+                         FontFamily="Consolas" FontSize="11" Margin="0,0,0,8"
+                         ToolTip="Klick kopiert den gesamten Schlüssel"
+                         PreviewMouseLeftButtonDown="LicenseKeyResultTextBox_PreviewMouseLeftButtonDown" />
                 <Button x:Name="CopyLicenseKeyButton" Content="In Zwischenablage kopieren" HorizontalAlignment="Left"
                         Padding="14,6" Click="CopyLicenseKeyButton_Click" />
             </StackPanel>

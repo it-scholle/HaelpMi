@@ -8,6 +8,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using HaelpMi.InstallCreator.Controls;
 using HaelpMi.InstallCreator.Licensing;
 
@@ -103,29 +104,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        // Bugfix 06.08.2026 (Fehlerbericht "Kopieren wirft immer noch einen Error"): der
-        // vorherige Fix (eigener STA-Worker-Thread + Handmade-Retry-Schleife über
-        // System.Windows.Clipboard) war selbst die Fehlerquelle - live nachgestellt und per
-        // Get-Clipboard von außen verifiziert: Clipboard.SetText auf einem STA-Thread OHNE
-        // eigene Windows-Nachrichtenschleife wirft zuverlässig eine Exception, OBWOHL der
-        // Schreibvorgang auf OS-Ebene tatsächlich ankam. Jetzt:
-        // System.Windows.Forms.Clipboard.SetDataObject(...) statt der WPF-eigenen
-        // Clipboard-Klasse - hat einen offiziell dafür vorgesehenen retryTimes/retryDelay-
-        // Parameter für genau CLIPBRD_E_CANT_OPEN und läuft zuverlässig direkt auf dem
-        // WPF-UI-Thread (der ist bereits STA, keine eigene Thread-Verwaltung nötig).
-        //
-        // Dritte Runde desselben Fehlerberichts - Nutzer-Feedback 06.08.2026: "der
-        // Kopiervorgang funktioniert ja, es ist wieder in der Zwischenablage - nur die
-        // Nachricht nervt und ist falsch". Bestätigt exakt das, was die eigene
-        // Live-Nachstellung vorher schon zeigte (siehe Kommentar oben): SetDataObject wirft
-        // eine ExternalException aus seinem eigenen internen Render-/Flush-Schritt, OBWOHL
-        // der eigentliche Schreibvorgang (SetClipboardData) längst angekommen ist - eine
-        // reine Falsch-Meldung, kein echter Fehlschlag. Der vorherige Fix (retryTimes/
-        // retryDelay erhöhen) konnte das nicht beheben, weil das Problem nicht "zu wenige
-        // Versuche" war, sondern "der letzte Versuch hat geklappt, meldet es aber falsch".
-        // Deshalb nicht mehr blind der Exception glauben: bei einem Fehlschlag kurz
-        // zurücklesen, bevor überhaupt eine Fehlermeldung gezeigt wird - erst wenn AUCH das
-        // fehlschlägt, ist es ein echter Fehler.
+        // Siehe ClipboardCopier-Klassenkommentar für die Begründung von Retry+Verify+Timeout.
         var password = PasswordBox.Password;
         if (ClipboardCopier.TryCopy(password, out var errorCode))
         {
@@ -133,12 +112,10 @@ public partial class MainWindow : Window
             return;
         }
 
-        // Erst nach zwei vollständigen Anläufen (siehe ClipboardCopier) ein wirklicher
-        // Fehlschlag - Nutzer soll wissen, dass das Passwort NICHT sicher kopiert wurde.
-        // "Anzeigen"-Knopf ist der tatsächlich funktionierende Fallback - WPFs PasswordBox
-        // blockt Strg+C absichtlich (Schutz gegen Mitlesen), "manuell markieren/kopieren"
-        // war daher vorher nie umsetzbar.
-        var message = $"Kopieren in die Zwischenablage fehlgeschlagen (HRESULT 0x{errorCode:X8}) - die Zwischenablage blieb auch nach zwei vollständigen Versuchen (je mehrere Sekunden Wiederholungen) dauerhaft von einem anderen Prozess blockiert (z. B. VM-Zwischenablage-Synchronisation). Über den \"Anzeigen\"-Knopf lässt sich das Passwort anzeigen und stattdessen von Hand markieren/kopieren.";
+        // "Anzeigen"-Knopf ist der Fallback - WPFs PasswordBox blockt Strg+C absichtlich
+        // (Schutz gegen Mitlesen), "manuell markieren/kopieren" war daher vorher nie
+        // umsetzbar. Nutzer soll wissen, dass das Passwort NICHT sicher kopiert wurde.
+        var message = $"Kopieren in die Zwischenablage fehlgeschlagen (HRESULT 0x{errorCode:X8}) - die Zwischenablage bleibt von einem anderen Prozess blockiert (z. B. VM-Zwischenablage-Synchronisation). Über den \"Anzeigen\"-Knopf lässt sich das Passwort anzeigen und stattdessen von Hand markieren/kopieren.";
         Log(message);
         System.Windows.MessageBox.Show(message, "HälpMi Install-Creator", MessageBoxButton.OK, MessageBoxImage.Warning);
     }
@@ -884,6 +861,17 @@ public partial class MainWindow : Window
     }
 
     private void CopyLicenseKeyButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (!string.IsNullOrEmpty(LicenseKeyResultTextBox.Text))
+        {
+            CopyLicenseKeyTextWithFeedback(LicenseKeyResultTextBox.Text);
+        }
+    }
+
+    // Nutzerwunsch 08.09.2026: ein Klick in das Ergebnisfeld selbst kopiert den ganzen
+    // Schlüssel direkt mit, ohne den Knopf darunter treffen zu müssen - eigenes manuelles
+    // Markieren bleibt trotzdem möglich (Event wird nicht abgefangen).
+    private void LicenseKeyResultTextBox_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
         if (!string.IsNullOrEmpty(LicenseKeyResultTextBox.Text))
         {
