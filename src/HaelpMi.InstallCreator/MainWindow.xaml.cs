@@ -743,8 +743,20 @@ public partial class MainWindow : Window
                 .OrderByDescending(entry => entry.ErstelltAm)
                 .ToList();
         LicenseHistoryListBox.ItemsSource = history.Select(entry => new LicenseHistoryItem(
-            $"{LicenseTierLimits.GetDisplayLabel(entry.Tier)} - erstellt {entry.ErstelltAm:d}, gültig bis {entry.Ablaufdatum:d}",
+            $"{LicenseTierLimits.GetDisplayLabel(entry.Tier, entry.UserLimit)} - erstellt {entry.ErstelltAm:d}, gültig bis {entry.Ablaufdatum:d}",
             entry.KeyText));
+    }
+
+    // Nutzerwunsch 08.09.2026: die Auswahl in der Historie zeigt ihren Schlüssel oben im
+    // selben Textfeld wie eine gerade neu erstellte Lizenz - beim Durchklicken bleibt so immer
+    // sichtbar, welcher Schlüssel gerade angeklickt ist, statt ihn nur über den Kopieren-Knopf
+    // blind in die Zwischenablage zu legen.
+    private void LicenseHistoryListBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (LicenseHistoryListBox.SelectedItem is not LicenseHistoryItem item) return;
+
+        LicenseKeyResultTextBox.Text = item.KeyText;
+        LicenseKeyResultPanel.Visibility = Visibility.Visible;
     }
 
     private async void CreateLicenseButton_Click(object sender, RoutedEventArgs e)
