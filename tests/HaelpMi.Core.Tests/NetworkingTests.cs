@@ -568,6 +568,70 @@ public class NetworkingTests
         Assert.True(RemovedDeviceStore.Contains(removedDevices, removedDeviceId));
     }
 
+    // --- Issue #61-Nachtrag (Nutzerbericht 08.09.2026 "Löschen ist ein Freischein" - der
+    // Broadcast oben allein hat weder das gelöschte Gerät selbst noch ein zweites
+    // Admin-Dashboard zuverlässig erreicht): NotifyKnownPeersDirectlyAsync kontaktiert
+    // zusätzlich jede bekannte IP direkt per Unicast. ---
+
+    [Fact]
+    public void CollectNotifyTargetIps_CombinesKnownAndRemovedDevices_DedupedAndWithoutEmptyIps()
+    {
+        var devices = new List<DeviceEntry>
+        {
+            new() { DeviceId = Guid.NewGuid(), IpAddress = "192.168.1.10" },
+            new() { DeviceId = Guid.NewGuid(), IpAddress = "" }, // nie erreicht - keine echte IP
+            new() { DeviceId = Guid.NewGuid(), IpAddress = "192.168.1.10" }, // Duplikat
+        };
+        var removedDevices = new List<RemovedDeviceEntry>
+        {
+            new(Guid.NewGuid(), DateTimeOffset.UtcNow, "192.168.1.20"),
+            new(Guid.NewGuid(), DateTimeOffset.UtcNow, null), // beim Löschen keine IP bekannt
+        };
+
+        var targets = DiscoveryService.CollectNotifyTargetIps(devices, removedDevices);
+
+        Assert.Equal(new[] { "192.168.1.10", "192.168.1.20" }, targets.OrderBy(x => x));
+    }
+
+    [Fact]
+    public async Task NotifyKnownPeersDirectlyAsync_UnicastsTombstone_ToRemovedDevicesLastKnownIp()
+    {
+        using var scope = new TestAppDataScope();
+        var discoveryPort = GetFreeUdpPort();
+        var customerGroupId = Guid.NewGuid();
+
+        var adminDeviceId = Guid.NewGuid();
+        var adminIdentity = MakeIdentity(customerGroupId, adminDeviceId, "Admin-PC", "Admin", "Büro", "5");
+
+        var removedDeviceId = Guid.NewGuid();
+        var removedAt = DateTimeOffset.UtcNow;
+        new RemovedDeviceStore().Save(new List<RemovedDeviceEntry> { new(removedDeviceId, removedAt, "127.0.0.1") });
+
+        await using var admin = new DiscoveryService(() => adminIdentity, discoveryPort: discoveryPort);
+        admin.StartListening();
+
+        // Simuliert das gelöschte Gerät: an die exakte Loopback-Adresse gebunden (statt
+        // 0.0.0.0 wie admin oben) - eine konkrete Bindung gewinnt bei eingehendem Unicast
+        // gegenüber einer Wildcard-Bindung auf demselben Port, genau das Verhalten, das
+        // NotifyKnownPeersDirectlyAsync in echt zwischen zwei unterschiedlichen Maschinen
+        // ausnutzt (dort mit unterschiedlichen echten IPs statt einer geteilten Loopback).
+        using var removedDeviceSocket = new UdpClient();
+        removedDeviceSocket.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
+        removedDeviceSocket.Client.Bind(new IPEndPoint(IPAddress.Loopback, discoveryPort));
+
+        var receiveTask = removedDeviceSocket.ReceiveAsync();
+        await admin.NotifyKnownPeersDirectlyAsync();
+
+        var result = await receiveTask.WaitAsync(TimeSpan.FromSeconds(5));
+        var message = JsonSerializer.Deserialize<BootCallMessage>(result.Buffer, WireOptions);
+
+        Assert.NotNull(message);
+        Assert.NotNull(message!.KnownDevices);
+        var tombstone = Assert.Single(message.KnownDevices!, d => d.DeviceId == removedDeviceId);
+        Assert.True(tombstone.Removed);
+        Assert.Equal(removedAt, tombstone.RemovedSetAtUtc);
+    }
+
     // --- Regressionsschutz 11.08.2026: drei frisch installierte Geräte blieben ohne
     // Config, obwohl der Admin sie längst über S/E "alle" eingerichtet hatte - erst ein
     // erneuter Config-Sync-Broadcast (Empfänger entfernt/wieder hinzugefügt) hat sie

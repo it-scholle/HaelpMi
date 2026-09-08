@@ -191,6 +191,89 @@ public sealed class DiscoveryService : IAsyncDisposable
         await _socket.SendAsync(payload, payload.Length, broadcastEndpoint).WaitAsync(ct);
     }
 
+    /// <summary>
+    /// Issue #61-Nachtrag (Nutzerbericht 08.09.2026 "Löschen ist ein Freischein" - ein
+    /// gelöschtes Gerät sendete weiter Alarme, ein anderes Admin-Dashboard zeigte es
+    /// weiter als Ziel): der Broadcast in <see cref="AnnounceAsync"/> erreicht nur, wer
+    /// GENAU in diesem Moment auf demselben Subnetz mithört - für eine Deaktivierung, die
+    /// zumindest das betroffene Gerät SELBST zuverlässig erreichen muss (Nutzerentscheidung
+    /// 08.09.2026: "die Reaktion des Systems muss mindestens am Endgerät ankommen, auch
+    /// wenn alles andere nicht"), reicht das nicht. Kontaktiert deshalb zusätzlich jede
+    /// bekannte IP direkt per Unicast - sowohl aktuell bekannte Peers als auch gerade erst
+    /// gelöschte (deren letzte bekannte IP nur noch in <see cref="RemovedDeviceStore"/>
+    /// steht, siehe dortiger Kommentar) - derselbe Zuverlässigkeits-Ansatz wie beim
+    /// eigentlichen Alarmversand (AlarmSender kontaktiert jedes Zielgerät ebenfalls direkt
+    /// statt zu broadcasten). Best-effort pro Ziel: ein einzelnes nicht erreichbares Gerät
+    /// darf die anderen nicht verhindern, und ein bereits informiertes Gerät verwirft eine
+    /// erneute Tombstone-Meldung ohnehin wirkungslos (Removed ist einseitig).
+    /// </summary>
+    public async Task NotifyKnownPeersDirectlyAsync(CancellationToken ct = default)
+    {
+        if (_socket is null)
+        {
+            return;
+        }
+
+        List<DeviceEntry> devices;
+        List<RemovedDeviceEntry> removedDevices;
+        await _storeLock.WaitAsync(ct);
+        try
+        {
+            devices = _deviceStore.Load();
+            removedDevices = _removedDeviceStore.Load();
+        }
+        finally
+        {
+            _storeLock.Release();
+        }
+
+        var targetIps = CollectNotifyTargetIps(devices, removedDevices);
+
+        if (targetIps.Count == 0)
+        {
+            return;
+        }
+
+        var knownDevices = await BuildKnownDevicesSummaryAsync(Guid.Empty, ct);
+        var message = BuildMessage(MessageKind.Announce, knownDevices);
+        var payload = NetworkSerializer.ToUtf8Json(message);
+        if (payload.Length > MaxDatagramBytes)
+        {
+            message = BuildMessage(MessageKind.Announce);
+            payload = NetworkSerializer.ToUtf8Json(message);
+        }
+
+        foreach (var ip in targetIps)
+        {
+            if (!IPAddress.TryParse(ip, out var address))
+            {
+                continue;
+            }
+
+            try
+            {
+                await _socket.SendAsync(payload, payload.Length, new IPEndPoint(address, _discoveryPort)).WaitAsync(ct);
+            }
+            catch (SocketException)
+            {
+                // best-effort, wie ReplyDirectlyAsync - ein nicht erreichbares Gerät darf die übrigen Ziele nicht blockieren
+            }
+        }
+    }
+
+    /// <summary>
+    /// Reine Ziel-Ermittlung für <see cref="NotifyKnownPeersDirectlyAsync"/>, als eigene
+    /// pure Funktion herausgezogen, damit sie ohne echtes Netzwerk testbar ist: jede
+    /// bekannte Peer-IP plus jede noch vorhandene letzte-bekannte-IP eines Tombstones,
+    /// leere/fehlende IPs (Gerät nie wirklich erreicht) und Duplikate herausgefiltert.
+    /// </summary>
+    internal static List<string> CollectNotifyTargetIps(List<DeviceEntry> devices, List<RemovedDeviceEntry> removedDevices) =>
+        devices.Select(d => d.IpAddress)
+            .Concat(removedDevices.Select(r => r.LastKnownIpAddress ?? string.Empty))
+            .Where(ip => !string.IsNullOrEmpty(ip))
+            .Distinct()
+            .ToList();
+
     private BootCallMessage BuildMessage(MessageKind kind, IReadOnlyList<KnownDeviceSummary>? knownDevices = null)
     {
         var identity = _identityProvider();
