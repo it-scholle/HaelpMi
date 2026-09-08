@@ -241,7 +241,8 @@
             <TextBlock Text="Bisher ausgestellte Lizenzen" FontWeight="SemiBold" Margin="0,0,0,6" />
             <!-- Nutzerwunsch 01.09.2026: jede Zeile zeigt Paketgröße+Datum und lässt sich
                  einzeln erneut kopieren (LicenseHistoryItem), ohne neu zu signieren. -->
-            <ListBox x:Name="LicenseHistoryListBox" Height="160" Margin="0,0,0,16">
+            <ListBox x:Name="LicenseHistoryListBox" Height="160" Margin="0,0,0,16"
+                     SelectionChanged="LicenseHistoryListBox_SelectionChanged">
                 <ListBox.ItemTemplate>
                     <DataTemplate>
                         <Grid Margin="0,4">

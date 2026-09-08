@@ -43,11 +43,19 @@ public static class LicenseTierLimits
     private static string GetDisplayName(LicenseTier tier) =>
         tier == LicenseTier.Trial ? "XS/Trial" : tier.ToString();
 
-    public static string GetDisplayLabel(LicenseTier tier)
+    /// <param name="actualCustomUserLimit">
+    /// Bei <see cref="LicenseTier.Custom"/> die tatsächlich vergebene Geräteanzahl, sofern schon
+    /// bekannt (z. B. aus einer bereits ausgestellten Lizenz in <see cref="LicenseRegistryEntry"/>).
+    /// <c>null</c> zeigt weiterhin den generischen Platzhaltertext, für die Auswahlliste im
+    /// <see cref="LicenseTierPicker"/>, bevor überhaupt eine Anzahl eingegeben wurde.
+    /// </param>
+    public static string GetDisplayLabel(LicenseTier tier, int? actualCustomUserLimit = null)
     {
         if (tier == LicenseTier.Custom)
         {
-            return "Custom - eigene Geräteanzahl";
+            return actualCustomUserLimit is { } customLimit
+                ? $"Custom - {customLimit} Geräte"
+                : "Custom - eigene Geräteanzahl";
         }
 
         var limit = GetUserLimit(tier);
