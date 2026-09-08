@@ -262,6 +262,34 @@ public partial class App : System.Windows.Application
     }
 
     /// <summary>
+    /// Issue #61-Nachtrag (Propagierungs-Bugfix 08.09.2026, Nutzerbericht "Deaktivieren/
+    /// Aktivieren im Geräte-Tab hat keine Wirkung"): eine im Geräte-Tab getroffene
+    /// Aktivieren/Deaktivieren-Entscheidung ÜBER DIESES Gerät, gelernt über Gossip (siehe
+    /// DiscoveryService.OwnLicenseOverrideObserved). "Neuester Zeitstempel gewinnt" wie bei
+    /// DeviceEntry.LicenseOverrideSetAtUtc, damit eine verspätet eintreffende ältere
+    /// Gossip-Meldung eine schon übernommene neuere Entscheidung nicht zurückdreht. Frisch
+    /// von der Platte geladen statt der eigenen _settings-Feldkopie (wie ConfigSyncService.
+    /// ApplyToSelf) - minimiert das Race mit einem parallel offenen ConfigWindow, das die
+    /// Datei aus einem älteren Ladezeitpunkt heraus überschreiben könnte.
+    /// </summary>
+    private void OnOwnLicenseOverrideObserved(object? sender, OwnLicenseOverrideInfo info)
+    {
+        var settings = _settingsStore.Load();
+        if (settings.LicenseOverrideSetAtUtc >= info.SetAtUtc)
+        {
+            return;
+        }
+
+        settings.LicenseOverride = info.Override;
+        settings.LicenseOverrideSetAtUtc = info.SetAtUtc;
+        _settingsStore.Save(settings);
+        _settings = settings;
+
+        RefreshLicenseLimitState();
+        _auditLog.Append($"Eigener Lizenz-Override übernommen: {info.Override} (SetAtUtc={info.SetAtUtc:O})");
+    }
+
+    /// <summary>
     /// Issue #59/#60: zeigt/schließt den Lizenzlimit-Toast passend zum aktuellen
     /// Deaktivierungs-Zustand dieses Geräts - aufgerufen beim Start, bei jedem Boot-Call-
     /// Update (neues Gerät gesehen, Kontingent könnte sich dadurch geändert haben) und nach
@@ -449,6 +477,9 @@ public partial class App : System.Windows.Application
 
         // Issue #59/#60-Nachtrag "Lizenz sofort verteilen".
         _discovery.PeerLicenseObserved += OnPeerLicenseObserved;
+
+        // Issue #61-Nachtrag "Propagierungs-Bugfix".
+        _discovery.OwnLicenseOverrideObserved += OnOwnLicenseOverrideObserved;
 
         // Issue #9 (Fast User Switching ohne Logout/Reboot): AlarmChannel entscheidet
         // selbst, ob diese Sitzung den echten TCP-Port hält (Primary) oder als Satellite
@@ -640,7 +671,10 @@ public partial class App : System.Windows.Application
 
     private async Task<IpcResponse> HandleSearchAgainRequestAsync()
     {
-        await _discovery!.AnnounceAsync();
+        // Issue #61-Nachtrag: bewusst mit Gossip-Anhang - "Erneut suchen" ist immer ein
+        // gezielter Nutzer-/Admin-Klick (nie ein stiller Hintergrund-Trigger), Grund genug
+        // für die etwas größere Nachricht (siehe DiscoveryService.AnnounceAsync).
+        await _discovery!.AnnounceAsync(includeKnownDevices: true);
         return new IpcResponse(true);
     }
 

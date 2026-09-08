@@ -65,6 +65,45 @@ public class LicenseLimitGuardTests
         Assert.False(guard.IsOwnDeviceDisabled());
     }
 
+    // --- Issue #61-Nachtrag (Propagierungs-Bugfix 08.09.2026, Nutzerbericht "Deaktivieren/
+    // Aktivieren im Geräte-Tab hat keine Wirkung"): BuildKnownDevices hat den eigenen
+    // Override bisher hartkodiert auf None gesetzt, egal was via Gossip in
+    // identity.LicenseOverride gelernt wurde - eine Fremdentscheidung über das eigene
+    // Gerät hatte dadurch NIE eine Wirkung. ---
+
+    [Fact]
+    public void IsOwnDeviceDisabled_True_ForUserRoleDevice_WithForceDisabledOverride_EvenWithinLimit()
+    {
+        var identity = MakeIdentity(Guid.NewGuid(), Role.User, DateTimeOffset.UtcNow) with
+        {
+            LicenseOverride = LicenseOverride.ForceDisabled,
+            LicenseOverrideSetAtUtc = DateTimeOffset.UtcNow,
+        };
+        var guard = new LicenseLimitGuard(() => identity, () => ValidLicense(10), () => new List<DeviceEntry>());
+
+        Assert.True(guard.IsOwnDeviceDisabled());
+    }
+
+    [Fact]
+    public void IsOwnDeviceDisabled_False_ForUserRoleDevice_WithForceEnabledOverride_EvenWhenOverLimit()
+    {
+        var ownId = Guid.NewGuid();
+        var identity = MakeIdentity(ownId, Role.User, DateTimeOffset.UtcNow) with
+        {
+            LicenseOverride = LicenseOverride.ForceEnabled,
+            LicenseOverrideSetAtUtc = DateTimeOffset.UtcNow,
+        };
+        var devices = new List<DeviceEntry>
+        {
+            // Länger bekanntes Gerät ohne Override - würde ohne den ForceEnabled-Override
+            // den einzigen Lizenzplatz belegen und das eigene Gerät verdrängen.
+            new() { DeviceId = Guid.NewGuid(), Role = Role.User, FirstSeenUtc = DateTimeOffset.UtcNow.AddDays(-1) },
+        };
+        var guard = new LicenseLimitGuard(() => identity, () => ValidLicense(1), () => devices);
+
+        Assert.False(guard.IsOwnDeviceDisabled());
+    }
+
     [Fact]
     public void GetDisabledDeviceIds_NeverContainsAdminDevices()
     {

@@ -12,6 +12,11 @@ namespace HaelpMi.Core.Models;
 ///
 /// <see cref="FirstSeenUtc"/> siehe <see cref="OwnSettings.FirstSeenUtc"/> - Grundlage für
 /// <see cref="HaelpMi.Core.Licensing.LicenseLimitEvaluator"/> (Issue #59/#60).
+///
+/// <see cref="LicenseOverride"/>/<see cref="LicenseOverrideSetAtUtc"/> siehe
+/// <see cref="OwnSettings.LicenseOverride"/> (Issue #61-Nachtrag) - Default
+/// <see cref="Models.LicenseOverride.None"/>/null, damit bestehende Aufrufer (Tests) ohne
+/// Kenntnis dieser Felder unverändert kompilieren.
 /// </summary>
 public sealed record LiveIdentity(
     Guid CustomerGroupId,
@@ -24,4 +29,6 @@ public sealed record LiveIdentity(
     bool IsRemoteSession,
     string ProgramVersion,
     int ConfigVersion,
-    DateTimeOffset FirstSeenUtc);
+    DateTimeOffset FirstSeenUtc,
+    LicenseOverride LicenseOverride = LicenseOverride.None,
+    DateTimeOffset? LicenseOverrideSetAtUtc = null);

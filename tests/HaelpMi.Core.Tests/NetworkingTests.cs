@@ -312,6 +312,103 @@ public class NetworkingTests
         Assert.Equal("Lager", gossiped.RoomName);
     }
 
+    // --- Issue #61-Nachtrag (Propagierungs-Bugfix 08.09.2026, Nutzerbericht "Deaktivieren/
+    // Aktivieren im Geräte-Tab hat keine Wirkung"): der bisherige blanke "Gossip über mich
+    // selbst wird ignoriert"-Filter hat versehentlich auch die einzige legitime
+    // Fremdmeinung über die eigene DeviceId verworfen - den Override. ---
+
+    [Fact]
+    public async Task DiscoveryService_ReplyToAnnounce_IncludesAnnouncersOwnOverride_WhenSet()
+    {
+        using var scope = new TestAppDataScope();
+        var discoveryPort = GetFreeUdpPort();
+        var customerGroupId = Guid.NewGuid();
+
+        var ownDeviceId = Guid.NewGuid();
+        var ownIdentity = MakeIdentity(customerGroupId, ownDeviceId, "Empfang EG", "Poststelle", "Empfangshalle", "0");
+
+        var newDeviceId = Guid.NewGuid();
+        var overrideSetAt = DateTimeOffset.UtcNow;
+        // Dieses Gerät kennt den Announcer bereits mit einer im Geräte-Tab getroffenen
+        // Deaktivieren-Entscheidung - genau die Information, die beim Announcer selbst
+        // ankommen muss.
+        new DeviceStore().Save(new List<DeviceEntry>
+        {
+            new()
+            {
+                DeviceId = newDeviceId, ComputerName = "PC-NEU", RoomName = "Empfang", RoomNumber = "1",
+                LicenseOverride = LicenseOverride.ForceDisabled, LicenseOverrideSetAtUtc = overrideSetAt,
+            },
+        });
+
+        await using var discovery = new DiscoveryService(() => ownIdentity, discoveryPort: discoveryPort);
+        discovery.StartListening();
+
+        using var newDeviceSocket = new UdpClient(0) { EnableBroadcast = true };
+        var announce = new BootCallMessage(
+            MessageKind.Announce, customerGroupId, newDeviceId, "PC-NEU", "Herr Neu", "Empfang", "1",
+            Role.User, false, 51999, "9.9.9", 0, DateTimeOffset.UtcNow);
+        var announceBytes = JsonSerializer.SerializeToUtf8Bytes(announce, WireOptions);
+
+        var replyListenTask = newDeviceSocket.ReceiveAsync();
+        await newDeviceSocket.SendAsync(announceBytes, announceBytes.Length, new IPEndPoint(IPAddress.Loopback, discoveryPort));
+
+        var replyResult = await replyListenTask.WaitAsync(TimeSpan.FromSeconds(5));
+        var reply = JsonSerializer.Deserialize<BootCallMessage>(replyResult.Buffer, WireOptions);
+
+        Assert.NotNull(reply);
+        Assert.NotNull(reply!.KnownDevices);
+        // Anders als DiscoveryService_ReplyToAnnounce_IncludesKnownDevices (dort ohne
+        // Override): der Announcer bekommt sich selbst NUR wegen des gesetzten Overrides
+        // zurückgemeldet.
+        var ownEntry = Assert.Single(reply.KnownDevices!, d => d.DeviceId == newDeviceId);
+        Assert.Equal(LicenseOverride.ForceDisabled, ownEntry.Override);
+        Assert.Equal(overrideSetAt, ownEntry.OverrideSetAtUtc);
+    }
+
+    [Fact]
+    public async Task DiscoveryService_GossipAboutSelf_RaisesOwnLicenseOverrideObserved_ButNeverStoresSelfAsPeer()
+    {
+        using var scope = new TestAppDataScope();
+        var discoveryPort = GetFreeUdpPort();
+        var customerGroupId = Guid.NewGuid();
+
+        var ownDeviceId = Guid.NewGuid();
+        var ownIdentity = MakeIdentity(customerGroupId, ownDeviceId, "Neu-PC", "Herr Neu", "Empfang", "1");
+
+        OwnLicenseOverrideInfo? observed = null;
+        var observedSignal = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        await using var discovery = new DiscoveryService(() => ownIdentity, discoveryPort: discoveryPort);
+        discovery.OwnLicenseOverrideObserved += (_, info) =>
+        {
+            observed = info;
+            observedSignal.TrySetResult();
+        };
+        discovery.StartListening();
+
+        var replierDeviceId = Guid.NewGuid();
+        var overrideSetAt = DateTimeOffset.UtcNow;
+        using var replierSocket = new UdpClient(0) { EnableBroadcast = true };
+        var reply = new BootCallMessage(
+            MessageKind.Reply, customerGroupId, replierDeviceId, "Admin-PC", "Admin", "Büro", "5",
+            Role.Admin, false, 51999, "9.9.9", 0, DateTimeOffset.UtcNow,
+            new List<KnownDeviceSummary> { new(ownDeviceId, "Neu-PC", "Herr Neu", "Empfang", "1", Role.User, "127.0.0.1", 51501, null, LicenseOverride.ForceEnabled, overrideSetAt) });
+        var replyBytes = JsonSerializer.SerializeToUtf8Bytes(reply, WireOptions);
+
+        await replierSocket.SendAsync(replyBytes, replyBytes.Length, new IPEndPoint(IPAddress.Loopback, discoveryPort));
+
+        await observedSignal.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.NotNull(observed);
+        Assert.Equal(LicenseOverride.ForceEnabled, observed!.Override);
+        Assert.Equal(overrideSetAt, observed.SetAtUtc);
+
+        // Architekturregel unverändert: ein Gerät trägt sich nie selbst in seine eigene
+        // Peer-Liste ein, auch nicht über einen Umweg durch Gossip.
+        var devices = new DeviceStore().Load();
+        Assert.DoesNotContain(devices, d => d.DeviceId == ownDeviceId);
+    }
+
     // --- Regressionsschutz 11.08.2026: drei frisch installierte Geräte blieben ohne
     // Config, obwohl der Admin sie längst über S/E "alle" eingerichtet hatte - erst ein
     // erneuter Config-Sync-Broadcast (Empfänger entfernt/wieder hinzugefügt) hat sie

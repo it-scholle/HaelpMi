@@ -27,6 +27,13 @@ public sealed class PeerLicenseInfo
     public required string LicenseKeyText { get; init; }
 }
 
+/// <summary>Siehe <see cref="DiscoveryService.OwnLicenseOverrideObserved"/>.</summary>
+public sealed class OwnLicenseOverrideInfo
+{
+    public required LicenseOverride Override { get; init; }
+    public required DateTimeOffset SetAtUtc { get; init; }
+}
+
 /// <summary>
 /// UDP boot-call discovery (Phase 1 5.5/FR-21/22/23, Teil 2 Abschnitt 9): one socket
 /// bound to <see cref="AppConstants.DiscoveryUdpPort"/> both sends the once-per-startup
@@ -85,6 +92,20 @@ public sealed class DiscoveryService : IAsyncDisposable
     /// </summary>
     public event EventHandler<PeerLicenseInfo>? PeerLicenseObserved;
 
+    /// <summary>
+    /// Issue #61-Nachtrag (Propagierungs-Bugfix 08.09.2026): eine im Geräte-Tab getroffene
+    /// Admin-Entscheidung ÜBER DIESES Gerät, gelernt aus dem Gossip-Anhang einer
+    /// Boot-Call-Nachricht (Announce mit <c>includeKnownDevices: true</c> ODER Reply). Ein
+    /// Gossip-Eintrag über die eigene DeviceId wird für jedes andere Feld (Computername/
+    /// Raum/Rolle/...) weiterhin ignoriert - ein Gerät kennt sich selbst besser als jeder
+    /// Dritte - aber genau der Override ist die eine legitime Ausnahme: er stammt per
+    /// Definition nie vom betroffenen Gerät selbst, ein Gerät kann ihn also nur über einen
+    /// Dritten erfahren. Der bisherige blanke "Gossip über mich selbst wird ignoriert"-
+    /// Filter hat das versehentlich mit verworfen - <see cref="HaelpMi.Core.Licensing.LicenseLimitGuard"/>
+    /// hat dadurch nie erfahren, wenn genau das eigene Gerät (de-)aktiviert wurde.
+    /// </summary>
+    public event EventHandler<OwnLicenseOverrideInfo>? OwnLicenseOverrideObserved;
+
     /// <param name="discoveryPort">Overridable only for tests - production always uses <see cref="AppConstants.DiscoveryUdpPort"/> so every device agrees on one port.</param>
     /// <param name="ownLicenseKeyTextProvider">
     /// Issue #59/#60-Nachtrag: liefert die eigene, aktuell geladene Lizenz als Text (oder
@@ -119,16 +140,37 @@ public sealed class DiscoveryService : IAsyncDisposable
         _receiveLoop = ReceiveLoopAsync(_socket, _cts.Token);
     }
 
-    /// <summary>Sends the once-per-startup boot-call announce (Teil 2, Abschnitt 9), or a manual "Erneut suchen" (FR-20).</summary>
-    public async Task AnnounceAsync(CancellationToken ct = default)
+    /// <summary>
+    /// Sends the once-per-startup boot-call announce (Teil 2, Abschnitt 9), or a manual
+    /// "Erneut suchen" (FR-20).
+    ///
+    /// <paramref name="includeKnownDevices"/> (Issue #61-Nachtrag 08.09.2026): normalerweise
+    /// false (schlanker, häufiger Announce - reine Identität reicht). Ein bewusst
+    /// admin-/nutzer-ausgelöstes "Erneut suchen" (nie ein stiller Hintergrund-Trigger, siehe
+    /// Aufrufer) setzt es auf true und hängt die komplette eigene Geräteliste als Gossip an,
+    /// genau wie sonst nur eine Reply es könnte (siehe <see cref="BuildKnownDevicesSummaryAsync"/>) -
+    /// broadcastet an ALLE gerade lauschenden Geräte auf einen Schlag, statt darauf zu
+    /// warten, dass jedes betroffene Gerät irgendwann von sich aus selbst announct. Behebt
+    /// den Fall, dass eine im Geräte-Tab getroffene Aktivieren/Deaktivieren-Entscheidung das
+    /// betroffene Gerät sonst erst bei dessen eigenem nächsten Boot-Call erreicht hätte.
+    /// </summary>
+    public async Task AnnounceAsync(CancellationToken ct = default, bool includeKnownDevices = false)
     {
         if (_socket is null)
         {
             throw new InvalidOperationException($"{nameof(StartListening)} must be called first.");
         }
 
-        var message = BuildMessage(MessageKind.Announce);
+        var knownDevices = includeKnownDevices ? await BuildKnownDevicesSummaryAsync(Guid.Empty, ct) : null;
+        var message = BuildMessage(MessageKind.Announce, knownDevices);
         var payload = NetworkSerializer.ToUtf8Json(message);
+        if (payload.Length > MaxDatagramBytes)
+        {
+            // Sicherheitsnetz wie bei ReplyDirectlyAsync: lieber ohne Gossip-Anhang senden als das Announce komplett zu verlieren.
+            message = BuildMessage(MessageKind.Announce);
+            payload = NetworkSerializer.ToUtf8Json(message);
+        }
+
         var broadcastEndpoint = new IPEndPoint(IPAddress.Broadcast, _discoveryPort);
         await _socket.SendAsync(payload, payload.Length, broadcastEndpoint).WaitAsync(ct);
     }
@@ -234,6 +276,7 @@ public sealed class DiscoveryService : IAsyncDisposable
 
         var remoteIp = result.RemoteEndPoint.Address.ToString();
         DeviceEntry updated;
+        OwnLicenseOverrideInfo? ownOverrideInfo = null;
 
         await _storeLock.WaitAsync(ct);
         try
@@ -247,16 +290,33 @@ public sealed class DiscoveryService : IAsyncDisposable
             DeviceStore.Upsert(devices, message.DeviceId, info, DateTimeOffset.UtcNow);
             updated = devices.First(d => d.DeviceId == message.DeviceId);
 
-            // Gossip (Nutzerwunsch 05.08.2026): eine Reply kann die komplette Geräteliste
-            // des Antwortenden mitbringen - so lernen wir auch von Geräten, die gerade
-            // offline sind und daher nie selbst direkt geantwortet hätten. Weder uns selbst
-            // noch den gerade schon oben verarbeiteten Antwortenden nochmal eintragen.
-            if (message.Kind == MessageKind.Reply && message.KnownDevices is { Count: > 0 } knownDevices)
+            // Gossip (Nutzerwunsch 05.08.2026): sowohl eine Reply als auch ein bewusst mit
+            // includeKnownDevices ausgelöstes Announce (Issue #61-Nachtrag, siehe
+            // AnnounceAsync) können die komplette Geräteliste des Absenders mitbringen - so
+            // lernen wir auch von Geräten, die gerade offline sind und daher nie selbst
+            // direkt geantwortet hätten. Den gerade schon oben verarbeiteten Absender nicht
+            // nochmal eintragen.
+            if (message.KnownDevices is { Count: > 0 } knownDevices)
             {
                 foreach (var known in knownDevices)
                 {
-                    if (known.DeviceId == ownIdentity.DeviceId || known.DeviceId == message.DeviceId)
+                    if (known.DeviceId == message.DeviceId)
                     {
+                        continue;
+                    }
+
+                    if (known.DeviceId == ownIdentity.DeviceId)
+                    {
+                        // Issue #61-Nachtrag: für jedes ANDERE Feld bleibt Gossip über die
+                        // eigene DeviceId zurecht ignoriert (siehe OwnLicenseOverrideObserved-
+                        // Klassenkommentar) - nur der Override wird herausgezogen und nach
+                        // dem Freigeben des Locks unten gemeldet, damit ein Abonnent
+                        // (HaelpMi.Agent) ihn in die eigenen OwnSettings übernehmen kann.
+                        if (known.OverrideSetAtUtc is { } setAtUtc)
+                        {
+                            ownOverrideInfo = new OwnLicenseOverrideInfo { Override = known.Override, SetAtUtc = setAtUtc };
+                        }
+
                         continue;
                     }
 
@@ -280,6 +340,11 @@ public sealed class DiscoveryService : IAsyncDisposable
 
         _audit?.Invoke($"discovery {message.Kind} deviceId={message.DeviceId}");
         RaiseObserver(() => DeviceUpdated?.Invoke(this, updated), nameof(DeviceUpdated));
+
+        if (ownOverrideInfo is not null)
+        {
+            RaiseObserver(() => OwnLicenseOverrideObserved?.Invoke(this, ownOverrideInfo), nameof(OwnLicenseOverrideObserved));
+        }
 
         if (message.ProgramVersion != ownIdentity.ProgramVersion)
         {
@@ -389,10 +454,26 @@ public sealed class DiscoveryService : IAsyncDisposable
             _storeLock.Release();
         }
 
-        return devices
+        var summaries = devices
             .Where(d => d.DeviceId != excludeDeviceId)
             .Select(d => new KnownDeviceSummary(d.DeviceId, d.ComputerName, d.User, d.RoomName, d.RoomNumber, d.Role, d.IpAddress, d.TcpPort, d.FirstSeenUtc, d.LicenseOverride, d.LicenseOverrideSetAtUtc))
             .ToList();
+
+        // Issue #61-Nachtrag: "dem Empfänger nichts über sich selbst erzählen" (der obige
+        // Where-Filter) gilt für jedes Feld - AUSSER dem Override, der einzigen legitimen
+        // Fremdmeinung über die eigene DeviceId (siehe OwnLicenseOverrideObserved). Ohne
+        // diese Ausnahme würde ReplyDirectlyAsync einem gerade erst wieder announcenden
+        // Gerät niemals die für genau dieses Gerät getroffene Override-Entscheidung
+        // zurückmelden - der Filter oben schließt dessen Eintrag ja komplett aus.
+        if (devices.FirstOrDefault(d => d.DeviceId == excludeDeviceId) is { LicenseOverrideSetAtUtc: not null } excludedSelf)
+        {
+            summaries.Add(new KnownDeviceSummary(
+                excludedSelf.DeviceId, excludedSelf.ComputerName, excludedSelf.User, excludedSelf.RoomName,
+                excludedSelf.RoomNumber, excludedSelf.Role, excludedSelf.IpAddress, excludedSelf.TcpPort,
+                excludedSelf.FirstSeenUtc, excludedSelf.LicenseOverride, excludedSelf.LicenseOverrideSetAtUtc));
+        }
+
+        return summaries;
     }
 
     public async ValueTask DisposeAsync()

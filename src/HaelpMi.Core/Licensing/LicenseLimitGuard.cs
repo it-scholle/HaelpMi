@@ -68,7 +68,12 @@ public sealed class LicenseLimitGuard
         var devices = _devicesProvider();
         var known = new List<LicenseLimitEvaluator.DeviceSeen>(devices.Count + 1)
         {
-            new(identity.DeviceId, identity.FirstSeenUtc, EffectiveOverride(identity.Role, LicenseOverride.None)),
+            // Issue #61-Nachtrag (Propagierungs-Bugfix 08.09.2026): identity.LicenseOverride
+            // statt hartkodiertem None - vorher hatte eine im Geräte-Tab getroffene
+            // Aktivieren/Deaktivieren-Entscheidung für DAS EIGENE Gerät hier nie eine
+            // Wirkung, egal was via Gossip gelernt wurde (siehe DiscoveryService.
+            // OwnLicenseOverrideObserved für den Lernpfad).
+            new(identity.DeviceId, identity.FirstSeenUtc, EffectiveOverride(identity.Role, identity.LicenseOverride)),
         };
 
         known.AddRange(devices.Select(d =>

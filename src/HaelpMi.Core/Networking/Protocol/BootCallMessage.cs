@@ -22,12 +22,17 @@ public enum MessageKind
 /// update - comparison happens locally on each side, there is no separate
 /// "update available" message.
 ///
-/// <see cref="KnownDevices"/> (Nutzerwunsch 05.08.2026): nur auf einer <see cref="Reply"/>
-/// gesetzt, nie auf einem Announce (das bliebe sonst ein Broadcast, den ALLE Geräte auf dem
-/// Segment empfangen, nicht nur der eine, der es braucht - siehe DiscoveryService). Der
-/// Antwortende hängt seine eigene Geräteliste an, damit der neu startende Announcer auch
-/// von Geräten erfährt, die gerade offline sind. Optional/nullable, damit alte Announces
-/// (die dieses Feld nie setzen) unverändert kompatibel bleiben.
+/// <see cref="KnownDevices"/> (Nutzerwunsch 05.08.2026): auf einer <see cref="Reply"/> immer
+/// gesetzt - der Antwortende hängt seine eigene Geräteliste an, damit der neu startende
+/// Announcer auch von Geräten erfährt, die gerade offline sind. Auf einem gewöhnlichen
+/// (stillen, häufigen) Announce bewusst weggelassen, das bliebe sonst ein Broadcast, den
+/// ALLE Geräte auf dem Segment empfangen - siehe DiscoveryService. Ausnahme (Issue
+/// #61-Nachtrag 08.09.2026): ein bewusst ausgelöstes "Erneut suchen"
+/// (<see cref="DiscoveryService.AnnounceAsync"/> mit <c>includeKnownDevices: true</c>) hängt
+/// es auch an ein Announce - dort ist der einmalige Broadcast an alle genau der Zweck (eine
+/// im Geräte-Tab getroffene Aktivieren/Deaktivieren-Entscheidung soll das betroffene Gerät
+/// sofort erreichen, nicht erst bei dessen eigenem nächsten Boot-Call). Optional/nullable,
+/// damit alte Announces (die dieses Feld nie setzen) unverändert kompatibel bleiben.
 ///
 /// <see cref="FirstSeenUtc"/> (Issue #59/#60): eigener Erstkontakt-Zeitpunkt des Absenders,
 /// Grundlage für <see cref="HaelpMi.Core.Licensing.LicenseLimitEvaluator"/> - siehe
