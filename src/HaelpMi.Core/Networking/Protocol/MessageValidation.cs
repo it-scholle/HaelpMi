@@ -39,7 +39,8 @@ internal static class MessageValidation
         Enum.IsDefined(message.Kind) &&
         (message.KnownDevices is null || IsPlausible(message.KnownDevices)) &&
         (message.PermanentlyRemovedDevices is null || IsPlausible(message.PermanentlyRemovedDevices)) &&
-        (message.LicenseKeyText is null || message.LicenseKeyText.Length <= MaxLicenseKeyTextLength);
+        (message.LicenseKeyText is null || message.LicenseKeyText.Length <= MaxLicenseKeyTextLength) &&
+        (message.PendingLicenseKeyText is null || message.PendingLicenseKeyText.Length <= MaxLicenseKeyTextLength);
 
     private static bool IsPlausible(IReadOnlyList<KnownDeviceSummary> knownDevices) =>
         knownDevices.Count <= MaxKnownDevicesCount &&

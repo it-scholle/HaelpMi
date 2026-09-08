@@ -59,6 +59,11 @@ public enum MessageKind
 /// für die Begründung, warum das ein eigenes Feld statt eines weiteren
 /// <see cref="KnownDeviceSummary"/>-Eintrags ist. Optional/nullable, gleicher
 /// Kompatibilitätsgrund wie <see cref="KnownDevices"/>.
+///
+/// <see cref="PendingLicenseKeyText"/> (Issue #94): dieselbe Idee, nur für eine beim
+/// Absender wegen eines Downgrades vorgemerkte, noch nicht aktive Lizenz - null, wenn der
+/// Absender selbst keine vorgemerkte Lizenz hat. Verteilt sich dieselbe Vormerkung
+/// gruppenweit an alle Geräte, die dadurch synchron zum selben Ablaufdatum wechseln.
 /// </summary>
 public sealed record BootCallMessage(
     MessageKind Kind,
@@ -78,4 +83,5 @@ public sealed record BootCallMessage(
     DateTimeOffset? FirstSeenUtc = null,
     string? LicenseKeyText = null,
     DateTimeOffset LastInstalledAtUtc = default,
-    IReadOnlyList<PermanentlyRemovedDeviceSummary>? PermanentlyRemovedDevices = null);
+    IReadOnlyList<PermanentlyRemovedDeviceSummary>? PermanentlyRemovedDevices = null,
+    string? PendingLicenseKeyText = null);
