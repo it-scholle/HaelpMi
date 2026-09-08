@@ -24,6 +24,15 @@ namespace HaelpMi.Core.Networking.Protocol;
 /// DeviceStore.Upsert). Ohne eigene Admin-Signaturprüfung auf diesem Versionsstand
 /// (CLAUDE.md) auf demselben Vertrauensniveau wie <see cref="Role"/> selbst - eine
 /// unauthentifizierte, aber plausible Selbst-/Fremdauskunft, kein härteres Sicherheitsziel.
+///
+/// <see cref="Removed"/>/<see cref="RemovedSetAtUtc"/> (Issue #61-Nachtrag "Löschen
+/// deaktiviert nicht wirklich"): trägt einen Tombstone aus <see cref="Storage.RemovedDeviceStore"/>
+/// weiter - anders als <see cref="Override"/> einseitig (kann nur von false auf true
+/// wechseln, nie zurück), deshalb ohne Zeitstempel-Konfliktregel bei Empfang: jeder
+/// Empfänger übernimmt Removed=true unbedingt, siehe DiscoveryService.HandleDatagramAsync.
+/// Alle anderen Felder eines rein tombstone-basierten Eintrags (kein zugehöriger
+/// DeviceEntry mehr vorhanden) sind bei Removed=true bedeutungslose Platzhalter - siehe
+/// DiscoveryService.BuildKnownDevicesSummaryAsync.
 /// </summary>
 public sealed record KnownDeviceSummary(
     Guid DeviceId,
@@ -36,4 +45,6 @@ public sealed record KnownDeviceSummary(
     int TcpPort,
     DateTimeOffset? FirstSeenUtc = null,
     LicenseOverride Override = LicenseOverride.None,
-    DateTimeOffset? OverrideSetAtUtc = null);
+    DateTimeOffset? OverrideSetAtUtc = null,
+    bool Removed = false,
+    DateTimeOffset? RemovedSetAtUtc = null);

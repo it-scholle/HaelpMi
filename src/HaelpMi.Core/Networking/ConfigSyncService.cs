@@ -261,6 +261,16 @@ public sealed class ConfigSyncService : IAsyncDisposable
     private async Task EvaluateAndPullAsync(Guid originDeviceId, int remoteConfigVersion, CancellationToken ct)
     {
         var settings = _settingsStore.Load();
+
+        // Issue #61-Nachtrag ("Löschen deaktiviert nicht wirklich"): ein per Geräte-Tab
+        // gelöschtes Gerät bekommt keine Config-Updates mehr, egal wie sie ausgelöst
+        // wurden (dedizierter Broadcast oder Boot-Call-Nachzieh-Pull) - siehe
+        // DiscoveryService.OwnDeviceRemovedObserved für den Lernpfad.
+        if (settings.Removed)
+        {
+            return;
+        }
+
         if (remoteConfigVersion <= settings.AppliedConfigVersion)
         {
             return; // already current or stale - nothing to do

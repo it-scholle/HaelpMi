@@ -482,11 +482,24 @@ public partial class App : System.Windows.Application
                 deviceStore.Save(devices);
                 _ = ipcClient.SendAsync(IpcCommandType.SearchAgain, TimeSpan.FromSeconds(10));
             },
+            // Issue #61-Nachtrag (Fehlerbericht "Löschen deaktiviert nicht wirklich"):
+            // zusätzlich zur bisherigen lokalen Entfernung aus der Übersicht jetzt auch
+            // ein Tombstone-Eintrag (siehe RemovedDeviceStore) - macht aus "Löschen" eine
+            // echte, per Gossip verbreitete Deaktivierung statt einer rein lokalen
+            // Anzeige-Entscheidung. Gleiches Sofort-Ausstrahlen-Muster wie
+            // SetDeviceLicenseOverride oben.
             DeleteDevice = deviceId =>
             {
                 var devices = deviceStore.Load();
                 DeviceStore.Remove(devices, deviceId);
                 deviceStore.Save(devices);
+
+                var removedDeviceStore = new RemovedDeviceStore();
+                var removedDevices = removedDeviceStore.Load();
+                RemovedDeviceStore.Add(removedDevices, deviceId, DateTimeOffset.UtcNow);
+                removedDeviceStore.Save(removedDevices);
+
+                _ = ipcClient.SendAsync(IpcCommandType.SearchAgain, TimeSpan.FromSeconds(10));
             },
             RequestSearchAgain = async () => (await ipcClient.SendAsync(IpcCommandType.SearchAgain, TimeSpan.FromSeconds(10))).Success,
             SetDeviceNote = (deviceId, note) =>

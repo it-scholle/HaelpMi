@@ -1,0 +1,61 @@
+<Window x:Class="HaelpMi.UI.Windows.DeviceRemovedToastWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="HälpMi"
+        Width="380" SizeToContent="Height"
+        WindowStyle="None" ResizeMode="NoResize"
+        ShowInTaskbar="False" Topmost="True"
+        Background="Transparent" AllowsTransparency="True">
+    <!-- Issue #61-Nachtrag ("Löschen deaktiviert nicht wirklich"): dasselbe Toast-Muster wie
+         LicenseLimitToastWindow (unten rechts einschwebend), erscheint bei jedem Agent-Start
+         unverändert wieder, solange OwnSettings.Removed gesetzt ist - "Später" schließt nur
+         dieses eine Fenster, hebt die Sperre (Senden/Empfangen/Config-Sync) nicht auf. -->
+    <Window.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/HaelpMi.UI;component/Styles/ModernStyles.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </Window.Resources>
+    <Border x:Name="RootBorder" Background="{StaticResource DangerBrush}" CornerRadius="14" Padding="14,12">
+        <Border.Effect>
+            <DropShadowEffect BlurRadius="14" ShadowDepth="2" Opacity="0.35" />
+        </Border.Effect>
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
+            <StackPanel Grid.Column="0">
+                <TextBlock Text="Gerät entfernt" Foreground="White" FontWeight="Bold" FontSize="13" />
+                <TextBlock Foreground="White" FontSize="12" TextWrapping="Wrap" Margin="0,3,0,10"
+                           Text="Dieses Gerät wurde von einem Admin im Dashboard gelöscht und ist deaktiviert - kein Alarmversand/-empfang, keine Konfigurationsupdates mehr. HälpMi muss neu installiert werden, um dieses Gerät wieder zu nutzen." />
+                <StackPanel x:Name="ButtonsPanel" Orientation="Horizontal">
+                    <Button x:Name="UninstallButton" Content="Jetzt deinstallieren" Padding="10,4" Margin="0,0,8,0"
+                            Background="White" FontWeight="SemiBold" BorderThickness="0" />
+                </StackPanel>
+                <TextBlock x:Name="UninstallerMissingText" Foreground="White" FontSize="11" TextWrapping="Wrap"
+                           Margin="0,8,0,0" Visibility="Collapsed"
+                           Text="Deinstallations-Programm nicht gefunden - bitte über Windows-Einstellungen/Systemsteuerung ('Apps' bzw. 'Programme und Features') deinstallieren." />
+            </StackPanel>
+
+            <!-- Gezeichnetes Kreuz statt Unicode-Glyph (bekannte Render-Probleme). -->
+            <Button Grid.Column="1" x:Name="CloseButton" Width="20" Height="20" Padding="0"
+                    VerticalAlignment="Top" Background="Transparent" BorderThickness="0" Click="CloseButton_Click">
+                <Grid Width="12" Height="12">
+                    <Rectangle Fill="White" Width="14" Height="2" RenderTransformOrigin="0.5,0.5">
+                        <Rectangle.RenderTransform>
+                            <RotateTransform Angle="45" />
+                        </Rectangle.RenderTransform>
+                    </Rectangle>
+                    <Rectangle Fill="White" Width="14" Height="2" RenderTransformOrigin="0.5,0.5">
+                        <Rectangle.RenderTransform>
+                            <RotateTransform Angle="-45" />
+                        </Rectangle.RenderTransform>
+                    </Rectangle>
+                </Grid>
+            </Button>
+        </Grid>
+    </Border>
+</Window>

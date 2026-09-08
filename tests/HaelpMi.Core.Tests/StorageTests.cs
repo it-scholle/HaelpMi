@@ -308,6 +308,55 @@ public class StorageTests
         Assert.Equal(keepId, devices[0].DeviceId);
     }
 
+    // --- Issue #61-Nachtrag (Fehlerbericht "Löschen deaktiviert nicht wirklich"): Remove()
+    // oben entfernt ein Gerät nur aus der lokalen Übersicht - RemovedDeviceStore ist der
+    // separate Tombstone, der verhindert, dass es per erneutem Boot-Call/Gossip wieder
+    // auflebt (siehe DiscoveryService). ---
+
+    [Fact]
+    public void RemovedDeviceStore_Add_ThenContains_FindsIt()
+    {
+        var deviceId = Guid.NewGuid();
+        var entries = new List<RemovedDeviceEntry>();
+
+        RemovedDeviceStore.Add(entries, deviceId, DateTimeOffset.UtcNow);
+
+        Assert.True(RemovedDeviceStore.Contains(entries, deviceId));
+        Assert.False(RemovedDeviceStore.Contains(entries, Guid.NewGuid()));
+    }
+
+    [Fact]
+    public void RemovedDeviceStore_Add_IsIdempotent_KeepsOriginalTimestamp()
+    {
+        var deviceId = Guid.NewGuid();
+        var firstRemovedAt = DateTimeOffset.UtcNow.AddMinutes(-5);
+        var entries = new List<RemovedDeviceEntry>();
+
+        RemovedDeviceStore.Add(entries, deviceId, firstRemovedAt);
+        RemovedDeviceStore.Add(entries, deviceId, DateTimeOffset.UtcNow); // späterer, abweichender Zeitstempel - darf den ersten nicht überschreiben
+
+        var entry = Assert.Single(entries);
+        Assert.Equal(firstRemovedAt, entry.RemovedAtUtc);
+    }
+
+    [Fact]
+    public void RemovedDeviceStore_RoundTrips_ThroughDisk()
+    {
+        using var scope = new TestAppDataScope();
+        var deviceId = Guid.NewGuid();
+        var removedAt = DateTimeOffset.UtcNow;
+        var store = new RemovedDeviceStore();
+
+        var entries = store.Load();
+        RemovedDeviceStore.Add(entries, deviceId, removedAt);
+        store.Save(entries);
+
+        var reloaded = new RemovedDeviceStore().Load();
+        var entry = Assert.Single(reloaded);
+        Assert.Equal(deviceId, entry.DeviceId);
+        Assert.Equal(removedAt, entry.RemovedAtUtc);
+    }
+
     [Fact]
     public void OrderForDisplay_PutsFavoritesFirst()
     {

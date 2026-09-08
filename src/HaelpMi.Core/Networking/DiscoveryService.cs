@@ -34,6 +34,12 @@ public sealed class OwnLicenseOverrideInfo
     public required DateTimeOffset SetAtUtc { get; init; }
 }
 
+/// <summary>Siehe <see cref="DiscoveryService.OwnDeviceRemovedObserved"/>.</summary>
+public sealed class OwnDeviceRemovedInfo
+{
+    public required DateTimeOffset RemovedAtUtc { get; init; }
+}
+
 /// <summary>
 /// UDP boot-call discovery (Phase 1 5.5/FR-21/22/23, Teil 2 Abschnitt 9): one socket
 /// bound to <see cref="AppConstants.DiscoveryUdpPort"/> both sends the once-per-startup
@@ -55,6 +61,7 @@ public sealed class DiscoveryService : IAsyncDisposable
     private readonly Func<string?>? _ownLicenseKeyTextProvider;
     private readonly int _discoveryPort;
     private readonly DeviceStore _deviceStore = new();
+    private readonly RemovedDeviceStore _removedDeviceStore = new();
     private readonly SemaphoreSlim _storeLock = new(1, 1);
     private readonly Action<string>? _audit;
     private UdpClient? _socket;
@@ -105,6 +112,15 @@ public sealed class DiscoveryService : IAsyncDisposable
     /// hat dadurch nie erfahren, wenn genau das eigene Gerät (de-)aktiviert wurde.
     /// </summary>
     public event EventHandler<OwnLicenseOverrideInfo>? OwnLicenseOverrideObserved;
+
+    /// <summary>
+    /// Issue #61-Nachtrag (Fehlerbericht "Löschen im Geräte-Tab deaktiviert das Gerät
+    /// nicht wirklich"): eine im Geräte-Tab getroffene "Löschen"-Entscheidung ÜBER DIESES
+    /// Gerät, gelernt aus dem Gossip-Anhang einer Boot-Call-Nachricht - genau derselbe
+    /// Lernpfad wie <see cref="OwnLicenseOverrideObserved"/>, nur einseitig (kann nur von
+    /// "nicht entfernt" auf "entfernt" wechseln, siehe RemovedDeviceStore).
+    /// </summary>
+    public event EventHandler<OwnDeviceRemovedInfo>? OwnDeviceRemovedObserved;
 
     /// <param name="discoveryPort">Overridable only for tests - production always uses <see cref="AppConstants.DiscoveryUdpPort"/> so every device agrees on one port.</param>
     /// <param name="ownLicenseKeyTextProvider">
@@ -275,20 +291,34 @@ public sealed class DiscoveryService : IAsyncDisposable
         }
 
         var remoteIp = result.RemoteEndPoint.Address.ToString();
-        DeviceEntry updated;
+        DeviceEntry? updated = null;
         OwnLicenseOverrideInfo? ownOverrideInfo = null;
+        OwnDeviceRemovedInfo? ownRemovedInfo = null;
 
         await _storeLock.WaitAsync(ct);
         try
         {
             var devices = _deviceStore.Load();
-            // Kein Override hier (bleibt null): ein Gerät berichtet nie eine Meinung über
-            // sich selbst - siehe DeviceUpsertInfo.
-            var info = new DeviceUpsertInfo(
-                message.ComputerName, message.User, message.RoomName, message.RoomNumber,
-                message.Role, message.IsRemoteSession, remoteIp, message.TcpPort, message.FirstSeenUtc);
-            DeviceStore.Upsert(devices, message.DeviceId, info, DateTimeOffset.UtcNow);
-            updated = devices.First(d => d.DeviceId == message.DeviceId);
+            var removedDevices = _removedDeviceStore.Load();
+
+            // Issue #61-Nachtrag ("Löschen deaktiviert nicht wirklich"): ein per Tombstone
+            // bereits als gelöscht bekannter Absender wird nie wieder aufgenommen, auch
+            // wenn er selbst weiterhin ganz normal announct (er weiß von seiner eigenen
+            // Löschung ja zunächst nichts) - siehe RemovedDeviceStore-Klassenkommentar.
+            if (RemovedDeviceStore.Contains(removedDevices, message.DeviceId))
+            {
+                devices.RemoveAll(d => d.DeviceId == message.DeviceId);
+            }
+            else
+            {
+                // Kein Override hier (bleibt null): ein Gerät berichtet nie eine Meinung über
+                // sich selbst - siehe DeviceUpsertInfo.
+                var info = new DeviceUpsertInfo(
+                    message.ComputerName, message.User, message.RoomName, message.RoomNumber,
+                    message.Role, message.IsRemoteSession, remoteIp, message.TcpPort, message.FirstSeenUtc);
+                DeviceStore.Upsert(devices, message.DeviceId, info, DateTimeOffset.UtcNow);
+                updated = devices.First(d => d.DeviceId == message.DeviceId);
+            }
 
             // Gossip (Nutzerwunsch 05.08.2026): sowohl eine Reply als auch ein bewusst mit
             // includeKnownDevices ausgelöstes Announce (Issue #61-Nachtrag, siehe
@@ -302,6 +332,24 @@ public sealed class DiscoveryService : IAsyncDisposable
                 {
                     if (known.DeviceId == message.DeviceId)
                     {
+                        continue;
+                    }
+
+                    if (known.Removed)
+                    {
+                        // Issue #61-Nachtrag: ein Tombstone gewinnt unbedingt, keine
+                        // Zeitstempel-Konfliktregel wie beim Override nötig - Removed kann
+                        // nur von false auf true wechseln (siehe KnownDeviceSummary), ein
+                        // "Zurückrudern" durch verspätete ältere Gossip gibt es nicht.
+                        var removedAt = known.RemovedSetAtUtc ?? DateTimeOffset.UtcNow;
+                        RemovedDeviceStore.Add(removedDevices, known.DeviceId, removedAt);
+                        devices.RemoveAll(d => d.DeviceId == known.DeviceId);
+
+                        if (known.DeviceId == ownIdentity.DeviceId)
+                        {
+                            ownRemovedInfo = new OwnDeviceRemovedInfo { RemovedAtUtc = removedAt };
+                        }
+
                         continue;
                     }
 
@@ -320,6 +368,14 @@ public sealed class DiscoveryService : IAsyncDisposable
                         continue;
                     }
 
+                    if (RemovedDeviceStore.Contains(removedDevices, known.DeviceId))
+                    {
+                        // Bereits lokal als gelöscht bekannt, auch wenn dieser konkrete
+                        // Gossip-Eintrag (noch veralteter Absender) es nicht mitträgt.
+                        devices.RemoveAll(d => d.DeviceId == known.DeviceId);
+                        continue;
+                    }
+
                     // Issue #61: Drittwissen trägt eine Override-Fremdmeinung mit (siehe
                     // KnownDeviceSummary) - Upsert wendet sie per "neuester Zeitstempel
                     // gewinnt" auf den lokalen Stand an.
@@ -332,6 +388,7 @@ public sealed class DiscoveryService : IAsyncDisposable
             }
 
             _deviceStore.Save(devices);
+            _removedDeviceStore.Save(removedDevices);
         }
         finally
         {
@@ -339,11 +396,19 @@ public sealed class DiscoveryService : IAsyncDisposable
         }
 
         _audit?.Invoke($"discovery {message.Kind} deviceId={message.DeviceId}");
-        RaiseObserver(() => DeviceUpdated?.Invoke(this, updated), nameof(DeviceUpdated));
+        if (updated is not null)
+        {
+            RaiseObserver(() => DeviceUpdated?.Invoke(this, updated), nameof(DeviceUpdated));
+        }
 
         if (ownOverrideInfo is not null)
         {
             RaiseObserver(() => OwnLicenseOverrideObserved?.Invoke(this, ownOverrideInfo), nameof(OwnLicenseOverrideObserved));
+        }
+
+        if (ownRemovedInfo is not null)
+        {
+            RaiseObserver(() => OwnDeviceRemovedObserved?.Invoke(this, ownRemovedInfo), nameof(OwnDeviceRemovedObserved));
         }
 
         if (message.ProgramVersion != ownIdentity.ProgramVersion)
@@ -445,9 +510,11 @@ public sealed class DiscoveryService : IAsyncDisposable
     {
         await _storeLock.WaitAsync(ct);
         List<DeviceEntry> devices;
+        List<RemovedDeviceEntry> removedDevices;
         try
         {
             devices = _deviceStore.Load();
+            removedDevices = _removedDeviceStore.Load();
         }
         finally
         {
@@ -471,6 +538,23 @@ public sealed class DiscoveryService : IAsyncDisposable
                 excludedSelf.DeviceId, excludedSelf.ComputerName, excludedSelf.User, excludedSelf.RoomName,
                 excludedSelf.RoomNumber, excludedSelf.Role, excludedSelf.IpAddress, excludedSelf.TcpPort,
                 excludedSelf.FirstSeenUtc, excludedSelf.LicenseOverride, excludedSelf.LicenseOverrideSetAtUtc));
+        }
+
+        // Issue #61-Nachtrag ("Löschen deaktiviert nicht wirklich"): Tombstones haben
+        // keinen zugehörigen DeviceEntry mehr (RemovedDeviceStore statt devices.json,
+        // siehe dortiger Klassenkommentar) und tauchen im obigen Select deshalb nie auf -
+        // hier separat angehängt, IMMER an jeden Empfänger, auch an den Betroffenen
+        // selbst (anders als beim Override oben gibt es hier keinen "kennt sich selbst
+        // besser"-Ausschluss: genau der Betroffene MUSS die Nachricht über sich selbst
+        // bekommen können, siehe OwnDeviceRemovedObserved). Übrige Felder sind
+        // Platzhalter - ein Tombstone-Eintrag beschreibt kein Gerät mehr, nur eine
+        // gelöschte DeviceId.
+        foreach (var removed in removedDevices)
+        {
+            summaries.Add(new KnownDeviceSummary(
+                removed.DeviceId, string.Empty, string.Empty, string.Empty, string.Empty,
+                Role.User, string.Empty, 0, null, LicenseOverride.None, null,
+                Removed: true, RemovedSetAtUtc: removed.RemovedAtUtc));
         }
 
         return summaries;

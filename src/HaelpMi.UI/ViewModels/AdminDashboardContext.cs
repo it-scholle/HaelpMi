@@ -105,7 +105,13 @@ public sealed class AdminDashboardContext
     /// </summary>
     public required Action<Guid, LicenseOverride> SetDeviceLicenseOverride { get; init; }
 
-    /// <summary>"Löschen" im Geräte-Tab (Issue #61) - siehe DeviceStore.Remove für die (bewusst rein lokale) Semantik.</summary>
+    /// <summary>
+    /// "Löschen" im Geräte-Tab (Issue #61) - entfernt das Gerät lokal aus der Übersicht
+    /// (DeviceStore.Remove) UND trägt es als Tombstone ein (RemovedDeviceStore), der sich
+    /// per Gossip im ganzen Kreis durchsetzt (Issue #61-Nachtrag "Löschen deaktiviert nicht
+    /// wirklich"): das betroffene Gerät selbst blockiert danach Alarmversand/-empfang und
+    /// Config-Sync-Übernahme und zeigt einen Hinweis mit Deinstallieren-Button.
+    /// </summary>
     public required Action<Guid> DeleteDevice { get; init; }
 
     /// <summary>Notiz-Feld im Geräte-Tab (Issue #61) - rein lokal wie bisher, kein Gossip (siehe DeviceEntry.Note).</summary>

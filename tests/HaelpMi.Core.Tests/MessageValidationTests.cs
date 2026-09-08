@@ -121,6 +121,17 @@ public class MessageValidationTests
         Assert.False((ValidBootCall() with { KnownDevices = devices }).IsPlausible());
     }
 
+    // Issue #61-Nachtrag: ein reiner Tombstone-Eintrag (Removed=true) hat keinen
+    // zugehörigen DeviceEntry mehr und damit keine echte IP/Port (siehe
+    // DiscoveryService.BuildKnownDevicesSummaryAsync) - TcpPort 0 ist dafür kein
+    // Plausibilitätsverstoß.
+    [Fact]
+    public void BootCallMessage_KnownDeviceRemovedWithTcpPortZero_IsPlausible()
+    {
+        var devices = new List<KnownDeviceSummary> { ValidKnownDevice() with { TcpPort = 0, IpAddress = "", Removed = true } };
+        Assert.True((ValidBootCall() with { KnownDevices = devices }).IsPlausible());
+    }
+
     [Fact]
     public void BootCallMessage_KnownDeviceWithUndefinedRole_IsRejected()
     {
