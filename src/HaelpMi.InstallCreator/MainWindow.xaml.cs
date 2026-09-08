@@ -758,6 +758,23 @@ public partial class MainWindow : Window
         LicenseHistoryListBox.ItemsSource = history.Select(entry => new LicenseHistoryItem(
             $"{LicenseTierLimits.GetDisplayLabel(entry.Tier, entry.UserLimit)} - erstellt {entry.ErstelltAm:d}, gültig bis {entry.Ablaufdatum:d}",
             entry.KeyText));
+
+        // Nutzerwunsch 08.09.2026: beim Kundenwechsel automatisch die neueste Lizenz vorauswählen
+        // (history steht bereits absteigend nach ErstelltAm, [0] ist also die neueste) - löst
+        // über SelectedIndex dieselbe SelectionChanged-Anzeige wie ein manueller Klick aus. Ist
+        // diese neueste bereits abgelaufen (oder existiert gar keine), bleibt das Feld
+        // ausgeblendet statt eine irreführend alte/ungültige Lizenz stehen zu lassen - gleicher
+        // Ablauf-Vergleich wie in LicenseReader.Classify (ExpiryDateUtc < DateTime.UtcNow).
+        var newest = history.FirstOrDefault();
+        if (newest is not null && newest.Ablaufdatum >= DateTime.Now)
+        {
+            LicenseHistoryListBox.SelectedIndex = 0;
+        }
+        else
+        {
+            LicenseHistoryListBox.SelectedIndex = -1;
+            LicenseKeyResultPanel.Visibility = Visibility.Collapsed;
+        }
     }
 
     // Nutzerwunsch 08.09.2026: die Auswahl in der Historie zeigt ihren Schlüssel oben im
@@ -858,6 +875,12 @@ public partial class MainWindow : Window
         LicenseStatusText.Text = "Lizenz erstellt.";
         Log($"Lizenz für {customer.Kundenname} erstellt (Tier {tier}, gültig bis {expiryDate:d}).");
         RefreshLicenseHistory();
+        // Die soeben erstellte Lizenz hat per ErstelltAm immer den neuesten Zeitstempel, steht in
+        // der (absteigend sortierten) Historie also auf Index 0 - explizit erneut auswählen, falls
+        // RefreshLicenseHistory sie oben gerade wegen des Aktiv-Checks ausgeblendet hat (der gilt
+        // nur für den automatischen Vorschlag beim Kundenwechsel, eine gerade erstellte Lizenz
+        // soll immer sichtbar bleiben, auch mit einem versehentlich schon abgelaufenen Datum).
+        LicenseHistoryListBox.SelectedIndex = 0;
     }
 
     private void CopyLicenseKeyButton_Click(object sender, RoutedEventArgs e)
