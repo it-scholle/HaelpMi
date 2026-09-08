@@ -13,7 +13,7 @@
 #define MyAppName "HälpMi"
 ; Alpha: 0.x until release, per city/product decision - Version 1.0.0 is reserved for
 ; the actual release. Bump the third number for ordinary fixes, second for a feature.
-#define MyAppVersion "0.40.1"
+#define MyAppVersion "0.41.0"
 #define MyAppPublisher "HälpMi contributors"
 #define MyAgentExeName "HaelpMi.Agent.exe"
 #define MyConfigExeName "HaelpMi.Config.exe"
@@ -665,6 +665,19 @@ begin
       LogUninstallDiagnostics('WARNUNG: {app}\versions existiert noch - deutet auf ein unterbrochenes Update hin (siehe UpdateServiceWorker-Kommentar).');
     if DirExists(ExpandConstant('{app}\_previous')) then
       LogUninstallDiagnostics('WARNUNG: {app}\_previous existiert noch - deutet auf einen unterbrochenen Swap hin.');
+
+    // Issue #61-Nachtrag (Nutzerwunsch 08.09.2026 "der Admin sollte im besten Fall auch
+    // gar nicht händisch deaktivieren müssen"): meldet die eigene Deinstallation aktiv ans
+    // Netz (Broadcast + Direct-Unicast an jeden bisher bekannten Peer, siehe
+    // DiscoveryService.AnnounceSelfRemovedAsync) - bewusst als expliziter Exec-Aufruf HIER,
+    // nicht als deklaratives [UninstallRun] (dessen Ausführungsreihenfolge relativ zu DIESEM
+    // Event-Handler nicht garantiert vor dem taskkill unten liegt): {#MyAgentExeName} matcht
+    // taskkill /IM rein nach Bilddateinamen (siehe Kommentar dort) - ein zu spät gestarteter
+    // Meldeversuch würde sich selbst mitten im Senden abschießen. ewWaitUntilTerminated
+    // erzwingt genau die Reihenfolge "erst melden, dann killen". Best-effort: ein
+    // Fehlschlag (z. B. kein Netz mehr) darf die eigentliche Deinstallation nicht
+    // aufhalten - Exec liefert dafür ohnehin nur einen Ergebniscode, kein Abbruch.
+    Exec(ExpandConstant('{app}\{#MyAgentExeName}'), '--notify-uninstall', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
 
     // Bugfix 06.08.2026 ("Uninstall entfernt Programm-Ordner nicht", Fehlerbericht): hier
     // stand bisher NUR der Agent-Kill - HaelpMi.Config.exe (Dashboard/Konfigurationsfenster,

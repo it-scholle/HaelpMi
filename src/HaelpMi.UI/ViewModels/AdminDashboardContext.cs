@@ -106,11 +106,24 @@ public sealed class AdminDashboardContext
     public required Action<Guid, LicenseOverride> SetDeviceLicenseOverride { get; init; }
 
     /// <summary>
-    /// "Löschen" im Geräte-Tab (Issue #61) - entfernt das Gerät lokal aus der Übersicht
-    /// (DeviceStore.Remove) UND trägt es als Tombstone ein (RemovedDeviceStore), der sich
-    /// per Gossip im ganzen Kreis durchsetzt (Issue #61-Nachtrag "Löschen deaktiviert nicht
-    /// wirklich"): das betroffene Gerät selbst blockiert danach Alarmversand/-empfang und
-    /// Config-Sync-Übernahme und zeigt einen Hinweis mit Deinstallieren-Button.
+    /// "Als deinstalliert markieren" im Geräte-Tab (Issue #61-Nachtrag 08.09.2026) -
+    /// manuelle Rückfallebene für den Normalfall, dass die Deinstallation bereits
+    /// automatisch gemeldet wurde (siehe DiscoveryService.AnnounceSelfRemovedAsync, vom
+    /// Uninstaller ausgelöst) und niemand hier klicken muss. Setzt
+    /// <see cref="DeviceEntry.Removed"/> lokal (DeviceStore.SetRemoved) und strahlt sofort
+    /// aus wie <see cref="SetDeviceLicenseOverride"/>. Das Gerät bleibt sichtbar (nur
+    /// gekennzeichnet), blockiert aber Alarmversand/-empfang und Config-Sync-Übernahme -
+    /// eine spätere Neuinstallation hebt die Markierung automatisch wieder auf.
+    /// </summary>
+    public required Action<Guid, bool> SetDeviceRemoved { get; init; }
+
+    /// <summary>
+    /// "Endgültig löschen" im Geräte-Tab (Issue #61-Nachtrag 08.09.2026 - vor der
+    /// "Deinstalliert"-Neufassung schlicht "Löschen") - entfernt das Gerät vollständig aus
+    /// der Übersicht (DeviceStore.Remove) UND trägt es als dauerhaften Tombstone ein
+    /// (RemovedDeviceStore), der sich per Gossip im ganzen Kreis durchsetzt. Bewusst
+    /// unumkehrbar (anders als <see cref="SetDeviceRemoved"/>) - eine Neuinstallation hebt
+    /// das NICHT automatisch wieder auf, das obliegt allein dem Admin.
     /// </summary>
     public required Action<Guid> DeleteDevice { get; init; }
 

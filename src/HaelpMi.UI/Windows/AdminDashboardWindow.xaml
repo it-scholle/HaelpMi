@@ -462,6 +462,14 @@
                                                         Visibility="{Binding IsLicenseExceeded, Converter={x:Static conv:BoolToVisibilityConverter.Instance}}">
                                                     <TextBlock Text="LIZENZ ÜBERSCHRITTEN" Foreground="White" FontSize="9" FontWeight="Bold" />
                                                 </Border>
+                                                <!-- Issue #61-Nachtrag: bleibt (anders als vor der "Deinstalliert"-Neufassung)
+                                                     sichtbar statt aus der Liste zu verschwinden - eine spätere
+                                                     Neuinstallation hebt das automatisch wieder auf. -->
+                                                <Border Background="{StaticResource TextSecondaryBrush}" CornerRadius="3" Padding="4,1" Margin="6,0,0,0" VerticalAlignment="Center"
+                                                        Visibility="{Binding IsUninstalled, Converter={x:Static conv:BoolToVisibilityConverter.Instance}}"
+                                                        ToolTip="{Binding UninstalledSinceDisplay}">
+                                                    <TextBlock Text="DEINSTALLIERT" Foreground="White" FontSize="9" FontWeight="Bold" />
+                                                </Border>
                                             </StackPanel>
 
                                             <StackPanel Grid.Column="2" VerticalAlignment="Center">
@@ -472,11 +480,25 @@
                                             <TextBox Grid.Column="3" Text="{Binding Note, Mode=TwoWay}" Tag="{Binding DeviceId}" Padding="4" FontSize="11"
                                                      Margin="0,0,10,0" VerticalAlignment="Center" LostFocus="DeviceNoteBox_LostFocus" ToolTip="Notiz (nur lokal auf diesem Admin-Gerät)" />
 
-                                            <Button Grid.Column="4" Width="26" Height="26" Padding="0" Tag="{Binding DeviceId}" VerticalAlignment="Center"
-                                                    IsEnabled="{Binding CanDelete}" Click="DeleteDeviceButton_Click" ToolTip="Gerät endgültig löschen (deaktiviert, Neuinstallation nötig)">
-                                                <Path Data="M2,2 L10,10 M2,10 L10,2" Stroke="{StaticResource TextSecondaryBrush}" StrokeThickness="1.6"
-                                                      Width="10" Height="10" Stretch="Uniform" />
-                                            </Button>
+                                            <StackPanel Grid.Column="4" Orientation="Horizontal">
+                                                <!-- "Als deinstalliert markieren"/"Markierung aufheben" (Issue #61-Nachtrag) -
+                                                     manuelle Rückfallebene, Normalfall ist die automatische Meldung durch
+                                                     den Uninstaller selbst. Gezeichnetes Power-Symbol statt Unicode-Glyph
+                                                     (bekannte Render-Probleme). -->
+                                                <Button Width="26" Height="26" Padding="0" Margin="0,0,4,0" Tag="{Binding DeviceId}" VerticalAlignment="Center"
+                                                        IsEnabled="{Binding CanDelete}" Click="MarkDeviceUninstalledButton_Click"
+                                                        ToolTip="Als deinstalliert markieren/Markierung aufheben (Rückfallebene - normalerweise meldet sich der Uninstaller selbst)">
+                                                    <Grid Width="12" Height="12">
+                                                        <Ellipse Stroke="{StaticResource TextSecondaryBrush}" StrokeThickness="1.4" Margin="0,2,0,0" />
+                                                        <Line X1="6" Y1="0" X2="6" Y2="5" Stroke="{StaticResource TextSecondaryBrush}" StrokeThickness="1.4" />
+                                                    </Grid>
+                                                </Button>
+                                                <Button Width="26" Height="26" Padding="0" Tag="{Binding DeviceId}" VerticalAlignment="Center"
+                                                        IsEnabled="{Binding CanDelete}" Click="DeleteDeviceButton_Click" ToolTip="Gerät endgültig löschen (deaktiviert, Neuinstallation nötig)">
+                                                    <Path Data="M2,2 L10,10 M2,10 L10,2" Stroke="{StaticResource TextSecondaryBrush}" StrokeThickness="1.6"
+                                                          Width="10" Height="10" Stretch="Uniform" />
+                                                </Button>
+                                            </StackPanel>
                                         </Grid>
                                     </Border>
                                 </DataTemplate>
@@ -485,7 +507,7 @@
                     </ScrollViewer>
 
                     <TextBlock Grid.Row="2" Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" Margin="0,10,0,0" TextWrapping="Wrap"
-                               Text="Deaktivierte Geräte zählen nicht mehr zum Lizenzkontingent und erhalten keine Alarme mehr. Löschen deaktiviert ein Gerät endgültig (kein Alarmversand/-empfang, keine Config-Updates mehr) und entfernt es aus jeder Geräteliste im Kreis - es kann sich nicht von selbst zurückmelden und muss neu installiert werden." />
+                               Text="Deaktivierte Geräte zählen nicht mehr zum Lizenzkontingent und erhalten keine Alarme mehr. Eine Deinstallation meldet sich automatisch (kein Alarmversand/-empfang, keine Config-Updates mehr) - das Gerät bleibt sichtbar, eine spätere Neuinstallation hebt die Markierung von selbst wieder auf. 'Endgültig löschen' entfernt ein Gerät dagegen dauerhaft aus jeder Geräteliste im Kreis, das obliegt allein dir als Admin." />
                 </Grid>
             </TabItem>
         </TabControl>

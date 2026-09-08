@@ -521,7 +521,8 @@ public class NetworkingTests
 
         await observedSignal.Task.WaitAsync(TimeSpan.FromSeconds(5));
         Assert.NotNull(observed);
-        Assert.Equal(removedAt, observed!.RemovedAtUtc);
+        Assert.True(observed!.Removed);
+        Assert.Equal(removedAt, observed.SetAtUtc);
 
         // Wie beim Override: ein Gerät trägt sich nie selbst in seine eigene Peer-Liste ein.
         var devices = new DeviceStore().Load();
@@ -529,7 +530,7 @@ public class NetworkingTests
     }
 
     [Fact]
-    public async Task DiscoveryService_GossipReportsThirdPartyRemoved_RemovesFromLocalListAndPersistsTombstone()
+    public async Task DiscoveryService_GossipReportsThirdPartyRemoved_MarksEntryButKeepsItVisible()
     {
         using var scope = new TestAppDataScope();
         var discoveryPort = GetFreeUdpPort();
@@ -538,10 +539,10 @@ public class NetworkingTests
         var ownDeviceId = Guid.NewGuid();
         var ownIdentity = MakeIdentity(customerGroupId, ownDeviceId, "Admin-B-PC", "Admin B", "Büro", "6");
 
-        // Dieses Admin-Dashboard kennt das gelöschte Gerät noch ganz normal - es hat den
-        // ursprünglichen "Löschen"-Klick auf einem ANDEREN Admin-Gerät nie gesehen.
+        // Dieses Admin-Dashboard kennt das deinstallierte Gerät noch ganz normal - es hat
+        // die Deinstallations-Meldung auf einem ANDEREN Admin-Gerät nie gesehen.
         var removedDeviceId = Guid.NewGuid();
-        new DeviceStore().Save(new List<DeviceEntry> { new() { DeviceId = removedDeviceId, ComputerName = "PC-Gelöscht", RoomName = "Lager", RoomNumber = "9" } });
+        new DeviceStore().Save(new List<DeviceEntry> { new() { DeviceId = removedDeviceId, ComputerName = "PC-Weg", RoomName = "Lager", RoomNumber = "9" } });
 
         await using var discovery = new DiscoveryService(() => ownIdentity, discoveryPort: discoveryPort);
         discovery.StartListening();
@@ -552,7 +553,7 @@ public class NetworkingTests
         var reply = new BootCallMessage(
             MessageKind.Reply, customerGroupId, adminADeviceId, "Admin-A-PC", "Admin A", "Büro", "5",
             Role.Admin, false, 51999, "9.9.9", 0, DateTimeOffset.UtcNow,
-            new List<KnownDeviceSummary> { new(removedDeviceId, "", "", "", "", Role.User, "", 0, null, LicenseOverride.None, null, Removed: true, RemovedSetAtUtc: removedAt) });
+            new List<KnownDeviceSummary> { new(removedDeviceId, "PC-Weg", "", "Lager", "9", Role.User, "192.168.1.40", 51501, null, LicenseOverride.None, null, Removed: true, RemovedSetAtUtc: removedAt) });
         var replyBytes = JsonSerializer.SerializeToUtf8Bytes(reply, WireOptions);
 
         var updatedSignal = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -561,11 +562,92 @@ public class NetworkingTests
         await adminASocket.SendAsync(replyBytes, replyBytes.Length, new IPEndPoint(IPAddress.Loopback, discoveryPort));
         await updatedSignal.Task.WaitAsync(TimeSpan.FromSeconds(5));
 
+        // Issue #61-Nachtrag ("Deinstalliert" statt Verstecken): das Gerät bleibt SICHTBAR
+        // in der Übersicht, nur markiert - anders als beim endgültigen Löschen landet hier
+        // nichts im RemovedDeviceStore.
         var devices = new DeviceStore().Load();
-        Assert.DoesNotContain(devices, d => d.DeviceId == removedDeviceId);
+        var marked = Assert.Single(devices, d => d.DeviceId == removedDeviceId);
+        Assert.True(marked.Removed);
+        Assert.Equal(removedAt, marked.RemovedSetAtUtc);
 
         var removedDevices = new RemovedDeviceStore().Load();
-        Assert.True(RemovedDeviceStore.Contains(removedDevices, removedDeviceId));
+        Assert.False(RemovedDeviceStore.Contains(removedDevices, removedDeviceId));
+    }
+
+    [Fact]
+    public async Task DiscoveryService_SelfReport_WithNewerLastInstalledAtUtc_ClearsPreviouslyKnownRemoved()
+    {
+        using var scope = new TestAppDataScope();
+        var discoveryPort = GetFreeUdpPort();
+        var customerGroupId = Guid.NewGuid();
+
+        var ownDeviceId = Guid.NewGuid();
+        var ownIdentity = MakeIdentity(customerGroupId, ownDeviceId, "Admin-PC", "Admin", "Büro", "5");
+
+        var reinstalledDeviceId = Guid.NewGuid();
+        var removedAt = DateTimeOffset.UtcNow.AddDays(-1);
+        new DeviceStore().Save(new List<DeviceEntry>
+        {
+            new() { DeviceId = reinstalledDeviceId, ComputerName = "PC-Alt", Removed = true, RemovedSetAtUtc = removedAt },
+        });
+
+        await using var discovery = new DiscoveryService(() => ownIdentity, discoveryPort: discoveryPort);
+        discovery.StartListening();
+
+        var updatedSignal = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        discovery.DeviceUpdated += (_, _) => updatedSignal.TrySetResult();
+
+        using var reinstalledSocket = new UdpClient(0) { EnableBroadcast = true };
+        // Selbstbericht (kein KnownDevices-Anhang) mit einem NEUEREN LastInstalledAtUtc als
+        // der lokal gespeicherte RemovedSetAtUtc - genau das Signal eines --post-install-Laufs.
+        var announce = new BootCallMessage(
+            MessageKind.Announce, customerGroupId, reinstalledDeviceId, "PC-Neu", "Frau Neu", "Empfang", "1",
+            Role.User, false, 51999, "9.9.9", 0, DateTimeOffset.UtcNow,
+            LastInstalledAtUtc: DateTimeOffset.UtcNow);
+        var announceBytes = JsonSerializer.SerializeToUtf8Bytes(announce, WireOptions);
+
+        await reinstalledSocket.SendAsync(announceBytes, announceBytes.Length, new IPEndPoint(IPAddress.Loopback, discoveryPort));
+        await updatedSignal.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+        var devices = new DeviceStore().Load();
+        var entry = Assert.Single(devices, d => d.DeviceId == reinstalledDeviceId);
+        Assert.False(entry.Removed);
+        Assert.Null(entry.RemovedSetAtUtc);
+        Assert.Equal("PC-Neu", entry.ComputerName); // normaler Selbstbericht wurde trotzdem ganz normal übernommen
+    }
+
+    // --- Issue #61-Nachtrag 08.09.2026 ("der Admin sollte im besten Fall auch gar nicht
+    // händisch deaktivieren müssen"): der Uninstaller meldet die eigene Deinstallation
+    // aktiv ans Netz, siehe DiscoveryService.AnnounceSelfRemovedAsync. ---
+
+    [Fact]
+    public async Task AnnounceSelfRemovedAsync_MarksSenderAsRemoved_OnReceiverSide_ButKeepsRowVisible()
+    {
+        using var scope = new TestAppDataScope();
+        var discoveryPort = GetFreeUdpPort();
+        var customerGroupId = Guid.NewGuid();
+
+        var uninstalledDeviceId = Guid.NewGuid();
+        var uninstalledIdentity = MakeIdentity(customerGroupId, uninstalledDeviceId, "PC-Weg", "Frau Weg", "Lager", "9");
+
+        var receiverDeviceId = Guid.NewGuid();
+        var receiverIdentity = MakeIdentity(customerGroupId, receiverDeviceId, "Admin-PC", "Admin", "Büro", "5");
+
+        await using var receiver = new DiscoveryService(() => receiverIdentity, discoveryPort: discoveryPort);
+        var updatedSignal = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        receiver.DeviceUpdated += (_, _) => updatedSignal.TrySetResult();
+        receiver.StartListening();
+
+        await using var uninstaller = new DiscoveryService(() => uninstalledIdentity, discoveryPort: discoveryPort);
+        uninstaller.StartListening();
+
+        await uninstaller.AnnounceSelfRemovedAsync();
+        await updatedSignal.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+        var devices = new DeviceStore().Load();
+        var entry = Assert.Single(devices, d => d.DeviceId == uninstalledDeviceId);
+        Assert.True(entry.Removed);
+        Assert.Equal("PC-Weg", entry.ComputerName); // ganz normaler, sichtbarer Eintrag - nicht versteckt
     }
 
     // --- Issue #61-Nachtrag (Nutzerbericht 08.09.2026 "Löschen ist ein Freischein" - der

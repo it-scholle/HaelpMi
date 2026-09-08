@@ -29,5 +29,6 @@ public static class LiveIdentityFactory
         settings.AppliedConfigVersion,
         settings.FirstSeenUtc,
         settings.LicenseOverride,
-        settings.LicenseOverrideSetAtUtc);
+        settings.LicenseOverrideSetAtUtc,
+        settings.LastInstalledAtUtc);
 }

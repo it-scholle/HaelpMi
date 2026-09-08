@@ -57,10 +57,17 @@ public partial class AdminDashboardWindow : Window
     /// <summary>Eine Zeile im Lizenzlimit-Banner (Issue #60) - siehe RefreshLicenseLimitBanner.</summary>
     private sealed record LicenseLimitDeviceRow(Guid DeviceId, string DisplayName);
 
-    /// <summary>Eine Zeile im Geräte-Tab (Issue #61) - siehe RefreshDevicesTab.</summary>
+    /// <summary>
+    /// Eine Zeile im Geräte-Tab (Issue #61) - siehe RefreshDevicesTab.
+    /// <paramref name="IsUninstalled"/>/<paramref name="UninstalledSinceDisplay"/> (Issue
+    /// #61-Nachtrag 08.09.2026 "Deinstalliert" statt Verstecken): anders als eine reine
+    /// Lizenz-Deaktivierung bleibt das Gerät sichtbar, aber deutlich gekennzeichnet - eine
+    /// spätere Neuinstallation hebt das automatisch wieder auf (siehe DeviceEntry.Removed).
+    /// </summary>
     private sealed record DeviceRow(
         Guid DeviceId, string ComputerName, string RoomDisplay, string User, string Note,
-        bool IsNew, bool IsAdmin, bool IsActive, bool IsLicenseExceeded, bool CanToggle, bool CanDelete, string ToggleTooltip);
+        bool IsNew, bool IsAdmin, bool IsActive, bool IsLicenseExceeded, bool CanToggle, bool CanDelete, string ToggleTooltip,
+        bool IsUninstalled, string UninstalledSinceDisplay);
 
     private readonly AdminDashboardContext _context;
     private SharedConfig _config = null!;
@@ -447,25 +454,33 @@ public partial class AdminDashboardWindow : Window
             .Select(d =>
             {
                 var isOwnDevice = d.DeviceId == ownDevice.DeviceId;
-                var isActive = !disabledDeviceIds.Contains(d.DeviceId);
-                var canToggle = !isOwnDevice && d.Role != Role.Admin
+                var isActive = !disabledDeviceIds.Contains(d.DeviceId) && !d.Removed;
+                // Issue #61-Nachtrag: der Aktivieren/Deaktivieren-Toggle ist wirkungslos,
+                // solange ein Gerät als deinstalliert markiert ist (Removed sperrt
+                // unabhängig vom LicenseOverride, siehe AlarmFlowCoordinator) - deshalb
+                // hier zusätzlich gesperrt, statt einen Klick anzubieten, der nichts ändert.
+                var canToggle = !isOwnDevice && d.Role != Role.Admin && !d.Removed
                     && DeviceActivationGate.CanToggle(isActive, activeCount, seatLimit);
-                var toggleTooltip = isOwnDevice
-                    ? "Dieses Gerät kann nicht deaktiviert werden."
-                    : d.Role == Role.Admin
-                        ? "Admin-Geräte zählen immer als aktiv."
-                        : isActive
-                            ? "Aktiv - anklicken zum Deaktivieren."
-                            : canToggle
-                                ? "Deaktiviert - anklicken zum Aktivieren."
-                                : "Lizenzkontingent ausgeschöpft - erst ein anderes Gerät deaktivieren.";
+                var toggleTooltip = d.Removed
+                    ? "Als deinstalliert markiert - erst die Markierung aufheben."
+                    : isOwnDevice
+                        ? "Dieses Gerät kann nicht deaktiviert werden."
+                        : d.Role == Role.Admin
+                            ? "Admin-Geräte zählen immer als aktiv."
+                            : isActive
+                                ? "Aktiv - anklicken zum Deaktivieren."
+                                : canToggle
+                                    ? "Deaktiviert - anklicken zum Aktivieren."
+                                    : "Lizenzkontingent ausgeschöpft - erst ein anderes Gerät deaktivieren.";
 
                 return new DeviceRow(
                     d.DeviceId, d.ComputerName,
                     string.IsNullOrWhiteSpace(d.RoomName) ? "kein Raum" : $"{d.RoomName} ({d.RoomNumber})",
                     d.User, d.Note, d.IsNew, d.Role == Role.Admin, isActive,
-                    IsLicenseExceeded: !isActive && d.LicenseOverride == LicenseOverride.None,
-                    CanToggle: canToggle, CanDelete: !isOwnDevice, ToggleTooltip: toggleTooltip);
+                    IsLicenseExceeded: !isActive && !d.Removed && d.LicenseOverride == LicenseOverride.None,
+                    CanToggle: canToggle, CanDelete: !isOwnDevice, ToggleTooltip: toggleTooltip,
+                    IsUninstalled: d.Removed,
+                    UninstalledSinceDisplay: d.RemovedSetAtUtc is { } removedAt ? $"Deinstalliert seit {removedAt.ToLocalTime():dd.MM.yyyy HH:mm}" : "Deinstalliert");
             })
             .OrderByDescending(r => r.IsNew)
             .ThenBy(r => r.ComputerName, StringComparer.CurrentCultureIgnoreCase)
@@ -496,6 +511,23 @@ public partial class AdminDashboardWindow : Window
         if (sender is Button { Tag: Guid deviceId })
         {
             _context.DeleteDevice(deviceId);
+            RefreshDevicesTab();
+        }
+    }
+
+    /// <summary>
+    /// "Als deinstalliert markieren"/"Markierung aufheben" (Issue #61-Nachtrag) - manuelle
+    /// Rückfallebene, siehe AdminDashboardContext.SetDeviceRemoved. Der Normalfall ist die
+    /// automatische Meldung durch den Uninstaller selbst; dieser Button greift nur, wenn
+    /// die niemanden erreicht hat.
+    /// </summary>
+    private void MarkDeviceUninstalledButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button { Tag: Guid deviceId } button)
+        {
+            var currentlyUninstalled = (DevicesList.ItemsSource as IEnumerable<DeviceRow>)
+                ?.FirstOrDefault(r => r.DeviceId == deviceId)?.IsUninstalled ?? false;
+            _context.SetDeviceRemoved(deviceId, !currentlyUninstalled);
             RefreshDevicesTab();
         }
     }

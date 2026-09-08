@@ -115,6 +115,20 @@ public partial class App : System.Windows.Application
             return;
         }
 
+        if (ShouldNotifyUninstallOnly(e.Args))
+        {
+            // Issue #61-Nachtrag (Nutzerwunsch 08.09.2026 "der Admin sollte im besten Fall
+            // auch gar nicht händisch deaktivieren müssen"): vom Uninstaller selbst
+            // aufgerufen (installer/HaelpMiCommon.iss.inc [UninstallRun]), BEVOR die
+            // Programmdateien entfernt werden - meldet die eigene Deinstallation aktiv ans
+            // Netz statt tatenlos zu verschwinden. Läuft ohne Fenster/Hintergrunddienste
+            // wie die anderen Sondermodi oben, die Einzelinstanz-Sperre unten gilt nicht
+            // (eine echte Produktivinstanz kann parallel weiterlaufen, bis der Uninstaller
+            // sie gleich danach selbst beendet).
+            RunNotifyUninstallAndExit();
+            return;
+        }
+
         if (ShouldRegisterAutostartOnly(e.Args))
         {
             // Root-Cause-Fix 11.08.2026 (Fehlerbericht "Autostart nicht eingerichtet" auf
@@ -167,13 +181,40 @@ public partial class App : System.Windows.Application
             return;
         }
 
-        StartBackgroundServices();
         var isPostInstallStart = IsPostInstallStart(e.Args);
+        if (isPostInstallStart)
+        {
+            // Issue #61-Nachtrag (Nutzerwunsch 08.09.2026 "wird das Gerät neu installiert,
+            // wird der Delete-Tag einfach entfernt"): [Run] löst --post-install bei JEDEM
+            // abgeschlossenen Installer-Lauf aus, auch Reparatur/Update über eine schon
+            // bestehende settings.json (anders als FirstSeenUtc, siehe dortiger Kommentar) -
+            // genau das macht diesen Zeitpunkt zum richtigen Signal "gerade (neu)
+            // installiert". Hebt eine evtl. vorhandene eigene Removed-Markierung UNBEDINGT
+            // auf (keine Zeitstempel-Prüfung nötig - ein tatsächlicher Installer-Lauf ist
+            // immer die stärkere, aktuellere Auskunft) und verbreitet den frischen
+            // Zeitstempel gleich beim ersten eigenen Announce weiter (siehe
+            // LiveIdentityFactory/DiscoveryService.BuildMessage), damit auch andere Geräte
+            // eine für diese DeviceId gespeicherte Markierung automatisch aufheben (siehe
+            // DeviceStore.Upsert).
+            _settings.LastInstalledAtUtc = DateTimeOffset.UtcNow;
+            if (_settings.Removed)
+            {
+                _settings.Removed = false;
+                _settings.RemovedSetAtUtc = null;
+                _auditLog.Append("Eigene Deinstalliert-Markierung durch Installer-Lauf aufgehoben");
+            }
+
+            _settingsStore.Save(_settings);
+        }
+
+        StartBackgroundServices();
         ShowLicenseReminderToastIfNeeded(isPostInstallStart);
         // Issue #61-Nachtrag: bewusst unconditional (kein isPostInstallStart-Filter wie
         // oben) - eine frische Installation hat nie Removed=true (neue DeviceId, siehe
-        // OwnSettings.DeviceId), ein Neustart eines schon zuvor gelöschten Geräts dagegen
-        // schon, und genau der soll den Hinweis unverändert wieder zeigen.
+        // OwnSettings.DeviceId), ein reparierter/aktualisierter Bestand hat die Markierung
+        // gerade eben oben aufgehoben bekommen, ein Neustart eines tatsächlich noch
+        // gelöschten Geräts dagegen nicht - und genau der soll den Hinweis unverändert
+        // wieder zeigen.
         ShowDeviceRemovedToastIfNeeded();
         // Issue #68-Nacharbeit: eine frische Installation hat noch keine Lizenzdatei
         // (LicenseStatus.Missing -> effektives Nutzerlimit 0, siehe
@@ -299,37 +340,46 @@ public partial class App : System.Windows.Application
 
     /// <summary>
     /// Issue #61-Nachtrag (Fehlerbericht "Löschen im Geräte-Tab deaktiviert das Gerät
-    /// nicht wirklich"): eine im Geräte-Tab getroffene "Löschen"-Entscheidung ÜBER DIESES
-    /// Gerät, gelernt über Gossip (siehe DiscoveryService.OwnDeviceRemovedObserved). Anders
-    /// als <see cref="OnOwnLicenseOverrideObserved"/> keine "neuester Zeitstempel
-    /// gewinnt"-Prüfung nötig - Removed kann nur von false auf true wechseln, ein
-    /// nochmaliges Setzen (auch mit älterem Zeitstempel) ändert am Ergebnis nichts.
+    /// nicht wirklich"): eine im Geräte-Tab getroffene "Deinstalliert"-Entscheidung ÜBER
+    /// DIESES Gerät, gelernt über Gossip (siehe DiscoveryService.OwnDeviceRemovedObserved).
+    /// "Neuester Zeitstempel gewinnt" wie beim Override (Nachtrag 08.09.2026: Removed ist
+    /// seit der "Deinstalliert"-Neufassung KEIN reines "kann nur auf true wechseln" mehr -
+    /// eine Neuinstallation kann die Markierung über denselben Gossip-Pfad auch wieder auf
+    /// false setzen, siehe DeviceStore.Upsert/LastInstalledAtUtc).
     /// </summary>
     private void OnOwnDeviceRemoved(object? sender, OwnDeviceRemovedInfo info)
     {
         var settings = _settingsStore.Load();
-        if (settings.Removed)
+        if (settings.RemovedSetAtUtc >= info.SetAtUtc)
         {
             return;
         }
 
-        settings.Removed = true;
-        settings.RemovedSetAtUtc = info.RemovedAtUtc;
+        settings.Removed = info.Removed;
+        settings.RemovedSetAtUtc = info.SetAtUtc;
         _settingsStore.Save(settings);
         _settings = settings;
 
-        _auditLog.Append($"Eigenes Gerät als gelöscht übernommen (RemovedAtUtc={info.RemovedAtUtc:O})");
+        _auditLog.Append($"Eigener Deinstalliert-Status übernommen: {info.Removed} (SetAtUtc={info.SetAtUtc:O})");
         ShowDeviceRemovedToastIfNeeded();
     }
 
     /// <summary>
     /// Issue #61-Nachtrag: zeigt den "Gerät entfernt"-Hinweis, solange OwnSettings.Removed
     /// gesetzt ist - aufgerufen beim Start (bereits vorher gelöscht) und sofort, sobald die
-    /// Löschung per Gossip neu eintrifft (<see cref="OnOwnDeviceRemoved"/>).
+    /// Löschung per Gossip neu eintrifft (<see cref="OnOwnDeviceRemoved"/>). Schließt einen
+    /// noch offenen Hinweis umgekehrt auch wieder, sobald die Markierung (z. B. durch eine
+    /// Neuinstallation) aufgehoben wurde.
     /// </summary>
     private void ShowDeviceRemovedToastIfNeeded()
     {
-        if (!_settings.Removed || _deviceRemovedToast is not null)
+        if (!_settings.Removed)
+        {
+            _deviceRemovedToast?.Close();
+            return;
+        }
+
+        if (_deviceRemovedToast is not null)
         {
             return;
         }
@@ -388,6 +438,10 @@ public partial class App : System.Windows.Application
     // vorbehalten (siehe TEST-STRATEGY.md) - Testfall dafür ist unten formuliert.
     private static bool ShouldRegisterAutostartOnly(string[] args) =>
         args.Contains("--register-autostart", StringComparer.Ordinal);
+
+    // Kein eigener Unit-Test (gleicher Grund wie bei ShouldRegisterAutostartOnly oben).
+    private static bool ShouldNotifyUninstallOnly(string[] args) =>
+        args.Contains("--notify-uninstall", StringComparer.Ordinal);
 
     // Issue #68: gesetzt nur auf dem Agent-Start, den der Installer selbst direkt nach der
     // Installation auslöst (siehe HaelpMiCommon.iss.inc [Run]) - unterdrückt auf diesem einen
@@ -454,6 +508,46 @@ public partial class App : System.Windows.Application
         var executablePath = Environment.ProcessPath ?? Process.GetCurrentProcess().MainModule?.FileName ?? string.Empty;
         var ok = !string.IsNullOrEmpty(executablePath) && AutostartRegistrar.EnsureRegistered(executablePath, out _);
         Shutdown(ok ? 0 : 1);
+    }
+
+    /// <summary>
+    /// Siehe Aufrufstelle in OnStartup und DiscoveryService.AnnounceSelfRemovedAsync -
+    /// meldet die eigene Deinstallation aktiv ans Netz (Broadcast + Direct-Unicast an
+    /// jeden bisher bekannten Peer), statt darauf zu warten, dass ein Admin sie manuell im
+    /// Geräte-Tab nachträgt. Best-effort: eine fehlgeschlagene Meldung (z. B. kein Netz
+    /// mehr verfügbar) darf die eigentliche Deinstallation nicht verhindern - der Admin
+    /// kann notfalls manuell nachmarkieren (DeviceStore.SetRemoved).
+    /// </summary>
+    private void RunNotifyUninstallAndExit()
+    {
+        try
+        {
+            var settings = _settingsStore.Load();
+            var deployment = DeploymentInfoStore.Load();
+            var identity = LiveIdentityFactory.Create(settings, deployment);
+
+            var discovery = new DiscoveryService(() => identity);
+            try
+            {
+                discovery.StartListening();
+                discovery.AnnounceSelfRemovedAsync().GetAwaiter().GetResult();
+
+                // Kurze Gnadenfrist, damit die zuletzt abgeschickten UDP-Pakete den
+                // Netzwerkadapter sicher noch verlassen, bevor dieser Prozess (und gleich
+                // danach der Uninstaller die Programmdateien) verschwindet.
+                Task.Delay(TimeSpan.FromMilliseconds(500)).Wait();
+            }
+            finally
+            {
+                discovery.DisposeAsync().AsTask().Wait();
+            }
+        }
+        catch (Exception)
+        {
+            // best-effort, siehe Methodenkommentar
+        }
+
+        Shutdown();
     }
 
     private LiveIdentity BuildIdentity() => LiveIdentityFactory.Create(_settings, _deployment);

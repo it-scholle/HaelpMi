@@ -44,6 +44,14 @@ public enum MessageKind
 /// null, wenn der Absender selbst keine (mehr) hat. Selbstsignierend, daher ohne
 /// zusätzliche Vertrauensinfrastruktur sicher gossip-fähig: jeder Empfänger prüft die
 /// Signatur selbst nach, bevor er sie übernimmt (siehe DiscoveryService.HandleDatagramAsync).
+///
+/// <see cref="LastInstalledAtUtc"/> (Issue #61-Nachtrag 08.09.2026): eigener Zeitpunkt des
+/// letzten Installer-Laufs (siehe <see cref="Models.OwnSettings.LastInstalledAtUtc"/>) -
+/// hebt bei einem Empfänger eine für diese DeviceId gespeicherte
+/// <see cref="Models.DeviceEntry.Removed"/>-Markierung automatisch auf, sobald neuer als
+/// deren Zeitstempel (siehe DeviceStore.Upsert). <c>default</c>/nie gesetzt bei einem
+/// Absender ohne dieses Feld (ältere Programmversion), verhält sich dann wie "nie
+/// installiert" - hebt also nichts auf, kompatibel zum bisherigen Verhalten.
 /// </summary>
 public sealed record BootCallMessage(
     MessageKind Kind,
@@ -61,4 +69,5 @@ public sealed record BootCallMessage(
     DateTimeOffset SentAtUtc,
     IReadOnlyList<KnownDeviceSummary>? KnownDevices = null,
     DateTimeOffset? FirstSeenUtc = null,
-    string? LicenseKeyText = null);
+    string? LicenseKeyText = null,
+    DateTimeOffset LastInstalledAtUtc = default);

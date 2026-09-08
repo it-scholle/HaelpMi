@@ -482,12 +482,26 @@ public partial class App : System.Windows.Application
                 deviceStore.Save(devices);
                 _ = ipcClient.SendAsync(IpcCommandType.SearchAgain, TimeSpan.FromSeconds(10));
             },
-            // Issue #61-Nachtrag (Fehlerbericht "Löschen deaktiviert nicht wirklich"):
-            // zusätzlich zur bisherigen lokalen Entfernung aus der Übersicht jetzt auch
-            // ein Tombstone-Eintrag (siehe RemovedDeviceStore) - macht aus "Löschen" eine
-            // echte, per Gossip verbreitete Deaktivierung statt einer rein lokalen
-            // Anzeige-Entscheidung. Gleiches Sofort-Ausstrahlen-Muster wie
-            // SetDeviceLicenseOverride oben.
+            // Issue #61-Nachtrag ("der Admin sollte im besten Fall auch gar nicht händisch
+            // deaktivieren müssen"): manuelle Rückfallebene, falls die automatische
+            // Deinstallations-Meldung (DiscoveryService.AnnounceSelfRemovedAsync, vom
+            // Uninstaller ausgelöst) niemanden erreicht hat - gleiches Sofort-
+            // Ausstrahlen-Muster wie SetDeviceLicenseOverride oben. Bleibt (anders als
+            // DeleteDevice unten) sichtbar in der Übersicht, nur als "Deinstalliert"
+            // markiert - eine spätere Neuinstallation hebt das automatisch wieder auf.
+            SetDeviceRemoved = (deviceId, removed) =>
+            {
+                var devices = deviceStore.Load();
+                DeviceStore.SetRemoved(devices, deviceId, removed, DateTimeOffset.UtcNow);
+                deviceStore.Save(devices);
+                _ = ipcClient.SendAsync(IpcCommandType.SearchAgain, TimeSpan.FromSeconds(10));
+            },
+            // "Endgültig löschen" (Issue #61-Nachtrag 08.09.2026 - vor der "Deinstalliert"-
+            // Neufassung schlicht "Löschen"): bewusst unumkehrbare, admin-only Aktion, die
+            // das Gerät komplett aus der Übersicht entfernt UND per Tombstone (siehe
+            // RemovedDeviceStore) im ganzen Kreis dauerhaft sperrt - anders als
+            // SetDeviceRemoved oben hebt eine spätere Neuinstallation das NICHT automatisch
+            // wieder auf. Gleiches Sofort-Ausstrahlen-Muster wie SetDeviceLicenseOverride.
             DeleteDevice = deviceId =>
             {
                 var devices = deviceStore.Load();

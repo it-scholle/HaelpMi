@@ -12,19 +12,20 @@ namespace HaelpMi.Core.Storage;
 public sealed record RemovedDeviceEntry(Guid DeviceId, DateTimeOffset RemovedAtUtc, string? LastKnownIpAddress = null);
 
 /// <summary>
-/// Tombstone-Liste gelöschter Geräte (Issue #61-Nachtrag, Fehlerbericht "Löschen im
-/// Geräte-Tab deaktiviert das Gerät nicht wirklich - es kann weiter propagieren und
-/// Alarme senden"): getrennt von <see cref="DeviceStore"/>, weil ein gelöschtes Gerät
-/// dort bewusst NICHT mehr auftaucht (Löschen entfernt es aus der Übersicht) - ohne
-/// diese separate Liste würde ein erneuter Boot-Call/Gossip des gelöschten Geräts (das
-/// von seiner eigenen Löschung ja zunächst nichts weiß) es beim nächsten Upsert einfach
-/// wieder unsichtbar in devices.json aufleben lassen. Einmal eingetragen, nie wieder
-/// entfernt (kein "Wiederherstellen") - eine echte Neuinstallation vergibt eine neue
-/// DeviceId (siehe OwnSettings.DeviceId) und betrifft diesen Eintrag hier gar nicht erst.
-/// Wird wie DeviceEntry per Gossip an andere Geräte weitergetragen (siehe
-/// DiscoveryService.BuildKnownDevicesSummaryAsync/HandleDatagramAsync), damit sich die
-/// Löschung ohne zentrale Instanz im ganzen Kreis durchsetzt, auch auf Admin-Dashboards,
-/// die den ursprünglichen "Löschen"-Klick nie gesehen haben.
+/// Tombstone-Liste ENDGÜLTIG gelöschter Geräte ("Endgültig löschen" im Geräte-Tab, Issue
+/// #61-Nachtrag) - bewusst getrennt von der sichtbaren, umkehrbaren
+/// <see cref="Models.DeviceEntry.Removed"/>-Markierung ("Deinstalliert", siehe dortiger
+/// Kommentar): ein endgültig gelöschtes Gerät verschwindet komplett aus
+/// <see cref="DeviceStore"/> (kein DeviceEntry mehr) - ohne diese separate Liste würde ein
+/// erneuter Boot-Call/Gossip des Geräts (das von seiner eigenen endgültigen Löschung ja
+/// zunächst nichts weiß) es beim nächsten Upsert einfach wieder in devices.json aufleben
+/// lassen. Einmal eingetragen, nie wieder entfernt (kein "Wiederherstellen", auch nicht
+/// durch eine Neuinstallation mit unveränderter DeviceId - anders als bei Removed/
+/// RemovedSetAtUtc gibt es hier keine LastInstalledAtUtc-Aufhebungsregel, das obliegt
+/// bewusst allein dem Admin). Wird wie DeviceEntry per Gossip an andere Geräte
+/// weitergetragen (siehe DiscoveryService.BuildKnownDevicesSummaryAsync/HandleDatagramAsync),
+/// damit sich die endgültige Löschung ohne zentrale Instanz im ganzen Kreis durchsetzt,
+/// auch auf Admin-Dashboards, die den ursprünglichen Klick nie gesehen haben.
 /// </summary>
 public sealed class RemovedDeviceStore
 {

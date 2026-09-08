@@ -14,6 +14,20 @@ namespace HaelpMi.Core.Storage;
 /// (<see cref="Protocol.KnownDeviceSummary"/>) befüllt - ein Gerät berichtet nie über sich
 /// selbst, deshalb bleibt dieses Feld beim direkten Selbstbericht des betroffenen Geräts
 /// null ("nicht anfassen"). Siehe <see cref="Upsert"/> für die Merge-Regel.
+///
+/// <paramref name="Removed"/>/<paramref name="RemovedSetAtUtc"/> (Issue #61-Nachtrag
+/// 08.09.2026 "Deinstalliert" statt Verstecken): dieselbe Fremdmeinungs-Semantik wie
+/// <paramref name="Override"/>, nur für <see cref="DeviceEntry.Removed"/> - ebenfalls nie
+/// aus einem Selbstbericht befüllt (ein Gerät erfährt seine eigene Deinstallation nie von
+/// sich selbst, siehe <see cref="Networking.DiscoveryService.AnnounceSelfRemovedAsync"/> für
+/// den Sonderweg, über den ein Gerät das trotzdem über sich selbst verbreiten kann).
+///
+/// <paramref name="LastInstalledAtUtc"/> (Issue #61-Nachtrag): GENAU umgekehrt - ausschließlich
+/// aus einem Selbstbericht befüllt (nur das betroffene Gerät selbst weiß, wann es zuletzt
+/// installiert/repariert wurde, siehe OwnSettings.LastInstalledAtUtc), nie aus Gossip über
+/// ein drittes Gerät. Überbietet ein vorhandenes <see cref="DeviceEntry.RemovedSetAtUtc"/>,
+/// hebt die Markierung dann automatisch auf - "wird das Gerät neu installiert, wird der Tag
+/// einfach entfernt" (Nutzerwunsch 08.09.2026).
 /// </summary>
 public sealed record DeviceUpsertInfo(
     string ComputerName,
@@ -26,7 +40,10 @@ public sealed record DeviceUpsertInfo(
     int TcpPort,
     DateTimeOffset? FirstSeenUtc,
     LicenseOverride? Override = null,
-    DateTimeOffset? OverrideSetAtUtc = null);
+    DateTimeOffset? OverrideSetAtUtc = null,
+    bool? Removed = null,
+    DateTimeOffset? RemovedSetAtUtc = null,
+    DateTimeOffset? LastInstalledAtUtc = null);
 
 /// <summary>Loads/saves the locally known list of other devices (FR-18, 5.4).</summary>
 public sealed class DeviceStore
@@ -63,6 +80,8 @@ public sealed class DeviceStore
                 IsNew = true,
                 LicenseOverride = info.Override ?? LicenseOverride.None,
                 LicenseOverrideSetAtUtc = info.Override is not null ? info.OverrideSetAtUtc : null,
+                Removed = info.Removed ?? false,
+                RemovedSetAtUtc = info.Removed is not null ? info.RemovedSetAtUtc : null,
             });
         }
         else
@@ -97,6 +116,30 @@ public sealed class DeviceStore
                 existing.LicenseOverride = reportedOverride;
                 existing.LicenseOverrideSetAtUtc = info.OverrideSetAtUtc;
             }
+
+            // Removed (Issue #61-Nachtrag): dieselbe "neuester Zeitstempel gewinnt"-Regel
+            // wie beim Override - eine Fremdmeinung (info.Removed != null) übernimmt sowohl
+            // eine neu gemeldete Deinstallation ALS AUCH eine neu gemeldete Aufhebung
+            // (Removed:false mit neuerem Zeitstempel), falls sie neuer ist als der lokal
+            // bekannte Stand.
+            if (info.Removed is { } reportedRemoved
+                && (existing.RemovedSetAtUtc is null || info.RemovedSetAtUtc > existing.RemovedSetAtUtc))
+            {
+                existing.Removed = reportedRemoved;
+                existing.RemovedSetAtUtc = info.RemovedSetAtUtc;
+            }
+
+            // LastInstalledAtUtc (Issue #61-Nachtrag, ausschließlich Selbstbericht - siehe
+            // DeviceUpsertInfo): eine neuere eigene Installation als die zuletzt bekannte
+            // Removed-Entscheidung hebt diese automatisch auf - "Neuinstallation entfernt
+            // den Delete-Tag" (Nutzerwunsch), ohne dass irgendjemand das Gerät erst wieder
+            // manuell aktivieren müsste.
+            if (existing.Removed && info.LastInstalledAtUtc is { } lastInstalledAtUtc
+                && lastInstalledAtUtc > (existing.RemovedSetAtUtc ?? DateTimeOffset.MinValue))
+            {
+                existing.Removed = false;
+                existing.RemovedSetAtUtc = null;
+            }
             // Favorite/Notified/Note/IsNew/LicenseLimitWarningAcknowledged sind lokale Entscheidungen und bleiben unangetastet.
         }
 
@@ -120,13 +163,34 @@ public sealed class DeviceStore
     }
 
     /// <summary>
-    /// "Löschen" im Geräte-Tab (Issue #61) - rein lokal, keine Tombstone-Verbreitung: ein
-    /// noch existierendes/wieder online kommendes Gerät wird beim nächsten eigenen Boot-Call
-    /// oder Gossip eines dritten Geräts ganz normal neu aufgenommen. Gedacht für tatsächlich
-    /// deinstallierte Geräte, die ohnehin nicht mehr melden.
+    /// "Endgültig löschen" im Geräte-Tab (Issue #61-Nachtrag 08.09.2026 - vor der
+    /// Neufassung schlicht "Löschen"): rein lokal, die eigentliche Verbreitung/
+    /// Resurrection-Sperre läuft über <see cref="RemovedDeviceStore"/> (siehe dortiger
+    /// Kommentar) - anders als die sichtbare, umkehrbare <see cref="DeviceEntry.Removed"/>-
+    /// Markierung ("Deinstalliert") ist das hier die bewusst unumkehrbare, admin-only
+    /// Aktion: das Gerät verschwindet komplett aus der Übersicht, eine spätere
+    /// Neuinstallation hebt das NICHT automatisch wieder auf.
     /// </summary>
     public static void Remove(List<DeviceEntry> devices, Guid deviceId) =>
         devices.RemoveAll(d => d.DeviceId == deviceId);
+
+    /// <summary>
+    /// "Als deinstalliert markieren" im Geräte-Tab (Issue #61-Nachtrag) - manuelle
+    /// Rückfallebene, falls die automatische Deinstallations-Meldung
+    /// (<see cref="Networking.DiscoveryService.AnnounceSelfRemovedAsync"/>) niemanden
+    /// erreicht hat. Setzt <see cref="DeviceEntry.Removed"/>/<see cref="DeviceEntry.RemovedSetAtUtc"/>
+    /// unbedingt (ein bewusster Admin-Klick gewinnt immer lokal), Verbreitung läuft danach
+    /// wie beim Override über den normalen Gossip-Pfad.
+    /// </summary>
+    public static void SetRemoved(List<DeviceEntry> devices, Guid deviceId, bool removed, DateTimeOffset setAtUtc)
+    {
+        var entry = devices.FirstOrDefault(d => d.DeviceId == deviceId);
+        if (entry is not null)
+        {
+            entry.Removed = removed;
+            entry.RemovedSetAtUtc = setAtUtc;
+        }
+    }
 
     /// <summary>
     /// Clears the "Neu" highlight once the Notified checkbox has been consciously set or
