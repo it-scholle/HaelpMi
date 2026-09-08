@@ -10,55 +10,73 @@ namespace HaelpMi.InstallCreator;
 /// Windows-Nachrichtenschleife zuverlässig eine Exception, obwohl der Schreibvorgang auf
 /// OS-Ebene tatsächlich ankommt - "funktioniert, meldet aber fälschlich einen Fehler".
 /// System.Windows.Forms.Clipboard.SetDataObject hat einen offiziell dafür vorgesehenen
-/// retryTimes/retryDelay-Parameter für CLIPBRD_E_CANT_OPEN und läuft zuverlässig direkt auf
-/// dem WPF-UI-Thread, meldet aber ebenfalls gelegentlich fälschlich CLIPBRD_E_CANT_OPEN aus
-/// seinem eigenen internen Render-/Flush-Schritt, obwohl der eigentliche Schreibvorgang
-/// längst angekommen ist - deshalb das Rücklese-Verify vor jedem "wirklich fehlgeschlagen".
-/// Ohne all das kann ein Zwischenablage-Zugriff das ganze Programm hängen lassen oder mit
-/// einer Falschmeldung abstürzen, wenn ein anderer Prozess (z. B. VM-Zwischenablage-
-/// Synchronisation) die Zwischenablage kurz blockiert.
+/// retryTimes/retryDelay-Parameter für CLIPBRD_E_CANT_OPEN, meldet aber ebenfalls gelegentlich
+/// fälschlich CLIPBRD_E_CANT_OPEN aus seinem eigenen internen Render-/Flush-Schritt, obwohl der
+/// eigentliche Schreibvorgang längst angekommen ist - deshalb das Rücklese-Verify vor jedem
+/// "wirklich fehlgeschlagen".
+///
+/// Nachtrag 08.09.2026 (Fehlerbericht "immer noch ~20s Programm-Hänger trotz Fix"): der obige
+/// retryTimes/retryDelay-Parameter deckt nur ein kurzes "busy, bitte nochmal versuchen" ab.
+/// Hält ein fremder Prozess (z. B. VM-Zwischenablage-Synchronisation) die Zwischenablage
+/// tatsächlich länger blockiert, kann der einzelne SetDataObject-Aufruf selbst - nicht nur die
+/// Pause zwischen zwei Versuchen - viele Sekunden lang im Win32/OLE-Aufruf hängen bleiben; kein
+/// retryTimes-Wert kann die Dauer eines einzelnen bereits blockierenden Aufrufs begrenzen. Der
+/// vorherige zweite Voll-Anlauf (weiterer SetDataObject-Aufruf + erneutes Rücklese-Verify)
+/// verdoppelte diese unbegrenzte Wartezeit nur, ohne sie zu begrenzen. Deshalb läuft der
+/// eigentliche Kopierversuch jetzt auf einem eigenen Hintergrund-Thread; das UI wartet über
+/// <see cref="Thread.Join(int)"/> höchstens <see cref="TotalTimeoutMs"/> darauf - danach gilt
+/// der Versuch als fehlgeschlagen und das UI ist wieder bedienbar, unabhängig davon, wie lange
+/// der Fremdprozess die Zwischenablage noch blockiert. Der Hintergrund-Thread selbst läuft als
+/// Daemon (<see cref="Thread.IsBackground"/>) unbeobachtet weiter oder stirbt mit dem Prozess -
+/// kein Leck, da Kopierversuche nicht gehäuft auftreten.
 /// </summary>
 internal static class ClipboardCopier
 {
-    /// <summary>
-    /// Blockiert die UI im schlechtesten Fall knapp 9s statt 4s - für einen manuell
-    /// angestoßenen Klick hinnehmbar, ein Zwischenablage-Zugriff lässt sich nicht sinnvoll
-    /// in einen Hintergrund-Task auslagern (die Zwischenablage-API selbst verlangt den
-    /// UI-Thread).
-    /// </summary>
+    private const int TotalTimeoutMs = 2500;
+    private const int SetDataRetryTimes = 10;
+    private const int SetDataRetryDelayMs = 100;
+    private const int VerifyAttempts = 5;
+    private const int VerifyDelayMs = 100;
+
     public static bool TryCopy(string text, out int lastErrorCode)
     {
-        lastErrorCode = 0;
-        const int maxAttempts = 2;
-        for (var attempt = 1; attempt <= maxAttempts; attempt++)
-        {
-            try
-            {
-                System.Windows.Forms.Clipboard.SetDataObject(text, copy: true, retryTimes: 30, retryDelay: 100);
-                return true;
-            }
-            catch (System.Runtime.InteropServices.ExternalException ex)
-            {
-                lastErrorCode = ex.ErrorCode;
-                if (VerifyEventuallyMatches(text))
-                {
-                    // SetDataObject hat sich geirrt (siehe Klassenkommentar) - tatsächlich erfolgreich.
-                    return true;
-                }
+        var outcome = new CopyOutcome();
+        var worker = new System.Threading.Thread(() => RunCopy(text, outcome)) { IsBackground = true };
+        worker.SetApartmentState(System.Threading.ApartmentState.STA);
+        worker.Start();
 
-                if (attempt < maxAttempts)
-                {
-                    System.Threading.Thread.Sleep(700);
-                }
-            }
+        if (!worker.Join(TotalTimeoutMs))
+        {
+            // Fremdprozess blockiert die Zwischenablage länger als hinnehmbar - UI nicht länger
+            // aufhalten, siehe Klassenkommentar. Kein spezifischer HRESULT bekannt, da der
+            // Aufruf selbst nie zurückgekehrt ist.
+            lastErrorCode = 0;
+            return false;
         }
 
-        return false;
+        lastErrorCode = outcome.ErrorCode;
+        return outcome.Success;
+    }
+
+    private static void RunCopy(string text, CopyOutcome outcome)
+    {
+        try
+        {
+            System.Windows.Forms.Clipboard.SetDataObject(text, copy: true, retryTimes: SetDataRetryTimes, retryDelay: SetDataRetryDelayMs);
+            outcome.Success = true;
+        }
+        catch (System.Runtime.InteropServices.ExternalException ex)
+        {
+            outcome.ErrorCode = ex.ErrorCode;
+            // SetDataObject hat sich möglicherweise geirrt (siehe Klassenkommentar) -
+            // tatsächlich erfolgreich trotz gemeldeter Exception.
+            outcome.Success = VerifyEventuallyMatches(text);
+        }
     }
 
     private static bool VerifyEventuallyMatches(string expected)
     {
-        for (var attempt = 0; attempt < 10; attempt++)
+        for (var attempt = 0; attempt < VerifyAttempts; attempt++)
         {
             try
             {
@@ -72,9 +90,15 @@ internal static class ClipboardCopier
                 // weiter versuchen, siehe Schleife
             }
 
-            System.Threading.Thread.Sleep(100);
+            System.Threading.Thread.Sleep(VerifyDelayMs);
         }
 
         return false;
+    }
+
+    private sealed class CopyOutcome
+    {
+        public bool Success;
+        public int ErrorCode;
     }
 }
