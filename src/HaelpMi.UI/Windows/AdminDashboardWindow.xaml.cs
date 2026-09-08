@@ -425,19 +425,32 @@ public partial class AdminDashboardWindow : Window
         var devices = _context.LoadDevices().Append(ownDevice).ToList();
         var disabledDeviceIds = _context.GetDisabledDeviceIds();
 
+        // Issue #61-Nacharbeit (Nutzerbericht 08.09.2026, "ich kann auf 3/2 Lizenzen gehen"):
+        // ein Klick durfte ein Gerät bisher auch dann aktivieren, wenn das Kontingent schon
+        // ausgeschöpft war (LicenseOverride.ForceEnabled hebelt das Kontingent in
+        // LicenseLimitEvaluator bewusst aus - "immer aktiv", siehe dortiger Kommentar). Vorab
+        // berechnet, damit alle Zeilen denselben Kontingent-Stand sehen, unabhängig von der
+        // Reihenfolge, in der sie unten aufgebaut werden - Entscheidung selbst in
+        // DeviceActivationGate (testbar ohne WPF).
+        var activeCount = devices.Count(d => !disabledDeviceIds.Contains(d.DeviceId));
+        var seatLimit = _context.GetLicenseSeatLimit();
+
         var rows = devices
             .Select(d =>
             {
                 var isOwnDevice = d.DeviceId == ownDevice.DeviceId;
                 var isActive = !disabledDeviceIds.Contains(d.DeviceId);
-                var canToggle = !isOwnDevice && d.Role != Role.Admin;
+                var canToggle = !isOwnDevice && d.Role != Role.Admin
+                    && DeviceActivationGate.CanToggle(isActive, activeCount, seatLimit);
                 var toggleTooltip = isOwnDevice
                     ? "Dieses Gerät kann nicht deaktiviert werden."
                     : d.Role == Role.Admin
                         ? "Admin-Geräte zählen immer als aktiv."
                         : isActive
                             ? "Aktiv - anklicken zum Deaktivieren."
-                            : "Deaktiviert - anklicken zum Aktivieren.";
+                            : canToggle
+                                ? "Deaktiviert - anklicken zum Aktivieren."
+                                : "Lizenzkontingent ausgeschöpft - erst ein anderes Gerät deaktivieren.";
 
                 return new DeviceRow(
                     d.DeviceId, d.ComputerName,
@@ -452,8 +465,6 @@ public partial class AdminDashboardWindow : Window
 
         DevicesList.ItemsSource = rows;
 
-        var activeCount = rows.Count(r => r.IsActive);
-        var seatLimit = _context.GetLicenseSeatLimit();
         LicenseSeatCountText.Text = seatLimit is { } limit ? $"{activeCount}/{limit} lizenziert" : $"{activeCount}/∞ lizenziert";
     }
 
