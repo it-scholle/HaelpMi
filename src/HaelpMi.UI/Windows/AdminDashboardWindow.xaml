@@ -127,7 +127,10 @@
                      (RowDefinition "Auto" statt "*"), und diese ScrollViewer übernimmt den
                      Rest, statt alles gleichmäßig auf nahezu 0px zusammenzuquetschen. -->
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
-                <Grid Margin="10">
+                <!-- Issue #84 (Nacharbeit zu #77): Lizenz-Sperre greift hier statt am
+                     MainTabControl selbst - die Reiter bleiben dadurch immer anklickbar,
+                     nur die Bearbeitung innerhalb wird deaktiviert. -->
+                <Grid Margin="10" x:Name="ProfileTabContent">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
@@ -314,7 +317,8 @@
             <!-- Gruppen: die einzige organisatorische Einheit - ein Zusammenschluss von
                  Arbeitsplätzen/Räumen (z. B. eine Etage), direkt aus Geräten. -->
             <TabItem Header="Gruppen">
-                <Grid Margin="10">
+                <!-- Issue #84 (Nacharbeit zu #77): siehe Kommentar an ProfileTabContent oben. -->
+                <Grid Margin="10" x:Name="GroupsTabContent">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="220" />
                         <ColumnDefinition Width="*" />
