@@ -27,6 +27,14 @@ public static class LicenseReader
         Load(AppPaths.LicenseFilePath, ownCustomerGroupId, publicKeyBytes);
 
     /// <summary>
+    /// Issue #94: dieselbe Prüfung wie <see cref="Load(Guid, byte[])"/>, nur für eine wegen
+    /// eines Downgrades vorgemerkte, noch nicht aktive Lizenz (siehe
+    /// <see cref="PendingLicenseSwitch"/>) statt für die gerade aktive.
+    /// </summary>
+    public static LicenseCheckResult LoadPending(Guid ownCustomerGroupId, byte[] publicKeyBytes) =>
+        Load(AppPaths.PendingLicenseFilePath, ownCustomerGroupId, publicKeyBytes);
+
+    /// <summary>
     /// Dateipfad als zusätzlicher Parameter (statt fest verdrahtet), damit Tests mit einer
     /// temporären Datei arbeiten können - gleiches Prinzip wie
     /// <c>UpdatePackageVerifier.Verify</c>.

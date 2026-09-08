@@ -408,8 +408,16 @@
                  zugänglichen ConfigWindow. Nutzerwunsch: letzter Tab statt erster.
                  Nutzerwunsch 08.09.2026: kein manueller "Erneut suchen"-Button mehr - der
                  Tab fragt beim Anklicken (MainTabControl_SelectionChanged) sowie bei
-                 App-Start und nach Lizenz-Import selbst automatisch nach. -->
-            <TabItem x:Name="DevicesTabItem" Header="Geräte">
+                 App-Start und nach Lizenz-Import selbst automatisch nach.
+                 Issue #94: "Geräte" -> "Geräte / Lizenz" - Lizenzinfo-Zeile (Paketgröße/
+                 verfügbare Lizenzen/Ablaufdatum) ganz oben, inkl. eigenem "Lizenz
+                 einspielen"-Button für einen frühzeitigen Paketwechsel (unabhängig vom
+                 #20-Warnbanner oben, das nur bei einem Problem mit der aktuellen Lizenz
+                 erscheint - beide rufen denselben LicenseKeyImportWindow-Dialog auf). Bei
+                 einem noch nicht wirksamen Downgrade (siehe PendingLicenseSwitch) stehen die
+                 neuen Werte in Klammern hinter den aktuellen, mit einer Info-Zeile zum
+                 Wechseldatum darüber. -->
+            <TabItem x:Name="DevicesTabItem" Header="Geräte / Lizenz">
                 <Grid Margin="10">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
@@ -417,19 +425,19 @@
                         <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
 
-                    <!-- Issue #118: eigener, immer sichtbarer Import-Button hier - unabhängig vom
-                         #20-Warnbanner oben (LicenseWarningBanner), das nur bei Ablauf/Fehler der
-                         aktuellen Lizenz erscheint. Ermöglicht einen frühzeitigen Lizenz-/
-                         Paketwechsel, bevor die laufende Lizenz überhaupt ein Problem zeigt. Ruft
-                         denselben LicenseKeyImportWindow-Dialog wie der Banner-Button auf. -->
-                    <Border Grid.Row="0" HorizontalAlignment="Left" Margin="0,0,0,12" Background="{StaticResource CardBackgroundBrush}" BorderBrush="{StaticResource HairlineBrush}"
-                            BorderThickness="1" CornerRadius="8" Padding="14,8">
-                        <DockPanel LastChildFill="True">
-                            <Button DockPanel.Dock="Right" x:Name="ImportLicenseFromDevicesTabButton" Content="Lizenz einspielen"
-                                    Padding="12,6" Margin="16,0,0,0" Click="ImportLicenseFromDevicesTabButton_Click" />
-                            <TextBlock x:Name="LicenseSeatCountText" FontSize="15" FontWeight="Bold" VerticalAlignment="Center" />
-                        </DockPanel>
-                    </Border>
+                    <StackPanel Grid.Row="0" Margin="0,0,0,12">
+                        <TextBlock x:Name="PendingLicenseInfoText" Visibility="Collapsed" Margin="0,0,0,6" FontSize="12"
+                                   Foreground="{StaticResource TextSecondaryBrush}" TextWrapping="Wrap" />
+                        <Border HorizontalAlignment="Left" Background="{StaticResource CardBackgroundBrush}" BorderBrush="{StaticResource HairlineBrush}"
+                                BorderThickness="1" CornerRadius="8" Padding="14,8">
+                            <DockPanel LastChildFill="True">
+                                <Button DockPanel.Dock="Right" x:Name="ImportLicenseFromDevicesTabButton" Content="Lizenz einspielen"
+                                        Padding="12,6" Background="White" BorderThickness="1" Margin="16,0,0,0"
+                                        Click="ImportLicenseFromDevicesTabButton_Click" />
+                                <TextBlock x:Name="LicenseInfoRowText" FontSize="15" FontWeight="Bold" VerticalAlignment="Center" TextWrapping="Wrap" />
+                            </DockPanel>
+                        </Border>
+                    </StackPanel>
 
                     <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
                         <ItemsControl x:Name="DevicesList">

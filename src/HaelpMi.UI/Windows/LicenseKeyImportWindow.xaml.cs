@@ -57,6 +57,21 @@ public partial class LicenseKeyImportWindow : Window
             return;
         }
 
+        // Issue #94 ("Lizenz einspielen" für einen frühzeitigen Paketwechsel): ein Downgrade
+        // wird nicht sofort aktiv, sondern nur vorgemerkt - eigene, nicht-fehlerhafte
+        // Rückmeldung statt der generischen Aktivierungs-Meldung unten.
+        if (diagnosis.Outcome == LicenseImportOutcome.PendingDowngrade)
+        {
+            var effectiveDate = diagnosis.CurrentLicense!.ExpiryDateUtc.ToLocalTime();
+            MessageBox.Show(this,
+                $"Die Neue Lizenz verfügt über weniger Gerätelizenzen. Die vorhandene Lizenz wird regulär bis {effectiveDate:d} genutzt und wechselt im Anschluss automatisch.",
+                "HälpMi - Lizenzwechsel vorgemerkt", MessageBoxButton.OK, MessageBoxImage.Information);
+
+            DialogResult = true;
+            Close();
+            return;
+        }
+
         if (diagnosis.Outcome != LicenseImportOutcome.Activated)
         {
             ShowError(BuildErrorMessage(diagnosis));

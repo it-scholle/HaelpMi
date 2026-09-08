@@ -321,4 +321,137 @@ public class LicenseWarningAndImportTests
         Assert.False(adopted);
         Assert.False(File.Exists(destinationPath));
     }
+
+    // --------------------------------------- LicenseImporter.ImportFromKeyText - Paketwechsel (Issue #94) ---
+    // "Lizenz einspielen" für einen frühzeitigen Upgrade/Downgrade, siehe LicensePackageComparer.
+
+    private static License MakeSignedWithLimit(Guid customerGroupId, int? userLimit, Ed25519PrivateKeyParameters privateKey) =>
+        SignLicense(MakeUnsigned(customerGroupId, DateTime.UtcNow.AddYears(1)) with { UserLimit = userLimit }, privateKey);
+
+    [Fact]
+    public void ImportFromKeyText_QueuesPendingDowngrade_WhenCurrentLicenseIsValidAndNewOneHasFewerDeviceLicenses()
+    {
+        var (privateKey, publicKeyBytes) = GenerateTestKeyPair();
+        var customerGroupId = Guid.NewGuid();
+        var destinationPath = Path.Combine(Path.GetTempPath(), $"lizenz-pkgchange-dst-{Guid.NewGuid():N}.json");
+        var pendingPath = Path.Combine(Path.GetTempPath(), $"lizenz-pkgchange-pending-{Guid.NewGuid():N}.json");
+        var current = MakeSignedWithLimit(customerGroupId, 25, privateKey);
+        File.WriteAllText(destinationPath, System.Text.Json.JsonSerializer.Serialize(current));
+        var smaller = MakeSignedWithLimit(customerGroupId, 10, privateKey);
+
+        var diagnosis = LicenseImporter.ImportFromKeyText(LicenseKeyText.Encode(smaller), customerGroupId, destinationPath, pendingPath, publicKeyBytes);
+
+        Assert.Equal(LicenseImportOutcome.PendingDowngrade, diagnosis.Outcome);
+        Assert.Equal(10, diagnosis.License!.UserLimit);
+        Assert.Equal(25, diagnosis.CurrentLicense!.UserLimit);
+        Assert.True(File.Exists(pendingPath));
+
+        // Die bisherige aktive Lizenz bleibt unangetastet aktiv.
+        var stillActive = LicenseReader.Load(destinationPath, customerGroupId, publicKeyBytes);
+        Assert.Equal(25, stillActive.License!.UserLimit);
+    }
+
+    [Fact]
+    public void ImportFromKeyText_ActivatesImmediately_ForUpgrade_EvenWhenCurrentLicenseIsValid()
+    {
+        var (privateKey, publicKeyBytes) = GenerateTestKeyPair();
+        var customerGroupId = Guid.NewGuid();
+        var destinationPath = Path.Combine(Path.GetTempPath(), $"lizenz-pkgchange-dst-{Guid.NewGuid():N}.json");
+        var pendingPath = Path.Combine(Path.GetTempPath(), $"lizenz-pkgchange-pending-{Guid.NewGuid():N}.json");
+        File.WriteAllText(destinationPath, System.Text.Json.JsonSerializer.Serialize(MakeSignedWithLimit(customerGroupId, 25, privateKey)));
+        var bigger = MakeSignedWithLimit(customerGroupId, 75, privateKey);
+
+        var diagnosis = LicenseImporter.ImportFromKeyText(LicenseKeyText.Encode(bigger), customerGroupId, destinationPath, pendingPath, publicKeyBytes);
+
+        Assert.Equal(LicenseImportOutcome.Activated, diagnosis.Outcome);
+        var active = LicenseReader.Load(destinationPath, customerGroupId, publicKeyBytes);
+        Assert.Equal(75, active.License!.UserLimit);
+        Assert.False(File.Exists(pendingPath));
+    }
+
+    [Fact]
+    public void ImportFromKeyText_ActivatesImmediately_ForSmallerPackage_WhenNoValidCurrentLicenseExists()
+    {
+        // Nutzerentscheidung 08.09.2026: fehlt eine gültige Vorgänger-Lizenz (hier: gar
+        // keine Datei vorhanden -> Missing), wird jede neue Lizenz sofort aktiv, egal wie
+        // groß das Paket ist.
+        var (privateKey, publicKeyBytes) = GenerateTestKeyPair();
+        var customerGroupId = Guid.NewGuid();
+        var destinationPath = Path.Combine(Path.GetTempPath(), $"lizenz-pkgchange-dst-{Guid.NewGuid():N}.json");
+        var pendingPath = Path.Combine(Path.GetTempPath(), $"lizenz-pkgchange-pending-{Guid.NewGuid():N}.json");
+        var small = MakeSignedWithLimit(customerGroupId, 10, privateKey);
+
+        var diagnosis = LicenseImporter.ImportFromKeyText(LicenseKeyText.Encode(small), customerGroupId, destinationPath, pendingPath, publicKeyBytes);
+
+        Assert.Equal(LicenseImportOutcome.Activated, diagnosis.Outcome);
+        Assert.True(File.Exists(destinationPath));
+    }
+
+    [Fact]
+    public void ImportFromKeyText_ClearsStalePendingFile_WhenSubsequentImportIsUpgrade()
+    {
+        var (privateKey, publicKeyBytes) = GenerateTestKeyPair();
+        var customerGroupId = Guid.NewGuid();
+        var destinationPath = Path.Combine(Path.GetTempPath(), $"lizenz-pkgchange-dst-{Guid.NewGuid():N}.json");
+        var pendingPath = Path.Combine(Path.GetTempPath(), $"lizenz-pkgchange-pending-{Guid.NewGuid():N}.json");
+        File.WriteAllText(destinationPath, System.Text.Json.JsonSerializer.Serialize(MakeSignedWithLimit(customerGroupId, 25, privateKey)));
+        File.WriteAllText(pendingPath, "irgendeine-alte-vormerkung");
+
+        var bigger = MakeSignedWithLimit(customerGroupId, 75, privateKey);
+        var diagnosis = LicenseImporter.ImportFromKeyText(LicenseKeyText.Encode(bigger), customerGroupId, destinationPath, pendingPath, publicKeyBytes);
+
+        Assert.Equal(LicenseImportOutcome.Activated, diagnosis.Outcome);
+        Assert.False(File.Exists(pendingPath));
+    }
+
+    // ----------------------------------- LicenseImporter.TryAdoptPendingFromPeer (Issue #94) ---
+
+    [Fact]
+    public void TryAdoptPendingFromPeer_Adopts_WhenNoPendingHeldYet_AndStillADowngradeAgainstOwnActiveLicense()
+    {
+        var (privateKey, publicKeyBytes) = GenerateTestKeyPair();
+        var customerGroupId = Guid.NewGuid();
+        var pendingPath = Path.Combine(Path.GetTempPath(), $"lizenz-pending-peer-{Guid.NewGuid():N}.json");
+        var ownActive = MakeSignedWithLimit(customerGroupId, 25, privateKey);
+        var peerPending = MakeSignedWithLimit(customerGroupId, 10, privateKey);
+
+        var adopted = LicenseImporter.TryAdoptPendingFromPeer(
+            LicenseKeyText.Encode(peerPending), customerGroupId, pendingPath, publicKeyBytes, ownActiveLicense: ownActive, ownPendingLicense: null);
+
+        Assert.True(adopted);
+        Assert.True(File.Exists(pendingPath));
+    }
+
+    [Fact]
+    public void TryAdoptPendingFromPeer_Rejects_WhenNoLongerADowngradeAgainstOwnActiveLicense()
+    {
+        // Die eigene aktive Lizenz ist (per Gossip) längst auf denselben kleinen Stand
+        // gewechselt - die vom Peer gemeldete Vormerkung wäre nur noch eine Karteileiche.
+        var (privateKey, publicKeyBytes) = GenerateTestKeyPair();
+        var customerGroupId = Guid.NewGuid();
+        var pendingPath = Path.Combine(Path.GetTempPath(), $"lizenz-pending-peer-{Guid.NewGuid():N}.json");
+        var ownActive = MakeSignedWithLimit(customerGroupId, 10, privateKey);
+        var peerPending = MakeSignedWithLimit(customerGroupId, 10, privateKey);
+
+        var adopted = LicenseImporter.TryAdoptPendingFromPeer(
+            LicenseKeyText.Encode(peerPending), customerGroupId, pendingPath, publicKeyBytes, ownActiveLicense: ownActive, ownPendingLicense: null);
+
+        Assert.False(adopted);
+        Assert.False(File.Exists(pendingPath));
+    }
+
+    [Fact]
+    public void TryAdoptPendingFromPeer_Rejects_WhenPeerPendingIsNotNewerThanOwnPending()
+    {
+        var (privateKey, publicKeyBytes) = GenerateTestKeyPair();
+        var customerGroupId = Guid.NewGuid();
+        var pendingPath = Path.Combine(Path.GetTempPath(), $"lizenz-pending-peer-{Guid.NewGuid():N}.json");
+        var ownPending = SignLicense(MakeUnsigned(customerGroupId, DateTime.UtcNow.AddYears(1)) with { UserLimit = 10, IssuedAtUtc = DateTime.UtcNow }, privateKey);
+        var olderPeerPending = SignLicense(MakeUnsigned(customerGroupId, DateTime.UtcNow.AddYears(1)) with { UserLimit = 10, IssuedAtUtc = DateTime.UtcNow.AddDays(-10) }, privateKey);
+
+        var adopted = LicenseImporter.TryAdoptPendingFromPeer(
+            LicenseKeyText.Encode(olderPeerPending), customerGroupId, pendingPath, publicKeyBytes, ownActiveLicense: null, ownPendingLicense: ownPending);
+
+        Assert.False(adopted);
+    }
 }
