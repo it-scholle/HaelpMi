@@ -56,6 +56,14 @@ public sealed class AlarmFlowCoordinator
     /// <summary>Issue #59/#60: true, solange dieses Gerät wegen Lizenzüberschreitung deaktiviert ist.</summary>
     public bool IsOwnDeviceLicenseDisabled() => _licenseLimitGuard.IsOwnDeviceDisabled();
 
+    /// <summary>
+    /// Issue #61-Nachtrag ("Löschen deaktiviert nicht wirklich"): true, sobald ein Admin
+    /// dieses Gerät im Geräte-Tab gelöscht hat (siehe OwnSettings.Removed) - anders als
+    /// <see cref="IsOwnDeviceLicenseDisabled"/> nie wieder rückgängig zu machen, außer
+    /// durch eine echte Neuinstallation.
+    /// </summary>
+    public bool IsOwnDeviceRemoved() => _settingsProvider().Removed;
+
     /// <summary>Called from the TCP listener's background thread when an alarm arrives (FR-9/FR-47).</summary>
     public void HandleIncomingAlarmRequest(AlarmReceivedEventArgs args)
     {
@@ -150,6 +158,12 @@ public sealed class AlarmFlowCoordinator
     /// <summary>Hotkey-triggered send for one <see cref="AlarmProfile"/> (FR-50): resolves this sender's asymmetric recipient set and starts a repeating session.</summary>
     public void TriggerAlarmProfile(AlarmProfile profile)
     {
+        if (IsOwnDeviceRemoved())
+        {
+            ShowDeviceRemovedBlockedMessage();
+            return;
+        }
+
         if (_licenseLimitGuard.IsOwnDeviceDisabled())
         {
             ShowLicenseLimitBlockedMessage();
@@ -192,6 +206,12 @@ public sealed class AlarmFlowCoordinator
             "aktiviert oder eine neue Lizenz eingespielt wird.",
             "HälpMi - Lizenz ausgeschöpft", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Warning);
 
+    private static void ShowDeviceRemovedBlockedMessage() =>
+        System.Windows.MessageBox.Show(
+            "Dieses Gerät wurde von einem Admin im Dashboard gelöscht und kann keine Alarme mehr senden. " +
+            "HälpMi kann deinstalliert werden - siehe den separaten Hinweis dazu.",
+            "HälpMi - Gerät entfernt", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Warning);
+
     private static async Task RunSessionAsync(RepeatingAlarmSession session)
     {
         try
@@ -219,7 +239,7 @@ public sealed class AlarmFlowCoordinator
     /// </summary>
     public Task<bool> SendSelfTestAsync(AlarmProfile profile)
     {
-        if (_licenseLimitGuard.IsOwnDeviceDisabled())
+        if (IsOwnDeviceRemoved() || _licenseLimitGuard.IsOwnDeviceDisabled())
         {
             return Task.FromResult(false);
         }

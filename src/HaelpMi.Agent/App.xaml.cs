@@ -77,6 +77,9 @@ public partial class App : System.Windows.Application
     /// <summary>Issue #59/#60: nur gesetzt, während dieses Gerät als lizenzüberschritten gilt - siehe RefreshLicenseLimitState.</summary>
     private LicenseLimitToastWindow? _licenseLimitToast;
 
+    /// <summary>Issue #61-Nachtrag: nur gesetzt, während der "Gerät entfernt"-Hinweis offen ist - siehe ShowDeviceRemovedToastIfNeeded.</summary>
+    private DeviceRemovedToastWindow? _deviceRemovedToast;
+
     private DiscoveryService? _discovery;
     private AlarmChannel? _listener;
     private AlarmFeedbackChannel? _feedbackChannel;
@@ -167,6 +170,11 @@ public partial class App : System.Windows.Application
         StartBackgroundServices();
         var isPostInstallStart = IsPostInstallStart(e.Args);
         ShowLicenseReminderToastIfNeeded(isPostInstallStart);
+        // Issue #61-Nachtrag: bewusst unconditional (kein isPostInstallStart-Filter wie
+        // oben) - eine frische Installation hat nie Removed=true (neue DeviceId, siehe
+        // OwnSettings.DeviceId), ein Neustart eines schon zuvor gelöschten Geräts dagegen
+        // schon, und genau der soll den Hinweis unverändert wieder zeigen.
+        ShowDeviceRemovedToastIfNeeded();
         // Issue #68-Nacharbeit: eine frische Installation hat noch keine Lizenzdatei
         // (LicenseStatus.Missing -> effektives Nutzerlimit 0, siehe
         // LicenseLimitGuard.EffectiveUserLimit) - ohne diesen Filter poppte der
@@ -287,6 +295,48 @@ public partial class App : System.Windows.Application
 
         RefreshLicenseLimitState();
         _auditLog.Append($"Eigener Lizenz-Override übernommen: {info.Override} (SetAtUtc={info.SetAtUtc:O})");
+    }
+
+    /// <summary>
+    /// Issue #61-Nachtrag (Fehlerbericht "Löschen im Geräte-Tab deaktiviert das Gerät
+    /// nicht wirklich"): eine im Geräte-Tab getroffene "Löschen"-Entscheidung ÜBER DIESES
+    /// Gerät, gelernt über Gossip (siehe DiscoveryService.OwnDeviceRemovedObserved). Anders
+    /// als <see cref="OnOwnLicenseOverrideObserved"/> keine "neuester Zeitstempel
+    /// gewinnt"-Prüfung nötig - Removed kann nur von false auf true wechseln, ein
+    /// nochmaliges Setzen (auch mit älterem Zeitstempel) ändert am Ergebnis nichts.
+    /// </summary>
+    private void OnOwnDeviceRemoved(object? sender, OwnDeviceRemovedInfo info)
+    {
+        var settings = _settingsStore.Load();
+        if (settings.Removed)
+        {
+            return;
+        }
+
+        settings.Removed = true;
+        settings.RemovedSetAtUtc = info.RemovedAtUtc;
+        _settingsStore.Save(settings);
+        _settings = settings;
+
+        _auditLog.Append($"Eigenes Gerät als gelöscht übernommen (RemovedAtUtc={info.RemovedAtUtc:O})");
+        ShowDeviceRemovedToastIfNeeded();
+    }
+
+    /// <summary>
+    /// Issue #61-Nachtrag: zeigt den "Gerät entfernt"-Hinweis, solange OwnSettings.Removed
+    /// gesetzt ist - aufgerufen beim Start (bereits vorher gelöscht) und sofort, sobald die
+    /// Löschung per Gossip neu eintrifft (<see cref="OnOwnDeviceRemoved"/>).
+    /// </summary>
+    private void ShowDeviceRemovedToastIfNeeded()
+    {
+        if (!_settings.Removed || _deviceRemovedToast is not null)
+        {
+            return;
+        }
+
+        _deviceRemovedToast = new DeviceRemovedToastWindow(AppPaths.FindUninstallerExecutable);
+        _deviceRemovedToast.Closed += (_, _) => _deviceRemovedToast = null;
+        _deviceRemovedToast.Show();
     }
 
     /// <summary>
@@ -481,11 +531,14 @@ public partial class App : System.Windows.Application
         // Issue #61-Nachtrag "Propagierungs-Bugfix".
         _discovery.OwnLicenseOverrideObserved += OnOwnLicenseOverrideObserved;
 
+        // Issue #61-Nachtrag "Löschen deaktiviert nicht wirklich".
+        _discovery.OwnDeviceRemovedObserved += OnOwnDeviceRemoved;
+
         // Issue #9 (Fast User Switching ohne Logout/Reboot): AlarmChannel entscheidet
         // selbst, ob diese Sitzung den echten TCP-Port hält (Primary) oder als Satellite
         // über den lokalen Relay-Kanal einer anderen Sitzung mitläuft - für den
         // Aufrufer hier kein Unterschied, AlarmReceived feuert in beiden Rollen gleich.
-        _listener = new AlarmChannel(BuildIdentity, _auditLog.Append, () => _coordinator!.IsOwnDeviceLicenseDisabled());
+        _listener = new AlarmChannel(BuildIdentity, _auditLog.Append, () => _coordinator!.IsOwnDeviceLicenseDisabled() || _coordinator!.IsOwnDeviceRemoved());
         _listener.AlarmReceived += (_, args) => _coordinator.HandleIncomingAlarmRequest(args);
         _listener.Start();
 
@@ -680,6 +733,11 @@ public partial class App : System.Windows.Application
 
     private async Task<IpcResponse> HandleSelfTestRequestAsync()
     {
+        if (_coordinator!.IsOwnDeviceRemoved())
+        {
+            return new IpcResponse(false, "Dieses Gerät wurde gelöscht und kann keine Alarme mehr senden.");
+        }
+
         if (_coordinator!.IsOwnDeviceLicenseDisabled())
         {
             return new IpcResponse(false, "Lizenz ausgeschöpft - dieses Gerät ist deaktiviert und kann keine Alarme senden.");

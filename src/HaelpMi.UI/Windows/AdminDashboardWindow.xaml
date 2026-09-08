@@ -473,7 +473,7 @@
                                                      Margin="0,0,10,0" VerticalAlignment="Center" LostFocus="DeviceNoteBox_LostFocus" ToolTip="Notiz (nur lokal auf diesem Admin-Gerät)" />
 
                                             <Button Grid.Column="4" Width="26" Height="26" Padding="0" Tag="{Binding DeviceId}" VerticalAlignment="Center"
-                                                    IsEnabled="{Binding CanDelete}" Click="DeleteDeviceButton_Click" ToolTip="Gerät aus der Liste entfernen">
+                                                    IsEnabled="{Binding CanDelete}" Click="DeleteDeviceButton_Click" ToolTip="Gerät endgültig löschen (deaktiviert, Neuinstallation nötig)">
                                                 <Path Data="M2,2 L10,10 M2,10 L10,2" Stroke="{StaticResource TextSecondaryBrush}" StrokeThickness="1.6"
                                                       Width="10" Height="10" Stretch="Uniform" />
                                             </Button>
@@ -485,7 +485,7 @@
                     </ScrollViewer>
 
                     <TextBlock Grid.Row="2" Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" Margin="0,10,0,0" TextWrapping="Wrap"
-                               Text="Deaktivierte Geräte zählen nicht mehr zum Lizenzkontingent und erhalten keine Alarme mehr. Löschen entfernt ein Gerät nur aus dieser lokalen Liste - meldet es sich erneut, erscheint es automatisch wieder." />
+                               Text="Deaktivierte Geräte zählen nicht mehr zum Lizenzkontingent und erhalten keine Alarme mehr. Löschen deaktiviert ein Gerät endgültig (kein Alarmversand/-empfang, keine Config-Updates mehr) und entfernt es aus jeder Geräteliste im Kreis - es kann sich nicht von selbst zurückmelden und muss neu installiert werden." />
                 </Grid>
             </TabItem>
         </TabControl>

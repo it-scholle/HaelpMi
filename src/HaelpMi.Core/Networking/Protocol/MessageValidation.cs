@@ -49,7 +49,11 @@ internal static class MessageValidation
             d.RoomName.Length <= MaxTextFieldLength &&
             d.RoomNumber.Length <= MaxTextFieldLength &&
             d.IpAddress.Length <= MaxTextFieldLength &&
-            d.TcpPort is > 0 and <= 65535 &&
+            // Ein reiner Tombstone-Eintrag (Removed=true, Issue #61-Nachtrag) hat keinen
+            // zugehörigen DeviceEntry mehr und damit keine echte IP/Port - Platzhalter
+            // (siehe DiscoveryService.BuildKnownDevicesSummaryAsync), deshalb hier von der
+            // sonst für jedes Gerät geltenden Port-Prüfung ausgenommen.
+            (d.Removed || d.TcpPort is > 0 and <= 65535) &&
             Enum.IsDefined(d.Role));
 
     public static bool IsPlausible(this AlarmRequestMessage message) =>

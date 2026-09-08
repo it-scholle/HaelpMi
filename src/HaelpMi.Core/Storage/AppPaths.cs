@@ -32,6 +32,9 @@ public static class AppPaths
 
     public static string DevicesFilePath => Path.Combine(RootFolder, "devices.json");
 
+    /// <summary>Siehe <see cref="RemovedDeviceStore"/> (Issue #61-Nachtrag "Löschen deaktiviert nicht wirklich").</summary>
+    public static string RemovedDevicesFilePath => Path.Combine(RootFolder, "removed-devices.json");
+
     public static string SharedConfigFilePath => Path.Combine(RootFolder, "shared-config.json");
 
     public static string ConfigHistoryFilePath => Path.Combine(RootFolder, "config-history.json");
@@ -49,6 +52,19 @@ public static class AppPaths
     /// nicht beim Bauen im Install-Creator - siehe Issue #10, DashboardAccessGuard.
     /// </summary>
     public static string InstalledByInfoFilePath => Path.Combine(AppContext.BaseDirectory, "installed-by.json");
+
+    /// <summary>
+    /// Inno-Setup-Standardname des Uninstallers im Installationsverzeichnis (Issue #61-
+    /// Nachtrag "Jetzt deinstallieren"-Button) - siehe installer/HaelpMiCommon.iss.inc,
+    /// keine eigene Konfiguration nötig, Inno Setup legt ihn immer so an. Null, falls die
+    /// Datei (aus welchem Grund auch immer) fehlt - der Aufrufer zeigt dann einen
+    /// manuellen Hinweis statt Process.Start gegen einen nicht existierenden Pfad zu werfen.
+    /// </summary>
+    public static string? FindUninstallerExecutable()
+    {
+        var path = Path.Combine(AppContext.BaseDirectory, "unins000.exe");
+        return File.Exists(path) ? path : null;
+    }
 
     /// <summary>
     /// Root-Bugfix (Fehlerbericht "Lizenz einspielen gibt keine Rückmeldung", 02.09.2026):

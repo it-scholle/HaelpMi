@@ -71,4 +71,18 @@ public sealed class OwnSettings
 
     /// <summary>Zeitstempel der letzten Übernahme - "neuester Zeitstempel gewinnt" bei widersprüchlichen Gossip-Meldungen, siehe DeviceEntry.LicenseOverrideSetAtUtc für dieselbe Regel.</summary>
     public DateTimeOffset? LicenseOverrideSetAtUtc { get; set; }
+
+    /// <summary>
+    /// Issue #61-Nachtrag ("Löschen" im Geräte-Tab): dieses Gerät wurde von einem Admin
+    /// gelöscht, gelernt per Gossip (siehe DiscoveryService.OwnDeviceRemovedObserved) -
+    /// wie <see cref="LicenseOverride"/> nie lokal gesetzt, nur von einem Dritten
+    /// gemeldet. Anders als LicenseOverride einseitig: wechselt nur von false auf true,
+    /// nie zurück - eine echte Neuinstallation (neue DeviceId) ist der einzige Weg zurück
+    /// in den Kreis, siehe RemovedDeviceStore. Sobald true: kein Alarmversand/-empfang
+    /// mehr (AlarmFlowCoordinator), keine Config-Sync-Übernahme mehr (ConfigSyncService),
+    /// stattdessen ein Hinweis-Popup mit direktem Deinstallieren-Button.
+    /// </summary>
+    public bool Removed { get; set; }
+
+    public DateTimeOffset? RemovedSetAtUtc { get; set; }
 }
