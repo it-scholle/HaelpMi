@@ -77,6 +77,19 @@ public static class AppConstants
     /// <summary>How long a sender waits for a single target's ack before giving up on it (FR-14 count).</summary>
     public static readonly TimeSpan AlarmAckTimeout = TimeSpan.FromSeconds(5);
 
+    /// <summary>
+    /// Obergrenze für einen aus dem TCP-Empfangsthread ausgelösten <c>Dispatcher.Invoke</c>
+    /// in <c>AlarmFlowCoordinator</c> (Issue #92): direkt nach Windows-Logon läuft
+    /// <c>StartBackgroundServices()</c> noch synchron innerhalb von <c>OnStartup</c> - der
+    /// Dispatcher pumpt zu diesem Zeitpunkt noch keine Nachrichten. Ein ungebremstes
+    /// <c>Dispatcher.Invoke</c> würde den Empfangsthread bis zum Ende von <c>OnStartup</c>
+    /// blockieren, oft länger als <see cref="AlarmAckTimeout"/> - Ack bzw. Status-Relay
+    /// kämen beim Sender nie rechtzeitig an, obwohl das Popup selbst später trotzdem
+    /// erscheint. Kleiner als <see cref="AlarmAckTimeout"/>, damit nach dem Timeout noch
+    /// Zeit für den eigentlichen Ack-Schreibvorgang bleibt.
+    /// </summary>
+    public static readonly TimeSpan AlarmDispatcherReadyTimeout = TimeSpan.FromSeconds(2);
+
     /// <summary>Hotkey-triggered alarm repeat interval (Teil 2, Abschnitt 7: "wiederholtes Senden im 5-Sekunden-Takt").</summary>
     public static readonly TimeSpan AlarmRepeatInterval = TimeSpan.FromSeconds(5);
 
