@@ -1,7 +1,15 @@
 namespace HaelpMi.Core.Storage;
 
-/// <summary>Ein per "Löschen" im Geräte-Tab entferntes Gerät (Issue #61-Nachtrag).</summary>
-public sealed record RemovedDeviceEntry(Guid DeviceId, DateTimeOffset RemovedAtUtc);
+/// <summary>
+/// Ein per "Löschen" im Geräte-Tab entferntes Gerät (Issue #61-Nachtrag).
+/// <paramref name="LastKnownIpAddress"/> (Issue #61-Nachtrag, Nutzerbericht "Löschen ist
+/// ein Freischein" 08.09.2026): die zuletzt bekannte IP des gelöschten Geräts, im Moment
+/// des Löschens aus dessen (dann verworfenem) <see cref="DeviceEntry"/> übernommen - einzige
+/// Grundlage, über die DiscoveryService.NotifyKnownPeersDirectlyAsync das Gerät noch
+/// direkt (statt nur per Broadcast) erreichen kann, da es ja bewusst nicht mehr in
+/// devices.json steht. Null, falls beim Löschen keine IP bekannt war (Gerät nie erreicht).
+/// </summary>
+public sealed record RemovedDeviceEntry(Guid DeviceId, DateTimeOffset RemovedAtUtc, string? LastKnownIpAddress = null);
 
 /// <summary>
 /// Tombstone-Liste gelöschter Geräte (Issue #61-Nachtrag, Fehlerbericht "Löschen im
@@ -28,12 +36,12 @@ public sealed class RemovedDeviceStore
     public static bool Contains(List<RemovedDeviceEntry> entries, Guid deviceId) =>
         entries.Any(e => e.DeviceId == deviceId);
 
-    /// <summary>Idempotent - ein bereits eingetragenes Gerät bleibt mit seinem ursprünglichen Zeitstempel stehen.</summary>
-    public static void Add(List<RemovedDeviceEntry> entries, Guid deviceId, DateTimeOffset removedAtUtc)
+    /// <summary>Idempotent - ein bereits eingetragenes Gerät bleibt mit seinem ursprünglichen Zeitstempel/IP stehen.</summary>
+    public static void Add(List<RemovedDeviceEntry> entries, Guid deviceId, DateTimeOffset removedAtUtc, string? lastKnownIpAddress = null)
     {
         if (!Contains(entries, deviceId))
         {
-            entries.Add(new RemovedDeviceEntry(deviceId, removedAtUtc));
+            entries.Add(new RemovedDeviceEntry(deviceId, removedAtUtc, lastKnownIpAddress));
         }
     }
 }

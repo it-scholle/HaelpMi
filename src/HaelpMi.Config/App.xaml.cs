@@ -491,12 +491,18 @@ public partial class App : System.Windows.Application
             DeleteDevice = deviceId =>
             {
                 var devices = deviceStore.Load();
+                // Issue #61-Nachtrag (Nutzerbericht "Löschen ist ein Freischein"): letzte
+                // bekannte IP VOR dem Entfernen sichern - sie ist die einzige Grundlage,
+                // über die DiscoveryService.NotifyKnownPeersDirectlyAsync das gelöschte
+                // Gerät gleich direkt (statt nur per Broadcast, siehe dortiger Kommentar)
+                // erreichen kann.
+                var lastKnownIp = devices.FirstOrDefault(d => d.DeviceId == deviceId)?.IpAddress;
                 DeviceStore.Remove(devices, deviceId);
                 deviceStore.Save(devices);
 
                 var removedDeviceStore = new RemovedDeviceStore();
                 var removedDevices = removedDeviceStore.Load();
-                RemovedDeviceStore.Add(removedDevices, deviceId, DateTimeOffset.UtcNow);
+                RemovedDeviceStore.Add(removedDevices, deviceId, DateTimeOffset.UtcNow, lastKnownIp);
                 removedDeviceStore.Save(removedDevices);
 
                 _ = ipcClient.SendAsync(IpcCommandType.SearchAgain, TimeSpan.FromSeconds(10));

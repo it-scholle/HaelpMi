@@ -520,6 +520,14 @@ public partial class App : System.Windows.Application
         _discovery.StartListening();
         _ = _discovery.AnnounceAsync();
 
+        // Issue #61-Nachtrag (Nutzerbericht "Löschen ist ein Freischein"): einmalig beim
+        // eigenen Start zusätzlich jeden bekannten Peer direkt unicasten (kein Heartbeat -
+        // reagiert nur auf das Startereignis dieses Prozesses) - holt Tombstones/Overrides
+        // nach, die dieses Gerät zwar schon kennt, aber deren letzter Push einen zu diesem
+        // Zeitpunkt nicht erreichbaren Peer verpasst hat (siehe DiscoveryService.
+        // NotifyKnownPeersDirectlyAsync).
+        _ = _discovery.NotifyKnownPeersDirectlyAsync();
+
         // Issue #59/#60: jeder neu bekannt gewordene Peer kann das eigene Lizenzkontingent
         // verschieben (mehr bekannte Geräte, evtl. auch ein neuer Peer mit früherem
         // FirstSeenUtc über Gossip) - Zustand nach jedem Boot-Call-Update neu bewerten.
@@ -728,6 +736,12 @@ public partial class App : System.Windows.Application
         // gezielter Nutzer-/Admin-Klick (nie ein stiller Hintergrund-Trigger), Grund genug
         // für die etwas größere Nachricht (siehe DiscoveryService.AnnounceAsync).
         await _discovery!.AnnounceAsync(includeKnownDevices: true);
+
+        // Issue #61-Nachtrag (Nutzerbericht 08.09.2026 "Löschen ist ein Freischein"):
+        // zusätzlich zum Broadcast oben jeden bekannten Peer (inkl. gerade gelöschter,
+        // per letzter bekannter IP) direkt unicasten - siehe dortiger Kommentar.
+        await _discovery!.NotifyKnownPeersDirectlyAsync();
+
         return new IpcResponse(true);
     }
 
