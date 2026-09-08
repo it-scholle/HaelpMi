@@ -116,7 +116,9 @@ public partial class AdminDashboardWindow : Window
         ReloadAll();
         RefreshLicenseBanner();
         RefreshLicenseLimitBanner();
-        RefreshDevicesTab();
+        // Nutzerwunsch 08.09.2026: bereits beim Öffnen des Dashboards aktiv nachfragen statt
+        // nur den zuletzt lokal gespeicherten Stand zu zeigen - siehe RefreshDevicesTabWithSearchAsync.
+        _ = RefreshDevicesTabWithSearchAsync();
 
         _deviceFileWatcher.Changed += (_, _) => RefreshDeviceDerivedViews();
         Closed += (_, _) =>
@@ -360,7 +362,7 @@ public partial class AdminDashboardWindow : Window
     // Datei-Auswahl - kein Datei-Dialog mehr an dieser Stelle nötig (löst das dortige
     // "Zuletzt verwendet"-Problem an der Wurzel, statt es nur per NoRecentFileDialog
     // abzufangen).
-    private void ImportLicenseButton_Click(object sender, RoutedEventArgs e)
+    private async void ImportLicenseButton_Click(object sender, RoutedEventArgs e)
     {
         var dialog = new LicenseKeyImportWindow(_context.ImportLicenseKeyText) { Owner = this };
         if (dialog.ShowDialog() == true)
@@ -373,6 +375,13 @@ public partial class AdminDashboardWindow : Window
             // GetDisabledDeviceIds() (rein aus der eigenen Lizenz + bekannten Peers
             // berechnet) sofort ein anderes Ergebnis geliefert hätte.
             RefreshLicenseLimitBanner();
+
+            // Nutzerwunsch 08.09.2026: dasselbe gilt für den x/y-Zähler und die Ein/Aus-
+            // Schalter im Geräte-Tab - eine neue Lizenz ändert sofort, wie viele Geräte
+            // lizenziert sind. Der Announce sorgt zusätzlich dafür, dass Peers die neue
+            // Lizenz per Gossip übernehmen (siehe BootCallMessage.LicenseKeyText), statt
+            // erst auf deren eigenen nächsten Boot-Call zu warten.
+            await RefreshDevicesTabWithSearchAsync();
 
             // Nutzerbericht 03.09.2026: ein noch offenes Systemstart-Erinnerungs-Popup
             // (anderer Prozess, siehe HaelpMi.Agent) blieb bisher veraltet stehen.
@@ -480,22 +489,28 @@ public partial class AdminDashboardWindow : Window
         }
     }
 
-    private async void DevicesSearchAgainButton_Click(object sender, RoutedEventArgs e)
+    // Nutzerwunsch 08.09.2026: kein manueller "Erneut suchen"-Button mehr im Geräte-Tab -
+    // ein Klick, den man erst noch verstehen/finden muss, ist schlechter als ein Tab, das
+    // von sich aus immer aktuell ist. RefreshDevicesTab() zeigt zuerst sofort den lokal
+    // bekannten Stand (kein Warten auf das Netzwerk), danach läuft ein Announce im
+    // Hintergrund - Antworten/Gossip treffen ohnehin schon über den bestehenden
+    // _deviceFileWatcher automatisch ein, dieser Extra-Refresh nach kurzer Gnadenfrist
+    // fängt nur den Fall ab, dass die erste Antwort schneller da ist als der Datei-Watcher
+    // reagiert. Aufgerufen bei App-Start (Konstruktor), Tab-Wechsel auf "Geräte" und nach
+    // erfolgreichem Lizenz-Import - spätestens beim Anklicken des Tabs sind die
+    // Informationen also aktuell, nicht erst nach einem eigenen Klick.
+    private async Task RefreshDevicesTabWithSearchAsync()
     {
-        DevicesSearchAgainButton.IsEnabled = false;
+        RefreshDevicesTab();
         try
         {
             await _context.RequestSearchAgain();
-            await Task.Delay(500); // kurze Gnadenfrist, bis Antworten eintreffen (wie ConfigWindow.SearchAgainButton_Click)
+            await Task.Delay(500);
             RefreshDevicesTab();
         }
         catch (Exception ex)
         {
-            ActionErrorHandler.Show(this, "Erneut suchen", ex);
-        }
-        finally
-        {
-            DevicesSearchAgainButton.IsEnabled = true;
+            ActionErrorHandler.Show(this, "Geräteliste aktualisieren", ex);
         }
     }
 
@@ -1547,6 +1562,15 @@ public partial class AdminDashboardWindow : Window
         {
             _context.ReleaseLock(EditScopeKind.UpdateRollout, AppConstants.UpdateRolloutScopeId);
             _heldUpdateRolloutLock = false;
+        }
+
+        // Nutzerwunsch 08.09.2026: kein Edit-Lock nötig (Geräte-Tab bearbeitet keinen
+        // exklusiv reservierbaren Datensatz), deshalb hier einfach direkt auffrischen statt
+        // wie beim Updates-Tab unten erst eine Reservierung einzuholen.
+        if (ReferenceEquals(MainTabControl.SelectedItem, DevicesTabItem))
+        {
+            await RefreshDevicesTabWithSearchAsync();
+            return;
         }
 
         if (!isUpdatesTabNow)
