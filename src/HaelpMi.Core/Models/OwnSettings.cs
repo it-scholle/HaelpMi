@@ -85,4 +85,22 @@ public sealed class OwnSettings
     public bool Removed { get; set; }
 
     public DateTimeOffset? RemovedSetAtUtc { get; set; }
+
+    /// <summary>
+    /// Issue #61-Nachtrag (Nutzerwunsch 08.09.2026 "wird das Gerät neu installiert, wird
+    /// der Delete-Tag einfach entfernt"): Zeitpunkt des letzten <c>--post-install</c>-Starts
+    /// (HaelpMi.Agent/App.xaml.cs) - läuft bei JEDEM abgeschlossenen Installer-Lauf, auch
+    /// Reparatur/Update über eine schon bestehende settings.json (anders als
+    /// <see cref="FirstSeenUtc"/>, das genau dafür bewusst NICHT erneut gesetzt wird - siehe
+    /// dortiger Kommentar). Wird als eigenes Feld im Boot-Call mitgeschickt (siehe
+    /// LiveIdentity/BootCallMessage); jedes andere Gerät hebt eine für diese DeviceId
+    /// gespeicherte <see cref="DeviceEntry.Removed"/>-Markierung automatisch auf, sobald
+    /// dieser Zeitstempel neuer ist als <see cref="DeviceEntry.RemovedSetAtUtc"/> (siehe
+    /// DeviceStore.Upsert) - eine neue Geräte-ID ist dafür NICHT nötig. Default
+    /// <c>default</c> ("noch nie ein Installer-Lauf mit dieser Logik") - bewusst KEINE
+    /// Selbstheilung auf "jetzt" beim ersten Laden wie bei FirstSeenUtc: das würde ein
+    /// bestehendes, tatsächlich nicht neu installiertes Gerät fälschlich wie gerade erst
+    /// installiert aussehen lassen, sobald es nur auf diese neue Programmversion aktualisiert.
+    /// </summary>
+    public DateTimeOffset LastInstalledAtUtc { get; set; }
 }

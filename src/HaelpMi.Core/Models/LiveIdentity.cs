@@ -31,4 +31,8 @@ public sealed record LiveIdentity(
     int ConfigVersion,
     DateTimeOffset FirstSeenUtc,
     LicenseOverride LicenseOverride = LicenseOverride.None,
-    DateTimeOffset? LicenseOverrideSetAtUtc = null);
+    DateTimeOffset? LicenseOverrideSetAtUtc = null,
+    // Siehe OwnSettings.LastInstalledAtUtc (Issue #61-Nachtrag) - im Boot-Call
+    // mitgeschickt, damit andere Geräte eine Removed-Markierung nach Neuinstallation
+    // automatisch aufheben.
+    DateTimeOffset LastInstalledAtUtc = default);

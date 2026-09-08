@@ -282,6 +282,107 @@ public class StorageTests
         Assert.Equal(LicenseOverride.ForceEnabled, devices[0].LicenseOverride); // ein älterer Gossip-Stand darf eine neuere lokale Entscheidung nicht zurückdrehen
     }
 
+    // --- Issue #61-Nachtrag 08.09.2026 ("Deinstalliert" statt Verstecken): dieselbe
+    // "neuester Zeitstempel gewinnt"-Fremdmeinungs-Regel wie beim Override oben, plus die
+    // neue LastInstalledAtUtc-Selbstbericht-Regel, die eine Removed-Markierung aufheben
+    // kann ("Neuinstallation entfernt den Delete-Tag"). ---
+
+    [Fact]
+    public void Upsert_SelfReport_NeverTouchesExistingRemoved()
+    {
+        var deviceId = Guid.NewGuid();
+        var setAt = DateTimeOffset.UtcNow;
+        var devices = new List<DeviceEntry>
+        {
+            new() { DeviceId = deviceId, ComputerName = "PC", Removed = true, RemovedSetAtUtc = setAt },
+        };
+
+        // Ein normaler Selbstbericht (Removed == null, LastInstalledAtUtc == null) darf
+        // eine bereits bekannte Fremdmeinung nie anfassen - ein Gerät kennt die über sich
+        // selbst getroffene Entscheidung nicht.
+        DeviceStore.Upsert(devices, deviceId, MakeInfo("PC", "U", "R", "1", "1.2.3.4"), DateTimeOffset.UtcNow);
+
+        Assert.True(devices[0].Removed);
+        Assert.Equal(setAt, devices[0].RemovedSetAtUtc);
+    }
+
+    [Fact]
+    public void Upsert_GossipRemoved_AppliesWhenNewerThanLocal()
+    {
+        var deviceId = Guid.NewGuid();
+        var devices = new List<DeviceEntry> { new() { DeviceId = deviceId } };
+
+        var newerInfo = new DeviceUpsertInfo("PC", "U", "R", "1", Role.User, false, "1.2.3.4", AppConstants.AlarmTcpPort,
+            null, Removed: true, RemovedSetAtUtc: DateTimeOffset.UtcNow);
+        DeviceStore.Upsert(devices, deviceId, newerInfo, DateTimeOffset.UtcNow);
+
+        Assert.True(devices[0].Removed);
+    }
+
+    [Fact]
+    public void Upsert_GossipRemoved_IgnoredWhenOlderThanLocal()
+    {
+        var deviceId = Guid.NewGuid();
+        var localSetAt = DateTimeOffset.UtcNow;
+        var devices = new List<DeviceEntry> { new() { DeviceId = deviceId, Removed = true, RemovedSetAtUtc = localSetAt } };
+
+        var staleInfo = new DeviceUpsertInfo("PC", "U", "R", "1", Role.User, false, "1.2.3.4", AppConstants.AlarmTcpPort,
+            null, Removed: false, RemovedSetAtUtc: localSetAt.AddMinutes(-5));
+        DeviceStore.Upsert(devices, deviceId, staleInfo, DateTimeOffset.UtcNow);
+
+        Assert.True(devices[0].Removed); // eine ältere Gossip-Meldung darf eine neuere lokale Entscheidung nicht zurückdrehen
+    }
+
+    [Fact]
+    public void Upsert_GossipRemoved_CanClearAnExistingMarking_WhenNewerThanLocal()
+    {
+        var deviceId = Guid.NewGuid();
+        var localSetAt = DateTimeOffset.UtcNow.AddDays(-1);
+        var devices = new List<DeviceEntry> { new() { DeviceId = deviceId, Removed = true, RemovedSetAtUtc = localSetAt } };
+
+        // Ein Dritter, der die Neuinstallation bereits selbst mitbekommen hat, gibt die
+        // Aufhebung (Removed:false) mit neuerem Zeitstempel weiter - Removed ist seit der
+        // "Deinstalliert"-Neufassung keine Einbahnstraße mehr.
+        var clearingInfo = new DeviceUpsertInfo("PC", "U", "R", "1", Role.User, false, "1.2.3.4", AppConstants.AlarmTcpPort,
+            null, Removed: false, RemovedSetAtUtc: DateTimeOffset.UtcNow);
+        DeviceStore.Upsert(devices, deviceId, clearingInfo, DateTimeOffset.UtcNow);
+
+        Assert.False(devices[0].Removed);
+    }
+
+    [Fact]
+    public void Upsert_SelfReport_WithNewerLastInstalledAtUtc_ClearsRemoved()
+    {
+        var deviceId = Guid.NewGuid();
+        var removedAt = DateTimeOffset.UtcNow.AddDays(-1);
+        var devices = new List<DeviceEntry> { new() { DeviceId = deviceId, Removed = true, RemovedSetAtUtc = removedAt } };
+
+        var selfReportAfterReinstall = new DeviceUpsertInfo("PC", "U", "R", "1", Role.User, false, "1.2.3.4", AppConstants.AlarmTcpPort,
+            null, LastInstalledAtUtc: DateTimeOffset.UtcNow);
+        DeviceStore.Upsert(devices, deviceId, selfReportAfterReinstall, DateTimeOffset.UtcNow);
+
+        Assert.False(devices[0].Removed);
+        Assert.Null(devices[0].RemovedSetAtUtc);
+    }
+
+    [Fact]
+    public void Upsert_SelfReport_WithOlderLastInstalledAtUtc_KeepsRemoved()
+    {
+        var deviceId = Guid.NewGuid();
+        var removedAt = DateTimeOffset.UtcNow;
+        var devices = new List<DeviceEntry> { new() { DeviceId = deviceId, Removed = true, RemovedSetAtUtc = removedAt } };
+
+        // Ein verspätet eintreffender, ÄLTERER Selbstbericht (z. B. ein Announce, das vor
+        // der Löschung abgeschickt, aber erst danach zugestellt wurde) darf die Markierung
+        // nicht aufheben.
+        var staleSelfReport = new DeviceUpsertInfo("PC", "U", "R", "1", Role.User, false, "1.2.3.4", AppConstants.AlarmTcpPort,
+            null, LastInstalledAtUtc: removedAt.AddMinutes(-5));
+        DeviceStore.Upsert(devices, deviceId, staleSelfReport, DateTimeOffset.UtcNow);
+
+        Assert.True(devices[0].Removed);
+        Assert.Equal(removedAt, devices[0].RemovedSetAtUtc);
+    }
+
     [Fact]
     public void SetLicenseOverride_SetsValueAndTimestamp_UnconditionallyLocal()
     {

@@ -178,11 +178,15 @@ public sealed class AlarmFlowCoordinator
         // Issue #60: lizenzüberschrittene Empfänger sind für andere unerreichbar (siehe
         // AlarmTcpListener) - sie erst gar nicht anschreiben, statt einen strukturell nie
         // bestätigbaren Verbindungsversuch zu zählen.
+        //
+        // Issue #61-Nachtrag ("Deinstalliert" bleibt seit der Neufassung sichtbar in
+        // devices.json statt wie zuvor entfernt zu werden, siehe DeviceEntry.Removed) -
+        // ohne diesen zusätzlichen Filter würde ein deinstalliertes Gerät weiterhin als
+        // Empfänger angeschrieben (derselbe "0/1 empfangen, obwohl längst deaktiviert"-Bug
+        // wie beim ursprünglichen Fehlerbericht, nur diesmal weil es nicht mehr aus der
+        // Liste verschwindet statt weil die Löschung nie ankam).
         var disabledDeviceIds = _licenseLimitGuard.GetDisabledDeviceIds();
-        if (disabledDeviceIds.Count > 0)
-        {
-            targets = targets.Where(t => !disabledDeviceIds.Contains(t.DeviceId)).ToList();
-        }
+        targets = targets.Where(t => !disabledDeviceIds.Contains(t.DeviceId) && !t.Removed).ToList();
 
         if (targets.Count == 0)
         {

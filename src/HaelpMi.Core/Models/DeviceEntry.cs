@@ -97,4 +97,24 @@ public sealed class DeviceEntry
     /// bekannte (Nutzer-Präferenz: Zeitstempel statt bloßem Bool für so einen Zustand).
     /// </summary>
     public DateTimeOffset? LicenseOverrideSetAtUtc { get; set; }
+
+    /// <summary>
+    /// "Deinstalliert" (Issue #61-Nachtrag 08.09.2026, Nutzerentscheidung nach v0.40.1:
+    /// eine Deaktivierung soll den Datensatz nicht mehr verstecken, sondern sichtbar
+    /// markiert bleiben) - gesetzt entweder automatisch durch die Deinstallations-Meldung
+    /// des betroffenen Geräts selbst (<see cref="Networking.DiscoveryService.AnnounceSelfRemovedAsync"/>)
+    /// oder manuell durch einen Admin als Rückfallebene, falls diese Meldung niemanden
+    /// erreicht hat. Anders als <see cref="LicenseOverride"/> KEIN reines "Fremdmeinung
+    /// gewinnt"-Feld: <see cref="RemovedSetAtUtc"/> dient zugleich als Referenzzeitpunkt,
+    /// den eine spätere Neuinstallation (per <c>LastInstalledAtUtc</c>-Selbstbericht, siehe
+    /// DeviceStore.Upsert) überbieten und die Markierung damit automatisch wieder aufheben
+    /// kann - "wird das Gerät neu installiert, wird der Tag einfach entfernt" (Nutzerwunsch).
+    /// Vollständiges, endgültiges Löschen aus der Geräteliste bleibt eine separate,
+    /// bewusst admin-only Aktion (siehe RemovedDeviceStore), die diese Markierung nicht
+    /// braucht.
+    /// </summary>
+    public bool Removed { get; set; }
+
+    /// <summary>Zeitpunkt der letzten Removed-Änderung (auf ODER ab) - null, solange nie gesetzt. Siehe <see cref="Removed"/>.</summary>
+    public DateTimeOffset? RemovedSetAtUtc { get; set; }
 }
