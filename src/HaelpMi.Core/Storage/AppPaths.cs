@@ -65,6 +65,14 @@ public static class AppPaths
     /// </summary>
     public static string LicenseFilePath => Path.Combine(RootFolder, "lizenz.json");
 
+    /// <summary>
+    /// Issue #94: eine per "Lizenz einspielen" eingespielte, aber wegen eines Downgrades
+    /// noch nicht aktive Lizenz - siehe HaelpMi.Core.Licensing.PendingLicenseSwitch. Neben,
+    /// nicht anstelle von <see cref="LicenseFilePath"/>, damit die bisherige, noch laufende
+    /// Lizenz bis zu ihrem eigenen Ablaufdatum unangetastet aktiv bleibt.
+    /// </summary>
+    public static string PendingLicenseFilePath => Path.Combine(RootFolder, "lizenz-pending.json");
+
     /// <summary>Issue #20-Nacharbeit (Systemstart-Erinnerung): "Später erinnern" - siehe HaelpMi.Core.Licensing.LicenseReminderStateStore.</summary>
     public static string LicenseReminderStateFilePath => Path.Combine(RootFolder, "license-reminder.json");
 

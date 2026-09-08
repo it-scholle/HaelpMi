@@ -44,6 +44,11 @@ public enum MessageKind
 /// null, wenn der Absender selbst keine (mehr) hat. Selbstsignierend, daher ohne
 /// zusätzliche Vertrauensinfrastruktur sicher gossip-fähig: jeder Empfänger prüft die
 /// Signatur selbst nach, bevor er sie übernimmt (siehe DiscoveryService.HandleDatagramAsync).
+///
+/// <see cref="PendingLicenseKeyText"/> (Issue #94): dieselbe Idee, nur für eine beim
+/// Absender wegen eines Downgrades vorgemerkte, noch nicht aktive Lizenz - null, wenn der
+/// Absender selbst keine vorgemerkte Lizenz hat. Verteilt sich dieselbe Vormerkung
+/// gruppenweit an alle Geräte, die dadurch synchron zum selben Ablaufdatum wechseln.
 /// </summary>
 public sealed record BootCallMessage(
     MessageKind Kind,
@@ -61,4 +66,5 @@ public sealed record BootCallMessage(
     DateTimeOffset SentAtUtc,
     IReadOnlyList<KnownDeviceSummary>? KnownDevices = null,
     DateTimeOffset? FirstSeenUtc = null,
-    string? LicenseKeyText = null);
+    string? LicenseKeyText = null,
+    string? PendingLicenseKeyText = null);

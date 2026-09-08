@@ -146,7 +146,7 @@ public partial class App : System.Windows.Application
         {
             _deployment = DeploymentInfoStore.Load();
             _settings = _settingsStore.Load();
-            _license = LicenseReader.Load(_deployment.CustomerGroupId, Convert.FromHexString(_deployment.LicensePublicKeyHex));
+            _license = LicenseRuntime.LoadCurrent(_deployment.CustomerGroupId, Convert.FromHexString(_deployment.LicensePublicKeyHex));
         }
         // FormatException: LicensePublicKeyHex (Issue #56) ist kein gültiger Hex-String -
         // dieselbe Fehlerklasse wie ein beschädigtes deployment.json, nicht separat zu werten.
@@ -224,7 +224,7 @@ public partial class App : System.Windows.Application
         // Issue #59/#60: ohne Neuladen bliebe eine gerade erst hochgesetzte UserLimit-Grenze
         // bis zum nächsten Programmneustart wirkungslos - "Aktivierung ... durch neue
         // Lizenz" (Issue #59) braucht den frischen Stand sofort, nicht erst danach.
-        _license = LicenseReader.Load(_deployment.CustomerGroupId, Convert.FromHexString(_deployment.LicensePublicKeyHex));
+        _license = LicenseRuntime.LoadCurrent(_deployment.CustomerGroupId, Convert.FromHexString(_deployment.LicensePublicKeyHex));
         RefreshLicenseLimitState();
 
         // Nutzerwunsch 07.09.2026 ("Update soll sofort an alle Geräte verteilt werden"): der
@@ -252,12 +252,35 @@ public partial class App : System.Windows.Application
             return;
         }
 
-        _license = LicenseReader.Load(_deployment.CustomerGroupId, Convert.FromHexString(_deployment.LicensePublicKeyHex));
+        _license = LicenseRuntime.LoadCurrent(_deployment.CustomerGroupId, Convert.FromHexString(_deployment.LicensePublicKeyHex));
         RefreshLicenseLimitState();
         _auditLog.Append($"Lizenz von Peer deviceId={info.DeviceId} übernommen (IssuedAtUtc={_license.License?.IssuedAtUtc:O})");
 
         // Weiterverbreiten (Gossip-Welle, wie Config-Sync): Peers, die diesen direkten
         // Kontakt verpasst haben, lernen die Lizenz beim nächsten Announce von UNS.
+        _ = _discovery?.AnnounceAsync();
+    }
+
+    /// <summary>
+    /// Issue #94-Nachtrag "Vorgemerkte Downgrade-Lizenz gruppenweit verteilen": ein Peer hat
+    /// in seinem Boot-Call eine bei ihm vorgemerkte Downgrade-Lizenz mitgeteilt - eigenständig
+    /// nachprüfen (siehe LicenseImporter.TryAdoptPendingFromPeer) und nur bei echtem Zugewinn
+    /// übernehmen, damit alle Geräte derselben Kundengruppe synchron zum selben Ablaufdatum
+    /// wechseln, egal auf welchem Admin-Gerät der Downgrade ursprünglich eingespielt wurde.
+    /// </summary>
+    private void OnPeerPendingLicenseObserved(object? sender, PeerPendingLicenseInfo info)
+    {
+        var publicKeyBytes = Convert.FromHexString(_deployment.LicensePublicKeyHex);
+        var ownPending = LicenseReader.LoadPending(_deployment.CustomerGroupId, publicKeyBytes).License;
+        var adopted = LicenseImporter.TryAdoptPendingFromPeer(info.PendingLicenseKeyText, _deployment.CustomerGroupId, publicKeyBytes, _license.License, ownPending);
+        if (!adopted)
+        {
+            return;
+        }
+
+        _auditLog.Append($"Vorgemerkte Downgrade-Lizenz von Peer deviceId={info.DeviceId} übernommen");
+
+        // Weiterverbreiten wie bei OnPeerLicenseObserved (Gossip-Welle).
         _ = _discovery?.AnnounceAsync();
     }
 
@@ -465,8 +488,13 @@ public partial class App : System.Windows.Application
 
         _coordinator = new AlarmFlowCoordinator(BuildIdentity, () => _settings, _sharedConfigStore.LoadOrCreate, () => _license, _feedbackChannel);
 
-        _discovery = new DiscoveryService(BuildIdentity, _auditLog.Append, ownLicenseKeyTextProvider: () =>
-            _license.License is null ? null : LicenseKeyText.Encode(_license.License));
+        _discovery = new DiscoveryService(BuildIdentity, _auditLog.Append,
+            ownLicenseKeyTextProvider: () => _license.License is null ? null : LicenseKeyText.Encode(_license.License),
+            ownPendingLicenseKeyTextProvider: () =>
+            {
+                var pending = LicenseReader.LoadPending(_deployment.CustomerGroupId, Convert.FromHexString(_deployment.LicensePublicKeyHex)).License;
+                return pending is null ? null : LicenseKeyText.Encode(pending);
+            });
         _discovery.StartListening();
         _ = _discovery.AnnounceAsync();
 
@@ -477,6 +505,9 @@ public partial class App : System.Windows.Application
 
         // Issue #59/#60-Nachtrag "Lizenz sofort verteilen".
         _discovery.PeerLicenseObserved += OnPeerLicenseObserved;
+
+        // Issue #94-Nachtrag "Vorgemerkte Downgrade-Lizenz gruppenweit verteilen".
+        _discovery.PeerPendingLicenseObserved += OnPeerPendingLicenseObserved;
 
         // Issue #61-Nachtrag "Propagierungs-Bugfix".
         _discovery.OwnLicenseOverrideObserved += OnOwnLicenseOverrideObserved;

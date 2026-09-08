@@ -33,11 +33,27 @@ public static class LicenseImporter
     /// Import bewusst NICHT übernommen (anders als die Soft-Expiry-Regel für eine bereits
     /// installierte Lizenz zur Laufzeit) - ein frisch eingespielter Schlüssel, der schon tot
     /// ist, nützt nichts und sähe als "aktiviert" nur falsch erfolgreich aus.
+    ///
+    /// Issue #94 ("Lizenz einspielen" für einen frühzeitigen Paketwechsel): bietet die
+    /// gültig eingelesene neue Lizenz gegenüber der aktuell aktiven WENIGER Gerätelizenzen
+    /// (<see cref="LicensePackageComparer.IsDowngrade"/>), wird sie NICHT sofort aktiv,
+    /// sondern nur vorgemerkt (<see cref="AppPaths.PendingLicenseFilePath"/>) - die
+    /// bisherige Lizenz läuft bis zu ihrem eigenen Ablaufdatum reguär weiter,
+    /// <see cref="PendingLicenseSwitch"/> übernimmt die Vormerkung danach automatisch. Gilt
+    /// nur, solange die aktuelle Lizenz überhaupt noch gültig ist - fehlt sie (Missing/
+    /// Invalid/bereits abgelaufen), wird jede neue Lizenz unabhängig von ihrer Größe sofort
+    /// aktiv (Nutzerentscheidung 08.09.2026: ohne laufende Vorgänger-Lizenz gibt es nichts,
+    /// das noch "regulär bis Datum genutzt" werden könnte). Ein Upgrade (oder eine neue
+    /// Lizenz ohne gültige Vorgängerin) ersetzt außerdem eine evtl. noch offene
+    /// Downgrade-Vormerkung - die ist dann überholt.
     /// </summary>
     public static LicenseImportDiagnosis ImportFromKeyText(string keyText, Guid ownCustomerGroupId, byte[] publicKeyBytes) =>
-        ImportFromKeyText(keyText, ownCustomerGroupId, AppPaths.LicenseFilePath, publicKeyBytes);
+        ImportFromKeyText(keyText, ownCustomerGroupId, AppPaths.LicenseFilePath, AppPaths.PendingLicenseFilePath, publicKeyBytes);
 
-    internal static LicenseImportDiagnosis ImportFromKeyText(string keyText, Guid ownCustomerGroupId, string destinationFilePath, byte[] publicKeyBytes)
+    internal static LicenseImportDiagnosis ImportFromKeyText(string keyText, Guid ownCustomerGroupId, string destinationFilePath, byte[] publicKeyBytes) =>
+        ImportFromKeyText(keyText, ownCustomerGroupId, destinationFilePath, destinationFilePath + ".pending", publicKeyBytes);
+
+    internal static LicenseImportDiagnosis ImportFromKeyText(string keyText, Guid ownCustomerGroupId, string destinationFilePath, string pendingFilePath, byte[] publicKeyBytes)
     {
         var license = LicenseReader.TryVerifyKeyTextAuthenticity(keyText, publicKeyBytes);
         if (license is null)
@@ -55,7 +71,19 @@ public static class LicenseImporter
             return new LicenseImportDiagnosis(LicenseImportOutcome.Expired, license);
         }
 
+        var currentCheck = LicenseReader.Load(destinationFilePath, ownCustomerGroupId, publicKeyBytes);
+        if (currentCheck.Status == LicenseStatus.Valid && LicensePackageComparer.IsDowngrade(license, currentCheck.License!))
+        {
+            JsonFileStore.Save(pendingFilePath, license);
+            return new LicenseImportDiagnosis(LicenseImportOutcome.PendingDowngrade, license, currentCheck.License);
+        }
+
         JsonFileStore.Save(destinationFilePath, license);
+        if (File.Exists(pendingFilePath))
+        {
+            File.Delete(pendingFilePath);
+        }
+
         return new LicenseImportDiagnosis(LicenseImportOutcome.Activated, license);
     }
 
@@ -87,6 +115,41 @@ public static class LicenseImporter
         }
 
         JsonFileStore.Save(destinationFilePath, checkResult.License);
+        return true;
+    }
+
+    /// <summary>
+    /// Issue #94-Nachtrag "Vorgemerkte Downgrade-Lizenz gruppenweit verteilen": P2P-Übernahme
+    /// einer per Boot-Call von einem Peer mitgeteilten VORGEMERKTEN Lizenz - dasselbe
+    /// "neuer gewinnt"-Prinzip wie <see cref="TryAdoptFromPeer"/> (IssuedAtUtc-Vergleich
+    /// gegen die eigene Vormerkung, falls schon eine vorliegt), plus eine zusätzliche
+    /// Prüfung: nur übernehmen, wenn es aus Sicht der EIGENEN aktiven Lizenz überhaupt noch
+    /// ein Downgrade ist - sonst hätte die eigene aktive Lizenz (die genauso per Gossip
+    /// synchron gehalten wird) längst nachgezogen und die Vormerkung wäre nur noch eine
+    /// Karteileiche eines Peers mit veraltetem Wissensstand.
+    /// </summary>
+    public static bool TryAdoptPendingFromPeer(string keyText, Guid ownCustomerGroupId, byte[] publicKeyBytes, License? ownActiveLicense, License? ownPendingLicense) =>
+        TryAdoptPendingFromPeer(keyText, ownCustomerGroupId, AppPaths.PendingLicenseFilePath, publicKeyBytes, ownActiveLicense, ownPendingLicense);
+
+    internal static bool TryAdoptPendingFromPeer(string keyText, Guid ownCustomerGroupId, string pendingDestinationFilePath, byte[] publicKeyBytes, License? ownActiveLicense, License? ownPendingLicense)
+    {
+        var checkResult = LicenseReader.LoadFromKeyText(keyText, ownCustomerGroupId, publicKeyBytes);
+        if (checkResult.License is null)
+        {
+            return false; // nicht lesbar, Signatur ungültig, oder falsche Kundengruppe
+        }
+
+        if (ownPendingLicense is not null && checkResult.License.IssuedAtUtc <= ownPendingLicense.IssuedAtUtc)
+        {
+            return false; // eigene Vormerkung ist schon mindestens genauso aktuell
+        }
+
+        if (ownActiveLicense is not null && !LicensePackageComparer.IsDowngrade(checkResult.License, ownActiveLicense))
+        {
+            return false; // gegenüber der eigenen aktiven Lizenz kein Downgrade (mehr) - Vormerkung wäre gegenstandslos
+        }
+
+        JsonFileStore.Save(pendingDestinationFilePath, checkResult.License);
         return true;
     }
 
@@ -122,7 +185,20 @@ public enum LicenseImportOutcome
 
     /// <summary>Text nicht dekodierbar oder Signatur ungültig (manipuliert/kein Lizenzschlüssel) - NICHT übernommen.</summary>
     NotRecognized,
+
+    /// <summary>
+    /// Issue #94: Signatur gültig, richtige Kundengruppe, nicht abgelaufen, aber weniger
+    /// Gerätelizenzen als die aktuell aktive Lizenz - vorgemerkt statt sofort übernommen,
+    /// siehe <see cref="LicenseImporter.ImportFromKeyText(string, Guid, byte[])"/>.
+    /// </summary>
+    PendingDowngrade,
 }
 
-/// <summary><see cref="License"/> ist bei <see cref="LicenseImportOutcome.NotRecognized"/> immer <c>null</c> - in allen anderen Fällen war der Schlüssel authentisch lesbar, auch wenn er abgelehnt wurde.</summary>
-public sealed record LicenseImportDiagnosis(LicenseImportOutcome Outcome, License? License);
+/// <summary>
+/// <see cref="License"/> ist bei <see cref="LicenseImportOutcome.NotRecognized"/> immer
+/// <c>null</c> - in allen anderen Fällen war der Schlüssel authentisch lesbar, auch wenn er
+/// abgelehnt wurde. <see cref="CurrentLicense"/> ist nur bei
+/// <see cref="LicenseImportOutcome.PendingDowngrade"/> gesetzt - die bisherige aktive
+/// Lizenz, deren <see cref="License.ExpiryDateUtc"/> zugleich das Wechseldatum ist.
+/// </summary>
+public sealed record LicenseImportDiagnosis(LicenseImportOutcome Outcome, License? License, License? CurrentLicense = null);

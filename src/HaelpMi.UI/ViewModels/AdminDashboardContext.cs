@@ -66,11 +66,21 @@ public sealed class AdminDashboardContext
     public required Func<LicenseCheckResult> GetLicenseStatus { get; init; }
 
     /// <summary>
-    /// "Lizenz einspielen"-Button im #20-Banner (Issue #51), Text statt Datei-Auswahl seit
-    /// Issue #54-Nacharbeit (01.09.2026) - siehe <see cref="LicenseImporter.ImportFromKeyText(string, Guid)"/>.
-    /// Der ursprüngliche Datei-Import (<see cref="LicenseImporter.Import(string, Guid)"/>)
-    /// bleibt als eigenständige, getestete Fähigkeit bestehen, hängt nur an keinem
-    /// UI-Button mehr.
+    /// Issue #94 ("Geräte / Lizenz"-Infozeile): eine wegen eines Downgrades vorgemerkte,
+    /// noch nicht aktive Lizenz - null, falls keine vorliegt. Wie <see cref="GetLicenseStatus"/>
+    /// live neu ausgewertet, nicht gecacht.
+    /// </summary>
+    public required Func<License?> GetPendingLicense { get; init; }
+
+    /// <summary>
+    /// "Lizenz einspielen"-Button im #20-Banner (Issue #51) sowie in der Geräte/Lizenz-
+    /// Infozeile (Issue #94), Text statt Datei-Auswahl seit Issue #54-Nacharbeit
+    /// (01.09.2026) - siehe <see cref="LicenseImporter.ImportFromKeyText(string, Guid)"/>.
+    /// Bietet der eingespielte Schlüssel gegenüber der aktuell aktiven Lizenz weniger
+    /// Gerätelizenzen, wird er dort nur vorgemerkt statt sofort aktiv (siehe
+    /// <see cref="LicenseImportOutcome.PendingDowngrade"/>). Der ursprüngliche Datei-Import
+    /// (<see cref="LicenseImporter.Import(string, Guid)"/>) bleibt als eigenständige,
+    /// getestete Fähigkeit bestehen, hängt nur an keinem UI-Button mehr.
     /// </summary>
     public required Func<string, LicenseImportDiagnosis> ImportLicenseKeyText { get; init; }
 

@@ -143,7 +143,7 @@ public partial class App : System.Windows.Application
         {
             settings = settingsStore.Load();
             deployment = DeploymentInfoStore.Load();
-            _license = LicenseReader.Load(deployment.CustomerGroupId, Convert.FromHexString(deployment.LicensePublicKeyHex));
+            _license = LicenseRuntime.LoadCurrent(deployment.CustomerGroupId, Convert.FromHexString(deployment.LicensePublicKeyHex));
         }
         // FormatException: LicensePublicKeyHex (Issue #56) ist kein gültiger Hex-String -
         // dieselbe Fehlerklasse wie ein beschädigtes deployment.json, nicht separat zu werten.
@@ -413,7 +413,7 @@ public partial class App : System.Windows.Application
         // einen zusätzlichen Netzwerk-Roundtrip wartet.
         void NotifyLocalAgentOfConfigChange() => _ = ipcClient.SendAsync(IpcCommandType.Rebroadcast, TimeSpan.FromSeconds(10));
 
-        LicenseCheckResult LoadLicense() => LicenseReader.Load(deployment.CustomerGroupId, Convert.FromHexString(deployment.LicensePublicKeyHex));
+        LicenseCheckResult LoadLicense() => LicenseRuntime.LoadCurrent(deployment.CustomerGroupId, Convert.FromHexString(deployment.LicensePublicKeyHex));
         var licenseLimitGuard = new LicenseLimitGuard(IdentityProvider, LoadLicense, deviceStore.Load);
 
         var context = new AdminDashboardContext
@@ -462,6 +462,7 @@ public partial class App : System.Windows.Application
             ExportUserInstaller = ExportUserInstallerAsync,
             ListAvailableUpdateVersions = () => new UpdatePackageCacheStore().ListAvailableVersions(),
             GetLicenseStatus = LoadLicense,
+            GetPendingLicense = () => LicenseReader.LoadPending(deployment.CustomerGroupId, Convert.FromHexString(deployment.LicensePublicKeyHex)).License,
             ImportLicenseKeyText = keyText => LicenseImporter.ImportFromKeyText(keyText, deployment.CustomerGroupId, Convert.FromHexString(deployment.LicensePublicKeyHex)),
             NotifyLicenseRenewed = () => _ = ipcClient.SendAsync(IpcCommandType.LicenseRenewed, TimeSpan.FromSeconds(10)),
             GetDisabledDeviceIds = licenseLimitGuard.GetDisabledDeviceIds,

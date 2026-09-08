@@ -370,7 +370,15 @@ public partial class AdminDashboardWindow : Window
     // Datei-Auswahl - kein Datei-Dialog mehr an dieser Stelle nötig (löst das dortige
     // "Zuletzt verwendet"-Problem an der Wurzel, statt es nur per NoRecentFileDialog
     // abzufangen).
-    private async void ImportLicenseButton_Click(object sender, RoutedEventArgs e)
+    private async void ImportLicenseButton_Click(object sender, RoutedEventArgs e) => await ShowLicenseImportDialogAsync();
+
+    // Issue #94: eigenständiger Button in der Lizenzinfo-Zeile für einen frühzeitigen
+    // Paketwechsel - ruft denselben Dialog/Import-Weg wie ImportLicenseButton_Click im
+    // #20-Warnbanner auf, nur unabhängig davon, ob gerade überhaupt eine Warnung angezeigt
+    // wird (die Infozeile ist immer sichtbar).
+    private async void ImportLicenseFromDevicesTabButton_Click(object sender, RoutedEventArgs e) => await ShowLicenseImportDialogAsync();
+
+    private async Task ShowLicenseImportDialogAsync()
     {
         var dialog = new LicenseKeyImportWindow(_context.ImportLicenseKeyText) { Owner = this };
         if (dialog.ShowDialog() == true)
@@ -473,8 +481,54 @@ public partial class AdminDashboardWindow : Window
 
         DevicesList.ItemsSource = rows;
 
-        LicenseSeatCountText.Text = seatLimit is { } limit ? $"{activeCount}/{limit} lizenziert" : $"{activeCount}/∞ lizenziert";
+        RefreshLicenseInfoRow(activeCount);
     }
+
+    /// <summary>
+    /// Issue #94: Lizenzinfo-Zeile ganz oben im "Geräte / Lizenz"-Tab (Paketgröße/freie
+    /// Lizenzen/Ablaufdatum). Bei einer noch nicht wirksamen Downgrade-Vormerkung (siehe
+    /// PendingLicenseSwitch) stehen die neuen Werte in Klammern hinter den aktuellen, mit
+    /// einer Info-Zeile zum Wechseldatum darüber - <paramref name="activeCount"/> kommt aus
+    /// RefreshDevicesTab, damit hier nicht nochmal dieselbe Geräteliste ausgewertet wird.
+    /// </summary>
+    private void RefreshLicenseInfoRow(int activeCount)
+    {
+        var checkResult = _context.GetLicenseStatus();
+        if (checkResult.License is null)
+        {
+            LicenseInfoRowText.Text = "Keine gültige Lizenz eingespielt.";
+            PendingLicenseInfoText.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        var current = checkResult.License;
+        var packageSegment = FormatPackage(current);
+        var freeSegment = $"{FormatFreeSeats(current.UserLimit, activeCount)} verfügbar";
+        var expirySegment = $"Ablauf {current.ExpiryDateUtc.ToLocalTime():d}";
+
+        var pending = _context.GetPendingLicense();
+        if (pending is not null)
+        {
+            packageSegment += $" ({FormatPackage(pending)})";
+            freeSegment += $" ({FormatFreeSeats(pending.UserLimit, activeCount)} verfügbar)";
+            expirySegment += $" (Ablauf {pending.ExpiryDateUtc.ToLocalTime():d})";
+
+            PendingLicenseInfoText.Text = $"Die neue Lizenz (Werte in Klammer) ist gültig ab {current.ExpiryDateUtc.ToLocalTime():d}.";
+            PendingLicenseInfoText.Visibility = Visibility.Visible;
+        }
+        else
+        {
+            PendingLicenseInfoText.Visibility = Visibility.Collapsed;
+        }
+
+        LicenseInfoRowText.Text = $"{packageSegment} · {freeSegment} · {expirySegment}";
+    }
+
+    private static string FormatPackage(License license) =>
+        license.UserLimit is { } limit ? $"{license.Tier} ({limit} Geräte)" : $"{license.Tier} (unbegrenzt)";
+
+    private static string FormatFreeSeats(int? seatLimit, int activeCount) =>
+        seatLimit is { } limit ? Math.Max(0, limit - activeCount).ToString() : "unbegrenzt";
 
     private void DeviceActiveToggle_Click(object sender, RoutedEventArgs e)
     {

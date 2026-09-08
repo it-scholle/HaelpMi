@@ -27,6 +27,13 @@ public sealed class PeerLicenseInfo
     public required string LicenseKeyText { get; init; }
 }
 
+/// <summary>Siehe <see cref="DiscoveryService.PeerPendingLicenseObserved"/>.</summary>
+public sealed class PeerPendingLicenseInfo
+{
+    public required Guid DeviceId { get; init; }
+    public required string PendingLicenseKeyText { get; init; }
+}
+
 /// <summary>Siehe <see cref="DiscoveryService.OwnLicenseOverrideObserved"/>.</summary>
 public sealed class OwnLicenseOverrideInfo
 {
@@ -53,6 +60,7 @@ public sealed class DiscoveryService : IAsyncDisposable
 {
     private readonly Func<LiveIdentity> _identityProvider;
     private readonly Func<string?>? _ownLicenseKeyTextProvider;
+    private readonly Func<string?>? _ownPendingLicenseKeyTextProvider;
     private readonly int _discoveryPort;
     private readonly DeviceStore _deviceStore = new();
     private readonly SemaphoreSlim _storeLock = new(1, 1);
@@ -93,6 +101,15 @@ public sealed class DiscoveryService : IAsyncDisposable
     public event EventHandler<PeerLicenseInfo>? PeerLicenseObserved;
 
     /// <summary>
+    /// Issue #94-Nachtrag "Vorgemerkte Downgrade-Lizenz gruppenweit verteilen": dasselbe
+    /// Prinzip wie <see cref="PeerLicenseObserved"/>, nur für
+    /// <see cref="BootCallMessage.PendingLicenseKeyText"/> - eine beim Absender wegen eines
+    /// Downgrades vorgemerkte, noch nicht aktive Lizenz. Auch hier trifft DiscoveryService
+    /// selbst keine Übernahme-Entscheidung (siehe LicenseImporter.TryAdoptPendingFromPeer).
+    /// </summary>
+    public event EventHandler<PeerPendingLicenseInfo>? PeerPendingLicenseObserved;
+
+    /// <summary>
     /// Issue #61-Nachtrag (Propagierungs-Bugfix 08.09.2026): eine im Geräte-Tab getroffene
     /// Admin-Entscheidung ÜBER DIESES Gerät, gelernt aus dem Gossip-Anhang einer
     /// Boot-Call-Nachricht (Announce mit <c>includeKnownDevices: true</c> ODER Reply). Ein
@@ -113,12 +130,19 @@ public sealed class DiscoveryService : IAsyncDisposable
     /// Peers ohne (aktuelle) Lizenz sie übernehmen können. Optional, damit bestehende
     /// Aufrufer/Tests unverändert kompilieren.
     /// </param>
-    public DiscoveryService(Func<LiveIdentity> identityProvider, Action<string>? audit = null, int? discoveryPort = null, Func<string?>? ownLicenseKeyTextProvider = null)
+    /// <param name="ownPendingLicenseKeyTextProvider">
+    /// Issue #94: dasselbe wie <paramref name="ownLicenseKeyTextProvider"/>, nur für eine
+    /// wegen eines Downgrades vorgemerkte, noch nicht aktive Lizenz - null, falls keine
+    /// vorliegt. Ebenfalls optional.
+    /// </param>
+    public DiscoveryService(Func<LiveIdentity> identityProvider, Action<string>? audit = null, int? discoveryPort = null,
+        Func<string?>? ownLicenseKeyTextProvider = null, Func<string?>? ownPendingLicenseKeyTextProvider = null)
     {
         _identityProvider = identityProvider;
         _audit = audit;
         _discoveryPort = discoveryPort ?? AppConstants.DiscoveryUdpPort;
         _ownLicenseKeyTextProvider = ownLicenseKeyTextProvider;
+        _ownPendingLicenseKeyTextProvider = ownPendingLicenseKeyTextProvider;
     }
 
     /// <summary>Binds the socket and starts the background receive loop. Call once at Agent startup.</summary>
@@ -194,7 +218,8 @@ public sealed class DiscoveryService : IAsyncDisposable
             DateTimeOffset.UtcNow,
             knownDevices,
             identity.FirstSeenUtc,
-            _ownLicenseKeyTextProvider?.Invoke());
+            _ownLicenseKeyTextProvider?.Invoke(),
+            _ownPendingLicenseKeyTextProvider?.Invoke());
     }
 
     private async Task ReceiveLoopAsync(UdpClient socket, CancellationToken ct)
@@ -363,6 +388,15 @@ public sealed class DiscoveryService : IAsyncDisposable
                 DeviceId = message.DeviceId,
                 LicenseKeyText = message.LicenseKeyText,
             }), nameof(PeerLicenseObserved));
+        }
+
+        if (message.PendingLicenseKeyText is { Length: > 0 })
+        {
+            RaiseObserver(() => PeerPendingLicenseObserved?.Invoke(this, new PeerPendingLicenseInfo
+            {
+                DeviceId = message.DeviceId,
+                PendingLicenseKeyText = message.PendingLicenseKeyText,
+            }), nameof(PeerPendingLicenseObserved));
         }
 
         if (message.ConfigVersion > ownIdentity.ConfigVersion)
