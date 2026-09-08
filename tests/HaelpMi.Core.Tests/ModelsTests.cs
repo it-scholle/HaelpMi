@@ -6,6 +6,17 @@ namespace HaelpMi.Core.Tests;
 
 public class ModelsTests
 {
+    // Issue #92: AlarmDispatcherReadyTimeout begrenzt ein aus dem TCP-Empfangsthread
+    // ausgelöstes Dispatcher.Invoke in AlarmFlowCoordinator - muss kleiner als
+    // AlarmAckTimeout bleiben, sonst ist der Ack/Status-Relay beim Sender ohnehin schon
+    // abgelaufen, bevor die Invoke-Sperre überhaupt nachgibt (siehe Kommentar an der
+    // Konstante selbst für die volle Begründung).
+    [Fact]
+    public void AlarmDispatcherReadyTimeout_IsShorterThan_AlarmAckTimeout()
+    {
+        Assert.True(AppConstants.AlarmDispatcherReadyTimeout < AppConstants.AlarmAckTimeout);
+    }
+
     [Fact]
     public void HotkeyDefinition_Format_CombinesModifiersAndKeyName()
     {

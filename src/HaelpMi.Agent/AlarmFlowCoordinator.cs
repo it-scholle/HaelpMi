@@ -78,6 +78,12 @@ public sealed class AlarmFlowCoordinator
         var settings = _settingsProvider();
         var soundOption = IncomingSoundCatalog.Resolve(settings.IncomingSoundId);
 
+        // Issue #92: Timeout statt unbegrenztem Invoke - direkt nach Logon ist der
+        // Dispatcher (siehe AlarmDispatcherReadyTimeout) unter Umständen noch nicht am
+        // Pumpen, sonst würde dieser Aufruf den Empfangsthread bis zum Ende von OnStartup
+        // blockieren und der Ack unten käme beim Sender nie rechtzeitig an. Das Popup wird
+        // trotzdem gezeigt, sobald der Dispatcher tatsächlich läuft - läuft er schon
+        // (Normalfall), verhält sich das wie das bisherige Invoke.
         System.Windows.Application.Current.Dispatcher.Invoke(() =>
         {
             if (_openPopups.TryGetValue(request.AlarmSessionId, out var existing))
@@ -105,7 +111,7 @@ public sealed class AlarmFlowCoordinator
 
             _openPopups[request.AlarmSessionId] = popup;
             popup.Show();
-        });
+        }, AppConstants.AlarmDispatcherReadyTimeout);
 
         _ = _audioPlayer.PlayOnAllActiveDevicesAsync(soundOption);
     }
@@ -118,7 +124,11 @@ public sealed class AlarmFlowCoordinator
             return;
         }
 
-        System.Windows.Application.Current.Dispatcher.Invoke(() => popup.UpdateOnTheWayCount(relay.OnTheWayUserNames.Count));
+        // Issue #92: gleicher Grund/gleiche Frist wie in HandleIncomingAlarmRequest oben -
+        // ein Status-Relay kann ebenso in das Startup-Fenster vor Dispatcher.Run() fallen.
+        System.Windows.Application.Current.Dispatcher.Invoke(
+            () => popup.UpdateOnTheWayCount(relay.OnTheWayUserNames.Count),
+            AppConstants.AlarmDispatcherReadyTimeout);
     }
 
     private async Task ReportOnMyWayAsync(AlarmRequestMessage request, AlarmReceivedEventArgs args)
