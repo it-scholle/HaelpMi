@@ -13,7 +13,7 @@
 #define MyAppName "HälpMi"
 ; Alpha: 0.x until release, per city/product decision - Version 1.0.0 is reserved for
 ; the actual release. Bump the third number for ordinary fixes, second for a feature.
-#define MyAppVersion "0.41.0"
+#define MyAppVersion "0.42.0"
 #define MyAppPublisher "HälpMi contributors"
 #define MyAgentExeName "HaelpMi.Agent.exe"
 #define MyConfigExeName "HaelpMi.Config.exe"
@@ -494,6 +494,18 @@ begin
   SaveJsonUtf8(ExpandConstant('{app}\installed-by.json'), Json);
 end;
 
+// Issue #99: der Installer wird immer manuell per Doppelklick gestartet (bei
+// HaelpMiAdminInstall zusätzlich erst nach UAC-Bestätigung, siehe PrivilegesRequired=admin
+// in HaelpMi.iss) - ohne diesen Aufruf geht das Wizard-Fenster mitunter hinter dem Explorer
+// oder dem UAC-Dialog auf statt sichtbar zu erscheinen. Der Aufruf sitzt bewusst in
+// CurPageChanged (erste Seite) statt in InitializeWizard - dort existiert WizardForm zwar
+// schon, ist aber noch nicht sichtbar/aktivierbar.
+function SetForegroundWindow(hWnd: LongInt): LongBool;
+  external 'SetForegroundWindow@user32.dll stdcall';
+
+var
+  ForegroundedOnce: Boolean;
+
 procedure InitializeWizard();
 begin
   RoomPage := CreateInputQueryPage(wpSelectDir,
@@ -503,6 +515,15 @@ begin
     'Admin-Dashboard ändern.');
   RoomPage.Add('Raumbezeichnung:', False);
   RoomPage.Add('Raumnummer:', False);
+end;
+
+procedure CurPageChanged(CurPageID: Integer);
+begin
+  if not ForegroundedOnce then
+  begin
+    ForegroundedOnce := True;
+    SetForegroundWindow(WizardForm.Handle);
+  end;
 end;
 
 // Bei Update/Reparatur (settings.json existiert schon) nie erneut fragen - siehe Kommentar

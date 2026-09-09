@@ -748,20 +748,7 @@ public partial class App : System.Windows.Application
     // keine eigene Logik hier nötig, das Konfigurationsprogramm entscheidet selbst.
     private static void OpenConfigOrDashboard()
     {
-        var configExePath = Path.Combine(AppContext.BaseDirectory, "HaelpMi.Config.exe");
-        if (!File.Exists(configExePath))
-        {
-            return;
-        }
-
-        try
-        {
-            Process.Start(new ProcessStartInfo(configExePath) { UseShellExecute = true });
-        }
-        catch (Exception)
-        {
-            // best-effort - der Agent hat kein eigenes Fenster, um einen Fehler anzuzeigen
-        }
+        StartConfigExe(null);
     }
 
     // Nutzerwunsch 06.08.2026: separater Tray-Menüpunkt für Admins, direkter Sprung ins
@@ -769,19 +756,35 @@ public partial class App : System.Windows.Application
     // Eintrag ("--open-dashboard", siehe HaelpMi.Config/App.xaml.cs OnStartup).
     private static void OpenDashboardDirectly()
     {
+        StartConfigExe("--open-dashboard");
+    }
+
+    // Issue #99: ein Klick auf "HälpMi konfigurieren"/"Dashboard öffnen" ist für den Nutzer
+    // ein Shortcut-Start wie jeder andere - bisher verpuffte ein Fehlschlag hier (fehlende
+    // exe nach kaputter Installation, Process.Start-Fehler) lautlos, weil der Agent kein
+    // eigenes Fenster hat. Eine MessageBox braucht dafür kein Fenster, nur einen laufenden
+    // WPF-Dispatcher (den der Agent als Application ohnehin hat).
+    private static void StartConfigExe(string? arguments)
+    {
         var configExePath = Path.Combine(AppContext.BaseDirectory, "HaelpMi.Config.exe");
         if (!File.Exists(configExePath))
         {
+            System.Windows.MessageBox.Show(
+                $"HälpMi.Config.exe wurde nicht gefunden ({configExePath}).{Environment.NewLine}Bitte HälpMi neu installieren/reparieren.",
+                "HälpMi - Start fehlgeschlagen", MessageBoxButton.OK, MessageBoxImage.Error);
             return;
         }
 
         try
         {
-            Process.Start(new ProcessStartInfo(configExePath, "--open-dashboard") { UseShellExecute = true });
+            Process.Start(new ProcessStartInfo(configExePath, arguments ?? "") { UseShellExecute = true });
         }
-        catch (Exception)
+        catch (Exception ex)
         {
-            // best-effort - der Agent hat kein eigenes Fenster, um einen Fehler anzuzeigen
+            CrashLogger.Log(nameof(HaelpMi.Agent), "StartConfigExe (Process.Start fehlgeschlagen)", ex);
+            System.Windows.MessageBox.Show(
+                $"HälpMi.Config.exe konnte nicht gestartet werden:{Environment.NewLine}{ex.Message}",
+                "HälpMi - Start fehlgeschlagen", MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
 

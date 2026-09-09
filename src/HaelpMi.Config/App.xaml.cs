@@ -90,6 +90,28 @@ public partial class App : System.Windows.Application
             args.Handled = true;
         };
 
+        try
+        {
+            await RunStartupAsync(e);
+        }
+        catch (Exception ex)
+        {
+            // Issue #99: dieser Prozess wird immer über einen Shortcut/Tray-Klick gestartet -
+            // ein Fehler VOR dem ersten Fenster (z. B. Mutex-/IPC-Aufbau) lief bisher nur in
+            // die AppDomain.UnhandledException-Hooks von CrashLogger (nur Log-Datei, keine
+            // sichtbare Meldung). Alle bereits bekannten Fehlerfälle haben unten weiterhin
+            // ihre eigene, spezifischere Meldung - das hier ist nur das Netz für alles
+            // Unerwartete, damit ein Shortcut-Start nie stillschweigend nichts tut.
+            CrashLogger.Log(nameof(HaelpMi.Config), "OnStartup (unerwarteter Fehler)", ex);
+            MessageBox.Show(
+                $"HälpMi konnte nicht gestartet werden:{Environment.NewLine}{ex.Message}",
+                "HälpMi - Start fehlgeschlagen", MessageBoxButton.OK, MessageBoxImage.Error);
+            Shutdown();
+        }
+    }
+
+    private async Task RunStartupAsync(StartupEventArgs e)
+    {
         _singleInstanceMutex = new Mutex(initiallyOwned: true, name: SingleInstanceMutexName, out var createdNew);
         _ownsSingleInstanceMutex = createdNew;
         if (!createdNew)
@@ -206,6 +228,9 @@ public partial class App : System.Windows.Application
         var configWindow = new ConfigWindow(context);
         MainWindow = configWindow;
         configWindow.Show();
+        // Issue #99: manuell getriggerter Start (Shortcut/Tray) - einmalig in den
+        // Vordergrund, damit das Fenster nicht z. B. hinter dem Explorer aufgeht.
+        ActivateWindow(configWindow);
     }
 
     // Läuft auf einem eigenen Hintergrund-Thread für die gesamte Prozesslaufzeit (kein
@@ -539,6 +564,9 @@ public partial class App : System.Windows.Application
         window.Closed += (_, _) => _dashboardWindow = null;
         MainWindow = window;
         window.Show();
+        // Issue #99: gilt hier ebenso - Start-Menü-Eintrag "HälpMi Dashboard" bzw.
+        // Tray-Menüpunkt "Dashboard öffnen" sind manuelle Trigger.
+        ActivateWindow(window);
         return Task.FromResult(true);
     }
 

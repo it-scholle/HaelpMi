@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Interop;
 
 namespace HaelpMi.InstallCreator;
 
@@ -24,8 +25,26 @@ public partial class App : System.Windows.Application
             args.Handled = true;
         };
 
-        var window = new MainWindow();
-        MainWindow = window;
-        window.Show();
+        try
+        {
+            var window = new MainWindow();
+            MainWindow = window;
+            window.Show();
+            // Issue #99: immer ein manueller Doppelklick-Start (nie beim Kunden) - einmalig
+            // in den Vordergrund, damit es nicht z. B. hinter dem Explorer aufgeht.
+            var hwnd = new WindowInteropHelper(window).Handle;
+            if (hwnd != IntPtr.Zero)
+            {
+                ForegroundHelper.ForceForeground(hwnd);
+            }
+        }
+        catch (Exception ex)
+        {
+            CrashLogger.Log("OnStartup (unerwarteter Fehler)", ex);
+            System.Windows.MessageBox.Show(
+                $"HaelpMi.InstallCreator konnte nicht gestartet werden:{Environment.NewLine}{ex.Message}",
+                "InstallCreator - Start fehlgeschlagen", MessageBoxButton.OK, MessageBoxImage.Error);
+            Shutdown();
+        }
     }
 }
