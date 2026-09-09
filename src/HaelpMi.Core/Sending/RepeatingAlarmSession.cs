@@ -15,7 +15,8 @@ public sealed class AlarmSessionStatus
 /// <summary>
 /// Why a session stopped pinging (Nutzerwunsch 09.08.2026, siehe <see cref="RepeatingAlarmSession.StopReason"/>):
 /// die Sender-Statusanzeige braucht das, um zwischen "sofort weg" (Cancelled) und
-/// "noch 2 Minuten sichtbar" (die anderen beiden) zu unterscheiden.
+/// "noch <see cref="AppConstants.SenderStatusBannerAutoCloseAfterFinish"/> sichtbar" (die
+/// anderen beiden) zu unterscheiden.
 /// </summary>
 public enum AlarmStopReason
 {
@@ -130,8 +131,9 @@ public sealed class RepeatingAlarmSession : IDisposable
         _pingingActive = false;
 
         // Nutzerwunsch 09.08.2026: die Sender-Statusanzeige (SenderStatusWindow) soll bei
-        // Abbrechen sofort verschwinden, bei Schwellwert/Zeitablauf aber noch 2 Minuten
-        // sichtbar bleiben - dafür muss sie wissen, WARUM gestoppt wurde, nicht nur DASS.
+        // Abbrechen sofort verschwinden, bei Schwellwert/Zeitablauf aber noch
+        // AppConstants.SenderStatusBannerAutoCloseAfterFinish sichtbar bleiben - dafür muss
+        // sie wissen, WARUM gestoppt wurde, nicht nur DASS.
         // _cancelledByUser wird ausschließlich vom öffentlichen Cancel() gesetzt; ein
         // Schwellwert-Stopp läuft intern direkt über _stopCts.Cancel() in OnMyWayReceived,
         // setzt das Flag also nicht - beide Fälle bleiben damit unterscheidbar.

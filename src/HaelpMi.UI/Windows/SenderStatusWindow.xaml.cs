@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Windows;
 using System.Windows.Threading;
 using HaelpMi.Core.Models;
@@ -48,8 +49,25 @@ public partial class SenderStatusWindow : Window
             _session.StatusChanged -= Session_StatusChanged;
             _session.Finished -= Session_Finished;
             _autoCloseTimer?.Stop(); // sonst tickt ein schon laufender Timer noch gegen ein per X geschlossenes Fenster
+            RepositionAll();
         };
-        OpenWindows.Add(this);
+
+        // Issue #100: höchstens ein Toast pro Benachrichtigungskreis (AlarmProfile)
+        // gleichzeitig - ein erneuter Alarm für dasselbe Profil ersetzt den alten Toast
+        // statt sich daneben zu stapeln und übernimmt dessen Bottom-Right-Slot (Index 0).
+        // Ein Alarm eines ANDEREN Profils bleibt unberührt und bekommt weiterhin einen
+        // eigenen, oberhalb gestapelten Platz (Add ans Ende, wie bisher).
+        var existingForSameProfile = OpenWindows.FirstOrDefault(w => w._session.Profile.Id == session.Profile.Id);
+        if (existingForSameProfile != null)
+        {
+            existingForSameProfile.Close();
+            OpenWindows.Insert(0, this);
+        }
+        else
+        {
+            OpenWindows.Add(this);
+        }
+        RepositionAll();
     }
 
     private void Session_StatusChanged(object? sender, AlarmSessionStatus status) =>
@@ -58,8 +76,8 @@ public partial class SenderStatusWindow : Window
     // Nutzerwunsch 09.08.2026: das Banner soll nicht wie bisher unbegrenzt stehen bleiben.
     // Bei manuellem Abbrechen sofort weg (der Sender hat gerade selbst aktiv gehandelt,
     // braucht keine Bestätigungsanzeige mehr) - bei Schwellwert/Zeitablauf noch
-    // SenderStatusBannerAutoCloseAfterFinish (2 Min.) sichtbar, genug Zeit für einen Blick
-    // auf die "Auf dem Weg"-Liste, aber nicht dauerhaft manuell wegzuklicken.
+    // SenderStatusBannerAutoCloseAfterFinish (3 Min., Issue #100) sichtbar, genug Zeit für
+    // einen Blick auf die "Auf dem Weg"-Liste, aber nicht dauerhaft manuell wegzuklicken.
     private void Session_Finished(object? sender, EventArgs e) =>
         Dispatcher.BeginInvoke(() =>
         {
@@ -100,6 +118,17 @@ public partial class SenderStatusWindow : Window
 
         Left = workArea.Right - Width - margin;
         Top = workArea.Bottom - ActualHeight - margin - verticalOffset;
+    }
+
+    // Issue #100: nach jeder Änderung an OpenWindows (Ersetzen/Schließen) müssen alle noch
+    // offenen Toasts neu positioniert werden, sonst bleibt ein Toast auf der zuvor
+    // berechneten Position eines inzwischen entfernten/eingefügten Nachbarn stehen.
+    private static void RepositionAll()
+    {
+        foreach (var window in OpenWindows)
+        {
+            window.PositionInCorner();
+        }
     }
 
     private void CancelButton_Click(object sender, RoutedEventArgs e) => _session.Cancel();
