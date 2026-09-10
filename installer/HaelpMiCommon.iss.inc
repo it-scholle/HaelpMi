@@ -13,7 +13,7 @@
 #define MyAppName "HälpMi"
 ; Alpha: 0.x until release, per city/product decision - Version 1.0.0 is reserved for
 ; the actual release. Bump the third number for ordinary fixes, second for a feature.
-#define MyAppVersion "0.43.0"
+#define MyAppVersion "0.43.1"
 #define MyAppPublisher "HälpMi contributors"
 #define MyAgentExeName "HaelpMi.Agent.exe"
 #define MyConfigExeName "HaelpMi.Config.exe"
@@ -722,27 +722,36 @@ begin
     // die Dateien unter {app} gelöscht werden.
     Sleep(500);
 
-    // Bugfix 10.09.2026 (Issue #104, Fehlerbericht "Uninstaller zeigt faelschlich 'nicht
-    // alle Komponenten entfernt'"): dieser DelTree stand bisher in usPostUninstall, also
-    // NACH Innos eigener interner Löschung der [Files]-Einträge. {app} enthält aber auch
-    // zur Laufzeit vom Update-Dienst angelegte, nicht in [Files] registrierte Dateien
-    // (installed-by.json, deployment.json, {app}\versions\...) - Inno kennt diese nicht,
-    // findet {app} bei der eigenen Leer-Prüfung also nicht-leer vor und setzt intern das
-    // "nicht alles entfernt"-Flag, das am Ende die eingebaute UninstalledMost-Meldung
-    // auslöst (German.isl). Das passiert selbst dann, wenn hier direkt danach ohnehin
-    // restlos aufgeräumt wird - die Meldung wird VOR diesem späteren Aufräumen entschieden.
-    // Deshalb hier, noch VOR Innos eigener Löschung für diesen Schritt: {app} enthält
-    // ausschließlich Programmdateien, keine Nutzerdaten (die liegen separat unter
-    // {commonappdata}\HaelpMi, siehe RemoveUserDataOnUninstall unten), daher ohne
-    // Rückfrage sicher.
-    DelTree(ExpandConstant('{app}'), True, True, True);
-
-    if DirExists(ExpandConstant('{app}')) then
-      LogUninstallDiagnostics('WARNUNG: {app} konnte nicht vollstaendig entfernt werden (vermutlich noch eine gesperrte Datei) - siehe tasklist-Ausgabe oben.');
+    // Bugfix 10.09.2026 (Issue #104), REVERTIERT/korrigiert 10.09.2026 (Fehlerbericht
+    // "Uninstaller haengt bei 0% Fortschritt"): Issue #104 verlegte den vollstaendigen
+    // DelTree({app}) hierher (usUninstall, vor Innos eigener interner Loeschung), um die
+    // faelschliche UninstalledMost-Meldung zu vermeiden. Das riss dabei aber {app}\
+    // unins000.exe/unins000.dat mit weg - Innos eigenes Uninstall-Log/Datenfile, das
+    // Inno fuer die anschliessende, fortschrittsbalkengetriebene Loeschung der eigenen
+    // [Files]-Eintraege noch braucht (siehe AppPaths.FindUninstallerExecutable). Ohne
+    // diese Datei bleibt Innos interne Loeschung bei 0% haengen. Deshalb hier nur noch
+    // gezielt die konkret bekannten, nicht in [Files] registrierten Laufzeit-Artefakte
+    // vorab entfernen (nie {app} als Ganzes) - {app} enthaelt danach beim Start von Innos
+    // eigener Loeschung nur noch das, was Inno selbst kennt (inkl. unins000.*), wird also
+    // korrekt vollstaendig entfernt und zeigt die richtige Abschlussmeldung.
+    DeleteFile(ExpandConstant('{app}\installed-by.json'));
+    DeleteFile(ExpandConstant('{app}\deployment.json'));
+    DelTree(ExpandConstant('{app}\versions'), True, True, True);
+    DelTree(ExpandConstant('{app}\_previous'), True, True, True);
   end;
 
   if CurUninstallStep = usPostUninstall then
   begin
+    // Sicherheitsnetz fuer alles, was trotz obigem gezieltem Aufraeumen und Innos eigener
+    // Loeschung noch uebrig ist (z. B. eine zum Kill-Zeitpunkt noch gesperrte Datei) -
+    // laeuft bewusst erst HIER, NACH Innos eigener Loeschung/Abschlussmeldungs-Entscheidung
+    // (siehe Kommentar oben), damit unins000.exe/.dat waehrend der eigentlichen Loeschung
+    // unangetastet bleiben.
+    DelTree(ExpandConstant('{app}'), True, True, True);
+
+    if DirExists(ExpandConstant('{app}')) then
+      LogUninstallDiagnostics('WARNUNG: {app} konnte nicht vollstaendig entfernt werden (vermutlich noch eine gesperrte Datei) - siehe tasklist-Ausgabe oben.');
+
     if RemoveUserDataOnUninstall then
       DelTree(ExpandConstant('{commonappdata}\HaelpMi'), True, True, True);
 
