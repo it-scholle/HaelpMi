@@ -520,32 +520,48 @@ public partial class App : System.Windows.Application
     /// </summary>
     private void RunNotifyUninstallAndExit()
     {
-        try
+        // Bugfix 10.09.2026 (Fehlerbericht "Uninstaller haengt bei 0%", Issue #111): lief
+        // hier bisher direkt synchron blockierend (.GetAwaiter().GetResult()/.Wait()) auf
+        // dem WPF-UI-Thread, INNERHALB von OnStartup - also bevor dessen Dispatcher-Pump
+        // (Dispatcher.Run()) ueberhaupt gestartet ist. WPF installiert aber schon zu diesem
+        // Zeitpunkt einen DispatcherSynchronizationContext auf diesem Thread. Jedes await
+        // in AnnounceSelfRemovedAsync/DiscoveryService, das nicht rein synchron durchlaeuft
+        // (z. B. ein UDP-Send an einen von mehreren bekannten Peers, der minimal laenger
+        // braucht als eine Instant-Completion), plant seine Fortsetzung ueber genau diesen
+        // Dispatcher ein - der nie abgeholt wird, weil der Pump noch nicht laeuft und der
+        // Thread blockiert ist: Deadlock, der Uninstaller (der auf das Prozessende wartet)
+        // haengt fuer immer bei 0%. Task.Run fuehrt die Arbeit auf einem Threadpool-Thread
+        // ohne SynchronizationContext aus - Fortsetzungen laufen dort ganz normal weiter,
+        // unabhaengig davon, ob irgendwo synchron auf sie gewartet wird.
+        Task.Run(async () =>
         {
-            var settings = _settingsStore.Load();
-            var deployment = DeploymentInfoStore.Load();
-            var identity = LiveIdentityFactory.Create(settings, deployment);
-
-            var discovery = new DiscoveryService(() => identity);
             try
             {
-                discovery.StartListening();
-                discovery.AnnounceSelfRemovedAsync().GetAwaiter().GetResult();
+                var settings = _settingsStore.Load();
+                var deployment = DeploymentInfoStore.Load();
+                var identity = LiveIdentityFactory.Create(settings, deployment);
 
-                // Kurze Gnadenfrist, damit die zuletzt abgeschickten UDP-Pakete den
-                // Netzwerkadapter sicher noch verlassen, bevor dieser Prozess (und gleich
-                // danach der Uninstaller die Programmdateien) verschwindet.
-                Task.Delay(TimeSpan.FromMilliseconds(500)).Wait();
+                var discovery = new DiscoveryService(() => identity);
+                try
+                {
+                    discovery.StartListening();
+                    await discovery.AnnounceSelfRemovedAsync();
+
+                    // Kurze Gnadenfrist, damit die zuletzt abgeschickten UDP-Pakete den
+                    // Netzwerkadapter sicher noch verlassen, bevor dieser Prozess (und gleich
+                    // danach der Uninstaller die Programmdateien) verschwindet.
+                    await Task.Delay(TimeSpan.FromMilliseconds(500));
+                }
+                finally
+                {
+                    await discovery.DisposeAsync();
+                }
             }
-            finally
+            catch (Exception)
             {
-                discovery.DisposeAsync().AsTask().Wait();
+                // best-effort, siehe Methodenkommentar
             }
-        }
-        catch (Exception)
-        {
-            // best-effort, siehe Methodenkommentar
-        }
+        }).GetAwaiter().GetResult();
 
         Shutdown();
     }
