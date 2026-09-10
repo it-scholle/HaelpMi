@@ -57,11 +57,57 @@ if ($dueForPullCheck) {
             $dirtyStatus = git status --porcelain 2>$null
             if ([string]::IsNullOrWhiteSpace($dirtyStatus)) {
                 git fetch --quiet 2>$null
-                $pullOutput = (git pull --ff-only 2>&1 | Out-String).Trim()
-                if ($LASTEXITCODE -ne 0) {
-                    Write-Host "Hinweis: automatischer git pull nicht möglich (kein Fast-Forward oder kein Netzwerk) - baue mit dem lokalen Stand weiter."
-                } elseif ($pullOutput -notmatch "Already up to date") {
-                    Write-Host "git pull: $pullOutput"
+                $currentBranch = (git symbolic-ref -q --short HEAD 2>$null)
+                if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace($currentBranch)) {
+                    $pullOutput = (git pull --ff-only 2>&1 | Out-String).Trim()
+                    if ($LASTEXITCODE -ne 0) {
+                        Write-Host "Hinweis: automatischer git pull nicht möglich (kein Fast-Forward oder kein Netzwerk) - baue mit dem lokalen Stand weiter."
+                    } elseif ($pullOutput -notmatch "Already up to date") {
+                        Write-Host "git pull: $pullOutput"
+                    }
+                } else {
+                    # Bugfix 10.09.2026 (Fehlerbericht "Installer zeigt noch alte Version,
+                    # obwohl release-1.0-MVP laengst aktueller ist", Issue #109): `git pull`
+                    # oben setzt einen Branch mit Upstream voraus - bei einem detached HEAD
+                    # (kein Branch) schlägt es IMMER fehl, unabhängig von Netzwerk/Fast-
+                    # Forward, und landete bisher in derselben Zeile wie ein harmloser
+                    # Offline-Fall ("kein Fast-Forward oder kein Netzwerk") - die eigentliche
+                    # Ursache (detached HEAD) wurde nie benannt, der Build lief unbemerkt mit
+                    # dem alten Stand weiter. `git remote set-head origin -a` frischt den
+                    # origin/HEAD-Symref (kann nach einem Default-Branch-Wechsel auf GitHub
+                    # veraltet sein, siehe CLAUDE.md-Abschnitt zum rotierenden
+                    # Default-Branch), danach wird - wie beim Branch-Pull oben nur per
+                    # Fast-Forward - direkt auf origin/HEAD aktualisiert.
+                    git remote set-head origin -a *> $null
+                    git rev-parse --verify --quiet origin/HEAD *> $null
+                    if ($LASTEXITCODE -eq 0) {
+                        $currentCommit = (git rev-parse HEAD).Trim()
+                        $targetCommit = (git rev-parse origin/HEAD).Trim()
+                        if ($currentCommit -ne $targetCommit) {
+                            git merge-base --is-ancestor HEAD origin/HEAD
+                            if ($LASTEXITCODE -eq 0) {
+                                git checkout --detach --quiet origin/HEAD *> $null
+                                if ($LASTEXITCODE -eq 0) {
+                                    $shortTarget = (git rev-parse --short origin/HEAD).Trim()
+                                    Write-Host "Detached HEAD war hinter origin/HEAD zurück - automatisch auf $shortTarget vorgezogen."
+                                } else {
+                                    Write-Host "WARNUNG: detached HEAD haette auf origin/HEAD vorgezogen werden koennen, git checkout ist aber fehlgeschlagen - baue mit dem lokalen (veralteten) Stand weiter."
+                                }
+                            } else {
+                                Write-Host ""
+                                Write-Host "=================================================================="
+                                Write-Host "WARNUNG: dieser Checkout steht auf einem detached HEAD, der NICHT"
+                                Write-Host "Vorfahre von origin/HEAD ist (divergiert) - kann nicht automatisch"
+                                Write-Host "aktualisiert werden. Ein jetzt gebauter Installer spiegelt"
+                                Write-Host "moeglicherweise NICHT den aktuellen origin/HEAD-Stand wider."
+                                Write-Host "Manuell pruefen: git log --oneline -5   bzw.   git checkout origin/HEAD"
+                                Write-Host "=================================================================="
+                                Read-Host "Enter zum Fortfahren trotz moeglicherweise veraltetem Stand"
+                            }
+                        }
+                    } else {
+                        Write-Host "Hinweis: detached HEAD, origin/HEAD nicht aufloesbar (kein Netzwerk?) - baue mit dem lokalen Stand weiter."
+                    }
                 }
             } else {
                 # Grossgeschriebenes "Ä" ohne BOM wird von PowerShell 5.1 ohne UTF-8-BOM als
