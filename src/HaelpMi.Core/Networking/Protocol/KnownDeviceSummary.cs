@@ -26,13 +26,15 @@ namespace HaelpMi.Core.Networking.Protocol;
 /// unauthentifizierte, aber plausible Selbst-/Fremdauskunft, kein härteres Sicherheitsziel.
 ///
 /// <see cref="Removed"/>/<see cref="RemovedSetAtUtc"/> (Issue #61-Nachtrag "Löschen
-/// deaktiviert nicht wirklich"): trägt einen Tombstone aus <see cref="Storage.RemovedDeviceStore"/>
-/// weiter - anders als <see cref="Override"/> einseitig (kann nur von false auf true
-/// wechseln, nie zurück), deshalb ohne Zeitstempel-Konfliktregel bei Empfang: jeder
-/// Empfänger übernimmt Removed=true unbedingt, siehe DiscoveryService.HandleDatagramAsync.
-/// Alle anderen Felder eines rein tombstone-basierten Eintrags (kein zugehöriger
-/// DeviceEntry mehr vorhanden) sind bei Removed=true bedeutungslose Platzhalter - siehe
-/// DiscoveryService.BuildKnownDevicesSummaryAsync.
+/// deaktiviert nicht wirklich"): die weiche, umkehrbare "Deinstalliert"-Markierung eines
+/// ganz normalen <see cref="Models.DeviceEntry"/> (Selbstbericht per
+/// <see cref="DiscoveryService.AnnounceSelfRemovedAsync"/> oder Drittmeinung) - "neuester
+/// Zeitstempel gewinnt" wie bei <see cref="Override"/>, siehe DeviceStore.Upsert. Bewusst
+/// NICHT der Weg für einen endgültigen <see cref="Storage.RemovedDeviceStore"/>-Tombstone
+/// (Bugfix 10.09.2026, siehe <see cref="Protocol.PermanentlyRemovedDeviceSummary"/>): ein
+/// Empfänger darf aus einer bloßen Removed=true-Drittmeinung nie selbst einen
+/// unumkehrbaren lokalen Tombstone ableiten, sonst könnte jeder ungeprüfte Peer ein
+/// beliebiges Gerät dauerhaft sperren.
 /// </summary>
 public sealed record KnownDeviceSummary(
     Guid DeviceId,

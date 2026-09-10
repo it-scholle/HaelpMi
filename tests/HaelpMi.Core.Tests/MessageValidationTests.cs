@@ -121,15 +121,34 @@ public class MessageValidationTests
         Assert.False((ValidBootCall() with { KnownDevices = devices }).IsPlausible());
     }
 
-    // Issue #61-Nachtrag: ein reiner Tombstone-Eintrag (Removed=true) hat keinen
-    // zugehörigen DeviceEntry mehr und damit keine echte IP/Port (siehe
-    // DiscoveryService.BuildKnownDevicesSummaryAsync) - TcpPort 0 ist dafür kein
-    // Plausibilitätsverstoß.
+    // Issue #61-Nachtrag: ein Removed=true-Selbstbericht (AnnounceSelfRemovedAsync) hat
+    // keinen echten Port mehr (der Prozess beendet sich gleich danach) - TcpPort 0 ist
+    // dafür kein Plausibilitätsverstoß.
     [Fact]
     public void BootCallMessage_KnownDeviceRemovedWithTcpPortZero_IsPlausible()
     {
         var devices = new List<KnownDeviceSummary> { ValidKnownDevice() with { TcpPort = 0, IpAddress = "", Removed = true } };
         Assert.True((ValidBootCall() with { KnownDevices = devices }).IsPlausible());
+    }
+
+    // ------------------------------------------------------- PermanentlyRemovedDevices ---
+
+    [Fact]
+    public void BootCallMessage_NullPermanentlyRemovedDevices_IsPlausible() =>
+        Assert.True((ValidBootCall() with { PermanentlyRemovedDevices = null }).IsPlausible());
+
+    [Fact]
+    public void BootCallMessage_PermanentlyRemovedDeviceWithEmptyDeviceId_IsRejected()
+    {
+        var tombstones = new List<PermanentlyRemovedDeviceSummary> { new(Guid.Empty, DateTimeOffset.UtcNow) };
+        Assert.False((ValidBootCall() with { PermanentlyRemovedDevices = tombstones }).IsPlausible());
+    }
+
+    [Fact]
+    public void BootCallMessage_TooManyPermanentlyRemovedDevices_IsRejected()
+    {
+        var tooMany = Enumerable.Range(0, 1001).Select(_ => new PermanentlyRemovedDeviceSummary(Guid.NewGuid(), DateTimeOffset.UtcNow)).ToList();
+        Assert.False((ValidBootCall() with { PermanentlyRemovedDevices = tooMany }).IsPlausible());
     }
 
     [Fact]

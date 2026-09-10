@@ -38,6 +38,7 @@ internal static class MessageValidation
         Enum.IsDefined(message.Role) &&
         Enum.IsDefined(message.Kind) &&
         (message.KnownDevices is null || IsPlausible(message.KnownDevices)) &&
+        (message.PermanentlyRemovedDevices is null || IsPlausible(message.PermanentlyRemovedDevices)) &&
         (message.LicenseKeyText is null || message.LicenseKeyText.Length <= MaxLicenseKeyTextLength);
 
     private static bool IsPlausible(IReadOnlyList<KnownDeviceSummary> knownDevices) =>
@@ -49,12 +50,17 @@ internal static class MessageValidation
             d.RoomName.Length <= MaxTextFieldLength &&
             d.RoomNumber.Length <= MaxTextFieldLength &&
             d.IpAddress.Length <= MaxTextFieldLength &&
-            // Ein reiner Tombstone-Eintrag (Removed=true, Issue #61-Nachtrag) hat keinen
-            // zugehörigen DeviceEntry mehr und damit keine echte IP/Port - Platzhalter
-            // (siehe DiscoveryService.BuildKnownDevicesSummaryAsync), deshalb hier von der
-            // sonst für jedes Gerät geltenden Port-Prüfung ausgenommen.
+            // Ein Removed=true-Eintrag ohne echten Port kommt von
+            // DiscoveryService.AnnounceSelfRemovedAsync (eigene Deinstallations-Meldung,
+            // der Prozess beendet sich gleich danach) - deshalb hier von der sonst für
+            // jedes Gerät geltenden Port-Prüfung ausgenommen. Ein "Endgültig gelöscht"-
+            // Tombstone läuft seit Bugfix 10.09.2026 nicht mehr über dieses Feld, siehe
+            // PermanentlyRemovedDeviceSummary.
             (d.Removed || d.TcpPort is > 0 and <= 65535) &&
             Enum.IsDefined(d.Role));
+
+    private static bool IsPlausible(IReadOnlyList<PermanentlyRemovedDeviceSummary> tombstones) =>
+        tombstones.Count <= MaxKnownDevicesCount && tombstones.All(t => t.DeviceId != Guid.Empty);
 
     public static bool IsPlausible(this AlarmRequestMessage message) =>
         message.CustomerGroupId != Guid.Empty &&

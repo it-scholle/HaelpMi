@@ -480,11 +480,13 @@ public class NetworkingTests
         var replyResult = await replyListenTask.WaitAsync(TimeSpan.FromSeconds(5));
         var reply = JsonSerializer.Deserialize<BootCallMessage>(replyResult.Buffer, WireOptions);
 
+        // Bugfix 10.09.2026: läuft seitdem über das eigene PermanentlyRemovedDevices-Feld,
+        // nicht mehr als getarnter KnownDeviceSummary-Eintrag - siehe
+        // PermanentlyRemovedDeviceSummary für die Begründung.
         Assert.NotNull(reply);
-        Assert.NotNull(reply!.KnownDevices);
-        var ownTombstone = Assert.Single(reply.KnownDevices!, d => d.DeviceId == removedDeviceId);
-        Assert.True(ownTombstone.Removed);
-        Assert.Equal(removedAt, ownTombstone.RemovedSetAtUtc);
+        Assert.NotNull(reply!.PermanentlyRemovedDevices);
+        var ownTombstone = Assert.Single(reply.PermanentlyRemovedDevices!, t => t.DeviceId == removedDeviceId);
+        Assert.Equal(removedAt, ownTombstone.RemovedAtUtc);
     }
 
     [Fact]
@@ -572,6 +574,98 @@ public class NetworkingTests
 
         var removedDevices = new RemovedDeviceStore().Load();
         Assert.False(RemovedDeviceStore.Contains(removedDevices, removedDeviceId));
+    }
+
+    // --- Bugfix "gelöschtes Gerät taucht per Gossip wieder auf" 10.09.2026: ein per
+    // "Endgültig löschen" gesetzter Tombstone (PermanentlyRemovedDeviceSummary) muss sich
+    // über einen dritten Peer, der den ursprünglichen Löschklick nie gesehen hat, weiter
+    // durchsetzen - sonst lebt das (weiterhin laufende) Gerät bei jedem Peer wieder auf,
+    // der es direkt kontaktiert, bevor er den Tombstone erhalten hat. ---
+
+    [Fact]
+    public async Task DiscoveryService_ReceivesPermanentTombstoneViaGossip_AddsItLocally_AndSenderIsNeverResurrected()
+    {
+        using var scope = new TestAppDataScope();
+        var discoveryPort = GetFreeUdpPort();
+        var customerGroupId = Guid.NewGuid();
+
+        var ownDeviceId = Guid.NewGuid();
+        var ownIdentity = MakeIdentity(customerGroupId, ownDeviceId, "Admin-B-PC", "Admin B", "Büro", "6");
+
+        // Dieses Admin-Dashboard hat "Endgültig löschen" nie selbst geklickt - es kennt
+        // das gelöschte Gerät bislang gar nicht.
+        var removedDeviceId = Guid.NewGuid();
+        var removedAt = DateTimeOffset.UtcNow.AddMinutes(-1);
+
+        await using var discovery = new DiscoveryService(() => ownIdentity, discoveryPort: discoveryPort);
+        discovery.StartListening();
+
+        var adminADeviceId = Guid.NewGuid();
+        using var adminASocket = new UdpClient(0) { EnableBroadcast = true };
+        var reply = new BootCallMessage(
+            MessageKind.Reply, customerGroupId, adminADeviceId, "Admin-A-PC", "Admin A", "Büro", "5",
+            Role.Admin, false, 51999, "9.9.9", 0, DateTimeOffset.UtcNow,
+            PermanentlyRemovedDevices: new List<PermanentlyRemovedDeviceSummary> { new(removedDeviceId, removedAt) });
+        var replyBytes = JsonSerializer.SerializeToUtf8Bytes(reply, WireOptions);
+
+        var updatedSignal = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        discovery.DeviceUpdated += (_, _) => updatedSignal.TrySetResult(); // vom Absender adminADeviceId, nicht vom Tombstone-Eintrag
+
+        await adminASocket.SendAsync(replyBytes, replyBytes.Length, new IPEndPoint(IPAddress.Loopback, discoveryPort));
+        await updatedSignal.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+        var removedDevices = new RemovedDeviceStore().Load();
+        Assert.True(RemovedDeviceStore.Contains(removedDevices, removedDeviceId));
+
+        // Das gelöschte Gerät weiß von seiner eigenen Löschung nichts und meldet sich
+        // ganz normal direkt bei diesem Peer - es darf trotzdem nicht wieder auftauchen
+        // (gleiche Zusicherung wie DiscoveryService_TombstonedSender_IsNeverResurrected_ButStillGetsAReply,
+        // nur diesmal mit einem per Gossip GELERNTEN statt lokal gesetzten Tombstone).
+        using var removedDeviceSocket = new UdpClient(0) { EnableBroadcast = true };
+        var announce = new BootCallMessage(
+            MessageKind.Announce, customerGroupId, removedDeviceId, "PC-Gelöscht", "Herr Weg", "Lager", "9",
+            Role.User, false, 51999, "9.9.9", 0, DateTimeOffset.UtcNow);
+        var announceBytes = JsonSerializer.SerializeToUtf8Bytes(announce, WireOptions);
+
+        var replyListenTask = removedDeviceSocket.ReceiveAsync();
+        await removedDeviceSocket.SendAsync(announceBytes, announceBytes.Length, new IPEndPoint(IPAddress.Loopback, discoveryPort));
+        await replyListenTask.WaitAsync(TimeSpan.FromSeconds(5));
+
+        var devices = new DeviceStore().Load();
+        Assert.DoesNotContain(devices, d => d.DeviceId == removedDeviceId);
+    }
+
+    [Fact]
+    public async Task DiscoveryService_GossipedTombstone_AboutOwnDeviceId_IsIgnored()
+    {
+        // Ein Gerät trägt sich nie selbst in seinen eigenen RemovedDeviceStore ein - sonst
+        // könnte jeder ungeprüfte Peer (keine Admin-Signaturprüfung auf diesem
+        // Versionsstand, CLAUDE.md) die eigene Identität dauerhaft sperren.
+        using var scope = new TestAppDataScope();
+        var discoveryPort = GetFreeUdpPort();
+        var customerGroupId = Guid.NewGuid();
+
+        var ownDeviceId = Guid.NewGuid();
+        var ownIdentity = MakeIdentity(customerGroupId, ownDeviceId, "PC-Betroffen", "Herr Betroffen", "Empfang", "1");
+
+        await using var discovery = new DiscoveryService(() => ownIdentity, discoveryPort: discoveryPort);
+        var updatedSignal = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        discovery.DeviceUpdated += (_, _) => updatedSignal.TrySetResult();
+        discovery.StartListening();
+
+        var adminDeviceId = Guid.NewGuid();
+        using var adminSocket = new UdpClient(0) { EnableBroadcast = true };
+        var reply = new BootCallMessage(
+            MessageKind.Reply, customerGroupId, adminDeviceId, "Admin-PC", "Admin", "Büro", "5",
+            Role.Admin, false, 51999, "9.9.9", 0, DateTimeOffset.UtcNow,
+            PermanentlyRemovedDevices: new List<PermanentlyRemovedDeviceSummary> { new(ownDeviceId, DateTimeOffset.UtcNow) });
+        var replyBytes = JsonSerializer.SerializeToUtf8Bytes(reply, WireOptions);
+
+        await adminSocket.SendAsync(replyBytes, replyBytes.Length, new IPEndPoint(IPAddress.Loopback, discoveryPort));
+        await updatedSignal.Task.WaitAsync(TimeSpan.FromSeconds(5)); // vom Absender adminDeviceId
+
+        var removedDevices = new RemovedDeviceStore().Load();
+        Assert.False(RemovedDeviceStore.Contains(removedDevices, ownDeviceId));
     }
 
     [Fact]
@@ -707,11 +801,13 @@ public class NetworkingTests
         var result = await receiveTask.WaitAsync(TimeSpan.FromSeconds(5));
         var message = JsonSerializer.Deserialize<BootCallMessage>(result.Buffer, WireOptions);
 
+        // Bugfix 10.09.2026: läuft seitdem über das eigene PermanentlyRemovedDevices-Feld,
+        // nicht mehr als getarnter KnownDeviceSummary-Eintrag - siehe
+        // PermanentlyRemovedDeviceSummary für die Begründung.
         Assert.NotNull(message);
-        Assert.NotNull(message!.KnownDevices);
-        var tombstone = Assert.Single(message.KnownDevices!, d => d.DeviceId == removedDeviceId);
-        Assert.True(tombstone.Removed);
-        Assert.Equal(removedAt, tombstone.RemovedSetAtUtc);
+        Assert.NotNull(message!.PermanentlyRemovedDevices);
+        var tombstone = Assert.Single(message.PermanentlyRemovedDevices!, t => t.DeviceId == removedDeviceId);
+        Assert.Equal(removedAt, tombstone.RemovedAtUtc);
     }
 
     // --- Regressionsschutz 11.08.2026: drei frisch installierte Geräte blieben ohne
