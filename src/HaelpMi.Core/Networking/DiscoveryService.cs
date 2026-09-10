@@ -184,8 +184,14 @@ public sealed class DiscoveryService : IAsyncDisposable
             throw new InvalidOperationException($"{nameof(StartListening)} must be called first.");
         }
 
-        var knownDevices = includeKnownDevices ? await BuildKnownDevicesSummaryAsync(Guid.Empty, ct) : null;
-        var message = BuildMessage(MessageKind.Announce, knownDevices);
+        IReadOnlyList<KnownDeviceSummary>? knownDevices = null;
+        IReadOnlyList<PermanentlyRemovedDeviceSummary>? permanentlyRemovedDevices = null;
+        if (includeKnownDevices)
+        {
+            (knownDevices, permanentlyRemovedDevices) = await BuildKnownDevicesSummaryAsync(Guid.Empty, ct);
+        }
+
+        var message = BuildMessage(MessageKind.Announce, knownDevices, permanentlyRemovedDevices);
         var payload = NetworkSerializer.ToUtf8Json(message);
         if (payload.Length > MaxDatagramBytes)
         {
@@ -242,8 +248,8 @@ public sealed class DiscoveryService : IAsyncDisposable
             return;
         }
 
-        var knownDevices = await BuildKnownDevicesSummaryAsync(Guid.Empty, ct);
-        var message = BuildMessage(MessageKind.Announce, knownDevices);
+        var (knownDevices, permanentlyRemovedDevices) = await BuildKnownDevicesSummaryAsync(Guid.Empty, ct);
+        var message = BuildMessage(MessageKind.Announce, knownDevices, permanentlyRemovedDevices);
         var payload = NetworkSerializer.ToUtf8Json(message);
         if (payload.Length > MaxDatagramBytes)
         {
@@ -359,7 +365,7 @@ public sealed class DiscoveryService : IAsyncDisposable
             .Distinct()
             .ToList();
 
-    private BootCallMessage BuildMessage(MessageKind kind, IReadOnlyList<KnownDeviceSummary>? knownDevices = null)
+    private BootCallMessage BuildMessage(MessageKind kind, IReadOnlyList<KnownDeviceSummary>? knownDevices = null, IReadOnlyList<PermanentlyRemovedDeviceSummary>? permanentlyRemovedDevices = null)
     {
         var identity = _identityProvider();
         return new BootCallMessage(
@@ -379,7 +385,8 @@ public sealed class DiscoveryService : IAsyncDisposable
             knownDevices,
             identity.FirstSeenUtc,
             _ownLicenseKeyTextProvider?.Invoke(),
-            identity.LastInstalledAtUtc);
+            identity.LastInstalledAtUtc,
+            permanentlyRemovedDevices);
     }
 
     private async Task ReceiveLoopAsync(UdpClient socket, CancellationToken ct)
@@ -561,9 +568,46 @@ public sealed class DiscoveryService : IAsyncDisposable
                 }
             }
 
-            // removedDevices (RemovedDeviceStore) wird hier nur gelesen, nie verändert -
-            // das endgültige Löschen bleibt eine separate, admin-only Aktion (siehe
-            // Config/App.xaml.cs DeleteDevice) - kein Save nötig.
+            // Bugfix "gelöschtes Gerät taucht per Gossip wieder auf" 10.09.2026: die
+            // erstmalige "Endgültig löschen"-Entscheidung bleibt admin-only (siehe
+            // Config/App.xaml.cs DeleteDevice), aber ein von einem Peer über
+            // PermanentlyRemovedDeviceSummary WEITERGETRAGENER Tombstone wird hier lokal
+            // übernommen - sonst gilt die Löschung nie über den einen Admin hinaus, bei dem
+            // ursprünglich geklickt wurde (ein Peer, der das betroffene, weiterhin
+            // laufende Gerät vorher direkt kontaktiert, hätte es sonst einfach wieder
+            // aufgenommen). Bewusst getrennt vom KnownDevices-Merge oben: eine bloße
+            // Removed=true-Drittmeinung (siehe dort) darf NIE einen eigenen Tombstone
+            // erzeugen, nur ein echter RemovedDeviceStore-Eintrag des Absenders.
+            if (message.PermanentlyRemovedDevices is { Count: > 0 } tombstones)
+            {
+                var tombstonesChanged = false;
+                foreach (var tombstone in tombstones)
+                {
+                    if (tombstone.DeviceId == ownIdentity.DeviceId)
+                    {
+                        // Ein Gerät trägt sich nie selbst in seine eigene Peer-/Tombstone-
+                        // Liste ein - unbeaufsichtigt übernommen könnte sonst jeder
+                        // ungeprüfte Peer die eigene Identität dauerhaft sperren (keine
+                        // Admin-Signaturprüfung auf diesem Versionsstand, CLAUDE.md).
+                        continue;
+                    }
+
+                    if (!RemovedDeviceStore.Contains(removedDevices, tombstone.DeviceId))
+                    {
+                        var lastKnownIp = devices.FirstOrDefault(d => d.DeviceId == tombstone.DeviceId)?.IpAddress;
+                        RemovedDeviceStore.Add(removedDevices, tombstone.DeviceId, tombstone.RemovedAtUtc, lastKnownIp);
+                        tombstonesChanged = true;
+                    }
+
+                    devices.RemoveAll(d => d.DeviceId == tombstone.DeviceId);
+                }
+
+                if (tombstonesChanged)
+                {
+                    _removedDeviceStore.Save(removedDevices);
+                }
+            }
+
             _deviceStore.Save(devices);
         }
         finally
@@ -654,8 +698,8 @@ public sealed class DiscoveryService : IAsyncDisposable
             return;
         }
 
-        var knownDevices = await BuildKnownDevicesSummaryAsync(announcerDeviceId, ct);
-        var reply = BuildMessage(MessageKind.Reply, knownDevices);
+        var (knownDevices, permanentlyRemovedDevices) = await BuildKnownDevicesSummaryAsync(announcerDeviceId, ct);
+        var reply = BuildMessage(MessageKind.Reply, knownDevices, permanentlyRemovedDevices);
         var payload = NetworkSerializer.ToUtf8Json(reply);
         if (payload.Length > MaxDatagramBytes)
         {
@@ -682,7 +726,7 @@ public sealed class DiscoveryService : IAsyncDisposable
         }
     }
 
-    private async Task<IReadOnlyList<KnownDeviceSummary>> BuildKnownDevicesSummaryAsync(Guid excludeDeviceId, CancellationToken ct)
+    private async Task<(IReadOnlyList<KnownDeviceSummary> KnownDevices, IReadOnlyList<PermanentlyRemovedDeviceSummary> PermanentlyRemovedDevices)> BuildKnownDevicesSummaryAsync(Guid excludeDeviceId, CancellationToken ct)
     {
         await _storeLock.WaitAsync(ct);
         List<DeviceEntry> devices;
@@ -721,21 +765,16 @@ public sealed class DiscoveryService : IAsyncDisposable
                 excludedSelf.Removed, excludedSelf.RemovedSetAtUtc));
         }
 
-        // Endgültig-gelöscht-Tombstones (Issue #61, "Endgültig löschen" - anders als die
-        // sichtbare Removed-Markierung oben haben diese keinen zugehörigen DeviceEntry mehr,
-        // siehe RemovedDeviceStore-Klassenkommentar) - IMMER an jeden Empfänger angehängt,
-        // auch an den Betroffenen selbst, damit sich die endgültige Löschung im ganzen
-        // Kreis durchsetzt. Übrige Felder sind Platzhalter - ein solcher Eintrag beschreibt
-        // kein Gerät mehr, nur eine für immer verworfene DeviceId.
-        foreach (var removed in removedDevices)
-        {
-            summaries.Add(new KnownDeviceSummary(
-                removed.DeviceId, string.Empty, string.Empty, string.Empty, string.Empty,
-                Role.User, string.Empty, 0, null, LicenseOverride.None, null,
-                Removed: true, RemovedSetAtUtc: removed.RemovedAtUtc));
-        }
+        // Endgültig-gelöscht-Tombstones (Issue #61, "Endgültig löschen") - eigenes Feld
+        // statt eines weiteren KnownDeviceSummary-Eintrags (Bugfix 10.09.2026, siehe
+        // PermanentlyRemovedDeviceSummary) - IMMER an jeden Empfänger angehängt, auch an
+        // den Betroffenen selbst, damit sich die endgültige Löschung im ganzen Kreis
+        // durchsetzt.
+        var tombstones = removedDevices
+            .Select(r => new PermanentlyRemovedDeviceSummary(r.DeviceId, r.RemovedAtUtc))
+            .ToList();
 
-        return summaries;
+        return (summaries, tombstones);
     }
 
     public async ValueTask DisposeAsync()

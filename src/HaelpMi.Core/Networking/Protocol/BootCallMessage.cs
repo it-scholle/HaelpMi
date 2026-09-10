@@ -52,6 +52,13 @@ public enum MessageKind
 /// deren Zeitstempel (siehe DeviceStore.Upsert). <c>default</c>/nie gesetzt bei einem
 /// Absender ohne dieses Feld (ältere Programmversion), verhält sich dann wie "nie
 /// installiert" - hebt also nichts auf, kompatibel zum bisherigen Verhalten.
+///
+/// <see cref="PermanentlyRemovedDevices"/> (Bugfix "gelöschtes Gerät taucht per Gossip
+/// wieder auf" 10.09.2026): "Endgültig löschen"-Tombstones aus
+/// <see cref="Storage.RemovedDeviceStore"/> - siehe <see cref="Protocol.PermanentlyRemovedDeviceSummary"/>
+/// für die Begründung, warum das ein eigenes Feld statt eines weiteren
+/// <see cref="KnownDeviceSummary"/>-Eintrags ist. Optional/nullable, gleicher
+/// Kompatibilitätsgrund wie <see cref="KnownDevices"/>.
 /// </summary>
 public sealed record BootCallMessage(
     MessageKind Kind,
@@ -70,4 +77,5 @@ public sealed record BootCallMessage(
     IReadOnlyList<KnownDeviceSummary>? KnownDevices = null,
     DateTimeOffset? FirstSeenUtc = null,
     string? LicenseKeyText = null,
-    DateTimeOffset LastInstalledAtUtc = default);
+    DateTimeOffset LastInstalledAtUtc = default,
+    IReadOnlyList<PermanentlyRemovedDeviceSummary>? PermanentlyRemovedDevices = null);
