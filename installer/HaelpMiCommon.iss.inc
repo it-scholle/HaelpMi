@@ -13,7 +13,7 @@
 #define MyAppName "HälpMi"
 ; Alpha: 0.x until release, per city/product decision - Version 1.0.0 is reserved for
 ; the actual release. Bump the third number for ordinary fixes, second for a feature.
-#define MyAppVersion "0.42.1"
+#define MyAppVersion "0.42.2"
 #define MyAppPublisher "HälpMi contributors"
 #define MyAgentExeName "HaelpMi.Agent.exe"
 #define MyConfigExeName "HaelpMi.Config.exe"
@@ -719,27 +719,30 @@ begin
     Exec('schtasks.exe', '/Delete /TN "HaelpMi Agent" /F', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
     // Handles werden nach Prozessende nicht immer sofort freigegeben (gleiches Prinzip wie
     // CurStepChanged oben und UpdateServiceWorker.ConfirmSwapAsync) - kurz warten, bevor
-    // Inno gleich im Anschluss versucht, die Dateien unter {app} zu löschen.
+    // die Dateien unter {app} gelöscht werden.
     Sleep(500);
-  end;
 
-  if CurUninstallStep = usPostUninstall then
-  begin
-    // Bugfix 06.08.2026 (Teil 2 desselben Fehlerberichts): {app} enthält nicht nur die von
-    // [Files] installierten Dateien, sondern auch zur Laufzeit vom Update-Dienst selbst
-    // angelegte Versions-/Swap-Ordner (siehe HaelpMi.UpdateService/UpdateServiceWorker.cs,
-    // VersionDir/AppRoot = AppContext.BaseDirectory = {app}) - die kennt Inno's automatische
-    // Deinstallation gar nicht, weil Setup sie nie selbst dorthin kopiert hat. Ein "leer,
-    // also lösche den Ordner"-Automatismus greift dann nicht, selbst wenn alle gesperrten
-    // Dateien oben schon frei sind. Deshalb hier zusätzlich ein expliziter, bedingungsloser
-    // DelTree - {app} enthält ausschließlich Programmdateien, keine Nutzerdaten (die liegen
-    // separat unter {commonappdata}\HaelpMi, siehe RemoveUserDataOnUninstall unten), daher
-    // ohne Rückfrage sicher.
+    // Bugfix 10.09.2026 (Issue #104, Fehlerbericht "Uninstaller zeigt faelschlich 'nicht
+    // alle Komponenten entfernt'"): dieser DelTree stand bisher in usPostUninstall, also
+    // NACH Innos eigener interner Löschung der [Files]-Einträge. {app} enthält aber auch
+    // zur Laufzeit vom Update-Dienst angelegte, nicht in [Files] registrierte Dateien
+    // (installed-by.json, deployment.json, {app}\versions\...) - Inno kennt diese nicht,
+    // findet {app} bei der eigenen Leer-Prüfung also nicht-leer vor und setzt intern das
+    // "nicht alles entfernt"-Flag, das am Ende die eingebaute UninstalledMost-Meldung
+    // auslöst (German.isl). Das passiert selbst dann, wenn hier direkt danach ohnehin
+    // restlos aufgeräumt wird - die Meldung wird VOR diesem späteren Aufräumen entschieden.
+    // Deshalb hier, noch VOR Innos eigener Löschung für diesen Schritt: {app} enthält
+    // ausschließlich Programmdateien, keine Nutzerdaten (die liegen separat unter
+    // {commonappdata}\HaelpMi, siehe RemoveUserDataOnUninstall unten), daher ohne
+    // Rückfrage sicher.
     DelTree(ExpandConstant('{app}'), True, True, True);
 
     if DirExists(ExpandConstant('{app}')) then
       LogUninstallDiagnostics('WARNUNG: {app} konnte nicht vollstaendig entfernt werden (vermutlich noch eine gesperrte Datei) - siehe tasklist-Ausgabe oben.');
+  end;
 
+  if CurUninstallStep = usPostUninstall then
+  begin
     if RemoveUserDataOnUninstall then
       DelTree(ExpandConstant('{commonappdata}\HaelpMi'), True, True, True);
 
