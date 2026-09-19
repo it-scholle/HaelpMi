@@ -744,6 +744,114 @@ public class NetworkingTests
         Assert.Equal("PC-Weg", entry.ComputerName); // ganz normaler, sichtbarer Eintrag - nicht versteckt
     }
 
+    // --- Issue #113 ("Admin kann sich selbst im Geräte-Tab deaktivieren"): technisch
+    // derselbe Sonderweg wie AnnounceSelfRemovedAsync oben, für LicenseOverride statt
+    // Removed - bewusst beschränkt auf None/ForceDisabled (nie ForceEnabled), damit sich
+    // kein Gerät per Selbstbericht am eigenen Lizenzkontingent vorbeimogeln kann. ---
+
+    [Fact]
+    public async Task AnnounceSelfLicenseOverrideAsync_MarksAdminSenderAsForceDisabled_OnReceiverSide()
+    {
+        using var scope = new TestAppDataScope();
+        var discoveryPort = GetFreeUdpPort();
+        var customerGroupId = Guid.NewGuid();
+
+        var adminDeviceId = Guid.NewGuid();
+        var adminIdentity = MakeIdentity(customerGroupId, adminDeviceId, "Admin-PC", "Admin", "Büro", "5") with { Role = Role.Admin };
+
+        var receiverDeviceId = Guid.NewGuid();
+        var receiverIdentity = MakeIdentity(customerGroupId, receiverDeviceId, "PC-Zwei", "Nutzer Zwei", "Zimmer", "2");
+
+        await using var receiver = new DiscoveryService(() => receiverIdentity, discoveryPort: discoveryPort);
+        var updatedSignal = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        receiver.DeviceUpdated += (_, _) => updatedSignal.TrySetResult();
+        receiver.StartListening();
+
+        await using var admin = new DiscoveryService(() => adminIdentity, discoveryPort: discoveryPort);
+        admin.StartListening();
+
+        var setAtUtc = DateTimeOffset.UtcNow;
+        await admin.AnnounceSelfLicenseOverrideAsync(LicenseOverride.ForceDisabled, setAtUtc);
+        await updatedSignal.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+        var devices = new DeviceStore().Load();
+        var entry = Assert.Single(devices, d => d.DeviceId == adminDeviceId);
+        Assert.Equal(LicenseOverride.ForceDisabled, entry.LicenseOverride);
+        Assert.Equal(setAtUtc, entry.LicenseOverrideSetAtUtc);
+    }
+
+    [Fact]
+    public async Task AnnounceSelfLicenseOverrideAsync_IsIgnoredByReceiver_WhenSenderIsNotAdmin()
+    {
+        // Nur ein Admin-Gerät darf sich selbst deaktivieren (Issue #113) - ein normales
+        // Gerät könnte sich sonst per Selbstbericht der eigenen Lizenzkontingent-Prüfung
+        // entziehen. Die Empfangsseite prüft das unabhängig von der Dashboard-UI (die
+        // SetOwnLicenseOverride ohnehin nur einem Admin anbietet).
+        using var scope = new TestAppDataScope();
+        var discoveryPort = GetFreeUdpPort();
+        var customerGroupId = Guid.NewGuid();
+
+        var userDeviceId = Guid.NewGuid();
+        var userIdentity = MakeIdentity(customerGroupId, userDeviceId, "PC-User", "Nutzer", "Zimmer", "3");
+
+        var receiverDeviceId = Guid.NewGuid();
+        var receiverIdentity = MakeIdentity(customerGroupId, receiverDeviceId, "PC-Zwei", "Nutzer Zwei", "Zimmer", "2");
+
+        await using var receiver = new DiscoveryService(() => receiverIdentity, discoveryPort: discoveryPort);
+        var updatedSignal = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        receiver.DeviceUpdated += (_, _) => updatedSignal.TrySetResult();
+        receiver.StartListening();
+
+        await using var user = new DiscoveryService(() => userIdentity, discoveryPort: discoveryPort);
+        user.StartListening();
+
+        await user.AnnounceSelfLicenseOverrideAsync(LicenseOverride.ForceDisabled, DateTimeOffset.UtcNow);
+        await updatedSignal.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+        var devices = new DeviceStore().Load();
+        var entry = Assert.Single(devices, d => d.DeviceId == userDeviceId);
+        Assert.Equal(LicenseOverride.None, entry.LicenseOverride);
+        Assert.Null(entry.LicenseOverrideSetAtUtc);
+    }
+
+    [Fact]
+    public async Task DiscoveryService_IgnoresSelfReportedForceEnabled_EvenFromAnAdminSender()
+    {
+        // AnnounceSelfLicenseOverrideAsync verweigert ForceEnabled bereits auf der
+        // Sendeseite (siehe dortiger Kommentar) - dieser Test simuliert trotzdem einen
+        // Absender, der diese Regel umgeht (z. B. eine manipulierte/ältere Gegenstelle), um
+        // die unabhängige Prüfung auf der Empfangsseite zu belegen (Verteidigung in der
+        // Tiefe): sonst könnte sich ein Gerät per Selbstbericht am eigenen
+        // Lizenzkontingent vorbeimogeln.
+        using var scope = new TestAppDataScope();
+        var discoveryPort = GetFreeUdpPort();
+        var customerGroupId = Guid.NewGuid();
+
+        var receiverDeviceId = Guid.NewGuid();
+        var receiverIdentity = MakeIdentity(customerGroupId, receiverDeviceId, "PC-Zwei", "Nutzer Zwei", "Zimmer", "2");
+        await using var discovery = new DiscoveryService(() => receiverIdentity, discoveryPort: discoveryPort);
+        var updatedSignal = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        discovery.DeviceUpdated += (_, _) => updatedSignal.TrySetResult();
+        discovery.StartListening();
+
+        var adminSenderId = Guid.NewGuid();
+        using var adminSocket = new UdpClient(0) { EnableBroadcast = true };
+        var setAtUtc = DateTimeOffset.UtcNow;
+        var message = new BootCallMessage(
+            MessageKind.Announce, customerGroupId, adminSenderId, "Admin-PC", "Admin", "Büro", "5",
+            Role.Admin, false, 51999, "9.9.9", 0, DateTimeOffset.UtcNow,
+            new List<KnownDeviceSummary> { new(adminSenderId, "Admin-PC", "Admin", "Büro", "5", Role.Admin, string.Empty, 51999, DateTimeOffset.UtcNow, LicenseOverride.ForceEnabled, setAtUtc) });
+        var payload = JsonSerializer.SerializeToUtf8Bytes(message, WireOptions);
+
+        await adminSocket.SendAsync(payload, payload.Length, new IPEndPoint(IPAddress.Loopback, discoveryPort));
+        await updatedSignal.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+        var devices = new DeviceStore().Load();
+        var entry = Assert.Single(devices, d => d.DeviceId == adminSenderId);
+        Assert.Equal(LicenseOverride.None, entry.LicenseOverride);
+        Assert.Null(entry.LicenseOverrideSetAtUtc);
+    }
+
     // --- Issue #61-Nachtrag (Nutzerbericht 08.09.2026 "Löschen ist ein Freischein" - der
     // Broadcast oben allein hat weder das gelöschte Gerät selbst noch ein zweites
     // Admin-Dashboard zuverlässig erreicht): NotifyKnownPeersDirectlyAsync kontaktiert

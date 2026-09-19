@@ -112,11 +112,15 @@ public sealed class DiscoveryService : IAsyncDisposable
     /// Boot-Call-Nachricht (Announce mit <c>includeKnownDevices: true</c> ODER Reply). Ein
     /// Gossip-Eintrag über die eigene DeviceId wird für jedes andere Feld (Computername/
     /// Raum/Rolle/...) weiterhin ignoriert - ein Gerät kennt sich selbst besser als jeder
-    /// Dritte - aber genau der Override ist die eine legitime Ausnahme: er stammt per
-    /// Definition nie vom betroffenen Gerät selbst, ein Gerät kann ihn also nur über einen
-    /// Dritten erfahren. Der bisherige blanke "Gossip über mich selbst wird ignoriert"-
-    /// Filter hat das versehentlich mit verworfen - <see cref="HaelpMi.Core.Licensing.LicenseLimitGuard"/>
-    /// hat dadurch nie erfahren, wenn genau das eigene Gerät (de-)aktiviert wurde.
+    /// Dritte - aber genau der Override ist eine legitime Ausnahme: er stammt normalerweise
+    /// nie vom betroffenen Gerät selbst, ein Gerät erfährt ihn also meist nur über einen
+    /// Dritten. Der bisherige blanke "Gossip über mich selbst wird ignoriert"-Filter hat das
+    /// versehentlich mit verworfen - <see cref="HaelpMi.Core.Licensing.LicenseLimitGuard"/>
+    /// hat dadurch nie erfahren, wenn genau das eigene Gerät (de-)aktiviert wurde. Seit Issue
+    /// #113 fließt hier auch der auf None/ForceDisabled beschränkte Selbstbericht eines
+    /// Admin-Geräts über sich selbst ein (<see cref="AnnounceSelfLicenseOverrideAsync"/>),
+    /// technisch derselbe generische "Sonderfall Selbstmeldung"-Pfad wie bei
+    /// <see cref="OwnDeviceRemovedObserved"/>.
     /// </summary>
     public event EventHandler<OwnLicenseOverrideInfo>? OwnLicenseOverrideObserved;
 
@@ -353,6 +357,82 @@ public sealed class DiscoveryService : IAsyncDisposable
     }
 
     /// <summary>
+    /// Issue #113 (Admin kann sich selbst im Geräte-Tab deaktivieren): technisch derselbe
+    /// Sonderweg wie <see cref="AnnounceSelfRemovedAsync"/> - broadcastet UND unicastet einen
+    /// Selbstbericht über <see cref="LicenseOverride"/>, das normale Gossip-Feld, über das ein
+    /// Gerät sonst nie legitim über sich selbst berichten kann (siehe DeviceUpsertInfo).
+    /// Bewusst beschränkt auf <see cref="LicenseOverride.None"/> und
+    /// <see cref="LicenseOverride.ForceDisabled"/> - <see cref="LicenseOverride.ForceEnabled"/>
+    /// würde einem Gerät erlauben, sich selbst am Lizenzkontingent vorbeizumogeln, wenn diese
+    /// Beschränkung hier jemals fiele. Aufrufer (HaelpMi.Agent, angestoßen vom Dashboard-Klick
+    /// über IpcCommandType.OwnLicenseOverrideChanged) muss diese Einschränkung ebenfalls
+    /// einhalten - siehe auch die spiegelbildliche Prüfung beim Empfang unten.
+    /// </summary>
+    public async Task AnnounceSelfLicenseOverrideAsync(LicenseOverride value, DateTimeOffset setAtUtc, CancellationToken ct = default)
+    {
+        if (_socket is null || value == LicenseOverride.ForceEnabled)
+        {
+            return;
+        }
+
+        var identity = _identityProvider();
+        // TcpPort echt statt 0 (anders als bei AnnounceSelfRemovedAsync oben): dort ist ein
+        // Port-loser Eintrag über Removed:true von der sonst geltenden Plausibilitätsprüfung
+        // ausgenommen (siehe MessageValidation.IsPlausible), hier bliebe die gesamte Nachricht
+        // ohne echten Port sonst als unplausibel verworfen.
+        var selfSummary = new KnownDeviceSummary(
+            identity.DeviceId, identity.ComputerName, identity.User, identity.RoomName, identity.RoomNumber,
+            identity.Role, string.Empty, AppConstants.AlarmTcpPort, identity.FirstSeenUtc, value, setAtUtc);
+
+        var message = BuildMessage(MessageKind.Announce, new[] { selfSummary });
+        var payload = NetworkSerializer.ToUtf8Json(message);
+        if (payload.Length > MaxDatagramBytes)
+        {
+            // Sicherheitsnetz wie AnnounceSelfRemovedAsync - kann bei einem einzelnen
+            // Gossip-Eintrag praktisch nie eintreten.
+            message = BuildMessage(MessageKind.Announce);
+            payload = NetworkSerializer.ToUtf8Json(message);
+        }
+
+        try
+        {
+            await _socket.SendAsync(payload, payload.Length, new IPEndPoint(IPAddress.Broadcast, _discoveryPort)).WaitAsync(ct);
+        }
+        catch (SocketException)
+        {
+            // best-effort - der direkte Unicast unten ist ohnehin die zuverlässigere Schiene
+        }
+
+        List<DeviceEntry> devices;
+        await _storeLock.WaitAsync(ct);
+        try
+        {
+            devices = _deviceStore.Load();
+        }
+        finally
+        {
+            _storeLock.Release();
+        }
+
+        foreach (var ip in devices.Select(d => d.IpAddress).Where(ip => !string.IsNullOrEmpty(ip)).Distinct())
+        {
+            if (!IPAddress.TryParse(ip, out var address))
+            {
+                continue;
+            }
+
+            try
+            {
+                await _socket.SendAsync(payload, payload.Length, new IPEndPoint(address, _discoveryPort)).WaitAsync(ct);
+            }
+            catch (SocketException)
+            {
+                // best-effort, wie AnnounceSelfRemovedAsync - ein nicht erreichbares Gerät darf die übrigen Ziele nicht blockieren
+            }
+        }
+    }
+
+    /// <summary>
     /// Reine Ziel-Ermittlung für <see cref="NotifyKnownPeersDirectlyAsync"/>, als eigene
     /// pure Funktion herausgezogen, damit sie ohne echtes Netzwerk testbar ist: jede
     /// bekannte Peer-IP plus jede noch vorhandene letzte-bekannte-IP eines Tombstones,
@@ -541,16 +621,33 @@ public sealed class DiscoveryService : IAsyncDisposable
                     if (known.DeviceId == message.DeviceId)
                     {
                         // Sonderfall: ein Gerät kann eine Meinung über SICH SELBST nur über
-                        // AnnounceSelfRemovedAsync äußern (eigene Deinstallations-Meldung) -
-                        // alle anderen Felder (Raum/Name/IP/...) wurden bereits oben aus dem
-                        // eigentlichen Boot-Call-Umschlag übernommen (dort mit der wirklich
-                        // beobachteten Quell-IP statt eines hier evtl. veralteten Werts),
-                        // deshalb hier NUR die Removed-Fremdmeinung mergen, kein Upsert.
+                        // AnnounceSelfRemovedAsync (Deinstallations-Meldung) oder, seit Issue
+                        // #113, AnnounceSelfLicenseOverrideAsync äußern - alle anderen Felder
+                        // (Raum/Name/IP/...) wurden bereits oben aus dem eigentlichen
+                        // Boot-Call-Umschlag übernommen (dort mit der wirklich beobachteten
+                        // Quell-IP statt eines hier evtl. veralteten Werts), deshalb hier NUR
+                        // die Removed-/Override-Fremdmeinung mergen, kein Upsert.
                         if (known.RemovedSetAtUtc is { } selfRemovedSetAtUtc && updated is not null
                             && (updated.RemovedSetAtUtc is null || selfRemovedSetAtUtc > updated.RemovedSetAtUtc))
                         {
                             updated.Removed = known.Removed;
                             updated.RemovedSetAtUtc = selfRemovedSetAtUtc;
+                        }
+
+                        // Issue #113: nur ein Admin-Gerät darf sich selbst deaktivieren
+                        // (Dashboard bleibt trotzdem nutzbar, siehe DashboardAccessGuard), und
+                        // nur auf None/ForceDisabled - ForceEnabled bleibt über eine
+                        // Selbstmeldung ausgeschlossen (Missbrauchsschutz, siehe
+                        // AnnounceSelfLicenseOverrideAsync für dieselbe Beschränkung auf der
+                        // Sendeseite; hier zusätzlich, falls je ein Absender diese Regel
+                        // umgeht).
+                        if (message.Role == Role.Admin
+                            && known.Override is LicenseOverride.None or LicenseOverride.ForceDisabled
+                            && known.OverrideSetAtUtc is { } selfOverrideSetAtUtc && updated is not null
+                            && (updated.LicenseOverrideSetAtUtc is null || selfOverrideSetAtUtc > updated.LicenseOverrideSetAtUtc))
+                        {
+                            updated.LicenseOverride = known.Override;
+                            updated.LicenseOverrideSetAtUtc = selfOverrideSetAtUtc;
                         }
 
                         continue;

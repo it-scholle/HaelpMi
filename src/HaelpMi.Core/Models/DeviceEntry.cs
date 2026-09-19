@@ -82,8 +82,13 @@ public sealed class DeviceEntry
     /// Anders als Favorite/Notified/Note ist das keine rein lokale Entscheidung: eine
     /// Deaktivierung soll auch für Peers gelten, die dasselbe Gerät kennen - siehe
     /// <see cref="LicenseOverrideSetAtUtc"/> für die Verbreitung. Ein Gerät setzt diesen
-    /// Wert nie über sich selbst (nur ein Admin über ein ANDERES Gerät), deshalb fasst
-    /// DeviceStore.Upsert ihn beim Selbstbericht des betroffenen Geräts nie an.
+    /// Wert normalerweise nie über sich selbst (nur ein Admin über ein ANDERES Gerät),
+    /// deshalb fasst DeviceStore.Upsert ihn beim gewöhnlichen Selbstbericht des betroffenen
+    /// Geräts nie an. Einzige Ausnahme (Issue #113): ein Admin-Gerät darf sich selbst auf
+    /// <see cref="Models.LicenseOverride.None"/>/<see cref="Models.LicenseOverride.ForceDisabled"/>
+    /// setzen (nie <see cref="Models.LicenseOverride.ForceEnabled"/>, das bliebe ein
+    /// Missbrauchsrisiko) - siehe DiscoveryService.AnnounceSelfLicenseOverrideAsync, technisch
+    /// derselbe Sonderweg wie bei <see cref="Removed"/>/AnnounceSelfRemovedAsync.
     /// </summary>
     public LicenseOverride LicenseOverride { get; set; }
 

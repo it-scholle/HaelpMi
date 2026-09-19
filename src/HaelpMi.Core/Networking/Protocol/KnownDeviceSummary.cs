@@ -24,6 +24,10 @@ namespace HaelpMi.Core.Networking.Protocol;
 /// DeviceStore.Upsert). Ohne eigene Admin-Signaturprüfung auf diesem Versionsstand
 /// (CLAUDE.md) auf demselben Vertrauensniveau wie <see cref="Role"/> selbst - eine
 /// unauthentifizierte, aber plausible Selbst-/Fremdauskunft, kein härteres Sicherheitsziel.
+/// Normalerweise eine reine Fremdmeinung über ein ANDERES Gerät; Issue #113 erlaubt zusätzlich
+/// einen auf None/ForceDisabled beschränkten Selbstbericht (nie ForceEnabled, siehe
+/// <see cref="DiscoveryService.AnnounceSelfLicenseOverrideAsync"/>) - erkennbar am
+/// Sonderfall <c>DeviceId == </c>Absender-DeviceId der umschließenden Boot-Call-Nachricht.
 ///
 /// <see cref="Removed"/>/<see cref="RemovedSetAtUtc"/> (Issue #61-Nachtrag "Löschen
 /// deaktiviert nicht wirklich"): die weiche, umkehrbare "Deinstalliert"-Markierung eines

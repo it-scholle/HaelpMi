@@ -456,6 +456,12 @@ public partial class App : System.Windows.Application
                     RoomName = identity.RoomName,
                     RoomNumber = identity.RoomNumber,
                     Role = identity.Role,
+                    // Issue #113: sonst zeigt der Geräte-Tab "Lizenzkontingent ausgeschöpft"
+                    // statt "manuell deaktiviert" für das eigene, bewusst per ForceDisabled
+                    // abgemeldete Admin-Gerät (siehe AdminDashboardWindow.RefreshDevicesTab,
+                    // IsLicenseExceeded).
+                    LicenseOverride = identity.LicenseOverride,
+                    LicenseOverrideSetAtUtc = identity.LicenseOverrideSetAtUtc,
                 };
             },
             Publish = async (mutate, scopeKind, scopeId, field, oldValue, newValue) =>
@@ -506,6 +512,23 @@ public partial class App : System.Windows.Application
                 DeviceStore.SetLicenseOverride(devices, deviceId, value, DateTimeOffset.UtcNow);
                 deviceStore.Save(devices);
                 _ = ipcClient.SendAsync(IpcCommandType.SearchAgain, TimeSpan.FromSeconds(10));
+            },
+            // Issue #113 ("Admin kann sich selbst im Geräte-Tab deaktivieren"): anders als
+            // SetDeviceLicenseOverride oben nicht über die (fremde Geräte enthaltende)
+            // Geräteliste - das eigene Gerät steht dort nicht drin -, sondern direkt in
+            // OwnSettings geschrieben ("ein bewusster Klick des hiesigen Admins gewinnt immer
+            // lokal", derselbe Grundsatz wie bei DeviceStore.SetLicenseOverride). Danach
+            // IpcCommandType.OwnLicenseOverrideChanged statt SearchAgain: der Agent lädt die
+            // frisch geschriebenen Settings neu (sonst erst beim nächsten Programmstart
+            // wirksam) UND meldet die Entscheidung selbst per
+            // DiscoveryService.AnnounceSelfLicenseOverrideAsync ans Netz.
+            SetOwnLicenseOverride = value =>
+            {
+                var settings = settingsStore.Load();
+                settings.LicenseOverride = value;
+                settings.LicenseOverrideSetAtUtc = DateTimeOffset.UtcNow;
+                settingsStore.Save(settings);
+                _ = ipcClient.SendAsync(IpcCommandType.OwnLicenseOverrideChanged, TimeSpan.FromSeconds(10));
             },
             // Issue #61-Nachtrag ("der Admin sollte im besten Fall auch gar nicht händisch
             // deaktivieren müssen"): manuelle Rückfallebene, falls die automatische
