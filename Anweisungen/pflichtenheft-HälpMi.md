@@ -21,7 +21,7 @@ für alle eine "offizielle" Geräteliste oder Berechtigung verwaltete. **Seit Ab
 eine Admin-Rolle mit exklusiver Konfigurationshoheit; die dezentrale P2P-Netzwerkkommunikation
 ohne zentralen Server bleibt davon unberührt bestehen** (siehe FR-33, ersetzt FR-26/Abschnitt 3.6).
 
-**Lizenz: Open Source, MIT.** Feste Vorgabe der Stadt als Auftraggeberin. Der Quellcode ist frei einsehbar und nutzbar; Einnahmen entstehen über den Dienstleistungsvertrag mit der Stadt (Bereitstellung, Wartung, Support), nicht über eine Nutzungsgebühr auf den Code selbst. Wichtige Konsequenz: alles, was ins öffentliche Repository kommt, ist für jeden einsehbar – siehe 3.8 und 5.10 für den Umgang mit dem privaten Signierschlüssel des separaten Lizenzierungs-Mechanismus.
+**Lizenz: Open Source, MIT.** Der Quellcode ist frei einsehbar und nutzbar. Wichtige Konsequenz: alles, was ins öffentliche Repository kommt, ist für jeden einsehbar – siehe 3.8 und 5.10 für den Umgang mit dem privaten Signierschlüssel des separaten Lizenzierungs-Mechanismus.
 
 ## 2. Nicht-Ziele / Abgrenzung
 
@@ -68,7 +68,7 @@ ohne zentralen Server bleibt davon unberührt bestehen** (siehe FR-33, ersetzt F
 - FR-25: Die "Neu"-Hervorhebung verschwindet, sobald die Checkbox "wird benachrichtigt" für dieses Gerät einmal bewusst gesetzt oder aktiv gelassen wurde
 
 ### 3.6 Keine zentrale Berechtigung (**vollständig ersetzt durch Abschnitt 10.1/10.3, siehe FR-33**)
-- FR-26 (**ersetzt durch FR-33**): Es gibt keine Berechtigungsliste und keine Admin-Rolle. Jede Person mit installierter und eingerichteter Software kann Alarme auslösen und wird Empfänger, sobald sie bei anderen Geräten den Haken "wird benachrichtigt" trägt. Eine zentrale Berechtigungsprüfung ist mit dem gewählten Architekturprinzip (kein Admin, keine zentrale Instanz) nicht sinnvoll umsetzbar. **Nach Rücksprache mit dem Auftraggeber ist diese Anforderung überholt** — es gibt jetzt eine Admin-Rolle mit Konfigurationshoheit, User-Konten können weiterhin nur Empfänger und ggf. Sender sein, aber nicht mehr konfigurieren.
+- FR-26 (**ersetzt durch FR-33**): Es gibt keine Berechtigungsliste und keine Admin-Rolle. Jede Person mit installierter und eingerichteter Software kann Alarme auslösen und wird Empfänger, sobald sie bei anderen Geräten den Haken "wird benachrichtigt" trägt. Eine zentrale Berechtigungsprüfung ist mit dem gewählten Architekturprinzip (kein Admin, keine zentrale Instanz) nicht sinnvoll umsetzbar. **Diese Anforderung ist überholt** — es gibt jetzt eine Admin-Rolle mit Konfigurationshoheit, User-Konten können weiterhin nur Empfänger und ggf. Sender sein, aber nicht mehr konfigurieren.
 
 ### 3.7 Selbsttest & Installation
 - FR-27: Selbsttest-Funktion im Programm ("Testalarm an mich selbst senden")
@@ -182,12 +182,12 @@ Da der komplette Code öffentlich einsehbar ist (FR-31), gilt für alles, was in
 - **Sicherheitsabfrage** (weiterhin offen): Soll vor dem Absenden eines Alarms eine Bestätigung kommen ("Wirklich senden?"), oder soll es sofort losgehen, damit im Ernstfall keine Zeit verloren geht?
 - ~~Mehrere Nachrichten~~ — **entschieden, siehe FR-8/FR-43**: Ja, mehrere Alarm-Profile mit eigenem Hotkey und eigenem Sender-/Empfängerkreis sind Teil von Abschnitt 10.
 
-### 8a-2. Architekturentscheidungen aus Version 2 (Claude-Empfehlung, vom Auftraggeber angenommen)
+### 8a-2. Architekturentscheidungen aus Version 2 (Claude-Empfehlung, angenommen)
 - Rechte-Trennung beim Auto-Update über einen separaten Windows-Dienst statt erhöhter Rechte für die User-App selbst (FR-61). Bei Bedarf hier nochmal gezielt nachfragen, falls das im Umsetzungs-Prompt anders gewünscht ist.
 
-### 8a-3. Vom Auftraggeber angekündigt für nach Abschluss des Alpha-Tests (noch nicht umzusetzen)
+### 8a-3. Angekündigt für nach Abschluss des Alpha-Tests (noch nicht umzusetzen)
 - **System-Tray-Icon**: Nach der Alpha-Testphase soll die laufende App (aktuell bewusst ohne eigenes Fenster/Tray-Icon, siehe 5.3) unten im Info-Bereich der Taskleiste laufen; das Admin-Dashboard soll zusätzlich von dort aus erreichbar sein (bisher nur über den Start-Menü-Eintrag "HälpMi Dashboard").
-- Sobald dieser Punkt ansteht, bespricht Claude Code vorher gemeinsam mit dem Auftraggeber weitere Optimierungsvorschläge, statt direkt umzusetzen.
+- Sobald dieser Punkt ansteht, bespricht Claude Code vorher gemeinsam mit dem Nutzer weitere Optimierungsvorschläge, statt direkt umzusetzen.
 - **Priorität aktuell (Stand Alpha-Test)**: zuerst der Fix des Absturzes beim Öffnen des Admin-Dashboards, danach ein vollständiger Test aller MVP-Funktionen. Dieser Punkt hier ist bewusst zurückgestellt.
 - **Admin-Dashboard UX-Nachschärfung** (Rückmeldung 04.08.2026, bewusst zurückgestellt bis nach der aktuellen Testrunde): Feldbeschriftungen in den Kreise-/Gruppen-/Alarm-Profile-Detailbereichen sollen eindeutiger/sinnhafter werden; beim Klicken in ein leeres rechtes Detailfeld (kein Kreis/keine Gruppe/kein Profil ausgewählt) soll automatisch ein neues Element angelegt werden, statt dass der Bereich deaktiviert bleibt; allgemein Klicks reduzieren, wo es geht.
 
@@ -216,7 +216,7 @@ Auto-Update-Pipeline mit gestaffeltem Rollout, Install-Creator. Details siehe Ab
 
 ## 10. Update Version 2 (02.08.2026) — Admin-Rollen, Konfigurationsverwaltung, Auto-Update
 
-Entstanden aus einem Rücksprachegespräch mit dem Auftraggeber. Ersetzt die in den Abschnitten 1–9
+Ersetzt die in den Abschnitten 1–9
 markierten Einzelpunkte, siehe dortige Verweise. Der zugehörige Umsetzungs-Prompt für Claude Code
 ist `claude-code-prompt-teil2-admin-update.md`, die dauerhaften Architekturregeln stehen in
 `CLAUDE.md`.
