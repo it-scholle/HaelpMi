@@ -455,18 +455,24 @@ public partial class AdminDashboardWindow : Window
             {
                 var isOwnDevice = d.DeviceId == ownDevice.DeviceId;
                 var isActive = !disabledDeviceIds.Contains(d.DeviceId) && !d.Removed;
+                // Issue #113: ein Admin darf ausschließlich sich selbst (de-)aktivieren, nie
+                // ein fremdes Admin-Gerät - umgekehrt darf ein Nicht-Admin-Gerät (praktisch
+                // nie das eigene, da nur ein Admin dieses Fenster überhaupt öffnen kann,
+                // siehe DashboardAccessGuard) wie bisher nicht sich selbst toggeln.
                 // Issue #61-Nachtrag: der Aktivieren/Deaktivieren-Toggle ist wirkungslos,
                 // solange ein Gerät als deinstalliert markiert ist (Removed sperrt
                 // unabhängig vom LicenseOverride, siehe AlarmFlowCoordinator) - deshalb
                 // hier zusätzlich gesperrt, statt einen Klick anzubieten, der nichts ändert.
-                var canToggle = !isOwnDevice && d.Role != Role.Admin && !d.Removed
+                var canToggle = (d.Role == Role.Admin ? isOwnDevice : !isOwnDevice) && !d.Removed
                     && DeviceActivationGate.CanToggle(isActive, activeCount, seatLimit);
                 var toggleTooltip = d.Removed
                     ? "Als deinstalliert markiert - erst die Markierung aufheben."
                     : isOwnDevice
-                        ? "Dieses Gerät kann nicht deaktiviert werden."
+                        ? isActive
+                            ? "Aktiv - anklicken, um dieses Gerät vom Senden/Empfangen abzumelden (Dashboard bleibt nutzbar)."
+                            : "Vom Senden/Empfangen abgemeldet, Dashboard bleibt nutzbar - anklicken zum Aktivieren."
                         : d.Role == Role.Admin
-                            ? "Admin-Geräte zählen immer als aktiv."
+                            ? "Ein Admin-Gerät kann nur von sich selbst deaktiviert werden."
                             : isActive
                                 ? "Aktiv - anklicken zum Deaktivieren."
                                 : canToggle
@@ -501,8 +507,20 @@ public partial class AdminDashboardWindow : Window
         // IsChecked spiegelt bereits den neuen (vom Nutzer gewünschten) Zustand wider, bevor
         // Click feuert (Standardverhalten von ToggleButton) - RefreshDevicesTab() unten baut
         // die Liste ohnehin komplett aus dem tatsächlich gespeicherten Stand neu auf.
-        var newOverride = toggle.IsChecked == true ? LicenseOverride.ForceEnabled : LicenseOverride.ForceDisabled;
-        _context.SetDeviceLicenseOverride(deviceId, newOverride);
+        if (deviceId == _context.LoadOwnDevice().DeviceId)
+        {
+            // Issue #113: für das eigene Admin-Gerät nie ForceEnabled selbst behaupten
+            // (Missbrauchsschutz, siehe DiscoveryService.AnnounceSelfLicenseOverrideAsync) -
+            // None reicht, weil ein Admin-Gerät ohne Override ohnehin als aktiv gilt
+            // (LicenseLimitGuard.EffectiveOverride).
+            _context.SetOwnLicenseOverride(toggle.IsChecked == true ? LicenseOverride.None : LicenseOverride.ForceDisabled);
+        }
+        else
+        {
+            var newOverride = toggle.IsChecked == true ? LicenseOverride.ForceEnabled : LicenseOverride.ForceDisabled;
+            _context.SetDeviceLicenseOverride(deviceId, newOverride);
+        }
+
         RefreshDevicesTab();
     }
 

@@ -10,13 +10,18 @@ namespace HaelpMi.Core.Licensing;
 ///
 /// Zwei Regeln, die anders als der Rest dieser Klasse NICHT aus der reinen
 /// FirstSeenUtc-Rangfolge folgen, sondern hier bewusst vorgeschaltet sind:
-/// - <see cref="Role.Admin"/>-Geräte (Dashboard) werden nie deaktiviert - eine Lizenz kann
-///   sonst nie repariert werden, wenn ausgerechnet das Dashboard selbst gesperrt wäre. Sie
-///   ZÄHLEN aber weiterhin zum Kontingent (Nutzerkorrektur 07.09.2026, nach einem
+/// - <see cref="Role.Admin"/>-Geräte (Dashboard) gelten standardmäßig als immer aktiv - eine
+///   Lizenz kann sonst nie repariert werden, wenn ausgerechnet das Dashboard selbst gesperrt
+///   wäre. Sie ZÄHLEN dabei weiterhin zum Kontingent (Nutzerkorrektur 07.09.2026, nach einem
 ///   Testaufbau: "Admin + 2 User" passte bei einer Custom-2-Lizenz, sollte aber "Admin + 1
 ///   User" als Maximum sein) - technisch derselbe Mechanismus wie
 ///   <see cref="LicenseOverride.ForceEnabled"/> (siehe <see cref="LicenseLimitEvaluator"/>):
-///   immer aktiv, belegt aber trotzdem einen Platz.
+///   immer aktiv, belegt aber trotzdem einen Platz. Ausnahme (Issue #113, Nutzerentscheidung
+///   19.09.2026): ein Admin-Gerät kann sich im Geräte-Tab bewusst selbst auf
+///   <see cref="LicenseOverride.ForceDisabled"/> setzen (Dashboard bleibt trotzdem nutzbar,
+///   siehe DashboardAccessGuard - unabhängig von diesem Guard hier) - dieser explizite
+///   Selbst-Override gewinnt dann, ForceEnabled bleibt nur der Default bei
+///   <see cref="LicenseOverride.None"/>.
 /// - Fehlt eine gültig signierte Lizenz ganz (<see cref="LicenseStatus.Missing"/>/
 ///   <see cref="LicenseStatus.Invalid"/>), gilt das Kontingent als 0 statt als unbegrenzt:
 ///   ein Gerät ohne jede erkennbare Lizenz darf nie "versehentlich frei laufen", nur weil
@@ -62,7 +67,7 @@ public sealed class LicenseLimitGuard
         return result.Status is LicenseStatus.Missing or LicenseStatus.Invalid ? 0 : result.License?.UserLimit;
     }
 
-    /// <summary>Admin-Rolle-Geräte gehen als ForceEnabled in den Pool ein (siehe Klassenkommentar) - zählen mit, werden aber nie deaktiviert.</summary>
+    /// <summary>Admin-Rolle-Geräte gehen standardmäßig als ForceEnabled in den Pool ein (siehe Klassenkommentar) - zählen mit, außer ein Admin hat sich per Issue #113 explizit selbst deaktiviert.</summary>
     private List<LicenseLimitEvaluator.DeviceSeen> BuildKnownDevices(LiveIdentity identity)
     {
         var devices = _devicesProvider();
@@ -82,5 +87,5 @@ public sealed class LicenseLimitGuard
     }
 
     private static LicenseOverride EffectiveOverride(Role role, LicenseOverride storedOverride) =>
-        role == Role.Admin ? LicenseOverride.ForceEnabled : storedOverride;
+        role == Role.Admin && storedOverride != LicenseOverride.ForceDisabled ? LicenseOverride.ForceEnabled : storedOverride;
 }

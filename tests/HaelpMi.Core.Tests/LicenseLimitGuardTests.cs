@@ -43,12 +43,31 @@ public class LicenseLimitGuardTests
     [Fact]
     public void IsOwnDeviceDisabled_False_ForAdminRoleDevice_EvenWhenLicenseIsMissing()
     {
-        // Das Dashboard darf sich nie selbst aussperren - sonst gäbe es keinen Weg mehr,
-        // eine fehlende/kaputte Lizenz überhaupt zu reparieren.
+        // Das Dashboard darf sich nicht ALLEIN durch eine fehlende/kaputte Lizenz selbst
+        // aussperren - sonst gäbe es keinen Weg mehr, sie überhaupt zu reparieren. Ein
+        // Admin kann sich seit Issue #113 aber weiterhin bewusst selbst abmelden, siehe
+        // IsOwnDeviceDisabled_True_ForAdminRoleDevice_WithExplicitForceDisabledOverride.
         var identity = MakeIdentity(Guid.NewGuid(), Role.Admin, DateTimeOffset.UtcNow);
         var guard = new LicenseLimitGuard(() => identity, MissingLicense, () => new List<DeviceEntry>());
 
         Assert.False(guard.IsOwnDeviceDisabled());
+    }
+
+    [Fact]
+    public void IsOwnDeviceDisabled_True_ForAdminRoleDevice_WithExplicitForceDisabledOverride()
+    {
+        // Issue #113 (Nutzerentscheidung 19.09.2026): ein Admin-Gerät zählt weiterhin
+        // standardmäßig als aktiv (siehe Test oben), kann sich aber bewusst selbst auf
+        // ForceDisabled setzen - Dashboard-Zugriff bleibt davon unberührt (siehe
+        // DashboardAccessGuard, unabhängig von diesem Guard hier).
+        var identity = MakeIdentity(Guid.NewGuid(), Role.Admin, DateTimeOffset.UtcNow) with
+        {
+            LicenseOverride = LicenseOverride.ForceDisabled,
+            LicenseOverrideSetAtUtc = DateTimeOffset.UtcNow,
+        };
+        var guard = new LicenseLimitGuard(() => identity, () => ValidLicense(10), () => new List<DeviceEntry>());
+
+        Assert.True(guard.IsOwnDeviceDisabled());
     }
 
     [Fact]
@@ -105,8 +124,12 @@ public class LicenseLimitGuardTests
     }
 
     [Fact]
-    public void GetDisabledDeviceIds_NeverContainsAdminDevices()
+    public void GetDisabledDeviceIds_DoesNotContainAdminDevices_ByDefault()
     {
+        // Vor Issue #113 hieß dieser Test "...NeverContainsAdminDevices" - seit ein
+        // Admin-Gerät sich bewusst selbst auf ForceDisabled setzen kann (siehe Test unten),
+        // gilt das nur noch als Default-Verhalten ohne expliziten Override, nicht mehr
+        // absolut.
         var adminDeviceId = Guid.NewGuid();
         var identity = MakeIdentity(Guid.NewGuid(), Role.User, DateTimeOffset.UtcNow);
         var devices = new List<DeviceEntry>
@@ -116,6 +139,27 @@ public class LicenseLimitGuardTests
         var guard = new LicenseLimitGuard(() => identity, () => ValidLicense(0), () => devices);
 
         Assert.DoesNotContain(adminDeviceId, guard.GetDisabledDeviceIds());
+    }
+
+    [Fact]
+    public void GetDisabledDeviceIds_ContainsAdminDevice_WhenExplicitlyForceDisabled()
+    {
+        // Issue #113: ein anderes Gerät sieht die Selbst-Deaktivierung eines Admin-Geräts
+        // genauso wie jede andere ForceDisabled-Fremdmeinung (gelernt per Gossip über
+        // DiscoveryService.AnnounceSelfLicenseOverrideAsync/OwnLicenseOverrideObserved).
+        var adminDeviceId = Guid.NewGuid();
+        var identity = MakeIdentity(Guid.NewGuid(), Role.User, DateTimeOffset.UtcNow);
+        var devices = new List<DeviceEntry>
+        {
+            new()
+            {
+                DeviceId = adminDeviceId, Role = Role.Admin, FirstSeenUtc = DateTimeOffset.UtcNow.AddDays(-1),
+                LicenseOverride = LicenseOverride.ForceDisabled, LicenseOverrideSetAtUtc = DateTimeOffset.UtcNow,
+            },
+        };
+        var guard = new LicenseLimitGuard(() => identity, () => ValidLicense(0), () => devices);
+
+        Assert.Contains(adminDeviceId, guard.GetDisabledDeviceIds());
     }
 
     [Fact]

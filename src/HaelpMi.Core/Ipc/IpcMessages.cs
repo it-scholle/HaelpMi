@@ -19,6 +19,15 @@ public enum IpcCommandType
     /// <c>LicenseReminderToastWindow</c>) selbst schließt, statt veraltet stehen zu bleiben.
     /// </summary>
     LicenseRenewed,
+
+    /// <summary>
+    /// Issue #113: Config schickt dies, nachdem ein Admin sich im Geräte-Tab selbst auf
+    /// aktiv/deaktiviert gesetzt und dabei direkt <c>OwnSettings.LicenseOverride</c>
+    /// geschrieben hat - der Agent lädt die Settings darauf neu (sonst erst beim nächsten
+    /// Programmstart wirksam) und meldet die Entscheidung per
+    /// <c>DiscoveryService.AnnounceSelfLicenseOverrideAsync</c> sofort ans Netz weiter.
+    /// </summary>
+    OwnLicenseOverrideChanged,
 }
 
 public sealed record IpcRequest(IpcCommandType Command);

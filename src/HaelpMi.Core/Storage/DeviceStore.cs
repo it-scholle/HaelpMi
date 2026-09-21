@@ -11,9 +11,13 @@ namespace HaelpMi.Core.Storage;
 ///
 /// <paramref name="Override"/>/<paramref name="OverrideSetAtUtc"/> (Issue #61): eine
 /// Fremdmeinung über <see cref="DeviceEntry.LicenseOverride"/, nur aus Gossip-Drittwissen
-/// (<see cref="Protocol.KnownDeviceSummary"/>) befüllt - ein Gerät berichtet nie über sich
-/// selbst, deshalb bleibt dieses Feld beim direkten Selbstbericht des betroffenen Geräts
-/// null ("nicht anfassen"). Siehe <see cref="Upsert"/> für die Merge-Regel.
+/// (<see cref="Protocol.KnownDeviceSummary"/>) befüllt - ein Gerät berichtet im normalen
+/// Boot-Call-Selbstbericht nie über sich selbst, deshalb bleibt dieses Feld dort null
+/// ("nicht anfassen"). Siehe <see cref="Upsert"/> für die Merge-Regel. Ausnahme (Issue
+/// #113): der dedizierte Selbstmelde-Weg über <see cref="Networking.DiscoveryService.AnnounceSelfLicenseOverrideAsync"/>
+/// füllt dieses Feld sehr wohl über sich selbst - dort wird das aber NICHT über diesen
+/// generischen Upsert-Pfad verarbeitet, sondern über denselben Sonderfall wie
+/// <paramref name="Removed"/> (siehe DiscoveryService).
 ///
 /// <paramref name="Removed"/>/<paramref name="RemovedSetAtUtc"/> (Issue #61-Nachtrag
 /// 08.09.2026 "Deinstalliert" statt Verstecken): dieselbe Fremdmeinungs-Semantik wie

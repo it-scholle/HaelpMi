@@ -106,6 +106,17 @@ public sealed class AdminDashboardContext
     public required Action<Guid, LicenseOverride> SetDeviceLicenseOverride { get; init; }
 
     /// <summary>
+    /// Toggle im Geräte-Tab für das EIGENE Admin-Gerät (Issue #113) - anders als
+    /// <see cref="SetDeviceLicenseOverride"/> nicht über die (fremde Geräte enthaltende)
+    /// Geräteliste, sondern direkt über die eigenen OwnSettings, danach sofortiges
+    /// Ausstrahlen wie dort (IpcCommandType.OwnLicenseOverrideChanged statt SearchAgain, da
+    /// nur eine Selbstmeldung nötig ist, kein voller Gossip-Announce). Nimmt nur
+    /// <see cref="LicenseOverride.None"/>/<see cref="LicenseOverride.ForceDisabled"/> an -
+    /// ForceEnabled bleibt bewusst ausgeschlossen, siehe DiscoveryService.AnnounceSelfLicenseOverrideAsync.
+    /// </summary>
+    public required Action<LicenseOverride> SetOwnLicenseOverride { get; init; }
+
+    /// <summary>
     /// "Als deinstalliert markieren" im Geräte-Tab (Issue #61-Nachtrag 08.09.2026) -
     /// manuelle Rückfallebene für den Normalfall, dass die Deinstallation bereits
     /// automatisch gemeldet wurde (siehe DiscoveryService.AnnounceSelfRemovedAsync, vom

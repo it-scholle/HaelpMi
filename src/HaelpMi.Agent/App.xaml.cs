@@ -285,6 +285,28 @@ public partial class App : System.Windows.Application
     }
 
     /// <summary>
+    /// Issue #113: Config hat gerade OwnSettings.LicenseOverride direkt auf der Platte
+    /// geschrieben (Admin hat sich im Geräte-Tab selbst (de-)aktiviert) - hier neu von der
+    /// Platte laden, damit die eigene Sende-/Empfangssperre (AlarmFlowCoordinator, über
+    /// RefreshLicenseLimitState) sofort greift, statt erst beim nächsten Programmstart.
+    /// Anschließend sofort per Broadcast/Unicast ans Netz weitergeben, statt auf den
+    /// nächsten natürlichen Boot-Call zu warten - gleiches Sofort-Muster wie
+    /// HandleLicenseRenewedRequestAsync oben.
+    /// </summary>
+    private async Task<IpcResponse> HandleOwnLicenseOverrideChangedRequestAsync()
+    {
+        _settings = _settingsStore.Load();
+        RefreshLicenseLimitState();
+
+        if (_settings.LicenseOverrideSetAtUtc is { } setAtUtc)
+        {
+            await (_discovery?.AnnounceSelfLicenseOverrideAsync(_settings.LicenseOverride, setAtUtc) ?? Task.CompletedTask);
+        }
+
+        return new IpcResponse(true);
+    }
+
+    /// <summary>
     /// Issue #59/#60-Nachtrag "Lizenz sofort verteilen": ein Peer hat in seinem Boot-Call
     /// eine Lizenz mitgeteilt - eigenständig nachprüfen (Signatur + Kundengruppe, siehe
     /// LicenseImporter.TryAdoptFromPeer) und nur bei echtem Zugewinn (keine eigene Lizenz
@@ -594,6 +616,7 @@ public partial class App : System.Windows.Application
         _ipcServer.On(IpcCommandType.SearchAgain, HandleSearchAgainRequestAsync);
         _ipcServer.On(IpcCommandType.SelfTest, HandleSelfTestRequestAsync);
         _ipcServer.On(IpcCommandType.LicenseRenewed, HandleLicenseRenewedRequestAsync);
+        _ipcServer.On(IpcCommandType.OwnLicenseOverrideChanged, HandleOwnLicenseOverrideChangedRequestAsync);
         _ipcServer.Start();
 
         var executablePath = Environment.ProcessPath ?? Process.GetCurrentProcess().MainModule?.FileName ?? string.Empty;
