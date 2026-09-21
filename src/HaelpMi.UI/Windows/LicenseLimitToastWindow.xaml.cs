@@ -3,7 +3,12 @@ using System.Windows.Media.Animation;
 
 namespace HaelpMi.UI.Windows;
 
-/// <summary>Siehe XAML-Kommentar. "Dashboard öffnen" nur für Admin-Rollen sinnvoll - User-Geräte bekommen nur den Hinweis + Schließen.</summary>
+/// <summary>
+/// Siehe XAML-Kommentar. Seit Issue #113 wird dieser Toast für ein Admin-Gerät gar nicht
+/// mehr aufgerufen (siehe App.xaml.cs RefreshLicenseLimitState) - "deaktiviert" bedeutet für
+/// ein Admin-Gerät seither immer die eigene, bewusste Entscheidung im Geräte-Tab, kein
+/// Fehlerzustand. <paramref name="openDashboard"/> ist damit an jeder verbliebenen Aufrufstelle null.
+/// </summary>
 public partial class LicenseLimitToastWindow : Window
 {
     public LicenseLimitToastWindow(Action? openDashboard)
