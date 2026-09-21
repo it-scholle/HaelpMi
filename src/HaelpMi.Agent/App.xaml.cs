@@ -431,10 +431,22 @@ public partial class App : System.Windows.Application
         // UI-Arbeit nur ein und kehrt sofort zurück.
         System.Windows.Application.Current.Dispatcher.BeginInvoke(() =>
         {
+            // Issue #113 (Nutzerkorrektur 21.09.2026): für ein Admin-Gerät bedeutet "disabled"
+            // seit Issue #113 ausschließlich den bewussten Selbst-Override im Geräte-Tab
+            // (LicenseLimitGuard.EffectiveOverride hält ein Admin-Gerät sonst immer
+            // ForceEnabled) - kein Fehlerzustand, über den per Toast zu informieren wäre, wie
+            // bei einer echten Lizenzkontingent-Überschreitung eines User-Geräts. Senden/
+            // Empfangen wird trotzdem ganz normal über AlarmFlowCoordinator/AlarmChannel
+            // gesperrt (siehe dort), nur eben lautlos - Config-Sync/Discovery bleiben aktiv.
+            if (_deployment.Role == Role.Admin)
+            {
+                _licenseLimitToast?.Close();
+                return;
+            }
+
             if (disabled && _licenseLimitToast is null)
             {
-                Action? openDashboard = _deployment.Role == Role.Admin ? OpenDashboardDirectly : null;
-                _licenseLimitToast = new LicenseLimitToastWindow(openDashboard);
+                _licenseLimitToast = new LicenseLimitToastWindow(null);
                 _licenseLimitToast.Closed += (_, _) => _licenseLimitToast = null;
                 _licenseLimitToast.Show();
             }
