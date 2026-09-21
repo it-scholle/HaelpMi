@@ -250,8 +250,7 @@ jeweilige Ursprungsgerät selbst zuletzt gepusht hat.
 
 Bewusst kein viertes kryptografisches Schlüsselpaar: `Role.Admin` bleibt wie bei
 EditLockService/ConfigSyncService eine unauthentifizierte Selbstauskunft des Peers — ein
-bekannter, für später vorgemerkter Punkt (siehe `Dokumente/infos-und-fragen.md`), keine
-Regression durch diese Änderung.
+bekannter, für später vorgemerkter Punkt, keine Regression durch diese Änderung.
 
 ### Datenschutz in der Praxis
 

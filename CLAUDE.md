@@ -173,31 +173,17 @@ und `scripts/release-issue.sh <issue-nummer> ["grund"]`.
 - Installer: Inno Setup oder WiX, plus separates Entwickler-Tool "Install-Creator" (siehe unten)
 
 ## Lizenz & Secrets
-- **Lizenztyp (korrigiert 09.08.2026):** Frühere Fassungen dieser Datei sowie
-  `Anweisungen/pflichtenheft-HälpMi.md` (Zeile 24, FR-31) legten die Lizenz konkret auf **MIT**
-  fest. Das war ein veralteter Stand — die tatsächliche Vorgabe der Stadt als Auftraggeberin ist
-  allgemeiner: **Quellcode muss öffentlich einsehbar/"open source" sein**, ohne dass MIT
-  namentlich verlangt wird. Damit ist auch eine **Source-Available-Lizenz** (öffentlicher
-  Quellcode, aber keine freie kommerzielle Weiterverwertung durch Dritte — z. B. Business Source
-  License, Functional Source License oder Elastic License v2, siehe Preis-/Lizenzmodell-Notiz)
-  eine offene, noch nicht final entschiedene Option. **Wichtig:** "Open Source" im engeren
-  (OSI-)Sinn verbietet Einschränkungen der kommerziellen Nutzung durch Dritte per Definition —
-  falls die Stadt den Begriff im engeren Sinn vertraglich verwendet, muss das vor einer
-  Source-Available-Entscheidung schriftlich mit ihr geklärt werden, bevor die `LICENSE`-Datei
-  geändert wird. Bis dahin bleibt die im Repository liegende `LICENSE`-Datei unverändert MIT.
-  `pflichtenheft-HälpMi.md` selbst wird nicht rückwirkend editiert (historische FR-Quelle), diese
-  CLAUDE.md-Notiz gewinnt bei Widersprüchen wie in den Referenzdokumenten oben beschrieben.
-- **Umstellung auf Source-Available als Entwurf (ergänzt 17.08.2026):** Die oben verlangte
-  schriftliche Klärung mit der Stadt liegt weiterhin nicht vor — die Klärung erfolgte bislang nur
-  **telefonisch mit der städtischen IT** (17.08.2026). Auf ausdrücklichen Wunsch des Nutzers wird
-  die `LICENSE`-Datei trotzdem bereits jetzt auf das oben beschriebene Source-Available-Modell
-  umgestellt (öffentlicher Quellcode, kostenfrei für Privatpersonen, kostenpflichtige
-  Nutzungsvereinbarung für Organisationen, keine Weiterverwertung durch Dritte zu
-  Konkurrenzprodukten) — bewusst als vorläufige Schutzmaßnahme, um die im bisherigen MIT-Text
-  erlaubte freie kommerzielle Weiterverwertung durch Dritte nicht länger offenzulassen, während die
-  schriftliche Bestätigung noch aussteht. `LICENSE` und der Lizenz-Abschnitt in `README.md` tragen
-  dazu einen deutlichen Entwurfs-Hinweis. **Vor einem echten Release weiterhin offen:** schriftliche
-  Bestätigung der Stadt nachholen und den Lizenztext von einer rechtskundigen Person prüfen lassen.
+- **Lizenztyp:** Die geltende Vorgabe ist allgemein gehalten: **Quellcode muss öffentlich
+  einsehbar/"open source" sein**, ohne dass eine bestimmte Lizenz namentlich verlangt wird. Die im
+  Repository liegende `LICENSE`-Datei ist aktuell ein **Source-Available-Entwurf** (öffentlicher
+  Quellcode, kostenfrei für Privatpersonen, kostenpflichtige Nutzungsvereinbarung für
+  Organisationen, keine Weiterverwertung durch Dritte zu Konkurrenzprodukten) statt MIT — bewusst
+  so gewählt, um freie kommerzielle Weiterverwertung durch Dritte nicht offenzulassen. **Vor einem
+  echten Release weiterhin offen:** endgültige Lizenzwahl schriftlich bestätigen lassen und den
+  Lizenztext von einer rechtskundigen Person prüfen lassen — `LICENSE` und der Lizenz-Abschnitt in
+  `README.md` tragen deshalb einen Entwurfs-Hinweis. `pflichtenheft-HälpMi.md` selbst wird nicht
+  rückwirkend editiert (historische FR-Quelle), diese CLAUDE.md-Notiz gewinnt bei Widersprüchen wie
+  in den Referenzdokumenten oben beschrieben.
 - `.gitignore` gegen Secret-Dateimuster von Anfang an.
 - Vier getrennte kryptografische Schlüsselpaare, niemals verwechseln oder zusammenlegen:
   1. Kunden-Lizenzsignatur (Ed25519) — Soft-Expiry, kein Hard-Lock.

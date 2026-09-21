@@ -81,10 +81,9 @@ bewusst *nicht* Teil der automatisierten Tests, statt eine unechte Abdeckung vor
 Source-available (kein OSI-Open-Source), siehe [`LICENSE`](LICENSE): Quellcode öffentlich
 einsehbar, kostenfrei für Privatpersonen, kostenpflichtige Nutzungsvereinbarung für
 Unternehmen/Behörden, keine Nutzung durch Dritte zum Bau konkurrierender Produkte. **Entwurf** —
-Klärung mit der Stadt bislang nur telefonisch, schriftliche Bestätigung und rechtskundige Prüfung
-stehen vor einem echten Release noch aus. Der Copyright-Halter in der `LICENSE`-Datei ist aktuell
-ein Platzhalter ("HälpMi contributors") - vor Veröffentlichung durch die tatsächliche
-Rechteinhaberin (die Stadt) ersetzen.
+schriftliche Bestätigung der endgültigen Lizenzwahl und rechtskundige Prüfung stehen vor einem
+echten Release noch aus. Der Copyright-Halter in der `LICENSE`-Datei ist aktuell ein Platzhalter
+("HälpMi contributors") - vor Veröffentlichung durch die tatsächliche Rechteinhaberin ersetzen.
 
 Für die separate Kunden-Lizenzverwaltung (Ed25519-signierte Lizenzdateien, siehe
 Pflichtenheft 3.9/5.10) ist nur ein Platzhalter für den öffentlichen Schlüssel im Code
