@@ -3,6 +3,9 @@
 // Lizenzsignatur; nur der öffentliche Teil landet in HaelpMi.Core, der private Schlüssel
 // gehört nie ins Repo, nie ins Log, nie in eine Fehlermeldung).
 //
+// DEPRECATED für release-1.0-MVP: die damit signierte Update-Pipeline läuft auf diesem
+// Release-Zweig nirgends (siehe HaelpMi.Core/Updates/UpdateSignaturePublicKey.cs).
+//
 // Verwendung:
 //   HaelpMi.UpdateSigner genkey <privateKeyOut.txt> <publicKeyOut.txt>
 //   HaelpMi.UpdateSigner sign <payload.zip> <privateKey.txt> <version> <manifestOut.json>

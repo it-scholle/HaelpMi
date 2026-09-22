@@ -3,6 +3,9 @@ using HaelpMi.Core.Updates;
 namespace HaelpMi.Core.Networking.Protocol;
 
 /// <summary>
+/// DEPRECATED für release-1.0-MVP: einziger Verwender <see cref="UpdatePackageDistributionService"/>
+/// läuft auf diesem Release-Zweig nicht.
+///
 /// P2P-Verteilung eines signierten Update-Pakets (Abschnitt 11): das Paket selbst kann
 /// mehrere zehn MB groß sein (self-contained .NET-Publish-Output) - viel zu groß für die
 /// sonst genutzten kleinen JSON-Zeilen (siehe <see cref="BoundedLineReader.MaxLineBytes"/>).

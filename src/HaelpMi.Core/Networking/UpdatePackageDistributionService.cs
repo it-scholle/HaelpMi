@@ -8,6 +8,9 @@ using HaelpMi.Core.Updates;
 namespace HaelpMi.Core.Networking;
 
 /// <summary>
+/// DEPRECATED für release-1.0-MVP: wird zur Laufzeit nirgends gestartet (siehe
+/// HaelpMi.Agent/App.xaml.cs) - keine P2P-Update-Verteilung auf diesem Release-Zweig.
+///
 /// P2P-Verteilung eines signierten Update-Pakets (Abschnitt 11), gleiches Muster wie
 /// <see cref="ConfigSyncService"/>s Pull-Kanal: die Erkennung "es gibt eine neuere
 /// Version" läuft bereits über den bestehenden Boot-Call

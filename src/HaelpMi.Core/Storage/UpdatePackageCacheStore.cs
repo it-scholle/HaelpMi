@@ -5,6 +5,10 @@ using System.Linq;
 namespace HaelpMi.Core.Storage;
 
 /// <summary>
+/// DEPRECATED für release-1.0-MVP: bleibt ungefüllt, da <see cref="Updates.UpdateSeedImporter"/>
+/// und <see cref="Networking.UpdatePackageDistributionService"/> auf diesem Release-Zweig
+/// nicht laufen.
+///
 /// Lokaler Zwischenspeicher für heruntergeladene/verifizierte Update-Pakete (Abschnitt 11).
 /// Jedes Gerät, das eine Version einmal erfolgreich bezogen hat, kann sie darüber auch an
 /// andere Peers weiterverteilen ("propagierender Boot-Call") - so muss nicht jedes Gerät

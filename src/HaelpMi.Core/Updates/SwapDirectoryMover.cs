@@ -3,6 +3,9 @@ using HaelpMi.Core.Models;
 namespace HaelpMi.Core.Updates;
 
 /// <summary>
+/// DEPRECATED für release-1.0-MVP: der einzige Aufrufer (<c>UpdateServiceWorker.
+/// ConfirmSwapAsync</c>) läuft auf diesem Release-Zweig nicht (Dienst wird nicht gebaut).
+///
 /// Reine Datei-Verschiebe-Logik für den 0-Downtime-Swap (Abschnitt 11), aus
 /// <c>HaelpMi.UpdateService.UpdateServiceWorker.ConfirmSwapAsync</c> herausgezogen, damit
 /// sie ohne laufenden SYSTEM-Dienst testbar ist (reine <see cref="System.IO"/>-Operationen
