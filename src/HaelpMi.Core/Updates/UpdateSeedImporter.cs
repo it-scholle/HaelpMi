@@ -4,6 +4,9 @@ using HaelpMi.Core.Storage;
 namespace HaelpMi.Core.Updates;
 
 /// <summary>
+/// DEPRECATED für release-1.0-MVP: wird zur Laufzeit nirgends aufgerufen (siehe
+/// HaelpMi.Agent/App.xaml.cs) - kein update-seed-Import auf diesem Release-Zweig.
+///
 /// Bootstrap für die P2P-Update-Verteilung (Abschnitt 11): "wie kommt das allererste Gerät
 /// im Netz zu einer neuen Version" war bisher bewusst außerhalb der P2P-Pipeline (siehe
 /// <see cref="UpdateOrchestrator"/>-Klassenkommentar) - reine Handarbeit über

@@ -2,6 +2,11 @@ using HaelpMi.Core.Diagnostics;
 using HaelpMi.UpdateService;
 using Microsoft.Extensions.Hosting;
 
+// DEPRECATED für release-1.0-MVP: wird vom Install-Creator nicht mehr gepublisht/
+// eingebettet und läuft auf keiner Kundenmaschine dieses Release (siehe
+// HaelpMi.Agent/App.xaml.cs, Kommentar bei _hotkey = new GlobalHotkey(); sowie
+// MainWindow.xaml.cs PayloadProjects). Quelle bewusst nicht gelöscht, siehe dort.
+//
 // Läuft als SYSTEM/LocalService - ein unbehandelter Fehler hier wuerde die gesamte
 // Update-Pipeline für alle Geräte lahmlegen, ohne dass irgendwo eine Spur bleibt (Event
 // Log wird nur von den ILogger-Aufrufen in UpdateServiceWorker gefüllt, nicht von einer

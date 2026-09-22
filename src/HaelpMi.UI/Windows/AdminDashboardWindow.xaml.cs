@@ -96,6 +96,10 @@ public partial class AdminDashboardWindow : Window
     // Updates-Tab (Nutzerwunsch 09.08.2026): ein einziger, fest verdrahteter Datensatz
     // (AppConstants.UpdateRolloutScopeId) statt echter Datensatz-Ids wie bei Gruppe/Profil -
     // deshalb reicht hier ein bool statt eines Guid?, ob der Lock gerade gehalten wird.
+    // DEPRECATED für release-1.0-MVP: der Tab speichert SharedConfig.UpdateRollout weiterhin
+    // korrekt (Config-Sync läuft), aber die auswertende Update-Pipeline (UpdateOrchestrator
+    // u. a., siehe dort) ist auf diesem Release-Zweig nicht aktiv - eine hier erteilte
+    // Freigabe hat aktuell keine sichtbare Wirkung bei den Geräten.
     private bool _heldUpdateRolloutLock;
 
     // Unterdrückt die Auto-Speichern-Handler unten, während LoadGroupDetail/

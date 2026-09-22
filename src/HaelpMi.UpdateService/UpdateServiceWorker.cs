@@ -11,6 +11,13 @@ using HaelpMi.Core.Updates;
 namespace HaelpMi.UpdateService;
 
 /// <summary>
+/// DEPRECATED für release-1.0-MVP: dieser Dienst wird vom Install-Creator nicht mehr
+/// gepublisht/eingebettet und läuft auf keiner Kundenmaschine dieses Release (siehe
+/// Program.cs). Der hier offene Named Pipe (siehe <c>authenticatedUsers</c> unten) ist
+/// damit für dieses Release nicht erreichbar - Befund aus Issue #122 (lokale
+/// Rechteausweitung) bleibt gültig für den Moment, in dem der Dienst reaktiviert wird
+/// (release-2.0), ist aber kein Angriffspfad im aktuellen Installer.
+///
 /// Läuft als Windows-Dienst (LocalService/SYSTEM) - der einzige Teil von HälpMi mit
 /// erhöhten Rechten, ausschließlich für Installieren/Testen/Swappen/Deinstallieren beim
 /// Auto-Update (CLAUDE.md, Abschnitt 11). Der (rechtelose) Agent weist über den lokalen

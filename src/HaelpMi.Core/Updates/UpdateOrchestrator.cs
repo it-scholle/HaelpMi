@@ -8,6 +8,10 @@ using HaelpMi.Core.Storage;
 namespace HaelpMi.Core.Updates;
 
 /// <summary>
+/// DEPRECATED für release-1.0-MVP: wird zur Laufzeit nirgends instanziiert/gestartet
+/// (siehe HaelpMi.Agent/App.xaml.cs) - Update dieses Release-Zweigs läuft ausschließlich
+/// manuell (neuer Installer-Lauf pro Gerät).
+///
 /// Orchestriert die 0-Downtime-Update-Pipeline (Abschnitt 11) auf einem Gerät: hört auf
 /// <see cref="DiscoveryService.PeerVersionObserved"/> (bereits vorhandener Boot-Call-
 /// Mechanismus), entscheidet ob/wann dieses Gerät dran ist (Admin-Freigabe + gestaffelte

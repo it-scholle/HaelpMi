@@ -1,6 +1,12 @@
 namespace HaelpMi.Core.Updates;
 
 /// <summary>
+/// DEPRECATED für release-1.0-MVP: der Verifier, der diesen Schlüssel benutzt
+/// (<see cref="UpdatePackageVerifier"/> via <see cref="UpdateSeedImporter"/>), wird auf
+/// diesem Release-Zweig zur Laufzeit nirgends aufgerufen (siehe HaelpMi.Agent/App.xaml.cs) -
+/// der unten dokumentierte Wegwerf-Dev-Schlüssel hat damit aktuell keinen Angriffspfad
+/// (Issue #123). Bleibt relevant, sobald die Update-Pipeline reaktiviert wird (release-2.0).
+///
 /// Öffentlicher Ed25519-Schlüssel zur Prüfung signierter Programm-Updates (Abschnitt 11,
 /// CLAUDE.md "Lizenz &amp; Secrets": separater Schlüssel von der Kunden-Lizenzsignatur).
 /// Nur der öffentliche Teil ist eingebettet - der private Schlüssel entsteht/lebt
