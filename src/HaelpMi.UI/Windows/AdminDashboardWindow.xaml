@@ -417,9 +417,18 @@
                         <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
 
+                    <!-- Issue #118: eigener, immer sichtbarer Import-Button hier - unabhängig vom
+                         #20-Warnbanner oben (LicenseWarningBanner), das nur bei Ablauf/Fehler der
+                         aktuellen Lizenz erscheint. Ermöglicht einen frühzeitigen Lizenz-/
+                         Paketwechsel, bevor die laufende Lizenz überhaupt ein Problem zeigt. Ruft
+                         denselben LicenseKeyImportWindow-Dialog wie der Banner-Button auf. -->
                     <Border Grid.Row="0" HorizontalAlignment="Left" Margin="0,0,0,12" Background="{StaticResource CardBackgroundBrush}" BorderBrush="{StaticResource HairlineBrush}"
                             BorderThickness="1" CornerRadius="8" Padding="14,8">
-                        <TextBlock x:Name="LicenseSeatCountText" FontSize="15" FontWeight="Bold" />
+                        <DockPanel LastChildFill="True">
+                            <Button DockPanel.Dock="Right" x:Name="ImportLicenseFromDevicesTabButton" Content="Lizenz einspielen"
+                                    Padding="12,6" Margin="16,0,0,0" Click="ImportLicenseFromDevicesTabButton_Click" />
+                            <TextBlock x:Name="LicenseSeatCountText" FontSize="15" FontWeight="Bold" VerticalAlignment="Center" />
+                        </DockPanel>
                     </Border>
 
                     <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
