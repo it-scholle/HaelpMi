@@ -377,7 +377,13 @@ public partial class AdminDashboardWindow : Window
     // Datei-Auswahl - kein Datei-Dialog mehr an dieser Stelle nötig (löst das dortige
     // "Zuletzt verwendet"-Problem an der Wurzel, statt es nur per NoRecentFileDialog
     // abzufangen).
-    private async void ImportLicenseButton_Click(object sender, RoutedEventArgs e)
+    private async void ImportLicenseButton_Click(object sender, RoutedEventArgs e) => await ImportLicenseAsync();
+
+    // Issue #118: gleicher Dialog/Ablauf wie ImportLicenseButton_Click, nur von einem zweiten,
+    // immer sichtbaren Button im Geräte-Tab aus aufgerufen (unabhängig vom #20-Warnbanner).
+    private async void ImportLicenseFromDevicesTabButton_Click(object sender, RoutedEventArgs e) => await ImportLicenseAsync();
+
+    private async Task ImportLicenseAsync()
     {
         var dialog = new LicenseKeyImportWindow(_context.ImportLicenseKeyText) { Owner = this };
         if (dialog.ShowDialog() == true)
