@@ -9,8 +9,6 @@ public static class ProviderContact
 {
     public const string Name = "Hannes Scholz";
     public const string Company = "IT-Scholle";
-    public const string Email = "info@it-scholle.de";
-    public const string Phone = "+49 179 1646513";
 
-    public static string DisplayText => $"{Name} ({Company}) - {Email}, {Phone}";
+    public static string DisplayText => $"{Name} ({Company})";
 }

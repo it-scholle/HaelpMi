@@ -29,7 +29,6 @@
 
         <TextBlock Text="Eine Software von IT-Scholle" FontWeight="SemiBold" FontSize="13" />
         <TextBlock Text="Hannes Scholz" Foreground="{StaticResource TextSecondaryBrush}" FontSize="12" Margin="0,2,0,0" />
-        <TextBlock Text="info@it-scholle.de" Foreground="{StaticResource AccentBrush}" FontSize="12" Margin="0,2,0,0" />
 
         <Button x:Name="CloseButton" Content="Schließen" HorizontalAlignment="Right" Padding="16,7"
                 Style="{StaticResource AccentButtonStyle}" Margin="0,20,0,0" Click="CloseButton_Click" />
