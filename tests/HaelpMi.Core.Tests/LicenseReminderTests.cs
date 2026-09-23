@@ -71,8 +71,7 @@ public class LicenseReminderTests
     {
         var text = LicenseWarningTextFormatter.Format(new LicenseWarning(LicenseWarningLevel.ExpiringSoon, 12));
 
-        Assert.Contains(ProviderContact.Email, text);
-        Assert.Contains(ProviderContact.Phone, text);
+        Assert.Contains(ProviderContact.DisplayText, text);
     }
 
     [Fact]
@@ -80,7 +79,7 @@ public class LicenseReminderTests
     {
         var text = LicenseWarningTextFormatter.Format(new LicenseWarning(LicenseWarningLevel.None, 200));
 
-        Assert.DoesNotContain(ProviderContact.Email, text);
+        Assert.DoesNotContain(ProviderContact.DisplayText, text);
     }
 
     [Fact]
