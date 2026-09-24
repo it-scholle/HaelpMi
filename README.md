@@ -78,9 +78,7 @@ bewusst *nicht* Teil der automatisierten Tests, statt eine unechte Abdeckung vor
 
 ## Lizenz
 
-MIT, siehe [`LICENSE`](LICENSE). Der Copyright-Halter in der `LICENSE`-Datei ist aktuell
-ein Platzhalter ("HälpMi contributors") - vor Veröffentlichung durch die tatsächliche
-Rechteinhaberin (die Stadt) ersetzen.
+MIT, siehe [`LICENSE`](LICENSE).
 
 Für die separate Kunden-Lizenzverwaltung (Ed25519-signierte Lizenzdateien, siehe
 Pflichtenheft 3.9/5.10) ist nur ein Platzhalter für den öffentlichen Schlüssel im Code
