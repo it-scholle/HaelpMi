@@ -1,21 +1,60 @@
-HälpMi — Quellverfügbare Lizenz (Entwurf)
+# HälpMi — Quellverfügbare Lizenz (Entwurf)
 
-Copyright (c) 2026 HälpMi contributors
+Copyright (c) 2026 Hannes Scholz / IT-Scholle. Alle Rechte vorbehalten, soweit nachfolgend nichts anderes bestimmt ist.
 
-Der Quellcode dieses Projekts ist öffentlich einsehbar und auditierbar.
+Repository: https://github.com/it-scholle/HaelpMi
 
-- Privatpersonen dürfen diese Software für private, nicht-kommerzielle Zwecke kostenfrei
-  nutzen.
-- Unternehmen, Behörden und sonstige Organisationen benötigen für die Nutzung eine
-  kostenpflichtige Nutzungsvereinbarung mit der Rechteinhaberin.
-- Die Erstellung und der Vertrieb eigener, konkurrierender Produkte auf Basis dieses
-  Quellcodes durch Dritte ist nicht gestattet.
+## § 0 Definitionen
 
-Dies ist KEINE Open-Source-Lizenz im Sinne der Open Source Initiative (OSI) — insbesondere
-keine MIT- oder AGPL-Lizenz. Es handelt sich um ein "Source-available"-Modell.
+- **„Privatperson"**: eine natürliche Person, die die Software ausschließlich für eigene, private Zwecke nutzt, ohne Bezug zu einer beruflichen, gewerblichen, behördlichen oder sonstigen organisatorischen Tätigkeit.
+- **„Organisation"**: jedes Unternehmen, jede Behörde, jeder Verein, jede Körperschaft des öffentlichen oder privaten Rechts oder jede sonstige Stelle, unabhängig von Rechtsform und Größe — sowie jede Nutzung durch eine Privatperson im Auftrag oder Interesse einer solchen Stelle.
+- **„Nutzung"**: das Installieren, Ausführen, Konfigurieren oder Betreiben der Software oder einer daraus abgeleiteten Fassung, gleich ob lokal, im eigenen Netzwerk oder über Dritte.
+- **„Konkurrenzprodukt"**: jedes Produkt oder jeder Dienst — entgeltlich oder unentgeltlich, vertrieben oder als Dienstleistung (einschließlich SaaS/Hosting für Dritte) betrieben —, das ganz oder teilweise auf diesem Quellcode oder einer Bearbeitung davon beruht und Notfall- oder Alarmierungsfunktionen anbietet.
 
----
-HINWEIS: Dies ist ein Entwurf. Die Klärung mit der Stadt als Auftraggeberin erfolgte bislang
-nur telefonisch (17.08.2026); eine schriftliche Bestätigung steht noch aus. Der endgültige
-Lizenztext muss vor einem echten Release von einer rechtskundigen Person geprüft und die
-Klärung mit der Stadt schriftlich nachgeholt werden.
+## § 1 Einsichtsrecht
+
+Der Quellcode ist öffentlich einsehbar und darf von jeder Person zu Informations-, Prüf- und Auditzwecken gelesen, kopiert und analysiert werden. Dieses Einsichtsrecht umfasst kein Nutzungs-, Bearbeitungs- oder Vertriebsrecht über die in dieser Lizenz eingeräumten Rechte hinaus.
+
+## § 2 Nutzung durch Privatpersonen
+
+Privatpersonen dürfen die Software für private, nicht-kommerzielle Zwecke kostenfrei nutzen und für den eigenen Gebrauch anpassen.
+
+## § 3 Nutzung durch Organisationen
+
+Jede Nutzung durch eine Organisation bedarf einer gesonderten, kostenpflichtigen schriftlichen Nutzungsvereinbarung mit der Rechteinhaberin. Ohne eine solche Vereinbarung ist jede Nutzung durch eine Organisation untersagt.
+
+## § 4 Verbot konkurrierender Produkte
+
+Die Erstellung, Bearbeitung, der Vertrieb und der Betrieb von Konkurrenzprodukten auf Basis dieses Quellcodes durch Dritte ist ohne gesonderte schriftliche Vereinbarung mit der Rechteinhaberin nicht gestattet. Dies gilt unabhängig davon, ob der abgeleitete Code verändert, umbenannt oder mit anderem Code kombiniert wurde.
+
+## § 5 Namensnutzung
+
+Diese Lizenz gewährt kein Recht zur Nutzung des Namens „HälpMi", des zugehörigen Logos oder der Marke IT-Scholle zu Werbe- oder sonstigen Zwecken.
+
+## § 6 Urheberrechtsvermerk
+
+Dieser Lizenztext sowie der Copyright-Vermerk sind in jeder Kopie oder Bearbeitung des Quellcodes zu erhalten.
+
+## § 7 Gewährleistung und Haftung
+
+Die Software wird ohne jede ausdrückliche oder stillschweigende Gewährleistung „wie besehen" zur Verfügung gestellt. Die Rechteinhaberin haftet nicht für Schäden aus der Nutzung der Software, soweit gesetzlich zulässig, mit Ausnahme von Vorsatz und grober Fahrlässigkeit.
+
+## § 8 Beendigung
+
+Die in dieser Lizenz eingeräumten Rechte erlöschen automatisch bei einem Verstoß gegen §§ 2 bis 5. In diesem Fall ist jede weitere Nutzung unverzüglich einzustellen und vorhandene Kopien sind zu löschen, soweit sie nicht ausschließlich der Dokumentation des Verstoßes dienen.
+
+## § 9 Anwendbares Recht
+
+Es gilt das Recht der Bundesrepublik Deutschland unter Ausschluss des UN-Kaufrechts.
+
+## § 10 Salvatorische Klausel
+
+Sollte eine Bestimmung dieser Lizenz unwirksam sein, bleibt die Wirksamkeit der übrigen Bestimmungen unberührt.
+
+## Kein Open-Source-Modell
+
+Dies ist **keine** Open-Source-Lizenz im Sinne der Open Source Initiative (OSI) — insbesondere keine MIT- oder AGPL-Lizenz. Es handelt sich um ein „Source-available"-Modell: einsehbar und auditierbar, aber in der Nutzung und Weiterverwendung eingeschränkt.
+
+## Lizenzanfragen
+
+Für Nutzungsvereinbarungen: info@it-scholle.de
