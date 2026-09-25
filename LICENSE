@@ -1,60 +1,279 @@
-# HälpMi — Quellverfügbare Lizenz (Entwurf)
+HälpMi-Lizenz (Source-Available)
+Fassung 1.0 vom 25.09.2026
 
-Copyright (c) 2026 Hannes Scholz / IT-Scholle. Alle Rechte vorbehalten, soweit nachfolgend nichts anderes bestimmt ist.
+Copyright (c) 2026 Hannes Scholz, handelnd unter IT-Scholle,
+Frohndorfer Straße 2, 99610 Sömmerda, Deutschland (nachfolgend „Lizenzgeber").
+Alle Rechte vorbehalten, soweit diese Lizenz nicht ausdrücklich etwas anderes bestimmt.
 
 Repository: https://github.com/it-scholle/HaelpMi
+Lizenzanfragen: info@it-scholle.de
 
-## § 0 Definitionen
+Diese Lizenz ist keine Open-Source-Lizenz im Sinne der Open Source Initiative (OSI).
+Der Quellcode ist öffentlich einsehbar und prüfbar. Privatpersonen dürfen die Software
+für private Zwecke unentgeltlich nutzen. Jede darüber hinausgehende Nutzung, insbesondere
+durch Organisationen und zu geschäftlichen Zwecken, bedarf einer gesonderten Vereinbarung
+oder einer Freigabe des Lizenzgebers.
 
-- **„Privatperson"**: eine natürliche Person, die die Software ausschließlich für eigene, private Zwecke nutzt, ohne Bezug zu einer beruflichen, gewerblichen, behördlichen oder sonstigen organisatorischen Tätigkeit.
-- **„Organisation"**: jedes Unternehmen, jede Behörde, jeder Verein, jede Körperschaft des öffentlichen oder privaten Rechts oder jede sonstige Stelle, unabhängig von Rechtsform und Größe — sowie jede Nutzung durch eine Privatperson im Auftrag oder Interesse einer solchen Stelle.
-- **„Nutzung"**: das Installieren, Ausführen, Konfigurieren oder Betreiben der Software oder einer daraus abgeleiteten Fassung, gleich ob lokal, im eigenen Netzwerk oder über Dritte.
-- **„Konkurrenzprodukt"**: jedes Produkt oder jeder Dienst — entgeltlich oder unentgeltlich, vertrieben oder als Dienstleistung (einschließlich SaaS/Hosting für Dritte) betrieben —, das ganz oder teilweise auf diesem Quellcode oder einer Bearbeitung davon beruht und Notfall- oder Alarmierungsfunktionen anbietet.
 
-## § 1 Einsichtsrecht
+§ 1 Gegenstand, Annahme, Rechtsnatur
 
-Der Quellcode ist öffentlich einsehbar und darf von jeder Person zu Informations-, Prüf- und Auditzwecken gelesen, kopiert und analysiert werden. Dieses Einsichtsrecht umfasst kein Nutzungs-, Bearbeitungs- oder Vertriebsrecht über die in dieser Lizenz eingeräumten Rechte hinaus.
+(1) Diese Lizenz gilt für die Software „HälpMi" in der Fassung, der sie beiliegt,
+    einschließlich Quellcode, Objektcode, Installationsprogrammen, Konfigurationsvorlagen,
+    Entwurfsmaterial (insbesondere Pflichtenheft und Architekturdokumentation),
+    Dokumentation, Grafiken und Symbolen sowie für jeden Teil davon (nachfolgend „Software").
 
-## § 2 Nutzung durch Privatpersonen
+(2) Bestandteile Dritter, die in der Software enthalten sind oder von ihr eingebunden
+    werden, unterliegen ausschließlich ihren eigenen Lizenzbedingungen (siehe Datei
+    THIRD-PARTY-NOTICES). Diese Lizenz beschränkt Rechte an solchen Bestandteilen nicht.
 
-Privatpersonen dürfen die Software für private, nicht-kommerzielle Zwecke kostenfrei nutzen und für den eigenen Gebrauch anpassen.
+(3) Wer die Software herunterlädt, vervielfältigt, installiert, ausführt oder bearbeitet,
+    nimmt diese Lizenz an. Auf den Zugang der Annahmeerklärung beim Lizenzgeber wird
+    verzichtet (§ 151 BGB). Wer diese Lizenz nicht annimmt, erhält keine Rechte an der
+    Software.
 
-## § 3 Nutzung durch Organisationen
+(4) Nutzungsrechte werden nur in dem in dieser Lizenz ausdrücklich beschriebenen Umfang
+    eingeräumt (§ 31 Abs. 1 Satz 2 UrhG). Die Beschränkungen dieser Lizenz sind zugleich
+    Bedingungen der Rechtseinräumung und vertragliche Pflichten. Jede Handlung außerhalb
+    dieses Umfangs ist nicht lizenziert.
 
-Jede Nutzung durch eine Organisation bedarf einer gesonderten, kostenpflichtigen schriftlichen Nutzungsvereinbarung mit der Rechteinhaberin. Ohne eine solche Vereinbarung ist jede Nutzung durch eine Organisation untersagt.
+(5) Diese Lizenz räumt ausschließlich einfache, nicht übertragbare und nicht
+    unterlizenzierbare Rechte ein. Rechte an Patenten, Marken, Unternehmenskennzeichen,
+    Werktiteln oder sonstigen Schutzrechten werden nicht eingeräumt.
 
-## § 4 Verbot konkurrierender Produkte
 
-Die Erstellung, Bearbeitung, der Vertrieb und der Betrieb von Konkurrenzprodukten auf Basis dieses Quellcodes durch Dritte ist ohne gesonderte schriftliche Vereinbarung mit der Rechteinhaberin nicht gestattet. Dies gilt unabhängig davon, ob der abgeleitete Code verändert, umbenannt oder mit anderem Code kombiniert wurde.
+§ 2 Begriffsbestimmungen
 
-## § 5 Namensnutzung
+(1) „Privatperson" ist eine natürliche Person, die die Software ausschließlich für eigene
+    private Zwecke im persönlichen oder häuslichen Bereich nutzt, etwa zum Lernen,
+    Ausprobieren oder für Hobbyprojekte, ohne Zusammenhang mit einer beruflichen,
+    gewerblichen, freiberuflichen, dienstlichen, amtlichen oder ehrenamtlichen Tätigkeit
+    für eine Organisation.
 
-Diese Lizenz gewährt kein Recht zur Nutzung des Namens „HälpMi", des zugehörigen Logos oder der Marke IT-Scholle zu Werbe- oder sonstigen Zwecken.
+(2) „Organisation" ist jede natürliche oder juristische Person, Personengesellschaft oder
+    sonstige Stelle, soweit sie nicht als Privatperson handelt, insbesondere Unternehmen
+    jeder Rechtsform einschließlich Einzelunternehmern und Freiberuflern, Behörden und
+    sonstige Stellen der öffentlichen Verwaltung, Körperschaften, Anstalten und Stiftungen
+    des öffentlichen oder privaten Rechts, Vereine und Verbände sowie Bildungs-,
+    Gesundheits- und gemeinnützige Einrichtungen – unabhängig von Rechtsform, Größe,
+    Gewinnerzielungsabsicht und Art der Finanzierung. Einer Organisation werden ihre
+    Beschäftigten, Beauftragten und Dienstleister zugerechnet, soweit diese für sie oder in
+    ihrem Interesse handeln, sowie die mit ihr verbundenen Unternehmen im Sinne der
+    §§ 15 ff. AktG.
 
-## § 6 Urheberrechtsvermerk
+(3) „Geschäftliche Zwecke" sind jede Nutzung durch oder für eine Organisation sowie jede
+    Nutzung, die unmittelbar oder mittelbar der Erzielung von Einnahmen dient, einschließlich
+    Leistungen für Dritte wie Installation, Betrieb, Hosting, Wartung, Anpassung, Beratung
+    oder Schulung. Die Nutzung durch Behörden und sonstige öffentliche Stellen erfolgt stets
+    zu geschäftlichen Zwecken im Sinne dieser Lizenz, auch ohne Gewinnerzielungsabsicht.
 
-Dieser Lizenztext sowie der Copyright-Vermerk sind in jeder Kopie oder Bearbeitung des Quellcodes zu erhalten.
+(4) „Bearbeitung" ist jede Änderung, Erweiterung, Kürzung, Anpassung, Portierung oder
+    Übersetzung – auch in eine andere Programmiersprache – der Software oder von Teilen
+    davon sowie die Übernahme von Teilen der Software in andere Software, jeweils
+    unabhängig von ihrem Umfang, von Umbenennung, von der Kombination mit anderem Code und
+    davon, ob sie manuell, automatisiert oder mithilfe von Systemen künstlicher Intelligenz
+    erfolgt. „Abgeleitetes Werk" ist das Ergebnis einer Bearbeitung.
 
-## § 7 Gewährleistung und Haftung
+(5) „Konkurrenzprodukt" ist jedes Produkt und jede Dienstleistung – entgeltlich oder
+    unentgeltlich, als Software, Gerät, gehosteter Dienst oder Dienstleistung –, das bzw.
+    die
+    a) die Software ganz oder teilweise ersetzt,
+    b) ein Angebot des Lizenzgebers ersetzt, das auf der Software beruht, oder
+    c) im Wesentlichen gleiche oder vergleichbare Funktionen wie die Software bietet,
+       insbesondere die Alarmierung, stille Alarmierung, Benachrichtigung oder
+       Notfallkommunikation von Personen am Arbeitsplatz.
 
-Die Software wird ohne jede ausdrückliche oder stillschweigende Gewährleistung „wie besehen" zur Verfügung gestellt. Die Rechteinhaberin haftet nicht für Schäden aus der Nutzung der Software, soweit gesetzlich zulässig, mit Ausnahme von Vorsatz und grober Fahrlässigkeit.
+(6) „Wettbewerber" ist jede Organisation, die ein Konkurrenzprodukt anbietet, entwickelt
+    oder dessen Entwicklung vorbereitet, sowie jede Person, die für eine solche Organisation
+    tätig ist oder in deren Auftrag oder Interesse handelt.
 
-## § 8 Beendigung
+(7) „Lizenzmechanismus" sind alle Funktionen der Software zur Prüfung, Anzeige oder
+    Durchsetzung von Lizenzdateien, Lizenzschlüsseln, Signaturen, Ablaufdaten und
+    Lizenzhinweisen.
 
-Die in dieser Lizenz eingeräumten Rechte erlöschen automatisch bei einem Verstoß gegen §§ 2 bis 5. In diesem Fall ist jede weitere Nutzung unverzüglich einzustellen und vorhandene Kopien sind zu löschen, soweit sie nicht ausschließlich der Dokumentation des Verstoßes dienen.
+(8) „Freigabe" ist eine ausdrückliche Zustimmung des Lizenzgebers in Schriftform oder
+    Textform (§ 126b BGB), die den Berechtigten und den Umfang der erlaubten Nutzung
+    bezeichnet. Schweigen, Duldung, schlüssiges Verhalten oder Erklärungen Dritter sind
+    keine Freigabe.
 
-## § 9 Anwendbares Recht
+(9) „Verbreitung" ist jede Weitergabe von Vervielfältigungsstücken an Dritte sowie jede
+    öffentliche Zugänglichmachung, einschließlich der Bereitstellung zum Download, in
+    Paketquellen, auf Spiegelservern oder über gehostete Dienste.
 
-Es gilt das Recht der Bundesrepublik Deutschland unter Ausschluss des UN-Kaufrechts.
 
-## § 10 Salvatorische Klausel
+§ 3 Einsicht und Prüfung
 
-Sollte eine Bestimmung dieser Lizenz unwirksam sein, bleibt die Wirksamkeit der übrigen Bestimmungen unberührt.
+(1) Jede Person darf den Quellcode lesen, herunterladen und zu folgenden Zwecken prüfen:
+    a) Prüfung der Sicherheit, des Datenschutzes und der Qualität der Software,
+    b) Prüfung vor einer Entscheidung über den Einsatz der Software, auch im Rahmen eines
+       Vergabeverfahrens,
+    c) Prüfung durch Aufsichts-, Rechnungsprüfungs- und Datenschutzbehörden sowie durch
+       von ihnen beauftragte Sachverständige,
+    d) Meldung von Fehlern und Sicherheitslücken an den Lizenzgeber.
 
-## Kein Open-Source-Modell
+(2) Vervielfältigungen sind nur erlaubt, soweit sie für diese Zwecke erforderlich sind.
+    Sie dürfen nicht verbreitet werden.
 
-Dies ist **keine** Open-Source-Lizenz im Sinne der Open Source Initiative (OSI) — insbesondere keine MIT- oder AGPL-Lizenz. Es handelt sich um ein „Source-available"-Modell: einsehbar und auditierbar, aber in der Nutzung und Weiterverwendung eingeschränkt.
+(3) Die Rechte nach Absatz 1 umfassen weder die Ausführung der Software durch
+    Organisationen noch die Bearbeitung, die Verbreitung oder die Verwendung der Software
+    oder von Teilen davon als Vorlage, Grundlage oder Bestandteil anderer Software.
 
-## Lizenzanfragen
 
-Für Nutzungsvereinbarungen: info@it-scholle.de
+§ 4 Private Nutzung
+
+(1) Privatpersonen dürfen die Software unentgeltlich für private Zwecke installieren,
+    ausführen und für den eigenen privaten Gebrauch bearbeiten.
+
+(2) Privatpersonen dürfen die Software und abgeleitete Werke weder verbreiten noch zu
+    geschäftlichen Zwecken nutzen oder durch Dritte nutzen lassen. § 7 Abs. 2 bleibt
+    unberührt.
+
+(3) Das Recht zur Bearbeitung nach Absatz 1 steht Personen nicht zu, die für einen
+    Wettbewerber tätig sind.
+
+
+§ 5 Nutzung durch Organisationen und zu geschäftlichen Zwecken
+
+(1) Jede Nutzung der Software durch eine Organisation und jede Nutzung zu geschäftlichen
+    Zwecken bedarf einer gesonderten Vereinbarung mit dem Lizenzgeber oder einer Freigabe.
+    Dies gilt insbesondere für Installation, Ausführung, Test, Evaluierung, Konfiguration
+    und Betrieb, für Vervielfältigung, Bearbeitung und Weiterentwicklung, für die
+    Verbreitung sowie für Dienstleistungen, die eine dieser Handlungen einschließen. Die
+    Vereinbarung kann entgeltlich oder unentgeltlich sein.
+
+(2) Art und Umfang der Nutzung richten sich ausschließlich nach der Vereinbarung oder
+    Freigabe. Soweit diese von dieser Lizenz abweicht, geht sie vor.
+
+(3) Dienstleister einer berechtigten Organisation dürfen die Software ausschließlich in
+    deren Auftrag und im Rahmen von deren Vereinbarung installieren, konfigurieren und
+    betreiben. Eigene Rechte erwerben sie dadurch nicht. Bearbeitungen bedürfen auch in
+    diesem Fall einer Freigabe.
+
+(4) Bearbeitungen, die im Rahmen einer Vereinbarung oder Freigabe entstehen, dürfen nur
+    im Rahmen dieser Vereinbarung oder Freigabe genutzt werden, soweit diese nichts
+    anderes bestimmt.
+
+
+§ 6 Konkurrenzprodukte und Systeme künstlicher Intelligenz
+
+(1) Ohne Freigabe ist es jeder Person untersagt,
+    a) die Software, Teile davon oder abgeleitete Werke zur Entwicklung, Herstellung,
+       Verbreitung, Vermarktung oder zum Betrieb eines Konkurrenzprodukts zu
+       vervielfältigen, zu bearbeiten oder sonst zu verwenden,
+    b) den Quellcode oder Teile davon einem System künstlicher Intelligenz als Eingabe,
+       Kontext oder Vorlage zu übergeben, um Code für ein Konkurrenzprodukt oder zu
+       geschäftlichen Zwecken zu erzeugen,
+    c) Handlungen nach Buchstabe a oder b zu veranlassen oder Dritte dabei zu unterstützen.
+
+(2) Der Lizenzgeber behält sich die Nutzung der Software für Text und Data Mining
+    ausdrücklich vor (§ 44b Abs. 3 UrhG, Art. 4 Abs. 3 der Richtlinie (EU) 2019/790).
+    Ohne Freigabe untersagt ist insbesondere die Verwendung der Software zum Training, zum
+    Feintuning oder zur Evaluierung von Modellen künstlicher Intelligenz. Gesetzliche
+    Erlaubnisse zu Zwecken der wissenschaftlichen Forschung (§ 60d UrhG) bleiben unberührt.
+
+(3) Zwingende gesetzliche Befugnisse, insbesondere nach §§ 69d Abs. 2 und 3 sowie 69e UrhG,
+    bleiben unberührt.
+
+
+§ 7 Verbreitung, Forks und Beiträge
+
+(1) Die Verbreitung der Software oder abgeleiteter Werke bedarf einer Freigabe.
+
+(2) Soweit die Nutzungsbedingungen von GitHub den Nutzern von GitHub Rechte zum Ansehen und
+    Forken des öffentlichen Repositorys innerhalb von GitHub einräumen, bleiben diese
+    unberührt. Ein Fork vermittelt keine weitergehenden Rechte; für ihn gilt diese Lizenz.
+    Die Lizenzdatei ist im Fork unverändert zu erhalten.
+
+(3) Beiträge Dritter, etwa Pull Requests, nimmt der Lizenzgeber nur auf Grundlage einer
+    gesonderten Vereinbarung an, mit der ihm die erforderlichen Nutzungsrechte eingeräumt
+    werden.
+
+
+§ 8 Lizenzmechanismus, Hinweise, Kennzeichen
+
+(1) Es ist untersagt, den Lizenzmechanismus zu entfernen, zu umgehen, zu deaktivieren oder
+    zu verändern, durch ihn geschützte Funktionen freizuschalten sowie Lizenzdateien oder
+    Signaturen zu erzeugen, zu verändern oder zu übertragen. Ausgenommen sind Bearbeitungen
+    durch Privatpersonen für den eigenen privaten Gebrauch nach § 4 Abs. 1.
+
+(2) Urheber-, Lizenz- und Kennzeichenhinweise dürfen nicht entfernt, verändert oder
+    unkenntlich gemacht werden. Jedes Vervielfältigungsstück und jedes abgeleitete Werk muss
+    diese Lizenz enthalten; abgeleitete Werke sind deutlich als geändert zu kennzeichnen.
+
+(3) Diese Lizenz gewährt keine Rechte an den Bezeichnungen „HälpMi" und „IT-Scholle", an
+    Logos und Symbolen des Lizenzgebers oder an verwechslungsfähigen Kennzeichen. Zulässig
+    ist allein die wahrheitsgemäße Angabe der Herkunft der Software.
+
+
+§ 9 Verstöße und Beendigung
+
+(1) Bei jedem Verstoß gegen diese Lizenz erlöschen sämtliche Rechte des Verletzers aus
+    dieser Lizenz automatisch (auflösende Bedingung, § 158 Abs. 2 BGB).
+
+(2) Verstößt eine Privatperson erstmals gegen diese Lizenz und beseitigt sie den Verstoß
+    einschließlich seiner Folgen, soweit möglich, innerhalb von 30 Tagen nach Zugang eines
+    Hinweises des Lizenzgebers in Textform vollständig, bestehen ihre Rechte nach § 4 fort.
+    Dies gilt nicht für Verstöße gegen § 6 oder § 8 Abs. 1 und nicht für Personen, die für
+    einen Wettbewerber tätig sind.
+
+(3) Nach Erlöschen der Rechte ist jede Nutzung einzustellen; alle Vervielfältigungsstücke
+    der Software und abgeleiteter Werke sind zu löschen. Die Löschung ist dem Lizenzgeber
+    auf Verlangen in Textform zu bestätigen.
+
+(4) Gesetzliche Ansprüche des Lizenzgebers, insbesondere auf Unterlassung, Beseitigung,
+    Schadensersatz, Auskunft und Vernichtung nach §§ 97 ff. UrhG, bleiben unberührt. Für die
+    Berechnung des Schadensersatzes nach den Grundsätzen der Lizenzanalogie dient die zum
+    Zeitpunkt der Nutzung gültige Preisliste des Lizenzgebers als Anhaltspunkt.
+
+
+§ 10 Gewährleistung, Haftung, Sicherheitshinweis
+
+(1) Die Software wird Privatpersonen unentgeltlich überlassen. Der Lizenzgeber haftet
+    insoweit nur für Vorsatz und grobe Fahrlässigkeit; für Sach- und Rechtsmängel haftet er
+    nur, wenn er den Mangel arglistig verschwiegen hat.
+
+(2) Unberührt bleiben die Haftung für Schäden aus der Verletzung des Lebens, des Körpers
+    oder der Gesundheit nach den gesetzlichen Vorschriften, die Haftung nach dem
+    Produkthaftungsgesetz und die Haftung aus einer ausdrücklich übernommenen Garantie.
+
+(3) Für Organisationen und für Nutzungen zu geschäftlichen Zwecken richten sich
+    Gewährleistung und Haftung ausschließlich nach der jeweiligen Vereinbarung.
+
+(4) HälpMi ist kein Notrufsystem. Die Software setzt keinen Notruf ab und ersetzt weder
+    Notrufe (110, 112) noch gesetzlich oder normativ vorgesehene Melde- und
+    Alarmierungswege (z. B. nach DIN VDE V 0827). Sie ist ausschließlich eine ergänzende
+    Maßnahme.
+
+
+§ 11 Fassungen dieser Lizenz
+
+(1) Jede veröffentlichte Fassung der Software unterliegt der Lizenzfassung, die ihr
+    beiliegt.
+
+(2) Der Lizenzgeber kann künftige Fassungen der Software unter geänderten Bedingungen
+    veröffentlichen. Bereits eingeräumte Rechte bleiben davon unberührt.
+
+
+§ 12 Anwendbares Recht, Gerichtsstand, Sprache
+
+(1) Es gilt das Recht der Bundesrepublik Deutschland unter Ausschluss des UN-Kaufrechts.
+    Gegenüber Verbrauchern bleiben zwingende Vorschriften des Staates ihres gewöhnlichen
+    Aufenthalts unberührt.
+
+(2) Ist der Nutzer Kaufmann, juristische Person des öffentlichen Rechts oder
+    öffentlich-rechtliches Sondervermögen oder hat er keinen allgemeinen Gerichtsstand in
+    Deutschland, ist Gerichtsstand für alle Streitigkeiten aus oder im Zusammenhang mit
+    dieser Lizenz der Sitz des Lizenzgebers. Der Lizenzgeber ist berechtigt, auch am
+    allgemeinen Gerichtsstand des Nutzers zu klagen.
+
+(3) Maßgeblich ist allein die deutsche Fassung dieser Lizenz. Übersetzungen dienen nur der
+    Information.
+
+
+§ 13 Schlussbestimmungen
+
+(1) Rechte, die diese Lizenz nicht ausdrücklich einräumt, bleiben dem Lizenzgeber
+    vorbehalten. Der Lizenzgeber kann Dritten jederzeit Rechte an der Software zu anderen
+    Bedingungen einräumen.
+
+(2) Sollte eine Bestimmung dieser Lizenz unwirksam sein, bleibt die Wirksamkeit der übrigen
+    Bestimmungen unberührt.
