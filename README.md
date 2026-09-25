@@ -78,9 +78,18 @@ bewusst *nicht* Teil der automatisierten Tests, statt eine unechte Abdeckung vor
 
 ## Lizenz
 
-MIT, siehe [`LICENSE`](LICENSE).
+Source-available, keine Open-Source-Lizenz im Sinne der OSI. Maßgeblich ist allein die Datei [`LICENSE`](LICENSE) (HälpMi-Lizenz, Fassung 1.0).
+
+Kurzfassung: Der Quellcode ist öffentlich einsehbar und prüfbar. Privatpersonen dürfen HälpMi für private Zwecke kostenfrei nutzen. Jede Nutzung durch Organisationen (Unternehmen, Behörden, Vereine usw.) sowie jede Nutzung oder Weiterentwicklung zu geschäftlichen Zwecken bedarf einer gesonderten Vereinbarung. Die Verwendung für Konkurrenzprodukte ist ohne Freigabe untersagt.
+
+Eine anwaltlich geprüfte Fassung der Lizenz ist in Vorbereitung und gilt ab ihrer Veröffentlichung für künftige Versionen.
+
+Lizenzanfragen: info@it-scholle.de
+Komponenten Dritter: siehe [`THIRD-PARTY-NOTICES`](THIRD-PARTY-NOTICES)
 
 Für die separate Kunden-Lizenzverwaltung (Ed25519-signierte Lizenzdateien, siehe
 Pflichtenheft 3.9/5.10) ist nur ein Platzhalter für den öffentlichen Schlüssel im Code
 (`HaelpMi.Core/Licensing/LicensePublicKey.cs`) - kein privater Schlüssel, auch nicht als
 Platzhalter. Dieser Mechanismus selbst ist nicht Teil dieses Pflichtenhefts.
+
+
