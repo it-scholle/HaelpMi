@@ -141,11 +141,14 @@ Status: [`TEST-STRATEGY.md`](TEST-STRATEGY.md) (Abschnitte E–G) und
 
 ## Lizenz
 
-Source-available (kein OSI-Open-Source), siehe [`LICENSE`](LICENSE): Quellcode öffentlich
-einsehbar, kostenfrei für Privatpersonen, kostenpflichtige Nutzungsvereinbarung für
-Organisationen (Unternehmen/Behörden), keine Nutzung durch Dritte zum Bau konkurrierender
-Produkte. **Entwurf** — schriftliche Bestätigung der endgültigen Lizenzwahl (bisher nur
-telefonisch zugesagt) und rechtskundige Prüfung stehen vor einem echten Release noch aus.
+Source-available, keine Open-Source-Lizenz im Sinne der OSI. Maßgeblich ist allein die Datei [`LICENSE`](LICENSE) (HälpMi-Lizenz, Fassung 1.0).
+
+Kurzfassung: Der Quellcode ist öffentlich einsehbar und prüfbar. Privatpersonen dürfen HälpMi für private Zwecke kostenfrei nutzen. Jede Nutzung durch Organisationen (Unternehmen, Behörden, Vereine usw.) sowie jede Nutzung oder Weiterentwicklung zu geschäftlichen Zwecken bedarf einer gesonderten Vereinbarung. Die Verwendung für Konkurrenzprodukte ist ohne Freigabe untersagt.
+
+Eine anwaltlich geprüfte Fassung der Lizenz ist in Vorbereitung und gilt ab ihrer Veröffentlichung für künftige Versionen.
+
+Lizenzanfragen: info@it-scholle.de
+Komponenten Dritter: siehe [`THIRD-PARTY-NOTICES`](THIRD-PARTY-NOTICES)
 
 Die separate Kunden-Lizenzverwaltung (Ed25519-signierte Lizenzdateien je Kundengruppe,
 Geräte-Limits, Tarifstufen, Ablaufwarnungen, Import über das Admin-Dashboard, siehe
@@ -153,3 +156,5 @@ Geräte-Limits, Tarifstufen, Ablaufwarnungen, Import über das Admin-Dashboard, 
 umgesetzt: eine kryptografisch verifizierte Admin-Rolle (`Role.Admin` ist im aktuellen
 Stand weiterhin eine unauthentifizierte Selbstauskunft des Peers) - siehe „Bekannte offene
 Punkte" in [`docs/TECHSTACK-UND-ARCHITEKTUR.md`](docs/TECHSTACK-UND-ARCHITEKTUR.md).
+
+
