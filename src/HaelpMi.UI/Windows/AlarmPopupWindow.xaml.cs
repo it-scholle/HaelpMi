@@ -36,6 +36,9 @@ public partial class AlarmPopupWindow : Window
     public Guid AlarmProfileId { get; }
     public Guid AlarmSessionId { get; }
 
+    /// <summary>Issue #136: true, sobald der Schwellwert einmal erreicht wurde ODER der Sender aufgehört hat zu pingen - bleibt danach dauerhaft true, siehe <see cref="UpdateOnTheWayCount"/>.</summary>
+    public bool IsThresholdReached => _thresholdReached;
+
     /// <summary>Raised when "Bin unterwegs" is clicked - the hosting coordinator sends the actual network message (FR-51).</summary>
     public event EventHandler? OnMyWayRequested;
 
@@ -104,20 +107,27 @@ public partial class AlarmPopupWindow : Window
         }
     }
 
-    /// <summary>Call whenever a new <see cref="Networking.Protocol.AlarmStatusRelayMessage"/> arrives for this session (FR-47/FR-51).</summary>
-    public void UpdateOnTheWayCount(int onTheWayCount)
+    /// <summary>
+    /// Call whenever a new <see cref="Networking.Protocol.AlarmStatusRelayMessage"/> arrives
+    /// for this session (FR-47/FR-51). Issue #136: <paramref name="senderStillSending"/>=false
+    /// (Abbrechen, Schwellwert anderswo erreicht, oder Zeitablauf) gibt "Schließen" ebenfalls
+    /// frei, unabhängig vom lokalen Zähler - sobald der Sender endgültig aufgehört hat zu
+    /// pingen, gibt es keinen Grund mehr, hier weiter zu warten. Zusätzlich sticky (ODER statt
+    /// Zuweisung): ein später eintreffendes, veraltetes Relay mit niedrigerem Zähler darf einen
+    /// einmal erreichten Zustand nicht mehr zurücknehmen.
+    /// </summary>
+    public void UpdateOnTheWayCount(int onTheWayCount, bool senderStillSending)
     {
-        _thresholdReached = onTheWayCount >= _responseThreshold;
+        _thresholdReached |= onTheWayCount >= _responseThreshold || !senderStillSending;
         CloseButton.IsEnabled = _thresholdReached;
         UpdateThresholdStatus(onTheWayCount);
     }
 
     private void UpdateThresholdStatus(int onTheWayCount)
     {
-        var remaining = Math.Max(0, _responseThreshold - onTheWayCount);
-        ThresholdStatusText.Text = remaining == 0
+        ThresholdStatusText.Text = _thresholdReached
             ? $"{onTheWayCount} Person(en) sind unterwegs - Fenster kann jetzt geschlossen werden."
-            : $"{onTheWayCount} Person(en) sind unterwegs - noch {remaining} bis das Fenster schließbar wird.";
+            : $"{onTheWayCount} Person(en) sind unterwegs - noch {Math.Max(0, _responseThreshold - onTheWayCount)} bis das Fenster schließbar wird.";
     }
 
     private void AutoCloseTimer_Tick(object? sender, EventArgs e)

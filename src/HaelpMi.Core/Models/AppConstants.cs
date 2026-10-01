@@ -100,6 +100,23 @@ public static class AppConstants
     public static readonly TimeSpan AlarmAutoCloseAfterLastSignal = TimeSpan.FromMinutes(1);
 
     /// <summary>
+    /// Issue #136 Fixvorschlag 5: das abschließende "Sender pingt nicht mehr"-Relay
+    /// (<see cref="Networking.Protocol.AlarmStatusRelayMessage.SenderStillSending"/>=false,
+    /// ausgelöst durch Abbrechen, Schwellwert-Erreichen oder Zeitablauf) ist das Signal,
+    /// das einem Empfänger das "Schließen" garantiert freigibt - geht genau dieses eine
+    /// Paket verloren (Best-Effort-Versand, siehe <c>AlarmFeedbackChannel.SendEnvelopeAsync</c>),
+    /// bleibt der Button ohne eigenen weiteren Grund gesperrt. Es wird deshalb statt
+    /// einmal <see cref="AlarmFinalRelayBurstCount"/>-mal verschickt, im Abstand
+    /// <see cref="AlarmFinalRelayBurstSpacing"/>, fire-and-forget nach dem ersten (sofort
+    /// gesendeten) Exemplar - verzögert weder <c>Finished</c> noch die
+    /// Sender-Statusanzeige (Nutzerwunsch 09.08.2026: bei Abbrechen sofort verschwinden).
+    /// </summary>
+    public const int AlarmFinalRelayBurstCount = 5;
+
+    /// <summary>Abstand zwischen den zusätzlichen Exemplaren aus <see cref="AlarmFinalRelayBurstCount"/>.</summary>
+    public static readonly TimeSpan AlarmFinalRelayBurstSpacing = TimeSpan.FromMilliseconds(150);
+
+    /// <summary>
     /// Sender-side status banner (SenderStatusWindow): how long it stays visible after
     /// the alarm ends via threshold or the 5-minute timeout, before closing itself
     /// (Nutzerwunsch 09.08.2026, Frist auf 3 Min. angehoben Issue #100 - genug Zeit, kurz
