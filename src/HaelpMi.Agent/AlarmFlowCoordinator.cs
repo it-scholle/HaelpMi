@@ -36,6 +36,18 @@ public sealed class AlarmFlowCoordinator
     private readonly LicenseLimitGuard _licenseLimitGuard;
     private readonly ConcurrentDictionary<Guid, AlarmPopupWindow> _openPopups = new();
 
+    /// <summary>
+    /// Issue #136: Session-IDs, für die dieses Gerät bereits "fertig" weiß (Schwellwert
+    /// erreicht und eigenes Popup geschlossen, ODER ein Status-Relay mit
+    /// SenderStillSending=false empfangen) - ohne das wäre eine Session-ID nach dem
+    /// Schließen des Popups ununterscheidbar von "nie gesehen" (siehe Klassenkommentar oben
+    /// zum Reopen-Verhalten): eine durch das 5-Sekunden-Repeat ohnehin unvermeidliche,
+    /// bereits unterwegs gewesene "letzte Welle" hätte sonst ein komplett neues Popup mit
+    /// zurückgesetztem Zustand erzeugt, obwohl der Nutzer schon regulär reagiert und
+    /// geschlossen hatte.
+    /// </summary>
+    private readonly CompletedAlarmSessionTracker _completedSessions = new(AppConstants.AlarmAutoCloseAfterLastSignal);
+
     public AlarmFlowCoordinator(
         Func<LiveIdentity> identityProvider,
         Func<OwnSettings> settingsProvider,
@@ -68,6 +80,16 @@ public sealed class AlarmFlowCoordinator
     public void HandleIncomingAlarmRequest(AlarmReceivedEventArgs args)
     {
         var request = args.Request;
+
+        // Issue #136: eine stray letzte Welle für eine schon abgeschlossene Session darf
+        // kein neues Popup mehr erzeugen - siehe _completedSessions-Klassenkommentar. Der
+        // Ack an den Sender (AlarmTcpListener.HandleClientAsync) ist davon unberührt, läuft
+        // unabhängig von dieser Methode.
+        if (_completedSessions.IsCompleted(request.AlarmSessionId))
+        {
+            _auditLog.Append($"alarm-Welle für bereits abgeschlossene Session ignoriert: alarmSessionId={request.AlarmSessionId}");
+            return;
+        }
 
         // Bugfix 25.08.2026 (Issue #9-Nachtrag): bei Fast User Switching bekommt JEDE
         // angemeldete Sitzung ein empfangenes Alarmsignal (siehe AlarmChannel), auch eine
@@ -115,7 +137,19 @@ public sealed class AlarmFlowCoordinator
                 request.SentAtUtc);
 
             popup.OnMyWayRequested += (_, _) => _ = ReportOnMyWayAsync(request, args);
-            popup.Closed += (_, _) => _openPopups.TryRemove(request.AlarmSessionId, out _);
+            popup.Closed += (_, _) =>
+            {
+                _openPopups.TryRemove(request.AlarmSessionId, out _);
+
+                // Issue #136: nur bei regulärem Schließen (Schwellwert/Sender-Stopp) als
+                // erledigt markieren - ein per FR-52-Auto-Close geschlossenes Fenster hat
+                // dieselbe Eigenschaft bereits gesetzt (IsThresholdReached deckt auch den
+                // Fall "Sender hat aufgehört zu pingen" ab, siehe AlarmPopupWindow).
+                if (popup.IsThresholdReached)
+                {
+                    _completedSessions.MarkCompleted(request.AlarmSessionId);
+                }
+            };
 
             _openPopups[request.AlarmSessionId] = popup;
             popup.Show();
@@ -127,6 +161,16 @@ public sealed class AlarmFlowCoordinator
     /// <summary>Every aggregated status update from the sender (FR-51): keeps a still-open receiver popup's threshold gate current.</summary>
     private void HandleStatusRelay(AlarmStatusRelayMessage relay)
     {
+        // Issue #136: der Sender hat endgültig aufgehört zu pingen (Abbrechen, Schwellwert
+        // oder Zeitablauf) - unabhängig davon, ob hier gerade ein Popup offen ist, markiert
+        // das diese Session als erledigt (siehe _completedSessions-Klassenkommentar). Deckt
+        // u. a. den Fall ab, dass das eigene Popup schon vorher über einen anderen Weg
+        // geschlossen wurde, bevor dieses Relay überhaupt ankam.
+        if (!relay.SenderStillSending)
+        {
+            _completedSessions.MarkCompleted(relay.AlarmSessionId);
+        }
+
         if (!_openPopups.TryGetValue(relay.AlarmSessionId, out var popup))
         {
             return;
@@ -135,7 +179,7 @@ public sealed class AlarmFlowCoordinator
         // Issue #92: gleicher Grund/gleiche Frist wie in HandleIncomingAlarmRequest oben -
         // ein Status-Relay kann ebenso in das Startup-Fenster vor Dispatcher.Run() fallen.
         System.Windows.Application.Current.Dispatcher.Invoke(
-            () => popup.UpdateOnTheWayCount(relay.OnTheWayUserNames.Count),
+            () => popup.UpdateOnTheWayCount(relay.OnTheWayUserNames.Count, relay.SenderStillSending),
             AppConstants.AlarmDispatcherReadyTimeout);
     }
 
