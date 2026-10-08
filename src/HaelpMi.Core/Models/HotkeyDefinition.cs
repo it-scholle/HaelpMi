@@ -1,3 +1,5 @@
+using HaelpMi.Core.Interop;
+
 namespace HaelpMi.Core.Models;
 
 /// <summary>
@@ -32,7 +34,9 @@ public sealed record HotkeyDefinition(HotkeyModifiers Modifiers, int VirtualKeyC
         if (Modifiers.HasFlag(HotkeyModifiers.Alt)) parts.Add("Alt");
         if (Modifiers.HasFlag(HotkeyModifiers.Shift)) parts.Add("Umschalt");
         if (Modifiers.HasFlag(HotkeyModifiers.Win)) parts.Add("Win");
-        parts.Add(KeyNames.TryGetValue(VirtualKeyCode, out var name) ? name : $"VK 0x{VirtualKeyCode:X2}");
+        parts.Add(KeyNames.TryGetValue(VirtualKeyCode, out var name)
+            ? name
+            : KeyNameResolver.Resolve(VirtualKeyCode) ?? $"VK 0x{VirtualKeyCode:X2}");
         return string.Join("+", parts);
     }
 

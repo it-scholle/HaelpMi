@@ -1,3 +1,4 @@
+using HaelpMi.Core.Interop;
 using HaelpMi.Core.Models;
 using HaelpMi.Core.Networking;
 using Xunit;
@@ -28,9 +29,71 @@ public class ModelsTests
     [Fact]
     public void HotkeyDefinition_Format_FallsBackToVirtualKeyCode_ForUnknownKeys()
     {
-        var hotkey = new HotkeyDefinition(HotkeyModifiers.None, 0xFE);
+        var hotkey = new HotkeyDefinition(HotkeyModifiers.None, 0x07);
 
-        Assert.Equal("VK 0xFE", hotkey.Format());
+        Assert.Equal("VK 0x07", hotkey.Format());
+    }
+
+    [Theory]
+    [InlineData(0xBA)]
+    [InlineData(0xBB)]
+    [InlineData(0xBC)]
+    [InlineData(0xBD)]
+    [InlineData(0xBE)]
+    [InlineData(0xBF)]
+    [InlineData(0xC0)]
+    [InlineData(0xDB)]
+    [InlineData(0xDC)]
+    [InlineData(0xDD)]
+    [InlineData(0xDE)]
+    [InlineData(0xE2)]
+    public void HotkeyDefinition_Format_ResolvesOemKeys_OnCurrentLayout(int virtualKeyCode)
+    {
+        var formatted = new HotkeyDefinition(HotkeyModifiers.Control, virtualKeyCode).Format();
+
+        Assert.DoesNotContain("VK 0x", formatted);
+    }
+
+    // Layoutgebundene Erwartungen greifen nur, wenn das Layout auf der Testmaschine
+    // installiert ist - ein LoadKeyboardLayout würde die Sprachliste des Nutzers verändern.
+    [Theory]
+    [InlineData(0x0407, 0xDC, "^")]
+    [InlineData(0x0407, 0xBA, "Ü")]
+    [InlineData(0x0407, 0xC0, "Ö")]
+    [InlineData(0x0407, 0xDE, "Ä")]
+    [InlineData(0x0407, 0xDB, "ß")]
+    [InlineData(0x0407, 0xBB, "+")]
+    [InlineData(0x0407, 0xBF, "#")]
+    [InlineData(0x0407, 0xDD, "´")]
+    [InlineData(0x0407, 0xE2, "<")]
+    [InlineData(0x0407, 0xBC, ",")]
+    [InlineData(0x0407, 0xBE, ".")]
+    [InlineData(0x0407, 0xBD, "-")]
+    [InlineData(0x0409, 0xC0, "`")]
+    [InlineData(0x0409, 0xBA, ";")]
+    [InlineData(0x0409, 0xDE, "'")]
+    [InlineData(0x0409, 0xDB, "[")]
+    public void KeyNameResolver_Resolve_ReturnsLayoutCharacter(int layoutId, int virtualKeyCode, string expected)
+    {
+        var layout = InstalledKeyboardLayouts.Find(layoutId);
+        if (layout == IntPtr.Zero)
+        {
+            return;
+        }
+
+        Assert.Equal(expected, KeyNameResolver.Resolve(virtualKeyCode, layout));
+    }
+
+    [Fact]
+    public void KeyNameResolver_Resolve_UsesExtendedName_ForNavigationKeys()
+    {
+        var layout = InstalledKeyboardLayouts.Find(0x0407);
+        if (layout == IntPtr.Zero)
+        {
+            return;
+        }
+
+        Assert.Equal("ENTF", KeyNameResolver.Resolve(0x2E, layout));
     }
 
     [Fact]
