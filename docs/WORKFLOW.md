@@ -138,6 +138,12 @@ Aktivierung einmalig pro lokalem Repository-Klon (Hooks sind nicht automatisch a
 git config core.hooksPath .githooks
 ```
 
+`pre-commit` prüft die vorgemerkten Änderungen zusätzlich mit gitleaks auf Secrets und bricht
+den Commit ab, wenn gitleaks fehlt (Windows: `winget install gitleaks`). Dieselbe Prüfung läuft
+über die gesamte Historie in der CI (`.github/workflows/ci.yml`, Job "Secrets"), zusammen mit
+Build und den systemneutralen Tests (`HaelpMi.Core.Tests`, `HaelpMi.InstallCreator.Tests`) auf
+einem Windows-Runner. Ergebnis eines PRs: `gh pr checks <nr>`.
+
 Wichtig: `core.hooksPath` zeigt (wie oben beschrieben) immer auf den **Haupt-Checkout**. Ein
 neuer/geänderter Hook aus einem Feature-Branch wirkt sich für ALLE Worktrees erst aus, sobald
 er dort gemergt UND der Haupt-Checkout selbst darauf aktualisiert ist (`git pull`/`checkout`) —
