@@ -21,7 +21,7 @@ für alle eine "offizielle" Geräteliste oder Berechtigung verwaltete. **Seit Ab
 eine Admin-Rolle mit exklusiver Konfigurationshoheit; die dezentrale P2P-Netzwerkkommunikation
 ohne zentralen Server bleibt davon unberührt bestehen** (siehe FR-33, ersetzt FR-26/Abschnitt 3.6).
 
-**Lizenz: Open Source, MIT.** Der Quellcode ist frei einsehbar und nutzbar. Wichtige Konsequenz: alles, was ins öffentliche Repository kommt, ist für jeden einsehbar – siehe 3.8 und 5.10 für den Umgang mit dem privaten Signierschlüssel des separaten Lizenzierungs-Mechanismus.
+**Lizenz:** ~~Open Source, MIT~~ — **ersetzt, siehe FR-31**: Maßgeblich ist allein die Datei `LICENSE` (HälpMi-Lizenz, Source-Available, keine Open-Source-Lizenz im Sinne der OSI). Der Quellcode ist öffentlich einsehbar, aber nicht frei nutzbar. Wichtige Konsequenz: alles, was ins öffentliche Repository kommt, ist für jeden einsehbar – siehe 3.8 und 5.10 für den Umgang mit dem privaten Signierschlüssel des separaten Lizenzierungs-Mechanismus.
 
 ## 2. Nicht-Ziele / Abgrenzung
 
@@ -79,7 +79,7 @@ ohne zentralen Server bleibt davon unberührt bestehen** (siehe FR-33, ersetzt F
 - FR-30: Der Sperrbildschirm bleibt bewusst unangetastet – ist der Rechner gesperrt, wird das Popup nicht erzwungen angezeigt. Windows isoliert den gesperrten Zustand technisch bewusst so, dass kein normales Programm dort eingreifen kann; das ist eine Sicherheitsgrenze, kein Bug
 
 ### 3.9 Lizenzierung des Codes
-- FR-31: Das komplette Projekt wird unter der MIT-Lizenz veröffentlicht (siehe 1.). Eine `LICENSE`-Datei mit dem MIT-Text gehört ins Repository
+- ~~FR-31: Das komplette Projekt wird unter der MIT-Lizenz veröffentlicht (siehe 1.). Eine `LICENSE`-Datei mit dem MIT-Text gehört ins Repository~~ — **ersetzt**: Der Quellcode bleibt öffentlich einsehbar, steht aber unter der HälpMi-Lizenz (Source-Available). Maßgeblich ist allein die Datei `LICENSE` im Repository
 - FR-32: Der private Signierschlüssel für die separate Kunden-Lizenzverwaltung (Ed25519-signierte Lizenzdateien mit Kundenname/Sitzanzahl/Ablaufdatum, an anderer Stelle bereits besprochen) darf niemals im Repository landen – nur der öffentliche Schlüssel zur Prüfung ist Teil des Codes. Diese Lizenzverwaltung selbst ist nicht Teil dieses Pflichtenhefts und wird separat spezifiziert, sobald sie ansteht
 
 ## 4. Nicht-funktionale Anforderungen
@@ -143,7 +143,7 @@ FR-7 (Sicherheitsabfrage) und FR-8 (mehrere Nachrichten) sind aktuell offen. Die
 - Die Sende-Funktion bekommt von Anfang an einen optionalen "Vor dem Senden bestätigen"-Hook, der aktuell einfach übersprungen wird (Standard: aus)
 - Nachricht/Hotkey werden intern bereits als Liste geführt (auch wenn die Oberfläche aktuell nur eine einzige anzeigt und nur einen Eintrag zulässt), damit eine spätere Erweiterung auf mehrere Alarme keine Datenmodell-Änderung mehr braucht
 
-### 5.10 Repository-Hygiene (Open Source)
+### 5.10 Repository-Hygiene (öffentliches Repository)
 Da der komplette Code öffentlich einsehbar ist (FR-31), gilt für alles, was ins Repository kommt, dieselbe Regel wie für jeden anderen Secret-Umgang: keine privaten Schlüssel, keine Zertifikate, keine Zugangsdaten im Klartext, auch nicht in der Commit-Historie. Der private Ed25519-Schlüssel für die Kunden-Lizenzverwaltung (FR-32) bleibt außerhalb des Repos, z. B. lokal beim Entwickler oder in einem separaten, nicht-öffentlichen Speicherort. Eine `.gitignore`, die typische Secret-Dateimuster ausschließt, sollte von Anfang an Teil des Projekts sein.
 
 ## 6. Bekannte technische Herausforderungen (explizit an Claude Code mitgeben)
@@ -202,7 +202,7 @@ Da der komplette Code öffentlich einsehbar ist (FR-31), gilt für alles, was in
 6. Selbsttest-Funktion, automatisierte Tests
 7. Installer mit Versionserkennung/Update-Angebot
 8. Bildschirmschoner-Handling (beenden bei eingehendem Alarm, Sperrbildschirm unangetastet)
-9. MIT-`LICENSE`-Datei, `.gitignore` gegen Secrets, öffentlicher Schlüssel für die Kunden-Lizenzverwaltung im Code, privater Schlüssel bewusst außerhalb des Repos
+9. `LICENSE`-Datei (ursprünglich MIT, ersetzt durch die HälpMi-Lizenz, siehe FR-31), `.gitignore` gegen Secrets, öffentlicher Schlüssel für die Kunden-Lizenzverwaltung im Code, privater Schlüssel bewusst außerhalb des Repos
 10. Erweiterungspunkte für FR-7/FR-8 im Code vorbereiten (siehe 5.9), aber inaktiv/mit einer festen Nachricht ausliefern
 
 **Phase 2 – aktuell, siehe Abschnitt 10 und `claude-code-prompt-teil2-admin-update.md`:**

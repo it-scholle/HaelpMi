@@ -173,17 +173,13 @@ und `scripts/release-issue.sh <issue-nummer> ["grund"]`.
 - Installer: Inno Setup oder WiX, plus separates Entwickler-Tool "Install-Creator" (siehe unten)
 
 ## Lizenz & Secrets
-- **Lizenztyp:** Die geltende Vorgabe ist allgemein gehalten: **Quellcode muss öffentlich
-  einsehbar/"open source" sein**, ohne dass eine bestimmte Lizenz namentlich verlangt wird. Die im
-  Repository liegende `LICENSE`-Datei ist aktuell ein **Source-Available-Entwurf** (öffentlicher
-  Quellcode, kostenfrei für Privatpersonen, kostenpflichtige Nutzungsvereinbarung für
-  Organisationen, keine Weiterverwertung durch Dritte zu Konkurrenzprodukten) statt MIT — bewusst
-  so gewählt, um freie kommerzielle Weiterverwertung durch Dritte nicht offenzulassen. **Vor einem
-  echten Release weiterhin offen:** endgültige Lizenzwahl schriftlich bestätigen lassen und den
-  Lizenztext von einer rechtskundigen Person prüfen lassen — `LICENSE` und der Lizenz-Abschnitt in
-  `README.md` tragen deshalb einen Entwurfs-Hinweis. `pflichtenheft-HälpMi.md` selbst wird nicht
-  rückwirkend editiert (historische FR-Quelle), diese CLAUDE.md-Notiz gewinnt bei Widersprüchen wie
-  in den Referenzdokumenten oben beschrieben.
+- **Lizenztyp:** Der Quellcode ist öffentlich einsehbar. Maßgeblich ist allein die Datei
+  `LICENSE` (HälpMi-Lizenz, Source-Available, Fassung 1.0): kostenfrei für Privatpersonen,
+  kostenpflichtige Nutzungsvereinbarung für Organisationen, keine Weiterverwertung durch Dritte zu
+  Konkurrenzprodukten, ausdrücklich **keine** Open-Source-Lizenz im Sinne der OSI. Nirgends im Repo
+  (Doku, Code-Kopfzeilen, Installer) von "MIT" oder "Open Source" für HälpMi selbst sprechen.
+  Die ursprüngliche MIT-Vorgabe im Pflichtenheft (FR-31) ist dort als ersetzt markiert. **Vor einem
+  echten Release weiterhin offen:** Prüfung des Lizenztexts durch eine rechtskundige Person.
 - `.gitignore` gegen Secret-Dateimuster von Anfang an.
 - Vier getrennte kryptografische Schlüsselpaare, niemals verwechseln oder zusammenlegen:
   1. Kunden-Lizenzsignatur (Ed25519) — Soft-Expiry, kein Hard-Lock.
