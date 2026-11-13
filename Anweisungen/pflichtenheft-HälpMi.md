@@ -28,7 +28,7 @@ ohne zentralen Server bleibt davon unberührt bestehen** (siehe FR-33, ersetzt F
 - Kein Cloud-Dienst, keine externe Kommunikation, keine Internetanbindung notwendig
 - Kein Video-/Audio-Chat, keine Fernsteuerung, keine Bildschirmüberwachung
 - ~~Keine zentrale Verwaltungsinstanz, kein Admin-Konto, keine Berechtigungsliste~~ — **überholt seit Abschnitt 10**: Es gibt jetzt eine Admin-Rolle mit Konfigurationshoheit (FR-33). Weiterhin gültig bleibt: kein zentraler *Server*-Prozess, keine Fernsteuerung, keine Bildschirmüberwachung.
-- Kein Ersatz für einen echten Notruf/Sicherheitsdienst bei akuter Gefahr – ergänzendes internes Tool
+- **Kein Notrufsystem:** HälpMi ist ein stilles Alarmsystem für die interne Alarmierung von Kolleg:innen. Es setzt keinen Notruf ab und ersetzt weder Notrufe (110, 112) noch einen Sicherheitsdienst bei akuter Gefahr – ergänzendes internes Tool (siehe `LICENSE` § 4)
 
 ## 3. Funktionale Anforderungen
 
