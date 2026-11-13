@@ -167,5 +167,5 @@ Die folgenden Punkte hängen von noch offenen externen Antworten ab und sollen *
 architektonisch festgelegt werden — modular genug bauen, dass sie sich später einfügen lassen,
 aber nicht implementieren:
 - Verhalten bei Mehrfach-VLAN/Mehrstandort-Netzen.
-- Etwaige Integration in eine zentrale Softwareverteilung der Behörde (WSUS o. ä.) als
+- Etwaige Integration in eine zentrale Softwareverteilung des Kunden (WSUS o. ä.) als
   Alternative zur P2P-Update-Verteilung.

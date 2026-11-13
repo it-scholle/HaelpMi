@@ -6,7 +6,7 @@ namespace HaelpMi.Core.Models;
 /// <see cref="ScopeKind"/>/<see cref="ScopeId"/> identify exactly which Gruppe or
 /// Alarm-Profil this entry belongs to - war früher pro Kreis, siehe EditScope.cs für den
 /// Hintergrund. Contains clear names (who changed what) - CLAUDE.md v2 flags this as
-/// needing Personalrat sign-off before wider rollout, same caveat as Phase 1's response
+/// needing works/staff council sign-off before wider rollout, same caveat as Phase 1's response
 /// log; not a decision this codebase makes on its own, just keeps the data minimal
 /// (field/old/new value, no free-text).
 /// </summary>

@@ -360,8 +360,8 @@ und `scripts/release-issue.sh <issue-nummer> ["grund"]`.
 - RDP-Kennzeichnung (`SM_REMOTESESSION`) ist eine reine Sitzungs-Eigenschaft, kein
   Überwachungsfeature. Nirgends langfristig protokollieren, wer wann remote war, außer im
   regulären Alarm-Log (wer hat auf Alarm X wie reagiert), das ohnehin schon vorgesehen ist.
-- Änderungshistorie und Antwort-Log enthalten Klarnamen — beides ist mit dem Auftraggeber
-  bezüglich Personalrat abzustimmen (siehe offene externe Fragen), nicht eigenmächtig erweitern.
+- Änderungshistorie und Antwort-Log enthalten Klarnamen — beides ist mit dem jeweiligen Kunden
+  (Datenschutz, Arbeitnehmervertretung) abzustimmen (siehe Pflichtenheft Abschnitt 8), nicht eigenmächtig erweitern.
 
 ## Codestil & Sicherheit
 - **Kommentarregel (verschärft 24.08.2026, Nutzerkorrektur nach v0.16.6):** Kommentare auf

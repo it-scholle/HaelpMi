@@ -25,8 +25,7 @@ und mach mit dem Rest weiter statt zu raten.
 Kein Admin, keine zentrale Instanz. Jeder Arbeitsplatz ist gleichberechtigt, Sender und Empfänger
 zugleich, mit einer rein lokal gespeicherten Sicht auf die anderen Geräte im Netz.
 
-Das gesamte Projekt wird unter MIT-Lizenz als Open Source veröffentlicht (feste Vorgabe der Stadt
-als Auftraggeberin). Lege von Anfang an eine `LICENSE`-Datei mit MIT-Text und eine `.gitignore`
+Das gesamte Projekt wird unter MIT-Lizenz als Open Source veröffentlicht. Lege von Anfang an eine `LICENSE`-Datei mit MIT-Text und eine `.gitignore`
 gegen typische Secret-Dateimuster an. Es gibt eine separate, hier noch nicht spezifizierte
 Kunden-Lizenzverwaltung (Ed25519-signierte Lizenzdateien) – dafür wird im Code nur der öffentliche
 Schlüssel zur Prüfung eingebaut, niemals ein privater Schlüssel oder sonstiges Geheimnis. Wenn dir

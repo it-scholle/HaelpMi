@@ -28,7 +28,7 @@ public sealed class DeviceEntry
     /// from it", not a history log (CLAUDE.md Datenschutz-Prinzipien: this is a pure
     /// session property, never persisted as a long-term who-was-remote-when trail).
     /// Pflichtenheft NFR-13: showing this is additional personal-data processing versus
-    /// Version 1 and needs its own Personalrat sign-off, same caveat as the response log.
+    /// Version 1 and needs its own works/staff council sign-off, same caveat as the response log.
     /// </summary>
     public bool IsRemoteSession { get; set; }
 
