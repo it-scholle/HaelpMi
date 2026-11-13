@@ -12,7 +12,7 @@ weiterhin nicht abschließend bestätigt.**
 
 Reale Logs aus `StartupTimingLog` (`Z:\HaelpMi-Logs\<Rechnername>\startup-timing.log`), bereits
 vorhanden von einem Mehrgeräte-Alarm/P2P-Testlauf am 18.08.2026 auf drei frisch installierten
-Admin-Testmaschinen (SYSTEMTECHNIK, PERSONALAMT, AMTSLEITUNG). Kein neuer Installationslauf in
+Admin-Testmaschinen (TESTGERAET-D, TESTGERAET-B, TESTGERAET-C). Kein neuer Installationslauf in
 dieser Sitzung nötig gewesen — die Daten lagen bereits vor und wurden ausgewertet statt zu raten.
 
 **Einschränkungen dieser Datengrundlage:**
@@ -47,11 +47,11 @@ ab hier IPC-seitig möglich) durchgehend unter 2 Sekunden bei den drei Erstinsta
 
 | Maschine       | Erststart-Block | Dauer OnStartup → startbereit |
 |----------------|------------------|--------------------------------|
-| SYSTEMTECHNIK  | 13:02:30         | ~1,3 s                         |
-| PERSONALAMT    | 22:43:28         | ~1,9 s                         |
-| AMTSLEITUNG    | 22:44:57         | ~1,1 s                         |
+| TESTGERAET-D   | 13:02:30         | ~1,3 s                         |
+| TESTGERAET-B   | 22:43:28         | ~1,9 s                         |
+| TESTGERAET-C   | 22:44:57         | ~1,1 s                         |
 
-Zwei spätere Blöcke (PERSONALAMT 23:29:19: ~7,4 s; AMTSLEITUNG 23:21:06: ~5,1 s) liegen höher,
+Zwei spätere Blöcke (TESTGERAET-B 23:29:19: ~7,4 s; TESTGERAET-C 23:21:06: ~5,1 s) liegen höher,
 sind aber erkennbar spätere Neustarts (keine begleitende zweite "--register-autostart"-Zeile
 davor, also keine Erstinstallation) — plausibler regulärer System-Jitter, kein neuer Beleg für
 eine ~60s-Verzögerung. Der Größenordnungsunterschied zur berichteten ~1 Minute bleibt in jedem
@@ -66,7 +66,7 @@ blockiert wäre). Das tritt in keinem der sechs beobachteten Startvorgänge auf.
 ## Befund 3: beobachtete SelfTest-Request → AlarmReceived-Läufe sind schnell
 
 Alle in den Logs sichtbaren Paare "IPC SelfTest-Request empfangen" → nachfolgendes
-"AlarmReceived" liegen unter 500 ms auseinander (PERSONALAMT, 22:46:00 und 22:46:13 Uhr). In den
+"AlarmReceived" liegen unter 500 ms auseinander (TESTGERAET-B, 22:46:00 und 22:46:13 Uhr). In den
 vorliegenden Daten konnte die berichtete ~1-Minuten-Verzögerung also nicht reproduziert werden —
 entweder ist sie hier nicht aufgetreten, oder keiner dieser Selbsttests war der tatsächliche
 "erste Klick direkt nach frischer Installation" aus dem Fehlerbericht (siehe Einschränkungen
