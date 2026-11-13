@@ -8,7 +8,7 @@ namespace HaelpMi.Core.Networking.Protocol;
 /// when counting toward the response threshold (FR-47).
 ///
 /// Pflichtenheft NFR-13: carrying room + name + status here is additional personal-data
-/// processing versus Version 1 and needs its own Personalrat sign-off (Abschnitt 8),
+/// processing versus Version 1 and needs its own works/staff council sign-off (Abschnitt 8),
 /// same caveat as the response log and the RDP flag - not a decision this codebase
 /// makes on its own, just keeps the fields minimal (no free text, no history beyond the
 /// existing per-device audit log).

@@ -1,4 +1,4 @@
-# Pflichtenheft: LAN-Alarmierungssystem für Verwaltungsnetzwerk
+# Pflichtenheft: LAN-Alarmierungssystem für Windows-Arbeitsplatznetzwerke
 
 Arbeitstitel / Programmname: **HälpMi**
 
@@ -12,7 +12,7 @@ Claude Code sind `CLAUDE.md` (dauerhafte Architekturregeln) und
 
 ## 1. Kontext & Grundprinzip
 
-Internes Verwaltungsnetzwerk einer Ordnungsbehörde, ausschließlich Windows-Endgeräte. Ziel: Per Tastenkürzel wird auf allen dafür freigegebenen Geräten ein erzwungenes Popup mit fester Nachricht angezeigt und ein Signalton abgespielt – auch bei Stummschaltung oder Kopfhörer.
+Internes Netzwerk mit Windows-Arbeitsplätzen (z. B. Verwaltung, Büro), ausschließlich Windows-Endgeräte. Ziel: Per Tastenkürzel wird auf allen dafür freigegebenen Geräten ein erzwungenes Popup mit fester Nachricht angezeigt und ein Signalton abgespielt – auch bei Stummschaltung oder Kopfhörer.
 
 **Grundprinzip (Version 1, seit Abschnitt 10 überholt): kein Admin, keine zentrale Instanz.**
 Ursprünglich war jeder Arbeitsplatz gleichberechtigt, pflegte ausschließlich seine eigene lokale
@@ -96,7 +96,7 @@ ohne zentralen Server bleibt davon unberührt bestehen** (siehe FR-33, ersetzt F
 - NFR-10: Die Architektur ist bewusst erweiterbar für die beiden noch offenen Entscheidungen (FR-7, FR-8) zu bauen – klare Erweiterungspunkte/Feature-Flags statt harter Verdrahtung, siehe 5.10
 - NFR-11 (neu, Version 2): Programm-Updates werden ausschließlich als signiert erkannte Pakete akzeptiert und gestaffelt vom Admin freigegeben (FR-57, FR-59) – ein fehlerhaftes Update darf sich nicht unkontrolliert netzwerkweit verbreiten
 - NFR-12 (neu, Version 2): Konfigurationsänderungen wirken sich per Hot-Reload unmittelbar aus, ohne dass ein Gerät neu gestartet werden muss (FR-55)
-- NFR-13 (neu, Version 2, ergänzt NFR-5/NFR-7): Die Reaktions-/Namensanzeige bei Alarmen (FR-51/FR-53) sowie die RDP-Kennzeichnung (FR-41) sind zusätzliche personenbezogene Verarbeitung gegenüber Version 1 und daher gesondert mit dem Personalrat abzustimmen (siehe Abschnitt 8)
+- NFR-13 (neu, Version 2, ergänzt NFR-5/NFR-7): Die Reaktions-/Namensanzeige bei Alarmen (FR-51/FR-53) sowie die RDP-Kennzeichnung (FR-41) sind zusätzliche personenbezogene Verarbeitung gegenüber Version 1 und daher gesondert mit der Arbeitnehmervertretung (Betriebs-/Personalrat) des jeweiligen Kunden abzustimmen (siehe Abschnitt 8)
 
 ## 5. Empfohlene Architektur
 
@@ -164,17 +164,17 @@ Da der komplette Code öffentlich einsehbar ist (FR-31), gilt für alles, was in
 
 ## 7. Vergleich mit bestehenden Lösungen (kurz)
 - `msg.exe` (Windows-Bordmittel): sofort verfügbar, aber ohne Audio-Override, ohne Raum-Mapping, abhängig von RPC/Firewall-Freigaben
-- Veyon (Open Source, GPL, Windows): hat Nachrichten-Broadcast und Standort-/Raumverwaltung, ist aber als Klassenraum-/Fernwartungssoftware konzipiert – Akzeptanzrisiko bei Personalrat/Belegschaft, da leicht als Überwachungssoftware wahrgenommen
+- Veyon (Open Source, GPL, Windows): hat Nachrichten-Broadcast und Standort-/Raumverwaltung, ist aber als Klassenraum-/Fernwartungssoftware konzipiert – Akzeptanzrisiko bei Arbeitnehmervertretung/Belegschaft, da leicht als Überwachungssoftware wahrgenommen
 - ntfy (self-hosted): braucht einen zentralen Server, kein echtes „jeder ist Server“-Modell
 - **Fazit**: Eigenentwicklung ist nötig, da die Kombination aus erzwungenem Vordergrund, Audio-Override, Broker-Losigkeit und dezentraler Selbstverwaltung so nicht fertig verfügbar ist
 
-## 8. Offene organisatorische Punkte (vor Rollout extern klären)
+## 8. Organisatorische Punkte vor einem Rollout (beim jeweiligen Kunden zu klären)
 
-- Datenschutzbeauftragte:n der Behörde einbinden (Verfahrensverzeichnis, da personenbezogene Daten wie Nutzername/Gerätezuordnung verarbeitet werden)
-- Prüfen, ob Personalrats-Beteiligung erforderlich ist: Systeme, die *geeignet* sind, Verhalten oder Leistung von Beschäftigten zu überwachen, sind in der Regel mitbestimmungspflichtig. Ein Auslösungs-Log kann darunterfallen. Landesspezifisches Personalvertretungsgesetz prüfen, das ist keine Rechtsberatung, nur ein Hinweis, den man nicht übersehen sollte. **Ergänzung Version 2**: Die neue Reaktions-/Namensanzeige bei Alarmen und die RDP-Kennzeichnung (NFR-13) sind eine funktionale Erweiterung der ursprünglich besprochenen Protokollierung und sollten dem Personalrat gesondert vorgelegt werden, nicht stillschweigend unter der alten Zustimmung mitlaufen
-- IT-Sicherheitsbeauftragte:n bzw. GPO-Verantwortliche für Firewall-Freigaben frühzeitig einbinden. **Ergänzung Version 2, zwei konkrete neue Fragen:**
-  - Funktioniert die Broadcast-basierte Geräteerkennung/-alarmierung/-update-Verteilung über mehrere Netzsegmente (VLANs)/Standorte hinweg, oder ist das Verwaltungsnetz getrennt segmentiert?
-  - Ist das eigenständige, signierte Peer-to-Peer-Update-Verfahren (FR-57 bis FR-61) mit der IT-Sicherheitsrichtlinie der Behörde vereinbar, oder wird eine Einbindung in eine bestehende zentrale Softwareverteilung (z. B. WSUS) vorausgesetzt?
+- Datenschutzbeauftragte:n des Kunden einbinden (Verzeichnis von Verarbeitungstätigkeiten, da personenbezogene Daten wie Nutzername/Gerätezuordnung verarbeitet werden)
+- Prüfen, ob die Arbeitnehmervertretung (Betriebs- bzw. Personalrat) zu beteiligen ist: Systeme, die *geeignet* sind, Verhalten oder Leistung von Beschäftigten zu überwachen, sind in der Regel mitbestimmungspflichtig. Ein Auslösungs-Log kann darunterfallen. Die jeweils maßgebliche Rechtsgrundlage (BetrVG bzw. Personalvertretungsgesetz) prüfen – das ist keine Rechtsberatung, nur ein Hinweis, den man nicht übersehen sollte. Die Reaktions-/Namensanzeige bei Alarmen und die RDP-Kennzeichnung (NFR-13) sind dabei ausdrücklich mit vorzulegen.
+- IT-Sicherheitsverantwortliche bzw. GPO-Verantwortliche für Firewall-Freigaben frühzeitig einbinden, insbesondere zu zwei Fragen:
+  - Funktioniert die Broadcast-basierte Geräteerkennung/-alarmierung/-update-Verteilung über mehrere Netzsegmente (VLANs)/Standorte hinweg, oder ist das Netz des Kunden getrennt segmentiert?
+  - Ist das eigenständige, signierte Peer-to-Peer-Update-Verfahren (FR-57 bis FR-61) mit der IT-Sicherheitsrichtlinie des Kunden vereinbar, oder wird eine Einbindung in eine bestehende zentrale Softwareverteilung (z. B. WSUS) vorausgesetzt?
 - Test-/Rollout-Plan für unterschiedliche Windows-Versionen im Netzwerk aufstellen
 
 ## 8a. Offene Produktentscheidungen (direkte Entscheidung, keine Rückfrage bei Dritten nötig)
@@ -280,4 +280,4 @@ Folgende Punkte hängen von noch offenen externen Antworten ab (siehe Abschnitt 
 bewusst nicht vorab architektonisch festgelegt, aber modular genug gebaut, dass sie sich später
 einfügen lassen:
 - Verhalten bei Mehrfach-VLAN-/Mehrstandort-Netzen
-- Etwaige Integration in eine zentrale Softwareverteilung der Behörde (WSUS o. ä.) als Alternative zur P2P-Update-Verteilung
+- Etwaige Integration in eine zentrale Softwareverteilung des Kunden (WSUS o. ä.) als Alternative zur P2P-Update-Verteilung

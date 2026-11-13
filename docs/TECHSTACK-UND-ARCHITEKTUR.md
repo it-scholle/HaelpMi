@@ -183,7 +183,7 @@ erzwungenes Popup, unterdrückt währenddessen den Bildschirmschoner, spielt den
 Audiogeräten auch bei Stummschaltung. Antworten wie "bin unterwegs" laufen über einen separaten
 Feedback-Kanal (Port 51505) zurück zum Sender, der sie im Status-Banner sammelt ("x von y
 geantwortet"). Alles landet fürs spätere Nachschlagen im Alarm-Log — das einzige Protokoll, das
-bewusst Klarnamen enthalten darf (mit dem Auftraggeber bezüglich Personalrat abzustimmen).
+bewusst Klarnamen enthalten darf (mit dem jeweiligen Kunden bezüglich Datenschutz und Arbeitnehmervertretung abzustimmen).
 
 ### Ablauf: Eine Config-Änderung
 
@@ -270,8 +270,8 @@ reagiert hat. Crash-Log und Audit-Log enthalten keine Alarmtexte, nur Ereignis-M
   gebaut.
 - `Installer.Tests` sind laut Projektstand noch nie live end-to-end gegen echte Installer-
   Dateien gelaufen, nur strukturell verifiziert.
-- Änderungshistorie/Antwort-Log enthalten Klarnamen — das ist mit dem Auftraggeber bezüglich
-  Personalrat noch abzustimmen, nicht eigenmächtig zu erweitern.
+- Änderungshistorie/Antwort-Log enthalten Klarnamen — das ist mit dem jeweiligen Kunden bezüglich
+  Datenschutz und Arbeitnehmervertretung abzustimmen, nicht eigenmächtig zu erweitern.
 - Audit-Sync-Empfangsseite (`AuditSyncService.StartListening`/Admin-Rollen-Filter) vertraut
   weiterhin der unauthentifizierten `Role`-Selbstauskunft eines Peers — ein viertes
   (asymmetrisches) Schlüsselpaar für eine echte Admin-Rollen-Verifizierung ist als
