@@ -38,7 +38,7 @@ public partial class App : System.Windows.Application
 {
     // Einzelinstanz-Sperre (Bugfix 11.08.2026, Fehlerbericht "Autostart nicht abgeschlossen -
     // Auto Task Registrierung fehlgeschlagen"): Crash-Log-Fund auf einem Testgerät
-    // (PERSONALBÜRO, unmittelbar nach einem Swap-Update) zeigte eine SocketException "Only
+    // (unmittelbar nach einem Swap-Update) zeigte eine SocketException "Only
     // one usage of each socket address" beim Binden von UpdatePackageDistributionService -
     // zwei HaelpMi.Agent.exe liefen gleichzeitig. Der Update-Dienst startet die neue Version
     // nach ConfirmSwapAsync per Process.Start, ohne zu prüfen, ob eine Alt-Instanz ihre

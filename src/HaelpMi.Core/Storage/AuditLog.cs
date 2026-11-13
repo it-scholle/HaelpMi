@@ -9,7 +9,7 @@ namespace HaelpMi.Core.Storage;
 /// jedes Gerät schreibt weiterhin nur seinen eigenen Ausschnitt, nur die Ablage landet
 /// (wie crash.log) auf dem geteilten Alpha-Test-Laufwerk statt ausschließlich lokal.
 ///
-/// Bugfix 11.08.2026 (Fehlerbericht "Autostart nicht eingerichtet", PERSONALBÜRO): bisher
+/// Bugfix 11.08.2026 (Fehlerbericht "Autostart nicht eingerichtet"): bisher
 /// AppPaths.RootFolder direkt, also NUR lokal unter %ProgramData% - für die
 /// Alpha-Fehlersuche unerreichbar, während crash.log längst auf Z: lag (siehe
 /// SharedLogPaths-Kommentar). Genau deshalb ließ sich die konkrete schtasks-Fehlermeldung
