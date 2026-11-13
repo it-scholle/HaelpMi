@@ -1,3 +1,7 @@
+> **Hinweis (nachträglich ergänzt):** Die MIT-/Open-Source-Vorgabe weiter unten ist überholt.
+> Maßgeblich ist allein die Datei `LICENSE` (HälpMi-Lizenz, Source-Available), siehe
+> Pflichtenheft FR-31.
+
 Baue "HälpMi" – ein LAN-Alarmierungssystem für ein Windows-Verwaltungsnetzwerk. Das vollständige
 Pflichtenheft liegt bei (pflichtenheft-lan-alarmierung.md) – lies es zuerst komplett, bevor du
 anfängst.
