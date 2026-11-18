@@ -31,8 +31,26 @@ Regel-Verantwortlichen, siehe PR zu #151):
   `AppConstants.cs`, dort bewusst fest).
 - Kein Linter/Formatierer konfiguriert.
 
+## Offene Funde aus #151
+
+Bei #151 aufgefallen, nicht Teil des Tickets, jeweils als eigenes Issue angelegt:
+
+- Barrierefreiheit: Das Admin-Dashboard unterscheidet Zustände nur über Farbe („grün =
+  zugeordnet“, „grün = Mitglied“). Teil A verlangt: Information nie nur über Farbe. (#157)
+- `scripts/*.sh` sind nicht ausführbar (Mode 100644); nur `bash scripts/…` funktioniert. (#158)
+- `docs/wissen/test-strategie.md` nennt `tests/HaelpMi.Audio.Tests` (nur im Legacy-Stand),
+  `tests/HaelpMi.InstallCreator.Tests` fehlt dort. (#159)
+- Repo-Ruleset „Block-all“: GitHub meldet beim Push „Commits must have verified signatures“
+  und „Changes must be made through a pull request“, nimmt den Push per Bypass aber an.
+  Commits auf `release-1.0-MVP` sind unsigniert. (#160)
+- `.ico` ohne 20/24/40/64-px-Stufen (siehe `design/KATALOG.md`). (#161)
+- Linter/Formatierer (`.editorconfig` + `dotnet format`) einrichten: eigenes Ticket, weil im
+  Bestandscode viele Funde zu erwarten sind. (#162)
+
 ## Nächste Schritte
 
+- #151: händischer Test unter Windows nach der Checkliste in PR #153 (vor allem Icons,
+  Fenster-Icons, Setup-Icon); Tests liefen bisher nur als Python-Spiegel unter Linux.
 - #145 (CI) und #151 (Struktur) abnehmen und nach `release-1.0-MVP` mergen.
 - Offene Regel-Entscheidungen aus #151 treffen (Branch-Modell, Commit-Format, Merge-Art).
 - Weitere Tickets im Milestone `release-1.0-MVP`.
