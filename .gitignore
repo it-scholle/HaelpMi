@@ -20,7 +20,7 @@ out/
 installer/Output/
 installer/payload/
 installer/UserInstallerPayload/
-## Publish-Ausgabe des "Update erstellen"-Knopfs (Self-Bootstrap-Update, siehe CLAUDE.md) -
+## Publish-Ausgabe des "Update erstellen"-Knopfs (Self-Bootstrap-Update, nur im Legacy-Stand) -
 ## gleiches Prinzip wie installer/payload/ oben, war hier nur versehentlich noch nicht gelistet
 ## und dadurch am 24.08.2026 kurzzeitig fälschlich mit eingecheckt (v0.16.6-Vorcommit).
 installer/UpdateBootstrapperPublish/
@@ -48,6 +48,19 @@ installer/inno-compiler/
 ## .claude/skills/ bleibt dagegen versioniert (projektweit geteiltes Tooling, siehe CLAUDE.md).
 .claude/settings.local.json
 .claude/scheduled_tasks.lock
+.claude/worktrees/
+
+## Persönliche Agent-Dateien (MasterAgents-Vorlage)
+PERSOENLICH.md
+CLAUDE.local.md
+
+## Logs und Laufzeitdaten
+*.log
+logs/
+
+## Sicherungskopien
+*.bak
+*.bak-*
 
 ## OS cruft
 Thumbs.db
@@ -73,6 +86,7 @@ secrets.json
 appsettings.*.local.json
 .env
 .env.*
+!.env.example
 *.local.env
 
 ## Local per-device runtime data (device id / device list / settings)
