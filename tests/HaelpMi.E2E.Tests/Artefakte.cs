@@ -34,11 +34,31 @@ internal static class Artefakte
         }
 
         Versuche(ziel, () => KopiereDateien(E2EUmgebung.DatenOrdner, "*.json", Path.Combine(ziel, "daten")));
+        Versuche(ziel, () => File.WriteAllText(Path.Combine(ziel, "netzwerk.txt"), Prozess.PowerShell(NetzwerkDiagnose)));
         Versuche(ziel, () => KopiereDateien(
             Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "HaelpMi-uninstall-diagnostics.log", ziel));
 
         return ziel;
     }
+
+    // Der User-Installer legt keine Firewall-Regeln an, der Admin-Installer nur für 51500/51501;
+    // Feedback (51505) und Config-Sync (51502/51503) haben keine Regel.
+    private const string NetzwerkDiagnose = """
+        '--- Firewall-Profile ---'
+        Get-NetFirewallProfile | Format-Table Name, Enabled, DefaultInboundAction -AutoSize | Out-String -Width 200
+        '--- Regeln HälpMi* ---'
+        Get-NetFirewallRule -DisplayName 'HälpMi*' -ErrorAction SilentlyContinue | ForEach-Object {
+            $f = $_ | Get-NetFirewallPortFilter
+            '{0} | {1} | {2} | {3} | {4}/{5}' -f $_.DisplayName, $_.Enabled, $_.Direction, $_.Action, $f.Protocol, $f.LocalPort
+        }
+        '--- Programmregeln HaelpMi* (z. B. nach einer Windows-Firewall-Abfrage) ---'
+        Get-NetFirewallApplicationFilter -ErrorAction SilentlyContinue | Where-Object Program -like '*HaelpMi*' | ForEach-Object {
+            $r = $_ | Get-NetFirewallRule
+            '{0} | {1} | {2} | {3} | {4}' -f $r.DisplayName, $r.Enabled, $r.Direction, $r.Action, $_.Program
+        }
+        '--- Ports 51500-51506 ---'
+        netstat -ano | Select-String ':5150[0-6]\s'
+        """;
 
     private static void KopiereDateien(string quelle, string muster, string ziel)
     {

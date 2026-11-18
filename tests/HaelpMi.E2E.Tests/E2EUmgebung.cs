@@ -12,6 +12,9 @@ internal static class E2EUmgebung
     public static string InstallerPfad => Env("HAELPMI_E2E_INSTALLER")
         ?? throw new InvalidOperationException("HAELPMI_E2E_INSTALLER ist nicht gesetzt (Pfad zur Installer-exe für dieses Gerät).");
 
+    /// <summary>Optional: lizenz.json der Test-Kundengruppe dieses Laufs, erzeugt vom Workflow (ci/e2e/testlizenz-erzeugen.ps1).</summary>
+    public static string? LizenzPfad => Env("HAELPMI_E2E_LIZENZ");
+
     public static string Raum => Env("HAELPMI_E2E_RAUM") ?? "E2E-A";
 
     public static string Raumnummer => Env("HAELPMI_E2E_RAUMNUMMER") ?? "101";

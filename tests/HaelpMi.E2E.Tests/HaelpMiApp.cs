@@ -4,7 +4,9 @@ using FlaUI.Core.AutomationElements;
 using FlaUI.Core.Input;
 using FlaUI.Core.WindowsAPI;
 using FlaUI.UIA3;
+using HaelpMi.Core.Autostart;
 using HaelpMi.Core.Models;
+using Xunit;
 
 namespace HaelpMi.E2E.Tests;
 
@@ -17,6 +19,7 @@ internal sealed class HaelpMiApp : IDisposable
     public const string TitelEinstellungen = "HälpMi - Einstellungen";
     public const string TitelDashboard = "HälpMi - Admin-Dashboard";
     public const string AlarmfensterId = "AlarmPopupWindow";
+    public const string SenderBannerId = "SenderStatusWindow";
 
     public UIA3Automation Automation { get; } = new();
 
@@ -43,6 +46,16 @@ internal sealed class HaelpMiApp : IDisposable
             }
 
             await Task.Delay(500);
+        }
+    }
+
+    /// <summary>Über die geplante Aufgabe statt direkt: der Runner läuft erhöht, der Agent soll wie beim Nutzer ohne Adminrechte laufen.</summary>
+    public static void StarteAgentUeberAutostart()
+    {
+        var ergebnis = Prozess.Ausfuehren("schtasks.exe", $"/Run /TN \"{AutostartRegistrar.TaskName}\"");
+        if (ergebnis.ExitCode != 0)
+        {
+            throw new InvalidOperationException($"schtasks /Run für '{AutostartRegistrar.TaskName}' fehlgeschlagen: {ergebnis.StdOut}");
         }
     }
 
@@ -111,6 +124,24 @@ internal sealed class HaelpMiApp : IDisposable
         if (hotkey.Modifiers.HasFlag(HotkeyModifiers.Win)) tasten.Add(VirtualKeyShort.LWIN);
         tasten.Add((VirtualKeyShort)hotkey.VirtualKeyCode);
         Keyboard.TypeSimultaneously(tasten.ToArray());
+    }
+
+    public static AutomationElement Element(AutomationElement wurzel, string automationId) =>
+        wurzel.FindFirstDescendant(cf => cf.ByAutomationId(automationId))
+        ?? throw new InvalidOperationException($"Element '{automationId}' nicht gefunden.");
+
+    public static async Task WarteBisAsync(Func<bool> bedingung, TimeSpan timeout, string meldung)
+    {
+        var frist = DateTime.UtcNow + timeout;
+        while (!bedingung())
+        {
+            if (DateTime.UtcNow > frist)
+            {
+                Assert.Fail(meldung);
+            }
+
+            await Task.Delay(300);
+        }
     }
 
     public void Dispose() => Automation.Dispose();

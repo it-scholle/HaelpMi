@@ -21,6 +21,11 @@ internal static class Installation
 
         HaelpMiApp.BeendeAlles();
         var vorgabe = SchreibeVorabEinstellungen(rolle);
+        if (E2EUmgebung.LizenzPfad is { } lizenz)
+        {
+            // Wie beim Kunden: lizenz.json liegt vor dem ersten Agent-Start bereit (LicenseReader).
+            File.Copy(lizenz, AppPaths.LicenseFilePath, overwrite: true);
+        }
 
         Directory.CreateDirectory(Artefakte.Ordner);
         var log = Path.Combine(Artefakte.Ordner, $"installer-{geraet}.log");
