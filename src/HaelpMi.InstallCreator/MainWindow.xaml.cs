@@ -416,7 +416,7 @@ public partial class MainWindow : Window
 
     // installer/HaelpMi.iss (Kopfkommentar) dokumentiert dieselben Befehle als manuellen
     // Schritt für alle, die ohne Install-Creator direkt per ISCC bauen (z. B. schnelles
-    // lokales Testen, siehe BUILD-UND-INSTALLATION.md) - hier laufen sie automatisch vor
+    // lokales Testen, siehe docs/handbuch/entwickler-bauen-und-installieren.md) - hier laufen sie automatisch vor
     // jedem Install-Creator-Build mit.
     //
     // Nutzerwunsch 20.08.2026 ("die 16 soll das Update-Ei und die Update-Pipeline komplett

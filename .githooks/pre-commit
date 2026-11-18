@@ -7,7 +7,7 @@
 # Begründung und docs/WORKFLOW.md Abschnitt "Install-Creator-Rebuild-Hook".
 #
 # Aktivierung pro Checkout einmalig: git config core.hooksPath .githooks
-# (siehe docs/WORKFLOW.md und BUILD-UND-INSTALLATION.md)
+# (siehe docs/WORKFLOW.md und docs/handbuch/entwickler-bauen-und-installieren.md)
 
 set -e
 

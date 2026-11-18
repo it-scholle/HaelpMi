@@ -10,7 +10,7 @@ bestehenden Dateien, sondern verbindet sie:
 - `tests/HaelpMi.Audio.Tests/` — coded, **spielt hörbar den echten Alarmton auf jedem
   aktiven Wiedergabegerät ab** (seit 13.08.2026 aus `HaelpMi.Core.Tests` ausgelagert,
   siehe README dort). Läuft ebenfalls nicht automatisch bei jedem `dotnet test`.
-- `ALPHA-TESTPLAN.md` — manuelle Checkliste für alles, was (noch) nicht coded ist
+- `docs/handbuch/entwickler-alpha-testplan.md` — manuelle Checkliste für alles, was (noch) nicht coded ist
   (UI-Erreichbarkeit, Ton, erzwungener Vordergrund). Wird schrittweise kleiner, je mehr
   hier automatisiert wird.
 
@@ -35,7 +35,7 @@ bestehenden Dateien, sondern verbindet sie:
 4. **Ton-Wiedergabe-Prüfung** ("Ton wird wirklich abgespielt", "auch bei stummgeschaltetem
    Gerät") — braucht eine virtuelle Audio-Loopback-Aufnahme, um wirklich zu verifizieren
    statt zu vermuten. Eigene Infrastruktur, hoher Aufwand gegenüber Nutzen im Alpha-
-   Stadium. **→ dokumentiert, vorerst manuell (ALPHA-TESTPLAN.md, Test 6).**
+   Stadium. **→ dokumentiert, vorerst manuell (docs/handbuch/entwickler-alpha-testplan.md, Test 6).**
 
 ## Versions-Gates (wie im Chat vorgeschlagen, jetzt festgeschrieben)
 
@@ -45,7 +45,7 @@ bestehenden Dateien, sondern verbindet sie:
 | Minor (x.**Y**.0) | **Volles coded Set**: alle `HaelpMi.Core.Tests` + alle `HaelpMi.Installer.Tests` |
 | Major/1.0+ | Zusätzlich: FlaUI-UI-Suite + Audio-Loopback-Suite, sobald gebaut (siehe unten) |
 
-Vor jedem Release zusätzlich: `ALPHA-TESTPLAN.md` von Hand durchgehen (das schrumpft mit
+Vor jedem Release zusätzlich: `docs/handbuch/entwickler-alpha-testplan.md` von Hand durchgehen (das schrumpft mit
 der Zeit, siehe oben).
 
 ---
@@ -68,7 +68,7 @@ Ausführungs-Hinweis (verändert das System, läuft NICHT automatisch in jedem `
 | A9 🔹 | Admin- vs. User-Installer: korrekte Rolle, korrekte Startmenü-Verknüpfung, Firewall-Regeln nur beim Admin | `[Installer.Tests]` ✅ |
 | A10 | User-Installer-Export (Install-Creator → eingebettete Datei) trägt dieselbe CustomerGroupId wie der Admin-Installer | `[Installer.Tests]` ✅ |
 | A11 🔹 | Zwei unabhängige CustomerGroupId-Installationen im selben Netz beeinflussen sich nie (Kreis-Isolation) | `HaelpMi.Core.Tests` ✅ (DiscoveryService/AlarmTcpListener) |
-| A12 🔹 | Autostart-Task-Prinzipal ist nach frischer Installation BUILTIN\Users (nicht nur der installierende Admin-Account) - Regressionstest 11.08.2026, siehe `ALPHA-TESTPLAN.md` Test 2 | ❌ **Nicht coded** — braucht ein zweites, nicht-lokal-admin Windows-Konto auf der Testmaschine, das `Installer.Tests`-Setup hat nur eines |
+| A12 🔹 | Autostart-Task-Prinzipal ist nach frischer Installation BUILTIN\Users (nicht nur der installierende Admin-Account) - Regressionstest 11.08.2026, siehe `docs/handbuch/entwickler-alpha-testplan.md` Test 2 | ❌ **Nicht coded** — braucht ein zweites, nicht-lokal-admin Windows-Konto auf der Testmaschine, das `Installer.Tests`-Setup hat nur eines |
 | A13 | Swap-Update repariert einen fehlenden/veralteten Autostart-Task als Nebeneffekt (LocalSystem-Kontext von `HaelpMi.UpdateService`, greift für vor diesem Fix installierte Geräte) | ❌ **Lücke** — `AutostartRegistrar.EnsureRegistered`-Aufruf in `ConfirmSwapAsync` ist neu, noch nicht durch A5 mitabgedeckt |
 
 ## B. Netzwerk / Discovery
@@ -108,7 +108,7 @@ Ausführungs-Hinweis (verändert das System, läuft NICHT automatisch in jedem `
 | D2 🔹 | Versionsvergleich numerisch, nicht als String | ✅ |
 | D3 | Gestaffelter Rollout: Quote/Reihenfolge nach stabiler DeviceId | ✅ |
 | D4 | Lockout nach N aufeinanderfolgenden Fehlschlägen | ❌ **Lücke** |
-| D5 | Voller Swap-Pipeline-Durchlauf (Test-Port-Parallelinstanz, Peer-Bestätigung, Port-Übernahme, Alt-Deinstallation) | ❌ **Nicht coded, absichtlich** — siehe `ALPHA-TESTPLAN.md` Test 9 ("nur auf Wegwerf-VMs"), zu riskant/aufwändig für automatisierte Ausführung im jetzigen Stadium |
+| D5 | Voller Swap-Pipeline-Durchlauf (Test-Port-Parallelinstanz, Peer-Bestätigung, Port-Übernahme, Alt-Deinstallation) | ❌ **Nicht coded, absichtlich** — siehe `docs/handbuch/entwickler-alpha-testplan.md` Test 9 ("nur auf Wegwerf-VMs"), zu riskant/aufwändig für automatisierte Ausführung im jetzigen Stadium |
 
 ## E. UI-Erreichbarkeit & Bedienung (geplant, noch nicht coded)
 
@@ -118,7 +118,7 @@ improvisiert wurden). Aufbau erst, wenn ein Bereich strukturell 2+ Versionen sta
 
 | # | Test | Aktuell |
 |---|---|---|
-| E1 | Dashboard: jeder Tab öffnet ohne Fehler | Manuell (`ALPHA-TESTPLAN.md` Test 3) |
+| E1 | Dashboard: jeder Tab öffnet ohne Fehler | Manuell (`docs/handbuch/entwickler-alpha-testplan.md` Test 3) |
 | E2 | Neues Profil ist sofort editierbar (Name/Text/Hotkey/Schwellwert befüllt) | Heute per Hand mit Screenshots verifiziert, siehe Chat-Verlauf 06.08. — guter erster FlaUI-Kandidat |
 | E3 | Save-on-Blur aktualisiert sichtbar UND bleibt nach Fenster-Neustart erhalten | Manuell |
 | E4 | Sender/Empfänger-Zuordnung per Klick | Manuell |
@@ -161,7 +161,7 @@ geworfen" unterscheiden.
   "nicht verhandelbar" (CLAUDE.md) zu markieren, nicht nur als Detail.
 - **Interop während laufender automatischer Weiterverteilung** (alte + neue Version
   gleichzeitig im Netz, solange noch nicht jedes Gerät gebootet/gezogen hat) — fehlt
-  komplett, auch als manueller Testfall. Ergänzt in `ALPHA-TESTPLAN.md` sinnvoll.
+  komplett, auch als manueller Testfall. Ergänzt in `docs/handbuch/entwickler-alpha-testplan.md` sinnvoll.
 - **Update-Signatur-Ablehnung End-to-End** (nicht nur die reine Kryptoprüfung) — D5 deckt
   das konzeptionell ab, ist aber bewusst nicht automatisiert (siehe oben).
 - **CrashLogger-Zuverlässigkeit** — ob ein echter Crash wirklich geloggt wird, wurde diese

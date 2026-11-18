@@ -97,7 +97,7 @@ Reparaturversuche an diesem Stand.
   CLAUDE.md gewinnt, weil sie die aktuellere, dauerhafte Regel ist.
 - `docs/WORKFLOW.md` — konkretisiert die Abschnitte "Versionierung", "Tests" und "Status-Updates"
   unten (Git-Mechanik im Detail: Branch/Rebase-Ablauf, Versionsnummer-Kollisionen, Tabellenvorlage).
-- `docs/WARTEZEIT-KONZEPT.md` — Analyse/Konzeptdokument (ergänzt 19.08.2026, Antwort auf die
+- `docs/wissen/wartezeit-konzept.md` — Analyse/Konzeptdokument (ergänzt 19.08.2026, Antwort auf die
   wiederholt aufgefallenen Wartezeiten Flaw 12/13/15/16) mit vollständigem Wartezeiten-Inventar,
   Klassifizierung und Zielwerten. Die dortige Design-Richtlinie ("Fenster/Prozess zuerst, Daten
   danach", Parallelisierung als Normalfall) gilt ab sofort für neue Lade-/Wartevorgänge.
@@ -219,7 +219,7 @@ und `scripts/release-issue.sh <issue-nummer> ["grund"]`.
   Programmstart), hält ihn ausschließlich im Arbeitsspeicher dieses einen Laufs und schreibt ihn
   nie auf die Platte. Der bisherige rein manuelle Weg über `HaelpMi.UpdateSigner` (Schlüssel als
   lokale `.txt`-Datei) bleibt als Fallback für Maschinen ohne Vaultwarden-Zugriff bestehen, siehe
-  `BUILD-UND-INSTALLATION.md` Schritt 1b.
+  `docs/handbuch/entwickler-bauen-und-installieren.md` Schritt 1b.
 
 ## Entwickler-Tool Install-Creator — Rebuild läuft automatisiert (Hook, seit 16.08.2026)
 - `tools/InstallCreator/HaelpMi.InstallCreator.exe` ist eine gitignorete, von Hand veröffentlichte
@@ -483,11 +483,11 @@ Vorlage: `docs/WORKFLOW.md`.
   automatisch mit) und `tests/HaelpMi.Audio.Tests` (xUnit, **spielt hörbar den echten Alarmton
   auf jedem aktiven Wiedergabegerät ab** — seit 13.08.2026 aus `HaelpMi.Core.Tests` ausgelagert,
   nachdem genau das unregelmäßig und ungefragt auf einer Session-VM piepte; läuft ebenfalls
-  nicht automatisch mit). `TEST-STRATEGY.md` ist die Quelle der Wahrheit für Umfang und Gates,
-  `ALPHA-TESTPLAN.md` deckt das (noch) nicht Automatisierte manuell ab.
+  nicht automatisch mit). `docs/wissen/test-strategie.md` ist die Quelle der Wahrheit für Umfang und Gates,
+  `docs/handbuch/entwickler-alpha-testplan.md` deckt das (noch) nicht Automatisierte manuell ab.
 - Jedes neue Feature bekommt mindestens formulierte Testfälle, im besten Fall geschriebene und
   ausgeführte automatisierte Tests.
-- Versions-Gates (aus `TEST-STRATEGY.md`): Patch → 🔹-Smoke-Set, Minor → volle coded Suite
+- Versions-Gates (aus `docs/wissen/test-strategie.md`): Patch → 🔹-Smoke-Set, Minor → volle coded Suite
   (Core + Installer), Major/1.0+ → zusätzlich FlaUI-UI-Suite + Audio-Loopback-Suite, sobald gebaut.
 - Vor Abschluss einer Version muss die für den jeweiligen Bump-Grad geforderte Stufe grün sein.
   Bei Fehlschlag: bis zu 3 Selbstkorrektur-Versuche, danach nachfragen statt weiter raten.

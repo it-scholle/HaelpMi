@@ -1752,7 +1752,7 @@ public partial class AdminDashboardWindow : Window
             var available = _context.ListAvailableUpdateVersions().OrderByDescending(v => v).ToList();
             AvailableVersionsText.Text = available.Count > 0
                 ? string.Join(", ", available)
-                : "(keine Version im Cache - siehe BUILD-UND-INSTALLATION.md, Schritt 1b, oder wartet auf einen ersten P2P-Pull)";
+                : "(keine Version im Cache - siehe docs/handbuch/entwickler-bauen-und-installieren.md, Schritt 1b, oder wartet auf einen ersten P2P-Pull)";
             AvailableVersionsCombo.ItemsSource = available;
             AvailableVersionsCombo.SelectedItem = available.FirstOrDefault();
 
@@ -1808,7 +1808,7 @@ public partial class AdminDashboardWindow : Window
     }
 
     // Nutzerwunsch: "Admin gibt Freigabestufen frei (z. B. 1 -> 2 -> 4 -> 8 Geräte)"
-    // (Anweisungen/claude-code-prompt-teil2-admin-update.md, Abschnitt 11) - Verdopplung
+    // (docs/wissen/anforderungen/claude-code-prompt-teil2-admin-update.md, Abschnitt 11) - Verdopplung
     // gedeckelt auf die Gesamtzahl bekannter Geräte, ein größeres Kontingent hätte ohnehin
     // keine zusätzliche Wirkung (UpdateOrchestrator.IsMyTurn).
     private async void NextStageButton_Click(object sender, RoutedEventArgs e)

@@ -492,7 +492,7 @@ public partial class App : System.Windows.Application
     // grundsätzlich keine Testinfrastruktur/InternalsVisibleTo - eine würde hier isoliert
     // nur für diese eine Zeile aufgesetzt, das wäre Aufwand ohne Gegenwert). Der eigentliche
     // schtasks-Aufruf ist ohnehin System-verändernd und damit HaelpMi.Installer.Tests
-    // vorbehalten (siehe TEST-STRATEGY.md) - Testfall dafür ist unten formuliert.
+    // vorbehalten (siehe docs/wissen/test-strategie.md) - Testfall dafür ist unten formuliert.
     private static bool ShouldRegisterAutostartOnly(string[] args) =>
         args.Contains("--register-autostart", StringComparer.Ordinal);
 

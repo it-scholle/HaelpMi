@@ -33,6 +33,6 @@
        bekannter WPF-Kompatibilitätsfall, kein Fehler auf unserer Seite, aber mit self-contained
        (Pflicht laut CLAUDE.md: kein vorausgesetztes .NET auf Kundenrechnern) nicht vereinbar.
        Die eigentliche Startzeit-Verkürzung (PublishReadyToRun statt PublishSingleFile, siehe
-       BUILD-UND-INSTALLATION.md) bleibt bestehen und war ohnehin der wirksamere Teil. -->
+       docs/handbuch/entwickler-bauen-und-installieren.md) bleibt bestehen und war ohnehin der wirksamere Teil. -->
 
 </Project>

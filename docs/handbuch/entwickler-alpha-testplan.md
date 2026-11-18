@@ -1,6 +1,17 @@
+---
+id: entwickler-alpha-testplan
+titel: Alpha-Testplan
+kapitel: Entwicklung
+reihenfolge: 20
+zielgruppe: entwickler
+ab_version: 0.16.0
+schlagworte: [test, alpha, manuell]
+siehe_auch: [entwickler-bauen-und-installieren]
+---
+
 # HälpMi Alpha-Testplan
 
-> **Hinweis 06.08.2026:** Siehe `TEST-STRATEGY.md` im Projekt-Root für die aktuelle
+> **Hinweis 06.08.2026:** Siehe `docs/wissen/test-strategie.md` im Projekt-Root für die aktuelle
 > Gesamt-Teststrategie (coded vs. manuell, Versions-Gates). Ein Teil der Installer-
 > Lebenszyklus-Punkte weiter unten (Test 2 teilweise, Test 8, Test 9 teilweise) ist
 > inzwischen als coded Suite unter `tests\HaelpMi.Installer.Tests\` vorhanden - dieses
@@ -18,7 +29,7 @@ die einmalige Inno-Setup-Einrichtung und das eigentliche Kompilieren beider Inst
 Skripte (`HaelpMi.iss`, `HaelpMi-Admin.iss`) über direkten ISCC-Aufruf - mit echtem Inno
 Setup 7, nicht nur Code gelesen. Dabei ist sogar ein echter Fehler aufgefallen und
 behoben worden (`RunOnceId` war an einer Stelle im Skript nicht erlaubt). Details und
-Befehle: `HälpMi\BUILD-UND-INSTALLATION.md`.
+Befehle: `docs/handbuch/entwickler-bauen-und-installieren.md`.
 
 Was ich damit **nicht** geprüft habe: den tatsächlichen Weg über die
 `HaelpMi.InstallCreator`-Oberfläche selbst (Klicks, Häkchen, Protokollanzeige) - nur die
@@ -34,7 +45,7 @@ vorherigen aufbaut.
 
 ## Test 1: Install-Creator baut den Admin-Installer (Test-Installer angehakt)
 
-Voraussetzung (falls noch nicht geschehen, siehe `HälpMi\BUILD-UND-INSTALLATION.md`):
+Voraussetzung (falls noch nicht geschehen, siehe `docs/handbuch/entwickler-bauen-und-installieren.md`):
 Inno Setup installiert, kompletter Ordner nach `HälpMi\installer\inno-compiler\` kopiert,
 `dotnet publish` für alle drei Payload-Projekte ausgeführt.
 

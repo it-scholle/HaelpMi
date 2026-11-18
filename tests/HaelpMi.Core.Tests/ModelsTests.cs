@@ -267,14 +267,14 @@ public class ModelsTests
         Assert.Equal(2, count); // deviceA + deviceB, nicht mehr
     }
 
-    // --- Bugfix 08.08.2026 (TEST-STRATEGY.md E11, "Meine Alarme" zeigte kein Profil mehr,
+    // --- Bugfix 08.08.2026 (docs/wissen/test-strategie.md E11, "Meine Alarme" zeigte kein Profil mehr,
     // sobald das eigene Gerät selbst zu seinen aufgelösten Empfängern zählte): der Fehler
     // saß in ConfigWindow.RebuildMyAlarms (HaelpMi.UI, WPF) - LoadDevices() lieferte dort
     // nie das eigene Gerät (wie im echten Betrieb, siehe Kommentar bei
     // RecipientResolver_ResolvesRoomSender_ViaTheSendingDevicesOwnCurrentRoomNumber oben),
     // wodurch ResolveRecipientsForSender ein an sich korrekt aufgelöstes eigenes Gerät im
     // letzten Schritt (Abgleich gegen allDevices) wieder herausfilterte. Der WPF-Layer
-    // selbst ist laut TEST-STRATEGY.md bewusst (noch) nicht coded getestet (FlaUI erst ab
+    // selbst ist laut docs/wissen/test-strategie.md bewusst (noch) nicht coded getestet (FlaUI erst ab
     // 1.0/Layout-Stabilität) - diese drei Fälle sichern stattdessen die Resolver-Annahme
     // ab, auf der der Fix (ConfigWindowContext.LoadOwnDevice + `.Append(ownDevice)`) beruht:
     // sobald das eigene Gerät in allDevices steht, muss es korrekt als Empfänger

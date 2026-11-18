@@ -19,7 +19,7 @@
 ; zu wechseln, kein Fehlerfall.
 ;
 ; Build/Payload identisch zu HaelpMi.iss - siehe dortige Kommentare bzw.
-; BUILD-UND-INSTALLATION.md im Projekt-Root.
+; docs/handbuch/entwickler-bauen-und-installieren.md.
 
 #define HaelpMiAdminInstall
 #include "HaelpMiCommon.iss.inc"

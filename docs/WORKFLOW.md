@@ -44,7 +44,7 @@ sich, ohne Merge-Rauschen.
 ### Konkreter Ablauf
 
 1. `EnterWorktree` - legt automatisch einen neuen Branch + isoliertes Arbeitsverzeichnis an.
-2. Arbeiten, committen, testen (die für den Bump-Grad passende Stufe aus `TEST-STRATEGY.md` -
+2. Arbeiten, committen, testen (die für den Bump-Grad passende Stufe aus `docs/wissen/test-strategie.md` -
    mindestens das 🔹-Smoke-Set) - alles innerhalb des Worktrees, gegen den eigenen Branch. Berührt
    ein Commit `src/HaelpMi.InstallCreator/`, `src/HaelpMi.UpdateSigner/` oder
    `Directory.Build.props` (auch ein reiner Versions-Bump zählt — das Tool zeigt seine eigene
@@ -193,7 +193,7 @@ jetzt, nicht rückwirkend für Arbeit, die schon mitten im Konflikt-Auflösen st
 
 ### Automatisch, sobald die Tests grün sind — keine Rückfrage, kein "mach du das selbst"
 
-Sobald die für den Bump-Grad passende Test-Stufe (siehe `TEST-STRATEGY.md`) für eine Änderung
+Sobald die für den Bump-Grad passende Test-Stufe (siehe `docs/wissen/test-strategie.md`) für eine Änderung
 grün ist - unabhängig davon, ob interaktiv oder als Background-Job entstanden -, wird automatisch
 auf `main` gerebased und per Fast-Forward integriert. Diese Datei (zusammen mit CLAUDE.md,
 Abschnitt "Versionierung") ist die
@@ -232,16 +232,16 @@ schon integriert, es geht nur um den Push selbst.
    nur, wenn eine Entscheidung wirklich blockiert.
 3. **Für jedes neue Feature:** mindestens Testfälle formulieren; im besten Fall automatisiert in
    `tests/HaelpMi.Core.Tests` (bzw. `tests/HaelpMi.Installer.Tests`, wenn es das ausführende
-   System betrifft) schreiben und ausführen. `TEST-STRATEGY.md` entsprechend nachführen.
-4. **Vor Abschluss einer Version:** die für den Bump-Grad geforderte Stufe aus `TEST-STRATEGY.md`
+   System betrifft) schreiben und ausführen. `docs/wissen/test-strategie.md` entsprechend nachführen.
+4. **Vor Abschluss einer Version:** die für den Bump-Grad geforderte Stufe aus `docs/wissen/test-strategie.md`
    muss grün sein (Patch → 🔹-Smoke-Set, Minor → volle coded Suite, Major → zusätzlich
    FlaUI/Audio-Loopback, sobald gebaut). Bei Fehlschlag: bis zu **3 Selbstkorrektur-Versuche**,
    danach Rückfrage statt weiter zu raten.
 5. **Wird ein Test durch geänderte Anforderungen hinfällig:** nicht kommentarlos löschen -
    Grund + Datum im Test selbst vermerken (z. B. `[Fact(Skip = "...")]` mit Begründung), bevor er
    entfernt wird.
-6. **Nach Abschluss:** Zyklus wiederholt sich — neue Tests für Neues, `TEST-STRATEGY.md` und
-   `ALPHA-TESTPLAN.md` nachführen, geforderte Stufe grün, danach gilt die Aufgabe als fertig.
+6. **Nach Abschluss:** Zyklus wiederholt sich — neue Tests für Neues, `docs/wissen/test-strategie.md` und
+   `docs/handbuch/entwickler-alpha-testplan.md` nachführen, geforderte Stufe grün, danach gilt die Aufgabe als fertig.
 
 ## Status-Updates in Chat-Antworten
 

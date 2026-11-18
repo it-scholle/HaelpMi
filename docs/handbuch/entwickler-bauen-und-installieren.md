@@ -1,3 +1,14 @@
+---
+id: entwickler-bauen-und-installieren
+titel: HälpMi bauen und installieren
+kapitel: Entwicklung
+reihenfolge: 10
+zielgruppe: entwickler
+ab_version: 0.16.0
+schlagworte: [build, installer, install-creator, signieren]
+siehe_auch: [entwickler-alpha-testplan]
+---
+
 # HälpMi – Bauen und Installieren
 
 Diese eine Datei ersetzt die früheren, sich überschneidenden Anleitungen. Alle Pfade hier
@@ -128,7 +139,7 @@ mehr nötig. Der private Schlüssel liegt dafür verschlüsselt in Vaultwarden (
    ```
    Den öffentlichen Schlüssel einmalig in
    `HälpMi\src\HaelpMi.Core\Updates\UpdateSignaturePublicKey.cs` einbetten (siehe
-   TECHSTACK-UND-ARCHITEKTUR.md - der dort eingebettete Key ist noch ein Wegwerf-Dev-Key).
+   docs/architektur.md - der dort eingebettete Key ist noch ein Wegwerf-Dev-Key).
    Den privaten Schlüssel nie ins Repo, nie ins Log, nie in eine Fehlermeldung (CLAUDE.md).
 
 2. Payload (aus Schritt 1) zu `package.zip` packen und signieren:
@@ -246,4 +257,4 @@ automatisch alles entfernt.
 ## Testablauf
 
 Die eigentliche Test-Checkliste (was genau durchzuklicken ist und was zurückgemeldet
-werden sollte) steht separat in `HälpMi\ALPHA-TESTPLAN.md`.
+werden sollte) steht separat in `docs/handbuch/entwickler-alpha-testplan.md`.

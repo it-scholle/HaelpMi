@@ -7,7 +7,7 @@ namespace HaelpMi.Core.Tests;
 /// <summary>
 /// Deckt <see cref="AutostartRegistrar"/>.BuildTaskXml direkt ab (InternalsVisibleTo, siehe
 /// HaelpMi.Core/AssemblyInfo.cs) - der eigentliche schtasks.exe-Aufruf lässt sich hier nicht
-/// prüfen (verändert das ausführende System, siehe TEST-STRATEGY.md - das ist
+/// prüfen (verändert das ausführende System, siehe docs/wissen/test-strategie.md - das ist
 /// HaelpMi.Installer.Tests' Aufgabe), aber die erzeugte Task-XML ist reiner String-Aufbau
 /// und deckt genau den Bugfix vom 08.08.2026 ab: früher lief die Registrierung fest an den
 /// zuerst anmeldenden Nutzer gebunden, weil kein Principal auf BUILTIN\Users zeigte.
