@@ -40,7 +40,7 @@ fi
 hash_watched_paths() {
     (
         cd "$source_root" || exit 1
-        find src/HaelpMi.InstallCreator src/HaelpMi.UpdateSigner Directory.Build.props \
+        find src/HaelpMi.InstallCreator src/HaelpMi.UpdateSigner design Directory.Build.props \
             \( -name bin -o -name obj \) -prune -o -type f -print 2>/dev/null \
             | sort | xargs -r sha256sum 2>/dev/null | sha256sum | cut -d' ' -f1
     )

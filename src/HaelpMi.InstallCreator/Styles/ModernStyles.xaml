@@ -1,27 +1,9 @@
 <ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
-    <!-- Schlankes, helles Farbschema (Nutzerwunsch: "Apple-artig") - ein Akzentton statt
-         der bisherigen Vielzahl an Ad-hoc-Hex-Farben je Button. Bestehende, semantisch
-         wichtige Inline-Farben (Alarm-Rot, Erfolgs-Grün im Toast, ...) bleiben an ihren
-         Stellen unverändert bestehen, da lokale Werte diese Styles ohnehin überschreiben -
-         hier geht es nur um die Form (Ecken, Abstände, Typografie), nicht um jede Farbe. -->
-    <SolidColorBrush x:Key="WindowBackgroundBrush" Color="#F5F5F7" />
-    <SolidColorBrush x:Key="CardBackgroundBrush" Color="#FFFFFF" />
-    <SolidColorBrush x:Key="HairlineBrush" Color="#D2D2D7" />
-    <SolidColorBrush x:Key="TextPrimaryBrush" Color="#1D1D1F" />
-    <SolidColorBrush x:Key="TextSecondaryBrush" Color="#6E6E73" />
-    <SolidColorBrush x:Key="AccentBrush" Color="#0071E3" />
-    <SolidColorBrush x:Key="AccentPressedBrush" Color="#005BBF" />
-    <!-- 06.08.2026: für das dauerhafte "Admin-Installer erstellt"-Panel in MainWindow.xaml -
-         dieselbe Farbe wie SuccessLightBrush in HaelpMi.UI/Styles/ModernStyles.xaml, hier
-         separat gepflegt, da dieses Projekt bewusst keine ProjectReference auf HaelpMi.UI hat. -->
-    <SolidColorBrush x:Key="SuccessLightBrush" Color="#D6F5DD" />
-    <SolidColorBrush x:Key="DangerBrush" Color="#FF3B30" />
-    <SolidColorBrush x:Key="SuccessBrush" Color="#34C759" />
-    <SolidColorBrush x:Key="SecondaryButtonBrush" Color="#E8E8ED" />
-
-    <FontFamily x:Key="AppFontFamily">Segoe UI Variable Text, Segoe UI</FontFamily>
+    <ResourceDictionary.MergedDictionaries>
+        <ResourceDictionary Source="/HaelpMi.InstallCreator;component/Styles/Design.xaml" />
+    </ResourceDictionary.MergedDictionaries>
 
     <Style TargetType="Window">
         <Setter Property="Background" Value="{StaticResource WindowBackgroundBrush}" />
@@ -175,7 +157,7 @@
         <Setter Property="BorderBrush" Value="{StaticResource HairlineBrush}" />
         <Setter Property="BorderThickness" Value="1" />
         <Setter Property="RowBackground" Value="{StaticResource CardBackgroundBrush}" />
-        <Setter Property="AlternatingRowBackground" Value="#FAFAFC" />
+        <Setter Property="AlternatingRowBackground" Value="{StaticResource TableAlternateRowBrush}" />
         <Setter Property="FontFamily" Value="{StaticResource AppFontFamily}" />
         <Setter Property="HorizontalGridLinesBrush" Value="{StaticResource HairlineBrush}" />
         <Setter Property="VerticalGridLinesBrush" Value="{StaticResource HairlineBrush}" />

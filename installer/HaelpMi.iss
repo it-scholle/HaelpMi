@@ -65,7 +65,7 @@ ArchitecturesInstallIn64BitMode=x64compatible
 ; der laufende Agent bleibt weiterhin ohne Admin/SYSTEM-Rechte.
 PrivilegesRequired=admin
 UninstallDisplayIcon={app}\{#MyAgentExeName}
-SetupIconFile=haelpmi_icon.ico
+SetupIconFile=..\design\icons\haelpmi_icon.ico
 ; Nutzerwunsch 06.08.2026: die "Schließe die Anwendungen automatisch"-Rückfrage von Inno's
 ; eingebautem Restart Manager spart sich der Nutzer. Erster Versuch war CloseApplications=
 ; force - das unterdrückt die Rückfrage NICHT: Inno's Restart-Manager-Erkennung (und die

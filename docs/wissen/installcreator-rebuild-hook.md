@@ -7,9 +7,9 @@ Regel: `AGENTS.md` Teil B, „Install-Creator“. Entscheidung:
 
 `tools/InstallCreator/HaelpMi.InstallCreator.exe` ist eine gitignorierte, veröffentlichte Kopie von
 `src/HaelpMi.InstallCreator`. Die gemeinsame Logik in `.githooks/lib/rebuild-installcreator.sh`
-bildet einen Hash über `src/HaelpMi.InstallCreator`, `src/HaelpMi.UpdateSigner` und
-`Directory.Build.props` (auch ein reiner Versions-Bump zählt, weil das Tool seine Version im
-Fenstertitel anzeigt) und vergleicht ihn mit `tools/InstallCreator/.source-hash` (gitignoriert).
+bildet einen Hash über `src/HaelpMi.InstallCreator`, `src/HaelpMi.UpdateSigner`, `design/` (Icon
+und Farben sind per Link eingebunden) und `Directory.Build.props` (auch ein reiner Versions-Bump
+zählt, weil das Tool seine Version im Fenstertitel anzeigt) und vergleicht ihn mit `tools/InstallCreator/.source-hash` (gitignoriert).
 Nur bei Abweichung läuft `dotnet publish` (Release, `win-x64`, self-contained, ReadyToRun);
 danach wird der neue Hash gespeichert.
 

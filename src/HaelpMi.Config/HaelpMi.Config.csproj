@@ -8,7 +8,7 @@
     <UseWPF>true</UseWPF>
     <RootNamespace>HaelpMi.Config</RootNamespace>
     <AssemblyName>HaelpMi.Config</AssemblyName>
-    <ApplicationIcon>Assets\haelpmi_icon.ico</ApplicationIcon>
+    <ApplicationIcon>..\..\design\icons\haelpmi_icon.ico</ApplicationIcon>
     <Platforms>x64;ARM64</Platforms>
     <!-- Kein InvariantGlobalization: WPF-Texteingabefelder lösen beim Klicken die aktuelle
          Tastatur-Eingabesprache in eine echte CultureInfo auf (TextEditorMouse.OnMouseDown

@@ -1,0 +1,87 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- Einzige Quelle für Farben und Schrift (Katalog: design/KATALOG.md). Wird per Link in
+         HaelpMi.UI und HaelpMi.InstallCreator eingebunden und dort von Styles/ModernStyles.xaml
+         gemergt. Farben in Fenstern und Styles nur über diese Schlüssel referenzieren. -->
+
+    <!-- Grundfarben -->
+    <Color x:Key="WindowBackgroundColor">#F5F5F7</Color>
+    <Color x:Key="CardBackgroundColor">#FFFFFF</Color>
+    <Color x:Key="SubtleBackgroundColor">#F4F6F6</Color>
+    <Color x:Key="TableAlternateRowColor">#FAFAFC</Color>
+    <Color x:Key="HairlineColor">#D2D2D7</Color>
+    <Color x:Key="TextPrimaryColor">#1D1D1F</Color>
+    <Color x:Key="TextSecondaryColor">#6E6E73</Color>
+    <Color x:Key="TextStatusColor">#34495E</Color>
+    <Color x:Key="AccentColor">#0071E3</Color>
+    <Color x:Key="AccentPressedColor">#005BBF</Color>
+    <Color x:Key="AccentLightColor">#D6E9FA</Color>
+    <Color x:Key="SecondaryButtonColor">#E8E8ED</Color>
+
+    <!-- Status -->
+    <Color x:Key="DangerColor">#FF3B30</Color>
+    <Color x:Key="SuccessColor">#34C759</Color>
+    <Color x:Key="SuccessLightColor">#D6F5DD</Color>
+    <Color x:Key="WarningColor">#FF9500</Color>
+
+    <!-- Alarm-Popup und Alarm-Aktionen -->
+    <Color x:Key="AlarmColor">#C0392B</Color>
+    <Color x:Key="AlarmHeaderSubtextColor">#F5B7B1</Color>
+    <Color x:Key="OnMyWayButtonColor">#27AE60</Color>
+    <Color x:Key="AlarmCloseButtonColor">#2E86C1</Color>
+
+    <!-- Aktions-Buttons mit eigener Farbe -->
+    <Color x:Key="ExportButtonColor">#2471A3</Color>
+    <Color x:Key="SlateButtonColor">#2C3E50</Color>
+    <Color x:Key="AdminButtonColor">#8E44AD</Color>
+
+    <!-- Toasts und Banner (halbtransparent) -->
+    <Color x:Key="ToastSuccessBackgroundColor">#DD1E8449</Color>
+    <Color x:Key="ToastSuccessAccentColor">#1E8449</Color>
+    <Color x:Key="ToastSuccessSubtextColor">#D5F5E3</Color>
+    <Color x:Key="BannerBackgroundColor">#DD2C3E50</Color>
+    <Color x:Key="BannerSubtextColor">#D6DBDF</Color>
+    <Color x:Key="BannerCloseColor">#BDC3C7</Color>
+
+    <SolidColorBrush x:Key="WindowBackgroundBrush" Color="{StaticResource WindowBackgroundColor}" />
+    <SolidColorBrush x:Key="CardBackgroundBrush" Color="{StaticResource CardBackgroundColor}" />
+    <SolidColorBrush x:Key="SubtleBackgroundBrush" Color="{StaticResource SubtleBackgroundColor}" />
+    <SolidColorBrush x:Key="TableAlternateRowBrush" Color="{StaticResource TableAlternateRowColor}" />
+    <SolidColorBrush x:Key="HairlineBrush" Color="{StaticResource HairlineColor}" />
+    <SolidColorBrush x:Key="TextPrimaryBrush" Color="{StaticResource TextPrimaryColor}" />
+    <SolidColorBrush x:Key="TextSecondaryBrush" Color="{StaticResource TextSecondaryColor}" />
+    <SolidColorBrush x:Key="TextStatusBrush" Color="{StaticResource TextStatusColor}" />
+    <SolidColorBrush x:Key="AccentBrush" Color="{StaticResource AccentColor}" />
+    <SolidColorBrush x:Key="AccentPressedBrush" Color="{StaticResource AccentPressedColor}" />
+    <!-- "Gerade zur Bearbeitung ausgewählt": darf weder mit Grün (zugeordnet) noch mit dem
+         Fett+Badge-Zustand verwechselt werden. -->
+    <SolidColorBrush x:Key="AccentLightBrush" Color="{StaticResource AccentLightColor}" />
+    <SolidColorBrush x:Key="SecondaryButtonBrush" Color="{StaticResource SecondaryButtonColor}" />
+
+    <SolidColorBrush x:Key="DangerBrush" Color="{StaticResource DangerColor}" />
+    <SolidColorBrush x:Key="SuccessBrush" Color="{StaticResource SuccessColor}" />
+    <!-- Füllt ganze Zeilen (aktiv/zugeordnet in Toggle-Listen), deshalb blasser als SuccessBrush. -->
+    <SolidColorBrush x:Key="SuccessLightBrush" Color="{StaticResource SuccessLightColor}" />
+    <!-- "Läuft bald ab": bewusst weniger dringlich als DangerBrush. -->
+    <SolidColorBrush x:Key="WarningBrush" Color="{StaticResource WarningColor}" />
+
+    <SolidColorBrush x:Key="AlarmBrush" Color="{StaticResource AlarmColor}" />
+    <SolidColorBrush x:Key="AlarmHeaderSubtextBrush" Color="{StaticResource AlarmHeaderSubtextColor}" />
+    <SolidColorBrush x:Key="OnMyWayButtonBrush" Color="{StaticResource OnMyWayButtonColor}" />
+    <SolidColorBrush x:Key="AlarmCloseButtonBrush" Color="{StaticResource AlarmCloseButtonColor}" />
+
+    <SolidColorBrush x:Key="ExportButtonBrush" Color="{StaticResource ExportButtonColor}" />
+    <SolidColorBrush x:Key="SlateButtonBrush" Color="{StaticResource SlateButtonColor}" />
+    <SolidColorBrush x:Key="AdminButtonBrush" Color="{StaticResource AdminButtonColor}" />
+
+    <SolidColorBrush x:Key="ToastSuccessBackgroundBrush" Color="{StaticResource ToastSuccessBackgroundColor}" />
+    <SolidColorBrush x:Key="ToastSuccessAccentBrush" Color="{StaticResource ToastSuccessAccentColor}" />
+    <SolidColorBrush x:Key="ToastSuccessSubtextBrush" Color="{StaticResource ToastSuccessSubtextColor}" />
+    <SolidColorBrush x:Key="BannerBackgroundBrush" Color="{StaticResource BannerBackgroundColor}" />
+    <SolidColorBrush x:Key="BannerSubtextBrush" Color="{StaticResource BannerSubtextColor}" />
+    <SolidColorBrush x:Key="BannerCloseBrush" Color="{StaticResource BannerCloseColor}" />
+
+    <FontFamily x:Key="AppFontFamily">Segoe UI Variable Text, Segoe UI</FontFamily>
+
+</ResourceDictionary>

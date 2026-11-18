@@ -288,7 +288,7 @@ Teil A gilt projektübergreifend und kommt aus der MasterAgents-Blueprint. Teil 
 - Kein Over-Engineering: keine Abstraktion, kein Interface, kein Pattern ohne aktuellen Anwendungsfall.
 
 ## Install-Creator
-- `tools/InstallCreator/HaelpMi.InstallCreator.exe` ist eine gitignorierte, veröffentlichte Kopie von `src/HaelpMi.InstallCreator`. Die Git-Hooks (`pre-commit`, `post-rewrite`, `post-merge`, `post-checkout`, gemeinsame Logik in `.githooks/lib/rebuild-installcreator.sh`) bauen sie zustandsbasiert neu, sobald sich `src/HaelpMi.InstallCreator`, `src/HaelpMi.UpdateSigner` oder `Directory.Build.props` geändert haben. Keine Session baut von Hand.
+- `tools/InstallCreator/HaelpMi.InstallCreator.exe` ist eine gitignorierte, veröffentlichte Kopie von `src/HaelpMi.InstallCreator`. Die Git-Hooks (`pre-commit`, `post-rewrite`, `post-merge`, `post-checkout`, gemeinsame Logik in `.githooks/lib/rebuild-installcreator.sh`) bauen sie zustandsbasiert neu, sobald sich `src/HaelpMi.InstallCreator`, `src/HaelpMi.UpdateSigner`, `design/` oder `Directory.Build.props` geändert haben. Keine Session baut von Hand.
 - Menschen starten das Tool über `tools/InstallCreator/Start.cmd` (bzw. `Start.ps1`), das selbst prüft und bei Bedarf neu baut; nie über die rohe `.exe`.
 - Details und Vorgeschichte: `docs/wissen/installcreator-rebuild-hook.md`.
 

@@ -2,34 +2,9 @@
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                     xmlns:helpers="clr-namespace:HaelpMi.UI.Helpers">
 
-    <!-- Schlankes, helles Farbschema (Nutzerwunsch: "Apple-artig") - ein Akzentton statt
-         der bisherigen Vielzahl an Ad-hoc-Hex-Farben je Button. Bestehende, semantisch
-         wichtige Inline-Farben (Alarm-Rot, Erfolgs-Grün im Toast, ...) bleiben an ihren
-         Stellen unverändert bestehen, da lokale Werte diese Styles ohnehin überschreiben -
-         hier geht es nur um die Form (Ecken, Abstände, Typografie), nicht um jede Farbe. -->
-    <SolidColorBrush x:Key="WindowBackgroundBrush" Color="#F5F5F7" />
-    <SolidColorBrush x:Key="CardBackgroundBrush" Color="#FFFFFF" />
-    <SolidColorBrush x:Key="HairlineBrush" Color="#D2D2D7" />
-    <SolidColorBrush x:Key="TextPrimaryBrush" Color="#1D1D1F" />
-    <SolidColorBrush x:Key="TextSecondaryBrush" Color="#6E6E73" />
-    <SolidColorBrush x:Key="AccentBrush" Color="#0071E3" />
-    <SolidColorBrush x:Key="AccentPressedBrush" Color="#005BBF" />
-    <SolidColorBrush x:Key="DangerBrush" Color="#FF3B30" />
-    <SolidColorBrush x:Key="SuccessBrush" Color="#34C759" />
-    <!-- Issue #20: "läuft bald ab" ist bewusst weniger dringlich als DangerBrush (abgelaufen/ungültig/fehlt). -->
-    <SolidColorBrush x:Key="WarningBrush" Color="#FF9500" />
-    <!-- Nutzerwunsch 04.08.2026: "leicht grün hinterlegt" für aktiv/zugeordnete Einträge
-         in Toggle-Listen (Empfänger-/Gruppen-Zuordnung) - blasser als SuccessBrush, da es
-         eine ganze Zeile füllt statt eines kleinen Icons/Buttons. -->
-    <SolidColorBrush x:Key="SuccessLightBrush" Color="#D6F5DD" />
-    <!-- Nutzerwunsch 04.08.2026 (Sender-Auswahl im Alarm-Profil): "gerade zur Bearbeitung
-         ausgewählt" braucht eine eigene Farbe, die nicht mit Grün (= Empfänger zugeordnet)
-         oder dem fett+Badge-Zustand (= Sender hat bereits Empfänger) verwechselt wird -
-         blasses Blau, abgeleitet von AccentBrush. -->
-    <SolidColorBrush x:Key="AccentLightBrush" Color="#D6E9FA" />
-    <SolidColorBrush x:Key="SecondaryButtonBrush" Color="#E8E8ED" />
-
-    <FontFamily x:Key="AppFontFamily">Segoe UI Variable Text, Segoe UI</FontFamily>
+    <ResourceDictionary.MergedDictionaries>
+        <ResourceDictionary Source="/HaelpMi.UI;component/Styles/Design.xaml" />
+    </ResourceDictionary.MergedDictionaries>
 
     <Style TargetType="Window">
         <Setter Property="Background" Value="{StaticResource WindowBackgroundBrush}" />
@@ -299,7 +274,7 @@
         <Setter Property="BorderBrush" Value="{StaticResource HairlineBrush}" />
         <Setter Property="BorderThickness" Value="1" />
         <Setter Property="RowBackground" Value="{StaticResource CardBackgroundBrush}" />
-        <Setter Property="AlternatingRowBackground" Value="#FAFAFC" />
+        <Setter Property="AlternatingRowBackground" Value="{StaticResource TableAlternateRowBrush}" />
         <Setter Property="FontFamily" Value="{StaticResource AppFontFamily}" />
         <Setter Property="HorizontalGridLinesBrush" Value="{StaticResource HairlineBrush}" />
         <Setter Property="VerticalGridLinesBrush" Value="{StaticResource HairlineBrush}" />
@@ -440,7 +415,7 @@
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="ToggleButton">
-                    <Border x:Name="Track" Width="40" Height="22" CornerRadius="11" Background="#D2D2D7">
+                    <Border x:Name="Track" Width="40" Height="22" CornerRadius="11" Background="{StaticResource HairlineBrush}">
                         <Border x:Name="Thumb" Width="18" Height="18" CornerRadius="9" Background="White"
                                 HorizontalAlignment="Left" Margin="2,0,0,0">
                             <Border.Effect>
@@ -450,7 +425,7 @@
                     </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsChecked" Value="True">
-                            <Setter TargetName="Track" Property="Background" Value="#0071E3" />
+                            <Setter TargetName="Track" Property="Background" Value="{StaticResource AccentBrush}" />
                             <Setter TargetName="Thumb" Property="HorizontalAlignment" Value="Right" />
                             <Setter TargetName="Thumb" Property="Margin" Value="0,0,2,0" />
                         </Trigger>

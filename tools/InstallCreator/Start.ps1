@@ -141,8 +141,10 @@ if (-not (Test-Path $csproj)) {
 # laengst als "Rebuild noetig" gewertet haette - zwei Sicherheitsnetze mit unterschiedlicher
 # Maschenweite sind schlechter als eines mit der breiteren.
 $updateSignerDir = Join-Path $repoRoot "src\HaelpMi.UpdateSigner"
+# Icon und Farben des Install-Creators sind per Link aus dem Design-System eingebunden.
+$designDir = Join-Path $repoRoot "design"
 $buildProps = Join-Path $repoRoot "Directory.Build.props"
-$watchedSourceDirs = @($srcDir, $updateSignerDir) | Where-Object { Test-Path $_ }
+$watchedSourceDirs = @($srcDir, $updateSignerDir, $designDir) | Where-Object { Test-Path $_ }
 
 $needsRebuild = $true
 if (Test-Path $exePath) {

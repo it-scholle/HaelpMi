@@ -106,7 +106,7 @@
         <!-- Nutzerwunsch: eine Datei an den Sysadmin, User-Installer wird bei Bedarf aus dem Dashboard selbst nachgebaut. -->
         <DockPanel Grid.Row="1" Margin="0,0,0,10">
             <Button DockPanel.Dock="Left" x:Name="ExportUserInstallerButton" Content="User-Installer exportieren"
-                    Padding="14,8" Background="#2471A3" Foreground="White" BorderThickness="0"
+                    Padding="14,8" Background="{StaticResource ExportButtonBrush}" Foreground="White" BorderThickness="0"
                     Click="ExportUserInstallerButton_Click" />
             <TextBlock x:Name="ExportStatusText" VerticalAlignment="Center" Margin="12,0,0,0" Foreground="Gray" />
         </DockPanel>
@@ -211,7 +211,7 @@
                              RebuildSenderPanels() für die eigentliche Steuerung, dies hier
                              nur der Startzustand vor dem ersten Aufbau. -->
                         <Button x:Name="TransferRecipientsButton" Content="Empfängerliste übertragen" HorizontalAlignment="Left"
-                                Padding="14,6" Background="#2C3E50" Foreground="White" BorderThickness="0" IsEnabled="False"
+                                Padding="14,6" Background="{StaticResource SlateButtonBrush}" Foreground="White" BorderThickness="0" IsEnabled="False"
                                 Click="TransferRecipientsButton_Click" />
                         <StackPanel x:Name="TransferModeButtons" Orientation="Horizontal" HorizontalAlignment="Left" Visibility="Collapsed">
                             <TextBlock VerticalAlignment="Center" Margin="0,0,10,0" TextWrapping="Wrap" MaxWidth="280"
@@ -328,10 +328,10 @@
                         <Button DockPanel.Dock="Bottom" x:Name="NewGroupButton" Content="Neue Gruppe" Margin="0,8,0,0" Padding="0,6" Click="NewGroupButton_Click" />
                         <ListBox x:Name="GroupsList" DisplayMemberPath="Name" SelectionChanged="GroupsList_SelectionChanged">
                             <ListBox.Resources>
-                                <SolidColorBrush x:Key="{x:Static SystemColors.HighlightBrushKey}" Color="#D6F5DD" />
-                                <SolidColorBrush x:Key="{x:Static SystemColors.HighlightTextBrushKey}" Color="#1D1D1F" />
-                                <SolidColorBrush x:Key="{x:Static SystemColors.ControlBrushKey}" Color="#D6F5DD" />
-                                <SolidColorBrush x:Key="{x:Static SystemColors.ControlTextBrushKey}" Color="#1D1D1F" />
+                                <SolidColorBrush x:Key="{x:Static SystemColors.HighlightBrushKey}" Color="{StaticResource SuccessLightColor}" />
+                                <SolidColorBrush x:Key="{x:Static SystemColors.HighlightTextBrushKey}" Color="{StaticResource TextPrimaryColor}" />
+                                <SolidColorBrush x:Key="{x:Static SystemColors.ControlBrushKey}" Color="{StaticResource SuccessLightColor}" />
+                                <SolidColorBrush x:Key="{x:Static SystemColors.ControlTextBrushKey}" Color="{StaticResource TextPrimaryColor}" />
                             </ListBox.Resources>
                         </ListBox>
                     </DockPanel>
@@ -467,7 +467,7 @@
 
                                             <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
                                                 <TextBlock Text="{Binding ComputerName}" FontWeight="SemiBold" VerticalAlignment="Center" />
-                                                <Border Background="#C0392B" CornerRadius="3" Padding="4,1" Margin="6,0,0,0" VerticalAlignment="Center"
+                                                <Border Background="{StaticResource AlarmBrush}" CornerRadius="3" Padding="4,1" Margin="6,0,0,0" VerticalAlignment="Center"
                                                         Visibility="{Binding IsNew, Converter={x:Static conv:BoolToVisibilityConverter.Instance}}">
                                                     <TextBlock Text="NEU" Foreground="White" FontSize="9" FontWeight="Bold" />
                                                 </Border>

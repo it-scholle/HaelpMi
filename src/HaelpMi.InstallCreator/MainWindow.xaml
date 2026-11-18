@@ -164,7 +164,7 @@
             <TextBlock DockPanel.Dock="Top" Text="Protokoll" FontWeight="SemiBold" Margin="0,0,0,6" />
             <TextBox x:Name="LogBox" IsReadOnly="True" TextWrapping="Wrap"
                      VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto"
-                     FontFamily="Consolas" FontSize="11" Background="#F4F6F6" />
+                     FontFamily="Consolas" FontSize="11" Background="{StaticResource SubtleBackgroundBrush}" />
         </DockPanel>
 
         <!-- Nutzerwunsch 20.08.2026: aus der rechten Protokoll-Spalte in die linke Spalte

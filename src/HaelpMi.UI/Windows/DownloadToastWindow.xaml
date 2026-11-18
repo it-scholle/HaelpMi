@@ -13,7 +13,7 @@
             </ResourceDictionary.MergedDictionaries>
         </ResourceDictionary>
     </Window.Resources>
-    <Border Background="#DD1E8449" CornerRadius="14" Padding="14,12">
+    <Border Background="{StaticResource ToastSuccessBackgroundBrush}" CornerRadius="14" Padding="14,12">
         <Border.Effect>
             <DropShadowEffect BlurRadius="14" ShadowDepth="2" Opacity="0.35" />
         </Border.Effect>
@@ -29,14 +29,14 @@
 
             <StackPanel Grid.Column="1">
                 <TextBlock x:Name="TitleText" Foreground="White" FontWeight="Bold" FontSize="13" TextWrapping="Wrap" />
-                <TextBlock x:Name="SubText" Foreground="#D5F5E3" FontSize="11" Margin="0,2,0,8" TextWrapping="Wrap" />
+                <TextBlock x:Name="SubText" Foreground="{StaticResource ToastSuccessSubtextBrush}" FontSize="11" Margin="0,2,0,8" TextWrapping="Wrap" />
                 <Button x:Name="OpenFolderButton" Content="Ordner öffnen" HorizontalAlignment="Left" Padding="10,4"
-                        Background="White" Foreground="#1E8449" BorderThickness="0" FontWeight="SemiBold"
+                        Background="White" Foreground="{StaticResource ToastSuccessAccentBrush}" BorderThickness="0" FontWeight="SemiBold"
                         Click="OpenFolderButton_Click" />
             </StackPanel>
 
             <Button Grid.Column="2" x:Name="CloseButton" Content="&#10005;" Width="20" Height="20"
-                    VerticalAlignment="Top" Background="Transparent" Foreground="#D5F5E3" BorderThickness="0"
+                    VerticalAlignment="Top" Background="Transparent" Foreground="{StaticResource ToastSuccessSubtextBrush}" BorderThickness="0"
                     Padding="0" Click="CloseButton_Click" />
         </Grid>
     </Border>

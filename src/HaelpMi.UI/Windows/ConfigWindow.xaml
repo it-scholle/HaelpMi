@@ -73,7 +73,7 @@
                 <!-- FR-33: nur sichtbar für Role.Admin - ConfigWindowContext.OpenAdminDashboard ist dann gesetzt. -->
                 <Button Grid.Row="1" Grid.Column="2" Grid.ColumnSpan="2" x:Name="OpenAdminDashboardButton"
                         Content="Admin-Dashboard öffnen" Padding="14,6" HorizontalAlignment="Right"
-                        Background="#8E44AD" Foreground="White" BorderThickness="0"
+                        Background="{StaticResource AdminButtonBrush}" Foreground="White" BorderThickness="0"
                         Visibility="Collapsed" Click="OpenAdminDashboardButton_Click" />
             </Grid>
         </GroupBox>
