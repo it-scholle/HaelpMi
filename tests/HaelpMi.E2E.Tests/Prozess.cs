@@ -63,11 +63,14 @@ internal static class Prozess
         return p.ExitCode;
     }
 
-    public static bool Laeuft(string prozessName)
+    public static int EigeneSitzung { get; } = Process.GetCurrentProcess().SessionId;
+
+    public static bool LaeuftInEigenerSitzung(string prozessName)
     {
         var prozesse = Process.GetProcessesByName(prozessName);
+        var gefunden = prozesse.Any(p => p.SessionId == EigeneSitzung);
         foreach (var p in prozesse) p.Dispose();
-        return prozesse.Length > 0;
+        return gefunden;
     }
 
     public static void Beenden(string prozessName)

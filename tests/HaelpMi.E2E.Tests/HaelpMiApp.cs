@@ -35,14 +35,15 @@ internal sealed class HaelpMiApp : IDisposable
 
     public static string FenstertitelFuerVerknuepfung(Role rolle) => rolle == Role.Admin ? TitelDashboard : TitelEinstellungen;
 
+    /// <summary>Wartet auf einen Agent in der Sitzung des Testlaufs; einer in einer fremden Sitzung zählt nicht.</summary>
     public static async Task WarteAufAgentAsync(TimeSpan timeout)
     {
         var frist = DateTime.UtcNow + timeout;
-        while (!Prozess.Laeuft(AgentProzess))
+        while (!Prozess.LaeuftInEigenerSitzung(AgentProzess))
         {
             if (DateTime.UtcNow > frist)
             {
-                throw new TimeoutException($"{AgentProzess} läuft nach {timeout} nicht.");
+                throw new TimeoutException($"{AgentProzess} läuft nach {timeout} nicht in Sitzung {Prozess.EigeneSitzung}.");
             }
 
             await Task.Delay(500);

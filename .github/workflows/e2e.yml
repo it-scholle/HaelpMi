@@ -17,9 +17,10 @@ permissions:
   contents: read
 
 # Eine Umgebung auf PVE 2, ein Lauf zur Zeit; ein laufender Lauf wird nie abgebrochen,
-# sonst bleiben die VMs an.
+# sonst bleiben die VMs an. Nur echte E2E-Läufe teilen sich die Gruppe: jedes andere Label
+# erzeugt einen Lauf ohne Jobs, der sonst einen wartenden echten Lauf aus der Warteschlange verdrängt.
 concurrency:
-  group: e2e-pve2
+  group: ${{ (github.event_name == 'workflow_dispatch' || github.event.label.name == 'e2e') && 'e2e-pve2' || format('e2e-noop-{0}', github.run_id) }}
   cancel-in-progress: false
 
 env:
@@ -81,7 +82,9 @@ jobs:
           $ist = (Get-FileHash $pfad -Algorithm SHA256).Hash
           if ($ist -ne $env:INNO_SHA256) { throw "SHA256 von $datei ist $ist, erwartet $env:INNO_SHA256" }
           $ziel = Join-Path $env:RUNNER_TEMP 'inno'
-          $p = Start-Process $pfad -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/SP-', "/DIR=`"$ziel`"" -Wait -PassThru
+          # Kein -Wait: in PowerShell 7 wartet es auf den ganzen Prozessbaum und kann hängen bleiben.
+          $p = Start-Process $pfad -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/SP-', "/DIR=`"$ziel`"" -PassThru
+          $p.WaitForExit()
           if ($p.ExitCode) { throw "Inno-Setup-Installation endete mit $($p.ExitCode)" }
           $iscc = Join-Path $ziel 'ISCC.exe'
           if (-not (Test-Path $iscc)) { throw "$iscc fehlt" }
@@ -93,14 +96,19 @@ jobs:
         run: ci/e2e/testlizenz-erzeugen.ps1 -Payload installer/payload -Ausgabe e2e-installer/lizenz.json
 
       # User vor Admin: der Admin-Installer bettet installer/UserInstallerPayload/HaelpMi-User-Setup.exe ein.
+      # Ohne /DCustomerGroupId gilt im Installer die Null-GUID, deren Nachrichten MessageValidation.IsPlausible verwirft.
       - name: Installer kompilieren
         env:
           GRUPPE: ${{ steps.lizenz.outputs.customer_group_id }}
           SCHLUESSEL: ${{ steps.lizenz.outputs.license_public_key_hex }}
         run: |
+          $g = [guid]::Empty
+          if (-not [guid]::TryParse($env:GRUPPE, [ref]$g) -or $g -eq [guid]::Empty) { throw "Keine gültige CustomerGroupId aus der Testlizenz: '$env:GRUPPE'" }
+          if ($env:SCHLUESSEL -notmatch '^[0-9A-Fa-f]{64}$') { throw 'Kein gültiger Lizenzschlüssel aus der Testlizenz.' }
           $gemeinsam = "/DCustomerGroupId=$env:GRUPPE", '/DIsTestInstaller=true', "/DLicensePublicKeyHex=$env:SCHLUESSEL"
           & $env:ISCC @gemeinsam "/O$PWD\installer\UserInstallerPayload" /FHaelpMi-User-Setup installer/HaelpMi.iss
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          if (-not (Test-Path installer/UserInstallerPayload/HaelpMi-User-Setup.exe)) { throw 'User-Installer fehlt in installer\UserInstallerPayload, der Admin-Installer würde ohne ihn scheitern.' }
           & $env:ISCC @gemeinsam "/O$PWD\e2e-installer" /FHaelpMi-Admin-Setup installer/HaelpMi-Admin.iss
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           Copy-Item installer/UserInstallerPayload/HaelpMi-User-Setup.exe e2e-installer/
@@ -146,6 +154,16 @@ jobs:
         with:
           name: e2e-tests
           path: C:\haelpmi-e2e\tests
+      # Testvorbereitung, Umgehung eines Produktbefunds: beim ersten Agent-Start fragt die Windows-Firewall
+      # nach einer Freigabe für HaelpMi.Agent.exe: der Admin-Installer legt nur Portregeln für 51500/51501 an,
+      # nicht für 51502–51506, der User-Installer gar keine. Der Dialog verdeckt das Alarmfenster. Die Programmregel
+      # ersetzt keine Produktkorrektur; sie lebt nur bis zum nächsten Reset auf clean-base.
+      - name: Testvorbereitung – Firewall-Freigabe für den Agent (Umgehung)
+        run: |
+          $name = 'HaelpMi E2E Agent (Testvorbereitung)'
+          Get-NetFirewallRule -DisplayName $name -ErrorAction SilentlyContinue | Remove-NetFirewallRule
+          New-NetFirewallRule -DisplayName $name -Direction Inbound -Action Allow -Profile Any `
+              -Program 'C:\Program Files\HaelpMi\HaelpMi.Agent.exe' | Out-Null
       - name: E2E-Tests
         run: |
           $filter = "Category=E2E&Geraet=$env:GERAET"
@@ -196,6 +214,16 @@ jobs:
         with:
           name: e2e-tests
           path: C:\haelpmi-e2e\tests
+      # Testvorbereitung, Umgehung eines Produktbefunds: beim ersten Agent-Start fragt die Windows-Firewall
+      # nach einer Freigabe für HaelpMi.Agent.exe: der Admin-Installer legt nur Portregeln für 51500/51501 an,
+      # nicht für 51502–51506, der User-Installer gar keine. Der Dialog verdeckt das Alarmfenster. Die Programmregel
+      # ersetzt keine Produktkorrektur; sie lebt nur bis zum nächsten Reset auf clean-base.
+      - name: Testvorbereitung – Firewall-Freigabe für den Agent (Umgehung)
+        run: |
+          $name = 'HaelpMi E2E Agent (Testvorbereitung)'
+          Get-NetFirewallRule -DisplayName $name -ErrorAction SilentlyContinue | Remove-NetFirewallRule
+          New-NetFirewallRule -DisplayName $name -Direction Inbound -Action Allow -Profile Any `
+              -Program 'C:\Program Files\HaelpMi\HaelpMi.Agent.exe' | Out-Null
       - name: E2E-Tests
         run: |
           $filter = "Category=E2E&Geraet=$env:GERAET"

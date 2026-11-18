@@ -1,6 +1,7 @@
 using System.Security.AccessControl;
 using System.Security.Principal;
 using HaelpMi.Core.Autostart;
+using HaelpMi.Core.Licensing;
 using HaelpMi.Core.Models;
 using HaelpMi.Core.Storage;
 using Xunit;
@@ -20,7 +21,10 @@ internal static class Installation
             "settings.json existiert schon - VM ist nicht auf clean-base, eine Erstinstallation lässt sich so nicht prüfen.");
 
         HaelpMiApp.BeendeAlles();
-        var vorgabe = SchreibeVorabEinstellungen(rolle);
+        var gruppeAusLizenz = E2EUmgebung.LizenzPfad is { } lizenzDatei
+            ? JsonFileStore.Load<License>(lizenzDatei)?.CustomerGroupId
+            : null;
+        var vorgabe = SchreibeVorabEinstellungen(rolle, gruppeAusLizenz ?? Guid.Empty);
         if (E2EUmgebung.LizenzPfad is { } lizenz)
         {
             // Wie beim Kunden: lizenz.json liegt vor dem ersten Agent-Start bereit (LicenseReader).
@@ -47,6 +51,13 @@ internal static class Installation
         Assert.NotNull(deployment);
         Assert.Equal(rolle, deployment!.Role);
 
+        // MessageValidation.IsPlausible verwirft jede Nachricht mit Null-GUID, ein solcher Installer kann nie kommunizieren.
+        Assert.NotEqual(Guid.Empty, deployment.CustomerGroupId);
+        if (gruppeAusLizenz is { } gruppe)
+        {
+            Assert.Equal(gruppe, deployment.CustomerGroupId);
+        }
+
         // FR-3/FR-37: vorab geschriebene settings.json bleibt unverändert, DeviceId inklusive.
         var settings = JsonFileStore.Load<OwnSettings>(AppPaths.SettingsFilePath);
         Assert.NotNull(settings);
@@ -66,6 +77,11 @@ internal static class Installation
         var dienst = Prozess.Ausfuehren("sc.exe", "query HaelpMiUpdateService");
         Assert.True(dienst.ExitCode != 0, "HaelpMiUpdateService ist registriert, laut Installer-Skript sollte es ihn nicht geben.");
 
+        // Die postinstall-Einträge starten Agent und Konfiguration mit dem Token des Installers, je nach Aufrufer
+        // erhöht oder in einer fremden Sitzung. Der Test braucht den Agent rechtelos in der eigenen Sitzung, wie nach einer Anmeldung.
+        await Task.Delay(TimeSpan.FromSeconds(3));
+        HaelpMiApp.BeendeAlles();
+        HaelpMiApp.StarteAgentUeberAutostart();
         await HaelpMiApp.WarteAufAgentAsync(TimeSpan.FromSeconds(60));
 
         if (rolle == Role.Admin)
@@ -74,8 +90,6 @@ internal static class Installation
             PruefeFirewallRegel("HälpMi Alarm", "TCP", AppConstants.AlarmTcpPort);
         }
 
-        // Silent führt die postinstall-Einträge aus und öffnet Dashboard bzw. Einstellungen.
-        HaelpMiApp.BeendeKonfiguration();
 
         Rendezvous.Signal($"{geraet.ToLowerInvariant()}-installiert", settings.DeviceId.ToString());
     }
@@ -85,7 +99,8 @@ internal static class Installation
     /// HaelpMiCommon.iss.inc). Liegt sie schon vor, überspringen sie die Raum-Seite und schreiben sie nicht
     /// neu (ShouldSkipPage, CurStepChanged) - so wird die stille Installation möglich.
     /// </summary>
-    private static OwnSettings SchreibeVorabEinstellungen(Role rolle)
+    /// <param name="gruppe">CustomerGroupId des Laufs aus lizenz.json; nur Cache wie in WriteSettingsJson, zur Laufzeit gilt deployment.json.</param>
+    private static OwnSettings SchreibeVorabEinstellungen(Role rolle, Guid gruppe)
     {
         var ordner = new DirectoryInfo(E2EUmgebung.DatenOrdner);
         ordner.Create();
@@ -101,8 +116,7 @@ internal static class Installation
             AccessControlType.Allow));
         ordner.SetAccessControl(acl);
 
-        // Felder wie in WriteSettingsJson (HaelpMiCommon.iss.inc). CustomerGroupId ist hier nur ein Cache,
-        // zur Laufzeit gilt deployment.json; vor der Installation ist sie unbekannt und bleibt leer.
+        // Felder wie in WriteSettingsJson (HaelpMiCommon.iss.inc).
         var settings = new OwnSettings
         {
             DeviceId = Guid.NewGuid(),
@@ -110,6 +124,7 @@ internal static class Installation
             RoomName = E2EUmgebung.Raum,
             RoomNumber = E2EUmgebung.Raumnummer,
             Role = rolle,
+            CustomerGroupId = gruppe,
             AppliedConfigVersion = 0,
             FirstRunCompleted = true,
         };
