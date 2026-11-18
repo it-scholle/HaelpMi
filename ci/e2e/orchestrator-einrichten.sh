@@ -3,6 +3,12 @@
 #
 # Idempotent: jeder Schritt prüft zuerst, ob er schon erfüllt ist. Als root ausführen.
 #
+# Voraussetzungen im frischen LXC:
+#   - Container mit "features: nesting=1" anlegen, sonst warnt systemd 252 und der
+#     SSH-Login dauert ~25 s.
+#   - Debian 12 bringt kein curl mit, zum Holen dieses Skripts vorher:
+#       apt-get update && apt-get install -y curl ca-certificates
+#
 #   orchestrator-einrichten.sh [--pve-host <adresse>]   einrichten
 #   orchestrator-einrichten.sh --pruefen                nur prüfen, Exit 1 bei Abweichung
 #   orchestrator-einrichten.sh --api-test               PVE-Token gegen die API testen
@@ -11,6 +17,8 @@
 #   RUNNER_TOKEN  Registrierungstoken für den GitHub-Runner (gilt 1 h), nur beim ersten Lauf nötig
 #   PVE_HOST      Adresse von PVE 2, alternativ zu --pve-host
 #   PVE_NODE      Node-Name; ohne Angabe per API ermittelt
+#
+# Die PVE-API hat keinen DNS-Namen, daher die Adresse immer per --pve-host oder PVE_HOST.
 #
 # Das PVE-Token wird als pve-token.json (Ausgabe von "pveum user token add ...
 # --output-format json") nach /etc/haelpmi-ci gelegt und beim nächsten Lauf umgewandelt.
@@ -34,6 +42,10 @@ WACHHALTEN="$CI_OPT/wachhalten.sh"
 SYSTEMD_DIR=/etc/systemd/system
 UNIT=haelpmi-e2e-wachhalten
 PAKETE=(curl jq openssh-client mosquitto-clients ca-certificates)
+# Das Token hat nur VM.Audit, VM.PowerMgmt und VM.Snapshot.Rollback auf diesen VMs (#163),
+# kein Pool.Audit; geprüft wird deshalb VM-weise statt über den Pool.
+TEST_VMIDS=(9101 9102 9103 9110)
+FREMDE_VMID=100
 
 pruefen=0
 api_test=0
@@ -44,7 +56,7 @@ while [[ $# -gt 0 ]]; do
         --pruefen) pruefen=1 ;;
         --api-test) api_test=1 ;;
         --pve-host) pve_host="${2:?--pve-host braucht eine Adresse}"; shift ;;
-        -h|--help) sed -n '2,17p' "$0"; exit 0 ;;
+        -h|--help) sed -n '2,/^set /{/^#/s/^# \{0,1\}//p}' "$0"; exit 0 ;;
         *) echo "Unbekannter Parameter: $1" >&2; exit 2 ;;
     esac
     shift
@@ -248,7 +260,7 @@ ist_pve_conf() {
         && rechte_ok "$CI_ETC/pve.conf" 600 "$NUTZER"
 }
 setze_pve_conf() {
-    local api node tmp status
+    local api node tmp status k kandidaten=()
     api="$(soll_api)"
     [[ -n "$api" ]] || return 2
     node="${PVE_NODE:-$(conf_wert "$CI_ETC/pve.conf" PVE_NODE)}"
@@ -256,11 +268,17 @@ setze_pve_conf() {
         tmp="$(mktemp)"
         trap 'rm -f "$tmp"' EXIT
         status="$(pve_get "$api" /nodes "$tmp" || true)"
-        [[ "$status" == 200 ]] && node="$(jq -r 'if (.data | length) == 1 then .data[0].node else empty end' "$tmp")"
-        # Mit Privilege Separation sieht das Token /nodes evtl. nicht, die Pool-Mitglieder schon.
-        if [[ -z "$node" ]]; then
-            status="$(pve_get "$api" /pools/haelpmi-test "$tmp" || true)"
-            [[ "$status" == 200 ]] && node="$(jq -r '[.data.members[].node // empty] | unique | if length == 1 then .[0] else empty end' "$tmp")"
+        if [[ "$status" == 200 ]]; then
+            mapfile -t kandidaten < <(jq -r '.data[].node' "$tmp")
+            if [[ ${#kandidaten[@]} -eq 1 ]]; then
+                node="${kandidaten[0]}"
+            else
+                # Cluster: der Node, auf dem die erste Test-VM liegt.
+                for k in "${kandidaten[@]}"; do
+                    status="$(pve_get "$api" "/nodes/$k/qemu/${TEST_VMIDS[0]}/status/current" "$tmp" || true)"
+                    [[ "$status" == 200 ]] && { node="$k"; break; }
+                done
+            fi
         fi
     fi
     (umask 077 && printf 'PVE_API=%s\nPVE_NODE=%s\n' "$api" "$node" > "$CI_ETC/pve.conf")
@@ -324,20 +342,22 @@ api_testen() {
     tmp="$(mktemp)"
     trap 'rm -f "$tmp"' EXIT
 
-    status="$(pve_get "$api" "/nodes/$node/qemu/100/status/current" "$tmp" || true)"
-    if [[ "$status" == 403 ]]; then
-        echo "ok             fremde VM 100: 403"
-    else
-        echo "ABWEICHUNG     fremde VM 100: HTTP $status, erwartet 403"
-        fehler=1
-    fi
+    for vmid in "${TEST_VMIDS[@]}"; do
+        status="$(pve_get "$api" "/nodes/$node/qemu/$vmid/status/current" "$tmp" || true)"
+        if [[ "$status" == 200 ]]; then
+            printf 'ok             Test-VM %s: 200 (%s, %s)\n' "$vmid" \
+                "$(jq -r '.data.name // "-"' "$tmp")" "$(jq -r '.data.status // "-"' "$tmp")"
+        else
+            echo "ABWEICHUNG     Test-VM $vmid: HTTP $status, erwartet 200"
+            fehler=1
+        fi
+    done
 
-    status="$(pve_get "$api" /pools/haelpmi-test "$tmp" || true)"
-    if [[ "$status" == 200 ]]; then
-        echo "ok             Pool haelpmi-test: 200"
-        jq -r '.data.members[] | select(.type == "qemu") | "               VM \(.vmid) \(.name // "") \(.status // "")"' "$tmp"
+    status="$(pve_get "$api" "/nodes/$node/qemu/$FREMDE_VMID/status/current" "$tmp" || true)"
+    if [[ "$status" == 403 ]]; then
+        echo "ok             fremde VM $FREMDE_VMID: 403"
     else
-        echo "ABWEICHUNG     Pool haelpmi-test: HTTP $status, erwartet 200"
+        echo "ABWEICHUNG     fremde VM $FREMDE_VMID: HTTP $status, erwartet 403"
         fehler=1
     fi
     exit "$fehler"
