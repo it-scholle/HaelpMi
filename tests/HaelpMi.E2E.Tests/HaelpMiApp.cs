@@ -56,7 +56,7 @@ internal sealed class HaelpMiApp : IDisposable
         var ergebnis = Prozess.Ausfuehren("schtasks.exe", $"/Run /TN \"{AutostartRegistrar.TaskName}\"");
         if (ergebnis.ExitCode != 0)
         {
-            throw new InvalidOperationException($"schtasks /Run für '{AutostartRegistrar.TaskName}' fehlgeschlagen: {ergebnis.StdOut}");
+            throw new InvalidOperationException($"schtasks /Run für '{AutostartRegistrar.TaskName}' fehlgeschlagen: {ergebnis.Ausgabe}");
         }
     }
 

@@ -71,7 +71,7 @@ internal static class Installation
 
         // NFR-2: Autostart über die geplante Aufgabe.
         var aufgabe = Prozess.Ausfuehren("schtasks.exe", $"/Query /TN \"{AutostartRegistrar.TaskName}\"");
-        Assert.True(aufgabe.ExitCode == 0, $"Geplante Aufgabe '{AutostartRegistrar.TaskName}' fehlt: {aufgabe.StdOut}");
+        Assert.True(aufgabe.ExitCode == 0, $"Geplante Aufgabe '{AutostartRegistrar.TaskName}' fehlt: {aufgabe.Ausgabe}");
 
         // Der Update-Dienst wird auf diesem Stand absichtlich nicht angelegt ([Run] in HaelpMiCommon.iss.inc).
         var dienst = Prozess.Ausfuehren("sc.exe", "query HaelpMiUpdateService");

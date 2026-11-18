@@ -109,19 +109,32 @@ jobs:
           & $env:ISCC @gemeinsam "/O$PWD\installer\UserInstallerPayload" /FHaelpMi-User-Setup installer/HaelpMi.iss
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           if (-not (Test-Path installer/UserInstallerPayload/HaelpMi-User-Setup.exe)) { throw 'User-Installer fehlt in installer\UserInstallerPayload, der Admin-Installer würde ohne ihn scheitern.' }
-          & $env:ISCC @gemeinsam "/O$PWD\e2e-installer" /FHaelpMi-Admin-Setup installer/HaelpMi-Admin.iss
+          & $env:ISCC @gemeinsam "/O$PWD\e2e-installer\a" /FHaelpMi-Admin-Setup installer/HaelpMi-Admin.iss
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
-          Copy-Item installer/UserInstallerPayload/HaelpMi-User-Setup.exe e2e-installer/
+          New-Item -ItemType Directory -Force -Path e2e-installer/b | Out-Null
+          Copy-Item installer/UserInstallerPayload/HaelpMi-User-Setup.exe e2e-installer/b/
+          Copy-Item e2e-installer/lizenz.json e2e-installer/a/
+          Copy-Item e2e-installer/lizenz.json e2e-installer/b/
 
       - name: E2E-Tests bauen
         run: dotnet build tests/HaelpMi.E2E.Tests -c Release
 
+      # Je VM ein eigenes Artefakt: die VMs laden mit wenigen hundert KB/s, der Admin-Installer
+      # enthält den User-Installer schon, A braucht ihn nicht ein zweites Mal.
       - uses: actions/upload-artifact@v4
         with:
-          name: installer
-          path: e2e-installer/
+          name: installer-a
+          path: e2e-installer/a/
           if-no-files-found: error
           retention-days: 3
+          compression-level: 0
+      - uses: actions/upload-artifact@v4
+        with:
+          name: installer-b
+          path: e2e-installer/b/
+          if-no-files-found: error
+          retention-days: 3
+          compression-level: 0
       - uses: actions/upload-artifact@v4
         with:
           name: e2e-tests
@@ -134,7 +147,7 @@ jobs:
     needs: [reset, build]
     if: (github.event_name == 'workflow_dispatch' || (github.event.label.name == 'e2e' && github.event.pull_request.head.repo.full_name == github.repository)) && contains(format(',{0},', inputs.vms || 'a,b'), ',a,')
     runs-on: [self-hosted, haelpmi-e2e, vm-a]
-    timeout-minutes: 35
+    timeout-minutes: 60
     defaults:
       run:
         shell: pwsh
@@ -148,7 +161,7 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with:
-          name: installer
+          name: installer-a
           path: C:\haelpmi-e2e\installer
       - uses: actions/download-artifact@v4
         with:
@@ -180,13 +193,19 @@ jobs:
           $tmp = Join-Path $rv ".ende.$([guid]::NewGuid().ToString('N')).tmp"
           Set-Content -LiteralPath $tmp -Value '' -NoNewline
           Move-Item -LiteralPath $tmp -Destination (Join-Path $rv "$($env:GERAET.ToLower())-ende") -Force
+      # upload-artifact nimmt hier nur Pfade unterhalb des Workspace an.
+      - name: Ergebnisse einsammeln
+        if: always()
+        run: |
+          $ziel = Join-Path $env:GITHUB_WORKSPACE 'e2e-out'
+          New-Item -ItemType Directory -Force -Path (Join-Path $ziel 'programdata') | Out-Null
+          if (Test-Path "$env:HAELPMI_E2E_DIR\out") { Copy-Item "$env:HAELPMI_E2E_DIR\out\*" $ziel -Recurse -Force }
+          Copy-Item "$env:ProgramData\HaelpMi\*.log" (Join-Path $ziel 'programdata') -ErrorAction SilentlyContinue
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: e2e-a
-          path: |
-            C:\haelpmi-e2e\out
-            C:\ProgramData\HaelpMi\*.log
+          path: e2e-out/
           if-no-files-found: warn
 
   test-b:
@@ -194,7 +213,7 @@ jobs:
     needs: [reset, build]
     if: (github.event_name == 'workflow_dispatch' || (github.event.label.name == 'e2e' && github.event.pull_request.head.repo.full_name == github.repository)) && contains(format(',{0},', inputs.vms || 'a,b'), ',b,')
     runs-on: [self-hosted, haelpmi-e2e, vm-b]
-    timeout-minutes: 35
+    timeout-minutes: 60
     defaults:
       run:
         shell: pwsh
@@ -208,7 +227,7 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with:
-          name: installer
+          name: installer-b
           path: C:\haelpmi-e2e\installer
       - uses: actions/download-artifact@v4
         with:
@@ -239,13 +258,19 @@ jobs:
           $tmp = Join-Path $rv ".ende.$([guid]::NewGuid().ToString('N')).tmp"
           Set-Content -LiteralPath $tmp -Value '' -NoNewline
           Move-Item -LiteralPath $tmp -Destination (Join-Path $rv "$($env:GERAET.ToLower())-ende") -Force
+      # upload-artifact nimmt hier nur Pfade unterhalb des Workspace an.
+      - name: Ergebnisse einsammeln
+        if: always()
+        run: |
+          $ziel = Join-Path $env:GITHUB_WORKSPACE 'e2e-out'
+          New-Item -ItemType Directory -Force -Path (Join-Path $ziel 'programdata') | Out-Null
+          if (Test-Path "$env:HAELPMI_E2E_DIR\out") { Copy-Item "$env:HAELPMI_E2E_DIR\out\*" $ziel -Recurse -Force }
+          Copy-Item "$env:ProgramData\HaelpMi\*.log" (Join-Path $ziel 'programdata') -ErrorAction SilentlyContinue
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: e2e-b
-          path: |
-            C:\haelpmi-e2e\out
-            C:\ProgramData\HaelpMi\*.log
+          path: e2e-out/
           if-no-files-found: warn
 
   # Spiegelt die Rendezvous-Marken zwischen A und B, bis beide "ende" gemeldet haben.
@@ -255,13 +280,14 @@ jobs:
     needs: [reset, build]
     if: (github.event_name == 'workflow_dispatch' || (github.event.label.name == 'e2e' && github.event.pull_request.head.repo.full_name == github.repository)) && contains(format(',{0},', inputs.vms || 'a,b'), ',a,') && contains(format(',{0},', inputs.vms || 'a,b'), ',b,')
     runs-on: [self-hosted, pve-orchestrator]
-    timeout-minutes: 30
+    timeout-minutes: 65
     defaults:
       run:
         shell: bash
     steps:
       - uses: actions/checkout@v4
-      - run: ci/e2e/rendezvous-relay.sh 9101 9102
+      # Läuft ab Start der Test-Jobs, also auch während deren Artefakt-Downloads (im ersten Lauf ~22 min).
+      - run: ci/e2e/rendezvous-relay.sh --timeout 60 9101 9102
 
   stop:
     name: VMs herunterfahren

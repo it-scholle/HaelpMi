@@ -3,7 +3,10 @@ using System.Text;
 
 namespace HaelpMi.E2E.Tests;
 
-internal sealed record ProzessErgebnis(int ExitCode, string StdOut);
+internal sealed record ProzessErgebnis(int ExitCode, string StdOut, string StdErr)
+{
+    public string Ausgabe => StdOut + StdErr;
+}
 
 internal static class Prozess
 {
@@ -26,17 +29,20 @@ internal static class Prozess
             throw new TimeoutException($"{exe} {argumente} hat sich nicht rechtzeitig beendet.");
         }
 
-        return new ProzessErgebnis(p.ExitCode, stdout.Result + stderr.Result);
+        return new ProzessErgebnis(p.ExitCode, stdout.Result, stderr.Result);
     }
 
-    /// <summary>Per -EncodedCommand, damit Umlaute (z. B. "HälpMi Alarm") unabhängig von der Konsolen-Codepage ankommen.</summary>
+    /// <summary>
+    /// Per -EncodedCommand, damit Umlaute (z. B. "HälpMi Alarm") unabhängig von der Konsolen-Codepage ankommen.
+    /// Liefert nur stdout: Windows PowerShell schreibt bei umgeleiteter Ausgabe Fortschrittsdatensätze als CLIXML nach stderr.
+    /// </summary>
     public static string PowerShell(string skript)
     {
         var kodiert = Convert.ToBase64String(Encoding.Unicode.GetBytes(skript));
         var ergebnis = Ausfuehren("powershell.exe", "-NoProfile -NonInteractive -EncodedCommand " + kodiert);
         if (ergebnis.ExitCode != 0)
         {
-            throw new InvalidOperationException($"PowerShell-Aufruf fehlgeschlagen ({ergebnis.ExitCode}): {ergebnis.StdOut}");
+            throw new InvalidOperationException($"PowerShell-Aufruf fehlgeschlagen ({ergebnis.ExitCode}): {ergebnis.Ausgabe}");
         }
 
         return ergebnis.StdOut.Trim();
