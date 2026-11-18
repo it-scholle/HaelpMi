@@ -1,0 +1,117 @@
+using FlaUI.Core.AutomationElements;
+using HaelpMi.Core.Models;
+using HaelpMi.Core.Storage;
+using HaelpMi.Installer.Tests;
+using Xunit;
+
+namespace HaelpMi.E2E.Tests;
+
+/// <summary>Testteil für VM A (Admin-Installer). Die Schritte bauen aufeinander auf.</summary>
+[Collection(E2ESammlung.Name)]
+[TestCaseOrderer("HaelpMi.Installer.Tests.PriorityOrderer", "HaelpMi.E2E.Tests")]
+[Trait("Category", "E2E")]
+[Trait("Geraet", "A")]
+public class GeraetATests
+{
+    private static readonly TimeSpan FensterTimeout = TimeSpan.FromSeconds(30);
+
+    [Fact, TestPriority(10)]
+    [Trait("FR", "FR-3"), Trait("FR", "FR-4"), Trait("FR", "FR-34"), Trait("FR", "FR-35"), Trait("FR", "FR-37"), Trait("FR", "NFR-2")]
+    public Task T1_AdminInstaller_InstalliertStill() =>
+        Artefakte.SichereAsync(nameof(T1_AdminInstaller_InstalliertStill),
+            () => Installation.InstalliereUndPruefeAsync(Role.Admin, "A"));
+
+    [Fact, TestPriority(20)]
+    [Trait("FR", "FR-4")]
+    public Task T2_VerknuepfungOeffnetDashboard_OhneAbsturz() =>
+        Artefakte.SichereAsync(nameof(T2_VerknuepfungOeffnetDashboard_OhneAbsturz), async () =>
+        {
+            HaelpMiApp.BeendeKonfiguration();
+            var crashLogVorher = CrashLogLaenge();
+
+            using var app = new HaelpMiApp();
+            var fenster = app.OeffneUeberVerknuepfung(Role.Admin, FensterTimeout);
+            Assert.False(fenster.IsOffscreen, "Dashboard-Fenster ist nicht sichtbar.");
+
+            // Fehler beim Aufbau landen über CrashLogger in crash.log, nicht als Prozessabbruch.
+            await Task.Delay(TimeSpan.FromSeconds(3));
+            Assert.True(CrashLogLaenge() == crashLogVorher, "crash.log hat beim Öffnen des Dashboards neue Einträge bekommen.");
+
+            HaelpMiApp.BeendeKonfiguration();
+        });
+
+    [Fact, TestPriority(30)]
+    [Trait("FR", "FR-27"), Trait("FR", "FR-40"), Trait("FR", "FR-51")]
+    public Task T3_Selbsttest_ZeigtAlarmfensterMitRaum() =>
+        Artefakte.SichereAsync(nameof(T3_Selbsttest_ZeigtAlarmfensterMitRaum), async () =>
+        {
+            StelleAlarmprofilSicher();
+            HaelpMiApp.BeendeKonfiguration();
+
+            using var app = new HaelpMiApp();
+            var einstellungen = app.OeffneEinstellungen(FensterTimeout);
+            Element(einstellungen, "SelfTestButton").AsButton().Invoke();
+
+            var popup = app.WarteAufAlarmfenster(FensterTimeout);
+            await WarteBisAsync(() => HaelpMiApp.IstImVordergrund(popup), TimeSpan.FromSeconds(10), "Alarmfenster ist nicht im Vordergrund.");
+            Assert.Equal($"{E2EUmgebung.Raum} ({E2EUmgebung.Raumnummer})", Element(popup, "RoomText").Name);
+
+            // Beim Selbsttest ist die Schwelle immer 1 (AlarmFlowCoordinator.SendSelfTestAsync).
+            Element(popup, "OnMyWayButton").AsButton().Invoke();
+            var schliessen = Element(popup, "CloseButton").AsButton();
+            await WarteBisAsync(() => schliessen.IsEnabled, TimeSpan.FromSeconds(15), "Schließen-Knopf wird nach 'Bin unterwegs' nicht aktiv.");
+            schliessen.Invoke();
+
+            await WarteBisAsync(() => !app.AlarmfensterOffen(), TimeSpan.FromSeconds(10), "Alarmfenster ist nach dem Schließen noch offen.");
+            HaelpMiApp.BeendeKonfiguration();
+        });
+
+    // Ein frisch installiertes Gerät hat noch kein Alarm-Profil, ohne eines lehnt der Agent den Selbsttest ab.
+    // Profil anlegen über das Dashboard ist Gegenstand späterer Tests, hier genügt der Datenstand.
+    private static void StelleAlarmprofilSicher()
+    {
+        var store = new SharedConfigStore();
+        var config = store.LoadOrCreate();
+        if (config.AlarmProfiles.Count > 0)
+        {
+            return;
+        }
+
+        config.AlarmProfiles.Add(new AlarmProfile { Name = "E2E-Selbsttest", Text = "E2E-Selbsttest" });
+        store.Save(config);
+    }
+
+    private static AutomationElement Element(AutomationElement wurzel, string automationId) =>
+        wurzel.FindFirstDescendant(cf => cf.ByAutomationId(automationId))
+        ?? throw new InvalidOperationException($"Element '{automationId}' nicht gefunden.");
+
+    private static long CrashLogLaenge() => E2EUmgebung.LogOrdner()
+        .Select(o => new FileInfo(Path.Combine(o, "crash.log")))
+        .Sum(f => SichereLaenge(f));
+
+    private static long SichereLaenge(FileInfo datei)
+    {
+        try
+        {
+            return datei.Exists ? datei.Length : 0;
+        }
+        catch (IOException)
+        {
+            return 0;
+        }
+    }
+
+    private static async Task WarteBisAsync(Func<bool> bedingung, TimeSpan timeout, string meldung)
+    {
+        var frist = DateTime.UtcNow + timeout;
+        while (!bedingung())
+        {
+            if (DateTime.UtcNow > frist)
+            {
+                Assert.Fail(meldung);
+            }
+
+            await Task.Delay(300);
+        }
+    }
+}
