@@ -2,8 +2,8 @@
 # Gibt ein GitHub-Issue wieder frei (entfernt status:in-progress), z. B. bei
 # Abbruch/Unterbrechung der Arbeit. Optional wird ein Grund als Kommentar
 # hinterlassen (z. B. "wartet auf #123"). Schließt das Issue NICHT - das
-# passiert nur beim tatsächlichen Abschluss, siehe CLAUDE.md, Abschnitt
-# "Issue-Workflow für parallele Sessions".
+# passiert nur beim tatsächlichen Abschluss, siehe AGENTS.md, Teil A
+# "Parallele Arbeit" und Teil B "Arbeitsablauf".
 set -euo pipefail
 
 if [ $# -lt 1 ]; then

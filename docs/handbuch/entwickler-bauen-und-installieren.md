@@ -192,7 +192,7 @@ Rechner kopieren, ohne den Rest des Repos mitzunehmen.
 `src\HaelpMi.InstallCreator` committet, sollte einmalig `git config core.hooksPath .githooks`
 setzen - ein Pre-Commit-Hook baut die Kopie in `tools\InstallCreator` dann automatisch bei jedem
 Commit neu, der den Quellcode berührt, statt sich auf `Start.cmd` beim nächsten Start zu
-verlassen. Details: `docs/WORKFLOW.md` Abschnitt "Install-Creator-Rebuild-Hook".
+verlassen. Details: `docs/wissen/installcreator-rebuild-hook.md`.
 
 In der App:
 1. Häkchen "Test-Installer" setzen (für interne Tests) oder Kundenname + Passwort

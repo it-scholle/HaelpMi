@@ -6,7 +6,7 @@
 # Rebase selbst gelaufen ist - in der Praxis oft nicht, siehe lib/rebuild-installcreator.sh).
 #
 # Gleiche gemeinsame, zustandsbasierte Logik wie die anderen drei Hooks - siehe dort für
-# Details und docs/WORKFLOW.md Abschnitt "Install-Creator-Rebuild-Hook".
+# Details und docs/wissen/installcreator-rebuild-hook.md.
 
 set -e
 

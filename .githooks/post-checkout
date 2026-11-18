@@ -4,8 +4,7 @@
 # sieht das nie, weil dabei kein neuer Commit entsteht.
 #
 # Gleiche gemeinsame, zustandsbasierte Logik wie die anderen drei Hooks - siehe
-# lib/rebuild-installcreator.sh für Details und docs/WORKFLOW.md Abschnitt
-# "Install-Creator-Rebuild-Hook".
+# lib/rebuild-installcreator.sh für Details und docs/wissen/installcreator-rebuild-hook.md.
 
 set -e
 

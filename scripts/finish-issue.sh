@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Meldet ein GitHub-Issue als fertig aus Sicht der Session: entfernt
 # status:in-progress, setzt status:review. Schließt das Issue NICHT - das
-# passiert erst nach Bestätigung/Abnahme durch den Nutzer, siehe CLAUDE.md,
-# Abschnitt "Issue-Workflow für parallele Sessions".
+# passiert erst nach Bestätigung/Abnahme durch den Nutzer, siehe AGENTS.md,
+# Teil B "Arbeitsablauf".
 set -euo pipefail
 
 if [ $# -lt 1 ]; then

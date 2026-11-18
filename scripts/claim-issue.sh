@@ -2,8 +2,8 @@
 # Markiert ein GitHub-Issue als "wird gerade bearbeitet" (status:in-progress),
 # damit keine andere parallele Session am selben Issue arbeitet. Entfernt dabei
 # ein eventuell noch vorhandenes status:review (Fall: Nutzer fordert Nacharbeit
-# an einem bereits als fertig gemeldeten Issue an). Siehe CLAUDE.md, Abschnitt
-# "Issue-Workflow für parallele Sessions".
+# an einem bereits als fertig gemeldeten Issue an). Siehe AGENTS.md, Teil A
+# "Tickets" und Teil B "Arbeitsablauf".
 set -euo pipefail
 
 if [ $# -lt 1 ]; then

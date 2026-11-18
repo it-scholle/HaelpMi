@@ -75,8 +75,8 @@ if ($dueForPullCheck) {
                     # Ursache (detached HEAD) wurde nie benannt, der Build lief unbemerkt mit
                     # dem alten Stand weiter. `git remote set-head origin -a` frischt den
                     # origin/HEAD-Symref (kann nach einem Default-Branch-Wechsel auf GitHub
-                    # veraltet sein, siehe CLAUDE.md-Abschnitt zum rotierenden
-                    # Default-Branch), danach wird - wie beim Branch-Pull oben nur per
+                    # veraltet sein, siehe docs/entscheidungen/0004-branch-modell-release-zyklen.md
+                    # zum rotierenden Default-Branch), danach wird - wie beim Branch-Pull oben nur per
                     # Fast-Forward - direkt auf origin/HEAD aktualisiert.
                     git remote set-head origin -a *> $null
                     git rev-parse --verify --quiet origin/HEAD *> $null

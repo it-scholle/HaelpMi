@@ -1,6 +1,6 @@
 # Gemeinsame Rebuild-Logik für tools/InstallCreator/, per "." (source) aus mehreren
 # Hooks aufgerufen (pre-commit, post-rewrite, post-merge, post-checkout - siehe
-# docs/WORKFLOW.md Abschnitt "Install-Creator-Rebuild-Hook"). KEIN eigenständig
+# docs/wissen/installcreator-rebuild-hook.md). KEIN eigenständig
 # ausführbares Skript (keine Shebang, kein eigenes chmod +x nötig) - wird immer per "."
 # in den jeweiligen Hook eingelesen, damit $0 der Pfad des AUFRUFENDEN Hooks bleibt
 # (Bugfix 17.08.2026, siehe ursprünglicher Kommentar in pre-commit: dest_root hängt
