@@ -1,8 +1,8 @@
 # 0010 – Vorschlag: Branch-Modell `develop`/`main` nach Teil A
 
 - Datum: 2026-11-18
-- Status: vorgeschlagen
-- Entschieden von: offen (Regel-Verantwortliche)
+- Status: angenommen (Umsetzung nach Abschluss von `release-1.0-MVP`)
+- Entschieden von: Repo-Owner, 2026-11-18
 
 ## Kontext
 Teil A der MasterAgents-Vorlage sieht vor: `develop` als dauerhafter Integrations- und

@@ -11,8 +11,9 @@ Stand: 2026-11-18
   nicht mehr weiterentwickelte Stand (siehe `docs/entscheidungen/0001-neustart-auf-v0-16.md`).
 - Update-Pipeline (Update-Dienst, P2P-Verteilung) ist in dieser Linie inaktiv; Updates erfolgen
   manuell per Installer.
-- CI (Windows-Build + Tests), gitleaks und Dependabot: in Arbeit in #145 (PR #146).
-- Struktur an die MasterAgents-Vorlage angeglichen: in Arbeit in #151.
+- CI (Windows-Build + Tests), gitleaks und Dependabot: aktiv seit v0.47.1 (#145).
+- Struktur an die MasterAgents-Vorlage angeglichen (v0.47.4, #151); die Ausnahmen von Teil A
+  sind vom Repo-Owner am 2026-11-18 entschieden (`AGENTS.md` Teil B).
 
 ## Offene Annahmen
 <!-- Jede mit Fundstelle (Datei oder Ticket). Sonst „keine“. -->
@@ -21,8 +22,7 @@ Stand: 2026-11-18
 
 ## Bekannte Abweichungen von `AGENTS.md` Teil A
 
-Nicht als Ausnahme freigegeben, sondern noch offen (Entscheidung durch die
-Regel-Verantwortlichen, siehe PR zu #151):
+Nicht als Ausnahme freigegeben, Umsetzung steht noch aus:
 
 - Audit-Log ohne Hash-Kette, Aufbewahrung und Schutz (`src/HaelpMi.Core/Storage/AuditLog.cs`).
 - Betriebs-Log ohne Stufen, Tagesdateien, Rotation und Aufbewahrung
@@ -49,8 +49,7 @@ Bei #151 aufgefallen, nicht Teil des Tickets, jeweils als eigenes Issue angelegt
 
 ## Nächste Schritte
 
-- #151: händischer Test unter Windows nach der Checkliste in PR #153 (vor allem Icons,
-  Fenster-Icons, Setup-Icon); Tests liefen bisher nur als Python-Spiegel unter Linux.
-- #145 (CI) und #151 (Struktur) abnehmen und nach `release-1.0-MVP` mergen.
-- Offene Regel-Entscheidungen aus #151 treffen (Branch-Modell, Commit-Format, Merge-Art).
+- Nach Abschluss von `release-1.0-MVP`: Branch-Modell auf `develop`/`main` umstellen
+  (ADR 0010), dazu Commit-Format und Merge-Art nach Teil A.
+- Versionsnummer nur noch an einer Stelle: ISPP liest `Directory.Build.props` (eigenes Ticket).
 - Weitere Tickets im Milestone `release-1.0-MVP`.
