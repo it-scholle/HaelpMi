@@ -205,11 +205,8 @@
                                                 <ColumnDefinition Width="*" />
                                                 <ColumnDefinition Width="26" />
                                             </Grid.ColumnDefinitions>
-                                            <!-- Gezeichnetes Dreieck statt Font-/Symbolzeichen - dieselbe Lehre wie beim
-                                                 "+"-Button (AdminDashboardWindow): Symbol-Glyphen sind in kleinen
-                                                 Controls nicht zuverlässig genug, ein gezeichnetes Shape immer. -->
-                                            <Path Grid.Column="1" Data="M0,0 L7,0 L3.5,5 Z" Fill="{StaticResource TextSecondaryBrush}"
-                                                  HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                            <ContentControl Grid.Column="1" Style="{StaticResource LucideIconStyle}" Tag="{StaticResource Icon.ChevronDown}" Width="14" Height="14" Foreground="{StaticResource TextSecondaryBrush}"
+                                                  HorizontalAlignment="Center" VerticalAlignment="Center" IsHitTestVisible="False" />
                                         </Grid>
                                     </Border>
                                 </ControlTemplate>

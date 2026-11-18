@@ -26,6 +26,35 @@ neuen Elements hier nachsehen.
 Offen: Die `.ico` enthält keine 20-, 24-, 40- und 64-px-Stufen; Windows skaliert dafür aus der
 nächsten Größe. Bei Unschärfe in Taskleiste oder Startmenü aus der SVG ergänzen.
 
+## Icons (Lucide)
+
+Quelle: `lucide-static` v0.460.0, Lizenz ISC (`icons/lucide/LICENSE`). Die SVGs liegen unverändert
+in `icons/lucide/`; die Pfade sind als `Geometry`-Ressourcen `Icon.*` in `xaml/Design.xaml`
+übernommen (24er-Raster, absolute Koordinaten, Kreise und Rechtecke als Pfade). Darstellung immer
+über den Style `LucideIconStyle` (Linienstärke 2 im 24er-Raster, runde Enden, Farbe = Foreground):
+
+```xml
+<ContentControl Style="{StaticResource LucideIconStyle}" Tag="{StaticResource Icon.X}" Width="16" Height="16" />
+```
+
+Icons sind Dekoration. Ein Button, der nur ein Icon zeigt, braucht `AutomationProperties.Name`
+(Textalternative) und einen `ToolTip`.
+
+| Name | Ressource | Bedeutung | Verwendet in | Ersetzt | Textalternative |
+|---|---|---|---|---|---|
+| `icons/lucide/x.svg` | `Icon.X` | schließen, entfernen | Schließen-Buttons aller Toasts und des Sender-Banners, „Gerät löschen“ | Zeichen ✕, gedrehte Rechtecke, eigener Pfad | „Schließen“ bzw. „Gerät löschen“ |
+| `icons/lucide/check.svg` | `Icon.Check` | erfolgreich erledigt | Download-Toast, Build-Erfolgs-Toast | Zeichen ✓ | – (dekorativ, Titeltext daneben) |
+| `icons/lucide/chevron-down.svg` | `Icon.ChevronDown` | Auswahlliste aufklappen | ComboBox-Template | gefülltes Dreieck | – (Teil der ComboBox) |
+| `icons/lucide/triangle-alert.svg` | `Icon.TriangleAlert` | Alarm/Warnung | Kopf des Alarm-Popups | Zeichen ⚠ | – (dekorativ, „HälpMi - Alarm“ daneben) |
+| `icons/lucide/volume-2.svg` | `Icon.Volume2` | Ton wird abgespielt | Alarm-Popup, Hinweis zum Signalton | Emoji 🔊 | – (dekorativ, Text daneben) |
+| `icons/lucide/plus.svg` | `Icon.Plus` | neu anlegen | „Neues Alarm-Profil“ | zwei Rechtecke | „Neues Alarm-Profil“ |
+| `icons/lucide/minus.svg` | `Icon.Minus` | löschen (mit Rückgängig) | „Alarm-Profil löschen“ | Rechteck | „Alarm-Profil löschen“ |
+| `icons/lucide/power.svg` | `Icon.Power` | als deinstalliert markieren | Geräteliste im Admin-Dashboard | Ellipse + Linie | „Als deinstalliert markieren“ |
+| `icons/lucide/eye.svg` | `Icon.Eye` | Passwort anzeigen | Install-Creator | zwei Ellipsen | „Passwort anzeigen“ |
+| `icons/lucide/eye-off.svg` | `Icon.EyeOff` | Passwort verbergen | Install-Creator | Ellipsen + Linie | „Passwort anzeigen“ (Umschalter) |
+| `icons/lucide/dices.svg` | `Icon.Dices` | zufällig erzeugen | Install-Creator, „Passwort generieren“ | zwei Rahmen mit Punkten | „Passwort generieren“ |
+| `icons/lucide/copy.svg` | `Icon.Copy` | in die Zwischenablage kopieren | Install-Creator, „Passwort kopieren“ | zwei Rahmen | „Passwort kopieren“ |
+
 ## Farben (`xaml/Design.xaml`)
 
 Jede Farbe gibt es als `…Color` (für `Color`-Eigenschaften) und als `…Brush`.

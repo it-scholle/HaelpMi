@@ -27,9 +27,11 @@
                     <TextBlock x:Name="AckedText" Foreground="{StaticResource BannerSubtextBrush}" FontSize="11" Margin="0,4,0,0" />
                 </StackPanel>
 
-                <Button Grid.Column="1" x:Name="CloseBannerButton" Content="&#10005;" Width="20" Height="20"
+                <Button Grid.Column="1" x:Name="CloseBannerButton" AutomationProperties.Name="Schließen" Width="20" Height="20"
                         VerticalAlignment="Top" Background="Transparent" Foreground="{StaticResource BannerCloseBrush}"
-                        BorderThickness="0" Padding="0" Click="CloseBannerButton_Click" />
+                        BorderThickness="0" Padding="0" Click="CloseBannerButton_Click">
+                    <ContentControl Style="{StaticResource LucideIconStyle}" Tag="{StaticResource Icon.X}" Width="12" Height="12" />
+                </Button>
             </Grid>
 
             <!-- FR-53: "Auf dem Weg"-Namensliste, untereinander formatiert. -->

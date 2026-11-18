@@ -24,7 +24,7 @@
                 <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
 
-            <TextBlock Grid.Column="0" Text="&#10003;" FontSize="26" FontWeight="Bold" Foreground="White"
+            <ContentControl Grid.Column="0" Style="{StaticResource LucideIconStyle}" Tag="{StaticResource Icon.Check}" Width="26" Height="26" Foreground="White"
                        VerticalAlignment="Top" Margin="0,0,10,0" />
 
             <StackPanel Grid.Column="1">
@@ -40,9 +40,11 @@
                 </StackPanel>
             </StackPanel>
 
-            <Button Grid.Column="2" x:Name="CloseButton" Content="&#10005;" Width="20" Height="20"
+            <Button Grid.Column="2" x:Name="CloseButton" AutomationProperties.Name="Schließen" Width="20" Height="20"
                     VerticalAlignment="Top" Background="Transparent" Foreground="{StaticResource ToastSuccessSubtextBrush}"
-                    Padding="0" Click="CloseButton_Click" />
+                    Padding="0" Click="CloseButton_Click">
+                <ContentControl Style="{StaticResource LucideIconStyle}" Tag="{StaticResource Icon.X}" Width="12" Height="12" />
+            </Button>
         </Grid>
     </Border>
 </Window>
