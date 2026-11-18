@@ -269,7 +269,7 @@ Teil A gilt projektübergreifend und kommt aus der MasterAgents-Blueprint. Teil 
 ## Design-System
 - Verzeichnis: `design/` (Katalog: `design/KATALOG.md`)
 - Icon-Bibliothek: Lucide (ISC-Lizenz)
-- Stil: hell und schlicht, ein Akzentton; Farben nur als Brush-Ressourcen aus `design/xaml/Farben.xaml`; Schrift `Segoe UI Variable Text, Segoe UI`; Ecken 8 px (Karten, Buttons); Lucide-Icons im 24-px-Raster mit 2 px Linienstärke und runden Enden.
+- Stil: hell und schlicht, ein Akzentton; Farben nur als Ressourcen aus `design/xaml/Design.xaml`; Schrift `Segoe UI Variable Text, Segoe UI`; Ecken 8 px (Karten, Buttons); Lucide-Icons im 24-px-Raster mit 2 px Linienstärke und runden Enden.
 
 ## Sicherheit und Schlüssel
 - Getrennte Schlüssel, nie verwechseln oder zusammenlegen:

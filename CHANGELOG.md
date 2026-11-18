@@ -8,6 +8,8 @@ Details stehen in der Git-Historie. Der eingefrorene Stand `legacy/main-0.39.x` 
 ### Neu
 ### Verbessert
 - Struktur an die MasterAgents-Vorlage angeglichen: Doku-Struktur (`docs/`), Arbeitsregeln in `AGENTS.md`, Entscheidungen als ADR, Design-System-Verzeichnis `design/` (#151)
+- Einheitliche Linien-Icons (Lucide) statt Schriftzeichen und Einzelzeichnungen; Icon-Buttons haben eine Textalternative für Screenreader (#151)
+- Farben und Logo liegen nur noch einmal zentral vor (#151)
 ### Behoben
 
 ## [0.47.3] – 2026-11-18
