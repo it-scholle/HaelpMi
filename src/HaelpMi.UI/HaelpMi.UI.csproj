@@ -15,7 +15,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Resource Include="Assets\haelpmi_icon.ico" />
+    <Resource Include="..\..\design\icons\haelpmi_icon.ico" Link="Assets\haelpmi_icon.ico" />
+    <Page Include="..\..\design\xaml\Design.xaml" Link="Styles\Design.xaml" />
   </ItemGroup>
 
 </Project>

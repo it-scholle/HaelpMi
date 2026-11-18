@@ -4,7 +4,8 @@ THIRD-PARTY-NOTICES
 HälpMi bindet die folgenden Komponenten Dritter ein bzw. wird mit ihnen als
 self-contained-Veröffentlichung ausgeliefert. Für jede Komponente sind Name,
 Version, Lizenz, Copyright-Vermerk und der vollständige Lizenztext angegeben.
-Alle nachfolgend genannten Komponenten sind unter der MIT-Lizenz lizenziert.
+Alle nachfolgend genannten Komponenten sind unter der MIT-Lizenz lizenziert,
+ausgenommen die Lucide-Icons (ISC-Lizenz, letzter Abschnitt).
 
 Unklare Lizenzangaben: keine. Alle Pakete deklarieren ihre Lizenz eindeutig
 (SPDX-Ausdruck "MIT" bzw., bei NAudio, eine im Paket mitgelieferte Lizenzdatei
@@ -1221,3 +1222,26 @@ Wird self-contained mitveröffentlicht. Lizenz: MIT. Der vollständige
 Third-Party-Hinweistext der .NET-Runtime selbst liegt im offiziellen
 dotnet/runtime-Repository:
 https://github.com/dotnet/runtime/blob/main/THIRD-PARTY-NOTICES.TXT
+
+--------------------------------------------------------------------------
+
+Komponente: Lucide Icons (lucide-static)
+Version: 0.460.0
+Lizenz: ISC
+Verwendet: Icon-Pfade in design/xaml/Design.xaml, Original-SVGs in design/icons/lucide/
+
+ISC License
+
+Copyright (c) for portions of Lucide are held by Cole Bemis 2013-2022 as part of Feather (MIT). All other copyright (c) for Lucide are held by Lucide Contributors 2022.
+
+Permission to use, copy, modify, and/or distribute this software for any
+purpose with or without fee is hereby granted, provided that the above
+copyright notice and this permission notice appear in all copies.
+
+THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.

@@ -106,7 +106,7 @@
         <!-- Nutzerwunsch: eine Datei an den Sysadmin, User-Installer wird bei Bedarf aus dem Dashboard selbst nachgebaut. -->
         <DockPanel Grid.Row="1" Margin="0,0,0,10">
             <Button DockPanel.Dock="Left" x:Name="ExportUserInstallerButton" Content="User-Installer exportieren"
-                    Padding="14,8" Background="#2471A3" Foreground="White" BorderThickness="0"
+                    Padding="14,8" Background="{StaticResource ExportButtonBrush}" Foreground="White" BorderThickness="0"
                     Click="ExportUserInstallerButton_Click" />
             <TextBlock x:Name="ExportStatusText" VerticalAlignment="Center" Margin="12,0,0,0" Foreground="Gray" />
         </DockPanel>
@@ -143,7 +143,7 @@
                         <!-- Nutzerwunsch 04.08.2026: "das Plus ist ein Punkt" - das Zeichen "+"
                              wurde vom Button-ControlTemplate/Font so klein/verschoben gerendert,
                              dass nur der untere Punkt sichtbar war. Statt eines Schriftzeichens
-                             jetzt ein gezeichnetes Kreuz (zwei Rechtecke) - unabhängig von
+                             jetzt ein gezeichnetes Icon aus dem Design-System - unabhängig von
                              Font-Metriken immer korrekt und scharf.
                              Bugfix 06.08.2026 (immer noch "kaputt" laut Fehlerbericht): der
                              Basis-Button-Style (ModernStyles.xaml) setzt Padding="14,7" - bei
@@ -152,11 +152,8 @@
                              behebt das (die Border bekommt ihre Form weiterhin über Width/Height
                              des Buttons selbst, nicht über Padding). -->
                         <Button DockPanel.Dock="Right" x:Name="NewProfileButton" Width="32" Height="32" Margin="8,0,0,0" Padding="0"
-                                Click="NewProfileButton_Click" ToolTip="Neues Alarm-Profil anlegen">
-                            <Grid Width="14" Height="14">
-                                <Rectangle Fill="{StaticResource TextPrimaryBrush}" Height="2" VerticalAlignment="Center" />
-                                <Rectangle Fill="{StaticResource TextPrimaryBrush}" Width="2" HorizontalAlignment="Center" />
-                            </Grid>
+                                Click="NewProfileButton_Click" AutomationProperties.Name="Neues Alarm-Profil" ToolTip="Neues Alarm-Profil anlegen">
+                            <ContentControl Style="{StaticResource LucideIconStyle}" Tag="{StaticResource Icon.Plus}" Width="16" Height="16" Foreground="{StaticResource TextPrimaryBrush}" />
                         </Button>
                         <!-- Nutzerwunsch 04.08.2026: kein "Löschen"-Button mit hässlichem
                              nativem Windows-Bestätigungsdialog mehr - stattdessen ein "-"
@@ -164,8 +161,8 @@
                              (Rückgängig deckt ein Versehen ab, siehe UndoProfileButton).
                              Padding="0": gleicher Grund wie bei NewProfileButton oben. -->
                         <Button DockPanel.Dock="Right" x:Name="DeleteProfileIconButton" Width="32" Height="32" Margin="4,0,0,0" Padding="0"
-                                Click="DeleteProfileIconButton_Click" ToolTip="Ausgewähltes Alarm-Profil löschen">
-                            <Rectangle Fill="{StaticResource TextPrimaryBrush}" Width="14" Height="2" />
+                                Click="DeleteProfileIconButton_Click" AutomationProperties.Name="Alarm-Profil löschen" ToolTip="Ausgewähltes Alarm-Profil löschen">
+                            <ContentControl Style="{StaticResource LucideIconStyle}" Tag="{StaticResource Icon.Minus}" Width="16" Height="16" Foreground="{StaticResource TextPrimaryBrush}" />
                         </Button>
                         <ComboBox x:Name="ProfileCombo" DisplayMemberPath="Name" SelectionChanged="ProfileCombo_SelectionChanged" />
                     </DockPanel>
@@ -211,7 +208,7 @@
                              RebuildSenderPanels() für die eigentliche Steuerung, dies hier
                              nur der Startzustand vor dem ersten Aufbau. -->
                         <Button x:Name="TransferRecipientsButton" Content="Empfängerliste übertragen" HorizontalAlignment="Left"
-                                Padding="14,6" Background="#2C3E50" Foreground="White" BorderThickness="0" IsEnabled="False"
+                                Padding="14,6" Background="{StaticResource SlateButtonBrush}" Foreground="White" BorderThickness="0" IsEnabled="False"
                                 Click="TransferRecipientsButton_Click" />
                         <StackPanel x:Name="TransferModeButtons" Orientation="Horizontal" HorizontalAlignment="Left" Visibility="Collapsed">
                             <TextBlock VerticalAlignment="Center" Margin="0,0,10,0" TextWrapping="Wrap" MaxWidth="280"
@@ -328,10 +325,10 @@
                         <Button DockPanel.Dock="Bottom" x:Name="NewGroupButton" Content="Neue Gruppe" Margin="0,8,0,0" Padding="0,6" Click="NewGroupButton_Click" />
                         <ListBox x:Name="GroupsList" DisplayMemberPath="Name" SelectionChanged="GroupsList_SelectionChanged">
                             <ListBox.Resources>
-                                <SolidColorBrush x:Key="{x:Static SystemColors.HighlightBrushKey}" Color="#D6F5DD" />
-                                <SolidColorBrush x:Key="{x:Static SystemColors.HighlightTextBrushKey}" Color="#1D1D1F" />
-                                <SolidColorBrush x:Key="{x:Static SystemColors.ControlBrushKey}" Color="#D6F5DD" />
-                                <SolidColorBrush x:Key="{x:Static SystemColors.ControlTextBrushKey}" Color="#1D1D1F" />
+                                <SolidColorBrush x:Key="{x:Static SystemColors.HighlightBrushKey}" Color="{StaticResource SuccessLightColor}" />
+                                <SolidColorBrush x:Key="{x:Static SystemColors.HighlightTextBrushKey}" Color="{StaticResource TextPrimaryColor}" />
+                                <SolidColorBrush x:Key="{x:Static SystemColors.ControlBrushKey}" Color="{StaticResource SuccessLightColor}" />
+                                <SolidColorBrush x:Key="{x:Static SystemColors.ControlTextBrushKey}" Color="{StaticResource TextPrimaryColor}" />
                             </ListBox.Resources>
                         </ListBox>
                     </DockPanel>
@@ -467,7 +464,7 @@
 
                                             <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
                                                 <TextBlock Text="{Binding ComputerName}" FontWeight="SemiBold" VerticalAlignment="Center" />
-                                                <Border Background="#C0392B" CornerRadius="3" Padding="4,1" Margin="6,0,0,0" VerticalAlignment="Center"
+                                                <Border Background="{StaticResource AlarmBrush}" CornerRadius="3" Padding="4,1" Margin="6,0,0,0" VerticalAlignment="Center"
                                                         Visibility="{Binding IsNew, Converter={x:Static conv:BoolToVisibilityConverter.Instance}}">
                                                     <TextBlock Text="NEU" Foreground="White" FontSize="9" FontWeight="Bold" />
                                                 </Border>
@@ -503,17 +500,13 @@
                                                      den Uninstaller selbst. Gezeichnetes Power-Symbol statt Unicode-Glyph
                                                      (bekannte Render-Probleme). -->
                                                 <Button Width="26" Height="26" Padding="0" Margin="0,0,4,0" Tag="{Binding DeviceId}" VerticalAlignment="Center"
-                                                        IsEnabled="{Binding CanDelete}" Click="MarkDeviceUninstalledButton_Click"
+                                                        IsEnabled="{Binding CanDelete}" Click="MarkDeviceUninstalledButton_Click" AutomationProperties.Name="Als deinstalliert markieren"
                                                         ToolTip="Als deinstalliert markieren/Markierung aufheben (Rückfallebene - normalerweise meldet sich der Uninstaller selbst)">
-                                                    <Grid Width="12" Height="12">
-                                                        <Ellipse Stroke="{StaticResource TextSecondaryBrush}" StrokeThickness="1.4" Margin="0,2,0,0" />
-                                                        <Line X1="6" Y1="0" X2="6" Y2="5" Stroke="{StaticResource TextSecondaryBrush}" StrokeThickness="1.4" />
-                                                    </Grid>
+                                                    <ContentControl Style="{StaticResource LucideIconStyle}" Tag="{StaticResource Icon.Power}" Width="14" Height="14" Foreground="{StaticResource TextSecondaryBrush}" />
                                                 </Button>
                                                 <Button Width="26" Height="26" Padding="0" Tag="{Binding DeviceId}" VerticalAlignment="Center"
-                                                        IsEnabled="{Binding CanDelete}" Click="DeleteDeviceButton_Click" ToolTip="Gerät endgültig löschen (deaktiviert, Neuinstallation nötig)">
-                                                    <Path Data="M2,2 L10,10 M2,10 L10,2" Stroke="{StaticResource TextSecondaryBrush}" StrokeThickness="1.6"
-                                                          Width="10" Height="10" Stretch="Uniform" />
+                                                        IsEnabled="{Binding CanDelete}" Click="DeleteDeviceButton_Click" AutomationProperties.Name="Gerät löschen" ToolTip="Gerät endgültig löschen (deaktiviert, Neuinstallation nötig)">
+                                                    <ContentControl Style="{StaticResource LucideIconStyle}" Tag="{StaticResource Icon.X}" Width="14" Height="14" Foreground="{StaticResource TextSecondaryBrush}" />
                                                 </Button>
                                             </StackPanel>
                                         </Grid>

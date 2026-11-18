@@ -8,7 +8,7 @@
     <UseWPF>true</UseWPF>
     <RootNamespace>HaelpMi.InstallCreator</RootNamespace>
     <AssemblyName>HaelpMi.InstallCreator</AssemblyName>
-    <ApplicationIcon>Assets\haelpmi_icon.ico</ApplicationIcon>
+    <ApplicationIcon>..\..\design\icons\haelpmi_icon.ico</ApplicationIcon>
     <Platforms>x64;ARM64</Platforms>
     <!-- Nur für Clipboard.SetDataObject(...,retryTimes,retryDelay) in MainWindow.xaml.cs
          CopyPasswordButton_Click - WinForms' Clipboard-Klasse hat für CLIPBRD_E_CANT_OPEN
@@ -27,10 +27,12 @@
   <!-- Bewusst ohne ProjectReference auf HaelpMi.Core/HaelpMi.UI: dieses Tool ist reines
        Entwickler-Werkzeug (Task "Install-Creator"), das nur ISCC.exe aufruft - es teilt
        keine Laufzeit-Modelle mit der eigentlichen App und soll deren Payload/Deployment
-       auch nicht versehentlich mit-referenzieren. Das Icon/Style-XAML sind bewusste, kleine
-       Duplikate der HaelpMi.UI-Pendants statt einer ProjectReference (siehe CrashLogger.cs). -->
+       auch nicht versehentlich mit-referenzieren. Icon und Farben kommen per Link aus dem
+       Design-System (design/), ModernStyles.xaml ist ein bewusstes Duplikat des
+       HaelpMi.UI-Pendants statt einer ProjectReference (siehe CrashLogger.cs). -->
   <ItemGroup>
-    <Resource Include="Assets\haelpmi_icon.ico" />
+    <Resource Include="..\..\design\icons\haelpmi_icon.ico" Link="Assets\haelpmi_icon.ico" />
+    <Page Include="..\..\design\xaml\Design.xaml" Link="Styles\Design.xaml" />
   </ItemGroup>
 
   <!-- Ed25519-Signierung der Lizenzdatei (Issue #18) - dieselbe Bibliothek, die HaelpMi.Core

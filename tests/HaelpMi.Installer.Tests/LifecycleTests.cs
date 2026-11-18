@@ -8,7 +8,7 @@ using Xunit.Abstractions;
 namespace HaelpMi.Installer.Tests;
 
 /// <summary>
-/// Deckt A1-A10 aus TEST-STRATEGY.md ab: der komplette Installer-Lebenszyklus, gegen die
+/// Deckt A1-A10 aus docs/wissen/test-strategie.md ab: der komplette Installer-Lebenszyklus, gegen die
 /// TATSÄCHLICH gebauten Installer-Dateien (installer\Output\*.exe), nicht gegen den
 /// Quellcode. Siehe README.md in diesem Ordner für die Voraussetzungen (Admin-Rechte,
 /// Wegwerf-VM) - dieses Projekt installiert/deinstalliert wirklich auf dem Rechner, auf
@@ -16,7 +16,7 @@ namespace HaelpMi.Installer.Tests;
 ///
 /// Die Tests bauen bewusst sequenziell aufeinander auf (siehe <see cref="TestPriorityAttribute"/>)
 /// statt unabhängig zu sein - ein Update/eine Reparatur ist ohne vorherige Installation
-/// gar nicht sinnvoll testbar, genau wie in ALPHA-TESTPLAN.md.
+/// gar nicht sinnvoll testbar, genau wie in docs/handbuch/entwickler-alpha-testplan.md.
 /// </summary>
 [Collection("InstallerLifecycle")]
 [TestCaseOrderer("HaelpMi.Installer.Tests.PriorityOrderer", "HaelpMi.Installer.Tests")]
@@ -246,7 +246,7 @@ public class LifecycleTests
 
     private static string RequireInstaller(string? path, string label) =>
         path ?? throw new InvalidOperationException(
-            $"{label} nicht gefunden unter {InstallerPaths.InstallerOutputDir} - erst `dotnet publish` (siehe BUILD-UND-INSTALLATION.md) + ISCC-Kompilierung laufen lassen, bevor dieses Testprojekt gestartet wird.");
+            $"{label} nicht gefunden unter {InstallerPaths.InstallerOutputDir} - erst `dotnet publish` (siehe docs/handbuch/entwickler-bauen-und-installieren.md) + ISCC-Kompilierung laufen lassen, bevor dieses Testprojekt gestartet wird.");
 
     private static string LogPathFor(string step) =>
         Path.Combine(Path.GetTempPath(), $"HaelpMi-InstallerTest-{step}-{DateTime.UtcNow:yyyyMMdd-HHmmss}.log");

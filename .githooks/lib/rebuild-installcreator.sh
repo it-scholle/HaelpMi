@@ -1,6 +1,6 @@
 # Gemeinsame Rebuild-Logik für tools/InstallCreator/, per "." (source) aus mehreren
 # Hooks aufgerufen (pre-commit, post-rewrite, post-merge, post-checkout - siehe
-# docs/WORKFLOW.md Abschnitt "Install-Creator-Rebuild-Hook"). KEIN eigenständig
+# docs/wissen/installcreator-rebuild-hook.md). KEIN eigenständig
 # ausführbares Skript (keine Shebang, kein eigenes chmod +x nötig) - wird immer per "."
 # in den jeweiligen Hook eingelesen, damit $0 der Pfad des AUFRUFENDEN Hooks bleibt
 # (Bugfix 17.08.2026, siehe ursprünglicher Kommentar in pre-commit: dest_root hängt
@@ -40,7 +40,7 @@ fi
 hash_watched_paths() {
     (
         cd "$source_root" || exit 1
-        find src/HaelpMi.InstallCreator src/HaelpMi.UpdateSigner Directory.Build.props \
+        find src/HaelpMi.InstallCreator src/HaelpMi.UpdateSigner design Directory.Build.props \
             \( -name bin -o -name obj \) -prune -o -type f -print 2>/dev/null \
             | sort | xargs -r sha256sum 2>/dev/null | sha256sum | cut -d' ' -f1
     )

@@ -15,7 +15,7 @@ namespace HaelpMi.InstallCreator;
 ///
 /// Bewusst (noch) ohne Vaultwarden-Anbindung: aktuell gibt es nur einen Installer-Rechner
 /// (kein Kollisionsrisiko durch parallele Instanzen), und die frühere Vaultwarden/Bitwarden-
-/// CLI-Anbindung (nur noch in BUILD-UND-INSTALLATION.md dokumentiert, nicht mehr im Code
+/// CLI-Anbindung (nur noch in docs/handbuch/entwickler-bauen-und-installieren.md dokumentiert, nicht mehr im Code
 /// vorhanden) brauchte für Entschlüsseln + Notiz-Lesen teils bis zu einer Minute - eine
 /// zentrale, verschlüsselte Ablage ist als eigenes Ticket für release-2.0 vorgemerkt (#42).
 /// </summary>

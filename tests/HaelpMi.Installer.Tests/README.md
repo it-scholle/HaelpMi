@@ -1,6 +1,6 @@
 # HaelpMi.Installer.Tests
 
-Coded End-to-End-Tests für den Installer-Lebenszyklus (siehe `TEST-STRATEGY.md` im
+Coded End-to-End-Tests für den Installer-Lebenszyklus (siehe `docs/wissen/test-strategie.md` im
 Projekt-Root, Abschnitt A). Anders als `HaelpMi.Core.Tests` **verändert dieses Projekt den
 Rechner, auf dem es läuft, wirklich**: es installiert/deinstalliert HälpMi mehrfach,
 legt/löscht Windows-Dienste, Firewall-Regeln und einen Autostart-Task an.
@@ -45,7 +45,7 @@ dotnet test tests\HaelpMi.Installer.Tests\HaelpMi.Installer.Tests.csproj -c Rele
 
 Die neun Tests (`Step10` … `Step90`) laufen **garantiert sequenziell in dieser Reihenfolge**
 (`TestPriorityAttribute`/`PriorityOrderer`, `DisableParallelization` in der
-`xunit.runner.json`) - sie bauen bewusst aufeinander auf, ähnlich `ALPHA-TESTPLAN.md`.
+`xunit.runner.json`) - sie bauen bewusst aufeinander auf, ähnlich `docs/handbuch/entwickler-alpha-testplan.md`.
 Bricht ein Schritt ab, bleibt der Rechner in einem Zwischenzustand stehen (siehe
 Kommentar am Ende von `LifecycleTests.cs`) - das ist auf einer Wegwerf-VM in Ordnung.
 

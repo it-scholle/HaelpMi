@@ -75,8 +75,8 @@ if ($dueForPullCheck) {
                     # Ursache (detached HEAD) wurde nie benannt, der Build lief unbemerkt mit
                     # dem alten Stand weiter. `git remote set-head origin -a` frischt den
                     # origin/HEAD-Symref (kann nach einem Default-Branch-Wechsel auf GitHub
-                    # veraltet sein, siehe CLAUDE.md-Abschnitt zum rotierenden
-                    # Default-Branch), danach wird - wie beim Branch-Pull oben nur per
+                    # veraltet sein, siehe docs/entscheidungen/0004-branch-modell-release-zyklen.md
+                    # zum rotierenden Default-Branch), danach wird - wie beim Branch-Pull oben nur per
                     # Fast-Forward - direkt auf origin/HEAD aktualisiert.
                     git remote set-head origin -a *> $null
                     git rev-parse --verify --quiet origin/HEAD *> $null
@@ -141,8 +141,10 @@ if (-not (Test-Path $csproj)) {
 # laengst als "Rebuild noetig" gewertet haette - zwei Sicherheitsnetze mit unterschiedlicher
 # Maschenweite sind schlechter als eines mit der breiteren.
 $updateSignerDir = Join-Path $repoRoot "src\HaelpMi.UpdateSigner"
+# Icon und Farben des Install-Creators sind per Link aus dem Design-System eingebunden.
+$designDir = Join-Path $repoRoot "design"
 $buildProps = Join-Path $repoRoot "Directory.Build.props"
-$watchedSourceDirs = @($srcDir, $updateSignerDir) | Where-Object { Test-Path $_ }
+$watchedSourceDirs = @($srcDir, $updateSignerDir, $designDir) | Where-Object { Test-Path $_ }
 
 $needsRebuild = $true
 if (Test-Path $exePath) {

@@ -40,22 +40,9 @@
                 </StackPanel>
             </StackPanel>
 
-            <!-- Gezeichnetes Kreuz statt Unicode-Glyph (bekannte Render-Probleme, siehe
-                 z. B. das "+"-Kreuz in AdminDashboardWindow.xaml). -->
-            <Button Grid.Column="1" x:Name="CloseButton" Width="20" Height="20" Padding="0"
+            <Button Grid.Column="1" x:Name="CloseButton" AutomationProperties.Name="Schließen" Width="20" Height="20" Padding="0"
                     VerticalAlignment="Top" Background="Transparent" BorderThickness="0" Click="CloseButton_Click">
-                <Grid Width="12" Height="12">
-                    <Rectangle Fill="White" Width="14" Height="2" RenderTransformOrigin="0.5,0.5">
-                        <Rectangle.RenderTransform>
-                            <RotateTransform Angle="45" />
-                        </Rectangle.RenderTransform>
-                    </Rectangle>
-                    <Rectangle Fill="White" Width="14" Height="2" RenderTransformOrigin="0.5,0.5">
-                        <Rectangle.RenderTransform>
-                            <RotateTransform Angle="-45" />
-                        </Rectangle.RenderTransform>
-                    </Rectangle>
-                </Grid>
+                <ContentControl Style="{StaticResource LucideIconStyle}" Tag="{StaticResource Icon.X}" Width="12" Height="12" Foreground="White" />
             </Button>
         </Grid>
     </Border>

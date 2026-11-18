@@ -13,7 +13,7 @@
 #define MyAppName "HälpMi"
 ; Alpha: 0.x until release, per city/product decision - Version 1.0.0 is reserved for
 ; the actual release. Bump the third number for ordinary fixes, second for a feature.
-#define MyAppVersion "0.47.3"
+#define MyAppVersion "0.47.4"
 #define MyAppPublisher "HälpMi contributors"
 #define MyAgentExeName "HaelpMi.Agent.exe"
 #define MyConfigExeName "HaelpMi.Config.exe"
@@ -80,7 +80,7 @@ Name: "german"; MessagesFile: "compiler:Languages\German.isl"
 Name: "{commonappdata}\HaelpMi"; Permissions: users-modify
 
 [Files]
-; Payload is produced by the dotnet publish commands documented in BUILD-UND-INSTALLATION.md (project root).
+; Payload is produced by the dotnet publish commands documented in docs/handbuch/entwickler-bauen-und-installieren.md.
 Source: "payload\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 #ifdef HaelpMiAdminInstall

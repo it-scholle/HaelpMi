@@ -19,7 +19,7 @@
 ; zu wechseln, kein Fehlerfall.
 ;
 ; Build/Payload identisch zu HaelpMi.iss - siehe dortige Kommentare bzw.
-; BUILD-UND-INSTALLATION.md im Projekt-Root.
+; docs/handbuch/entwickler-bauen-und-installieren.md.
 
 #define HaelpMiAdminInstall
 #include "HaelpMiCommon.iss.inc"
@@ -41,7 +41,7 @@ ArchitecturesInstallIn64BitMode=x64compatible
 ; unten). Der Agent selbst läuft weiterhin ganz normal ohne Admin/SYSTEM (5.3/5.7).
 PrivilegesRequired=admin
 UninstallDisplayIcon={app}\{#MyAgentExeName}
-SetupIconFile=haelpmi_icon.ico
+SetupIconFile=..\design\icons\haelpmi_icon.ico
 ; Siehe HaelpMi.iss für die ausführliche Begründung - identisches Vorgehen hier.
 CloseApplications=no
 #if InstallerPassword != ""

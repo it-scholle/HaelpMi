@@ -8,7 +8,7 @@ namespace HaelpMi.Installer.Tests;
 /// Steuert Inno Setups eigene Wizard-Seiten und native MsgBox-Rückfragen per Tastatur -
 /// bewusst NICHT per Koordinaten-Klick oder WPF-spezifischer UI-Automation, weil das hier
 /// gar nicht unsere eigene, sich verändernde Oberfläche ist, sondern Inno Setups feste,
-/// über Jahre stabile Wizard-Chrome (siehe TEST-STRATEGY.md, Abschnitt "Warum nicht alles
+/// über Jahre stabile Wizard-Chrome (siehe docs/wissen/test-strategie.md, Abschnitt "Warum nicht alles
 /// jetzt automatisieren" - genau der Unterschied zwischen stabiler und sich verändernder
 /// UI). Tab-Reihenfolge und Beschleuniger (Alt+N für "&Weiter" usw.) sind Teil von Inno
 /// Setups eigenem, unverändertem VCL-Wizard und nicht von uns beeinflusst.
@@ -49,7 +49,7 @@ internal static class WizardAutomation
         FocusAndSend(installerProcess, "%i"); // Bereit-Seite: Alt+I ("&Installieren")
 
         // Datei-Kopieren braucht echte Zeit (Payload ist mehrere hundert MB, siehe
-        // BUILD-UND-INSTALLATION.md) - auf das tatsächliche Ergebnis pollen statt eine feste
+        // docs/handbuch/entwickler-bauen-und-installieren.md) - auf das tatsächliche Ergebnis pollen statt eine feste
         // Wartezeit zu raten, die bei einer langsamen Test-VM sonst zu kurz sein könnte.
         await WaitForFileAsync(expectedResultFile, TimeSpan.FromMinutes(2));
         await Task.Delay(TimeSpan.FromMilliseconds(500)); // CurStepChanged(ssPostInstall) ganz zu Ende laufen lassen

@@ -13,7 +13,7 @@
             </ResourceDictionary.MergedDictionaries>
         </ResourceDictionary>
     </Window.Resources>
-    <Border Background="#DD1E8449" CornerRadius="14" Padding="16,14">
+    <Border Background="{StaticResource ToastSuccessBackgroundBrush}" CornerRadius="14" Padding="16,14">
         <Border.Effect>
             <DropShadowEffect BlurRadius="14" ShadowDepth="2" Opacity="0.35" />
         </Border.Effect>
@@ -24,25 +24,27 @@
                 <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
 
-            <TextBlock Grid.Column="0" Text="&#10003;" FontSize="26" FontWeight="Bold" Foreground="White"
+            <ContentControl Grid.Column="0" Style="{StaticResource LucideIconStyle}" Tag="{StaticResource Icon.Check}" Width="26" Height="26" Foreground="White"
                        VerticalAlignment="Top" Margin="0,0,10,0" />
 
             <StackPanel Grid.Column="1">
                 <TextBlock x:Name="TitleText" Foreground="White" FontWeight="Bold" FontSize="14" TextWrapping="Wrap" />
-                <TextBlock x:Name="SubText" Foreground="#D5F5E3" FontSize="11" Margin="0,2,0,10" TextWrapping="Wrap" />
+                <TextBlock x:Name="SubText" Foreground="{StaticResource ToastSuccessSubtextBrush}" FontSize="11" Margin="0,2,0,10" TextWrapping="Wrap" />
                 <StackPanel Orientation="Horizontal">
                     <Button x:Name="ShowInExplorerButton" Content="Anzeigen" HorizontalAlignment="Left" Padding="12,5"
-                            Background="White" Foreground="#1E8449" FontWeight="SemiBold"
+                            Background="White" Foreground="{StaticResource ToastSuccessAccentBrush}" FontWeight="SemiBold"
                             Click="ShowInExplorerButton_Click" />
                     <Button x:Name="MoveToMountButton" Content="Nach Z: verschieben" HorizontalAlignment="Left" Padding="12,5"
-                            Margin="8,0,0,0" Background="White" Foreground="#1E8449" FontWeight="SemiBold"
+                            Margin="8,0,0,0" Background="White" Foreground="{StaticResource ToastSuccessAccentBrush}" FontWeight="SemiBold"
                             Click="MoveToMountButton_Click" />
                 </StackPanel>
             </StackPanel>
 
-            <Button Grid.Column="2" x:Name="CloseButton" Content="&#10005;" Width="20" Height="20"
-                    VerticalAlignment="Top" Background="Transparent" Foreground="#D5F5E3"
-                    Padding="0" Click="CloseButton_Click" />
+            <Button Grid.Column="2" x:Name="CloseButton" AutomationProperties.Name="Schließen" Width="20" Height="20"
+                    VerticalAlignment="Top" Background="Transparent" Foreground="{StaticResource ToastSuccessSubtextBrush}"
+                    Padding="0" Click="CloseButton_Click">
+                <ContentControl Style="{StaticResource LucideIconStyle}" Tag="{StaticResource Icon.X}" Width="12" Height="12" />
+            </Button>
         </Grid>
     </Border>
 </Window>
