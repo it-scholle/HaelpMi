@@ -64,7 +64,6 @@ jobs:
           $skript = Join-Path $PWD 'installer\ci-versionspruefung.iss'
           Set-Content -LiteralPath $skript -Encoding utf8 -Value @(
               '#include "HaelpMiVersion.iss.inc"'
-              '#pragma message "MyAppVersion=" + MyAppVersion'
               '#if MyAppVersion != Erwartet'
               '  #error ISPP liest eine andere Version als Directory.Build.props'
               '#endif'

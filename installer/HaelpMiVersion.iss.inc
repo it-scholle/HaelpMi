@@ -3,7 +3,12 @@
 ; stehen, und vor dem Element darf "<Version>" nicht vorkommen (auch nicht im Kommentar).
 ; Die CI vergleicht das Ergebnis mit dem echten XML-Wert (.github/workflows/ci.yml).
 
-#define VersionPropsPath AddBackslash(SourcePath) + "..\Directory.Build.props"
+; Schrägstrich, damit ISPP keinen Backslash als Escape-Zeichen liest; Windows akzeptiert beides.
+#define VersionPropsPath AddBackslash(SourcePath) + "../Directory.Build.props"
+#if !FileExists(VersionPropsPath)
+  #pragma message "Nicht gefunden: " + VersionPropsPath
+  #error Directory.Build.props nicht gefunden (installer-Ordner muss daneben liegen)
+#endif
 #define MyAppVersion ""
 #define VersionPropsHandle 0
 #define VersionPropsLine ""
@@ -23,6 +28,7 @@
   #expr FileClose(VersionPropsHandle)
 #endif
 
+#pragma message "MyAppVersion " + MyAppVersion + " aus " + VersionPropsPath
 #if MyAppVersion == ""
   #error Version nicht ermittelt: kein <Version>-Element in Directory.Build.props gefunden
 #endif
