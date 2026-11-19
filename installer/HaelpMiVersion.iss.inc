@@ -13,12 +13,13 @@
 ; Zuweisung direkt im Schleifenrumpf statt per #sub: ein #define im #sub legt eine eigene
 ; Variable an, die außerhalb nicht sichtbar ist.
 #for {VersionPropsHandle = FileOpen(VersionPropsPath); VersionPropsHandle && !FileEof(VersionPropsHandle) && Pos("<Version>", VersionPropsLine) == 0; ""} VersionPropsLine = FileRead(VersionPropsHandle)
-#if VersionPropsHandle
-  #expr FileClose(VersionPropsHandle)
+#if !VersionPropsHandle
+  #error Directory.Build.props nicht lesbar
 #endif
+#expr FileClose(VersionPropsHandle)
 
 #define VersionStart Pos("<Version>", VersionPropsLine) + 9
-#define MyAppVersion Copy(VersionPropsLine, VersionStart, Pos("</Version>", VersionPropsLine) - VersionStart)
+#define MyAppVersion Trim(Copy(VersionPropsLine, VersionStart, Pos("</Version>", VersionPropsLine) - VersionStart))
 #pragma message "MyAppVersion " + MyAppVersion + " aus " + VersionPropsPath
 #if VersionStart == 9 || MyAppVersion == ""
   #error Version nicht ermittelt: kein <Version>-Element in Directory.Build.props gefunden
