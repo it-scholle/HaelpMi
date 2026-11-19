@@ -306,6 +306,7 @@ Teil A gilt projektübergreifend und kommt aus der MasterAgents-Blueprint. Teil 
 - Minor: volle coded Suite (Core, InstallCreator, Installer).
 - Major/1.0+: zusätzlich FlaUI-UI-Suite und Audio-Loopback-Suite, sobald gebaut.
 - Vor jedem Release zusätzlich `docs/handbuch/entwickler-alpha-testplan.md` von Hand durchgehen.
+- E2E (FlaUI auf PVE-VMs): auslösen mit `gh pr edit <nr> --add-label e2e` (nur PRs aus diesem Repo; für einen weiteren Lauf das Label vorher entfernen) oder `gh workflow run e2e.yml --ref <branch> -f vms=a,b` (erst, wenn `e2e.yml` im Default-Branch liegt). Ergebnis mit `gh run list --workflow e2e.yml` und `gh run view <id> --log-failed`, Artefakte `e2e-a`/`e2e-b` mit `gh run download <id>`. Ein Lauf zur Zeit. Umfang und Gate: `docs/wissen/test-strategie.md` Abschnitt H; Betrieb: `docs/betrieb.md`.
 - Fehlschlag: bis zu 3 Korrekturversuche mit jeweils neuer, begründeter Vermutung, danach stoppen und berichten.
 - Durch Anforderungsänderungen hinfällige Tests vor dem Entfernen mit `[Fact(Skip = "…")]` und Begründung markieren und im PR nennen.
 
