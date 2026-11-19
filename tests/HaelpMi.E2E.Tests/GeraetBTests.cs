@@ -13,21 +13,21 @@ namespace HaelpMi.E2E.Tests;
 [TestCaseOrderer("HaelpMi.Installer.Tests.PriorityOrderer", "HaelpMi.E2E.Tests")]
 [Trait("Category", "E2E")]
 [Trait("Geraet", "B")]
-public class GeraetBTests
+public partial class GeraetBTests
 {
-    private static readonly TimeSpan PopupTimeout = TimeSpan.FromSeconds(10);
+    private static readonly TimeSpan PopupTimeout = TimeSpan.FromSeconds(15);
 
     private readonly ITestOutputHelper _ausgabe;
 
     public GeraetBTests(ITestOutputHelper ausgabe) => _ausgabe = ausgabe;
 
-    [Fact, TestPriority(10)]
+    [Fact, TestPriority(10), Trait("Bereich", "Basis")]
     [Trait("FR", "FR-3"), Trait("FR", "FR-4"), Trait("FR", "FR-34"), Trait("FR", "FR-35"), Trait("FR", "FR-37"), Trait("FR", "NFR-2")]
     public Task T1_UserInstaller_InstalliertStill() =>
         Artefakte.SichereAsync(nameof(T1_UserInstaller_InstalliertStill),
             () => Installation.InstalliereUndPruefeAsync(Role.User, "B"));
 
-    [Fact, TestPriority(40)]
+    [Fact, TestPriority(40), Trait("Bereich", "Basis")]
     [Trait("Teil", ZweiGeraete.Teil)]
     public Task T4_Discovery_BKenntA() =>
         Artefakte.SichereAsync(nameof(T4_Discovery_BKenntA), async () =>
@@ -38,7 +38,7 @@ public class GeraetBTests
         });
 
     // Gegenstück: GeraetATests.T5_Alarm_AnB_MitRueckmeldung.
-    [Fact, TestPriority(50)]
+    [Fact, TestPriority(50), Trait("Bereich", "Basis")]
     [Trait("Teil", ZweiGeraete.Teil), Trait("FR", "FR-40"), Trait("FR", "FR-51"), Trait("FR", "FR-53")]
     public Task T5_Alarm_VonA_MitRueckmeldung() =>
         Artefakte.SichereAsync(nameof(T5_Alarm_VonA_MitRueckmeldung), async () =>
@@ -46,13 +46,16 @@ public class GeraetBTests
             var b = ZweiGeraete.EigeneDeviceId();
             var a = await ZweiGeraete.DeviceIdDerGegenseiteAsync("a");
             await ZweiGeraete.BereiteAlarmprofilVorAsync(a, b);
+
+            // Erster UIA-Zugriff dieses Testprozesses dauert auf einer frischen VM teils über 10 s, deshalb vor der Marke.
+            using var app = new HaelpMiApp();
+            Assert.False(app.AlarmfensterOffen(), "Vor dem Alarm ist schon ein Alarmfenster offen.");
             Rendezvous.Signal("b-bereit", E2EUmgebung.Raum);
 
             // Inhalt: Zeile 1 Raumtext von A, Zeile 2 Auslösezeitpunkt (UTC, Uhr von A).
             var zeilen = (await Rendezvous.WaitForAsync("a-ausgeloest", ZweiGeraete.GegenseiteTimeout)).Split('\n');
             var markeDa = DateTimeOffset.UtcNow;
 
-            using var app = new HaelpMiApp();
             Window popup;
             try
             {

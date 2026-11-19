@@ -24,13 +24,23 @@ internal static partial class Rendezvous
         File.Move(temp, ziel, overwrite: true);
     }
 
+    /// <summary>Meldet der Gegenseite, dass der Test mit diesem Markenpräfix hier gescheitert ist; deren Warten auf "&lt;praefix&gt;-…" endet sofort.</summary>
+    public static void Abbrechen(string praefix) => Signal(AbbruchMarke(praefix));
+
     /// <returns>Inhalt der Marke.</returns>
     public static async Task<string> WaitForAsync(string marke, TimeSpan timeout)
     {
         var pfad = PfadFuer(marke);
+        var praefix = TestPraefix().Match(marke);
+        var abbruch = praefix.Success ? PfadFuer(AbbruchMarke(praefix.Groups[1].Value)) : null;
         var frist = DateTime.UtcNow + timeout;
         while (DateTime.UtcNow < frist)
         {
+            if (abbruch is not null && File.Exists(abbruch))
+            {
+                throw new TimeoutException($"Rendezvous-Marke '{marke}': Test {praefix.Groups[1].Value} ist auf der Gegenseite gescheitert, siehe deren Ergebnis.");
+            }
+
             if (File.Exists(pfad))
             {
                 try
@@ -58,6 +68,11 @@ internal static partial class Rendezvous
 
         return Path.Combine(Ordner, marke);
     }
+
+    private static string AbbruchMarke(string praefix) => $"{praefix}-abbruch";
+
+    [GeneratedRegex("^(t[0-9]+)-")]
+    private static partial Regex TestPraefix();
 
     [GeneratedRegex("^[A-Za-z0-9][A-Za-z0-9._-]*$")]
     private static partial Regex GueltigeMarke();

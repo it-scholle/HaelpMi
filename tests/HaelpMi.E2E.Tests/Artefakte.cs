@@ -8,7 +8,8 @@ internal static class Artefakte
     public static string Ordner => Path.Combine(E2EUmgebung.Wurzel, "out");
 
     // xUnit 2 hat keinen Fehlschlag-Hook, deshalb umschließt jeder Test seinen Rumpf hiermit.
-    public static async Task SichereAsync(string testName, Func<Task> rumpf)
+    /// <param name="abbruch">Präfix der Rendezvous-Marken des Tests (z. B. "t6"); bei einem Fehlschlag erfährt die Gegenseite davon, siehe <see cref="Rendezvous.Abbrechen"/>.</param>
+    public static async Task SichereAsync(string testName, Func<Task> rumpf, string? abbruch = null)
     {
         try
         {
@@ -16,6 +17,11 @@ internal static class Artefakte
         }
         catch
         {
+            if (abbruch is not null)
+            {
+                Rendezvous.Abbrechen(abbruch);
+            }
+
             Sammle(testName);
             throw;
         }

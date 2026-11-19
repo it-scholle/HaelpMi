@@ -13,7 +13,7 @@ namespace HaelpMi.E2E.Tests;
 [TestCaseOrderer("HaelpMi.Installer.Tests.PriorityOrderer", "HaelpMi.E2E.Tests")]
 [Trait("Category", "E2E")]
 [Trait("Geraet", "A")]
-public class GeraetATests
+public partial class GeraetATests
 {
     private static readonly TimeSpan FensterTimeout = TimeSpan.FromSeconds(30);
 
@@ -21,7 +21,7 @@ public class GeraetATests
 
     public GeraetATests(ITestOutputHelper ausgabe) => _ausgabe = ausgabe;
 
-    [Fact, TestPriority(10)]
+    [Fact, TestPriority(10), Trait("Bereich", "Basis")]
     [Trait("FR", "FR-3"), Trait("FR", "FR-4"), Trait("FR", "FR-34"), Trait("FR", "FR-35"), Trait("FR", "FR-37"), Trait("FR", "NFR-2")]
     public Task T1_AdminInstaller_InstalliertStill() =>
         Artefakte.SichereAsync(nameof(T1_AdminInstaller_InstalliertStill),
@@ -72,7 +72,7 @@ public class GeraetATests
             HaelpMiApp.BeendeKonfiguration();
         });
 
-    [Fact, TestPriority(40)]
+    [Fact, TestPriority(40), Trait("Bereich", "Basis")]
     [Trait("Teil", ZweiGeraete.Teil)]
     public Task T4_Discovery_AKenntB() =>
         Artefakte.SichereAsync(nameof(T4_Discovery_AKenntB), async () =>
@@ -83,7 +83,7 @@ public class GeraetATests
         });
 
     // Gegenstück: GeraetBTests.T5_Alarm_VonA_MitRueckmeldung.
-    [Fact, TestPriority(50)]
+    [Fact, TestPriority(50), Trait("Bereich", "Basis")]
     [Trait("Teil", ZweiGeraete.Teil), Trait("FR", "FR-50"), Trait("FR", "FR-53")]
     public Task T5_Alarm_AnB_MitRueckmeldung() =>
         Artefakte.SichereAsync(nameof(T5_Alarm_AnB_MitRueckmeldung), async () =>
@@ -102,7 +102,7 @@ public class GeraetATests
             Window banner;
             try
             {
-                banner = app.WarteAufFenster(AgentProzess, null, SenderBannerId, TimeSpan.FromSeconds(10));
+                banner = app.WarteAufSenderBanner(TimeSpan.FromSeconds(10));
             }
             catch (TimeoutException)
             {
@@ -111,11 +111,35 @@ public class GeraetATests
                 throw;
             }
 
-            await Rendezvous.WaitForAsync("b-quittiert", TimeSpan.FromMinutes(2));
-            await WarteBisAsync(() => AufDemWeg(banner).Any(n => n.StartsWith(raumB + " - ", StringComparison.Ordinal)),
-                TimeSpan.FromSeconds(15), $"'Bin unterwegs' von B (Raum '{raumB}') erscheint nicht unter 'Auf dem Weg'.");
-            Assert.Equal("Empfangen: 1 von 1", Element(banner, "AckedText").Name);
+            try
+            {
+                await Rendezvous.WaitForAsync("b-quittiert", TimeSpan.FromMinutes(2));
+                await WarteBisAsync(() => AufDemWeg(banner).Any(n => n.StartsWith(raumB + " - ", StringComparison.Ordinal)),
+                    TimeSpan.FromSeconds(15), $"'Bin unterwegs' von B (Raum '{raumB}') erscheint nicht unter 'Auf dem Weg'.");
+            }
+            catch
+            {
+                // Sonst wiederholt A den Alarm bis in T6 hinein und B bekommt dort weiter dessen Fenster.
+                try
+                {
+                    Element(banner, "CancelButton").AsButton().Invoke();
+                }
+                catch (Exception ex) when (ex is System.Runtime.InteropServices.COMException or InvalidOperationException)
+                {
+                }
+
+                await app.SchliesseSenderBannerAsync();
+                throw;
+            }
+
+            Assert.True(Element(banner, "AckedText").Name == "Empfangen: 1 von 1", AckBefund(Element(banner, "AckedText").Name));
         });
+
+    // Der Zähler zeigt nur das Ergebnis der letzten Senderunde (RepeatingAlarmSession._lastAckedCount); kommt die
+    // Empfangsbestätigung nicht binnen AlarmAckTimeout, bleibt er auf 0, obwohl B schon "Bin unterwegs" gemeldet hat.
+    internal static string AckBefund(string angezeigt) =>
+        $"Produktbefund: das Sender-Banner zeigt '{angezeigt}' statt 'Empfangen: 1 von 1', obwohl B den Alarm empfangen " +
+        "und 'Bin unterwegs' gemeldet hat (Empfangsbestätigung nicht binnen AlarmAckTimeout angekommen, siehe audit.log beider Geräte).";
 
     // Ein frisch installiertes Gerät hat noch kein Alarm-Profil, ohne eines lehnt der Agent den Selbsttest ab.
     // Profil anlegen über das Dashboard ist Gegenstand späterer Tests, hier genügt der Datenstand.

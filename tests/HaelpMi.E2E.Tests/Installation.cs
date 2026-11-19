@@ -81,8 +81,7 @@ internal static class Installation
         // erhöht oder in einer fremden Sitzung. Der Test braucht den Agent rechtelos in der eigenen Sitzung, wie nach einer Anmeldung.
         await Task.Delay(TimeSpan.FromSeconds(3));
         HaelpMiApp.BeendeAlles();
-        HaelpMiApp.StarteAgentUeberAutostart();
-        await HaelpMiApp.WarteAufAgentAsync(TimeSpan.FromSeconds(60));
+        await HaelpMiApp.StarteAgentAsync();
 
         if (rolle == Role.Admin)
         {
