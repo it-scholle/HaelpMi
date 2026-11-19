@@ -1,7 +1,7 @@
 # 0010 – Vorschlag: Branch-Modell `develop`/`main` nach Teil A
 
 - Datum: 2026-11-18
-- Status: angenommen (Umsetzung nach Abschluss von `release-1.0-MVP`)
+- Status: umgesetzt (2026-11-19, #194)
 - Entschieden von: Repo-Owner, 2026-11-18
 
 ## Kontext
@@ -30,3 +30,6 @@ nicht umgehängt werden müssen. Bis zur Entscheidung gilt das bisherige Modell.
 Bei Annahme: Ticket „Branch-Modell auf develop/main umstellen“ anlegen; `pre-push`-Hook aus der
 Vorlage übernehmen; Ausnahmen „Branch-Modell“, „Commit-Format“ und „Merge-Art“ in `AGENTS.md`
 Teil B streichen.
+
+## Umsetzung
+2026-11-19 (#194): `develop` und `release-2.0` vom Endstand von `release-1.0-MVP` (v0.47.11) angelegt, `develop` ist GitHub-Default, offene PRs umgehängt, Milestone `release-1.0-MVP` geschlossen. Abweichend von Möglichkeit 1 bleibt ein Stabilisierungs-Branch `release-X.Y` zwischen `develop` und `main` (AGENTS.md Teil B, „Release-Stabilisierung über `release-X.Y`“). `pre-push` aus der Vorlage übernommen.
