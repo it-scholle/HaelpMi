@@ -48,6 +48,10 @@ bestehenden Dateien, sondern verbindet sie:
 Vor jedem Release zusätzlich: `docs/handbuch/entwickler-alpha-testplan.md` von Hand durchgehen (das schrumpft mit
 der Zeit, siehe oben).
 
+E2E: Wann neue Tests oder ein Lauf Pflicht sind und welches E2E-Gate je Versionssprung gilt, regelt
+`AGENTS.md` Teil B, Abschnitt "E2E-Tests". Suite und Testfälle: siehe E2E-Suite
+(`tests/HaelpMi.E2E.Tests`, PR #170).
+
 ---
 
 ## A. Identität & Deployment (Installer-Lebenszyklus)
@@ -185,13 +189,9 @@ Alle Werte werden per Regex geprüft, sonst bricht der Build-Job ab. Vergleichsl
 Stand vor dem Fix: in `ci/e2e/lauf.env` `PRODUKT_REF=v0.46.1` und `FILTER=Bereich=Basis|Bereich=R136`
 committen, Label `e2e` setzen, danach die Datei wieder leeren.
 
-Gate-Einordnung:
-
-| Version-Sprung | E2E |
-|---|---|
-| Patch | nicht gefordert |
-| Minor | empfohlen, wenn Installer, Agent, UI oder Netzwerk berührt sind (Label `e2e` am PR) |
-| Major/1.0+ | grüner Lauf mit `a,b` gefordert (ist die FlaUI-UI-Suite aus der Gate-Tabelle oben) |
+Gate-Einordnung: verbindlich ist `AGENTS.md` Teil B, Abschnitt "E2E-Tests" (Patch: betroffene
+Bereiche, sofern E2E-relevant; Minor: volle Suite `a,b`; Major/1.0+: volle Suite inkl.
+Regressionsfälle wie T10, `Bereich=R136`).
 
 Bekannte Umgehungen in der Testvorbereitung (keine Produktkorrektur):
 
