@@ -22,7 +22,7 @@ internal static class ZweiGeraete
     public static readonly TimeSpan SchrittTimeout = TimeSpan.FromMinutes(3);
 
     // A und B schreiben dieselbe shared-config.json, deshalb feste Werte statt Zufall.
-    private static readonly Guid ProfilId = new("e2e00000-0000-4000-8000-000000000005");
+    public static readonly Guid ProfilId =new("e2e00000-0000-4000-8000-000000000005");
 
     private const HotkeyModifiers StrgAltUmschalt = HotkeyModifiers.Control | HotkeyModifiers.Alt | HotkeyModifiers.Shift;
 
@@ -68,7 +68,14 @@ internal static class ZweiGeraete
     }
 
     // Hotkeys und Boot-Call kommen erst nach dem Prozessstart im Hintergrund (StartBackgroundServices).
-    private static readonly TimeSpan AgentAnlaufzeit = TimeSpan.FromSeconds(10);
+    public static readonly TimeSpan AgentAnlaufzeit = TimeSpan.FromSeconds(10);
+
+    /// <summary><see cref="HaelpMiApp.AgentNeustartAsync"/> plus <see cref="AgentAnlaufzeit"/>, danach empfängt und sendet der Agent.</summary>
+    public static async Task AgentNeustartMitAnlaufAsync()
+    {
+        await HaelpMiApp.AgentNeustartAsync();
+        await Task.Delay(AgentAnlaufzeit);
+    }
 
     public static Guid EigeneDeviceId() =>
         JsonFileStore.Load<OwnSettings>(AppPaths.SettingsFilePath)?.DeviceId
@@ -139,9 +146,7 @@ internal static class ZweiGeraete
     /// <summary>Ohne gültige Lizenz gilt für User-Geräte Kontingent 0 (LicenseLimitGuard), B könnte weder senden noch empfangen.</summary>
     private static void PruefeLizenz()
     {
-        var deployment = JsonFileStore.Load<DeploymentInfo>(Path.Combine(E2EUmgebung.ProgrammOrdner, "deployment.json"))
-            ?? throw new InvalidOperationException("deployment.json fehlt.");
-        var ergebnis = LicenseReader.Load(deployment.CustomerGroupId, Convert.FromHexString(deployment.LicensePublicKeyHex));
+        var ergebnis = Lizenz.Status();
         Assert.True(ergebnis.Status == LicenseStatus.Valid,
             $"Lizenzstatus {ergebnis.Status} statt Valid. Der Workflow erzeugt pro Lauf eine Test-Kundengruppe samt Lizenz " +
             "(HAELPMI_E2E_LIZENZ); ohne sie sperrt LicenseLimitGuard das User-Gerät B.");

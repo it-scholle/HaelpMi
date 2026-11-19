@@ -15,7 +15,13 @@ internal static class E2EUmgebung
     /// <summary>Optional: lizenz.json der Test-Kundengruppe dieses Laufs, erzeugt vom Workflow (ci/e2e/testlizenz-erzeugen.ps1).</summary>
     public static string? LizenzPfad => Env("HAELPMI_E2E_LIZENZ");
 
-    public static string Raum => Env("HAELPMI_E2E_RAUM") ?? "E2E-A";
+    /// <summary>Tag oder Commit, aus dem Agent und Installer dieses Laufs gebaut wurden; null = Stand des PR (Workflow-Input produkt_ref).</summary>
+    public static string? ProduktRef => Env("HAELPMI_E2E_PRODUKT_REF");
+
+    /// <summary>Anzahl Zyklen für T10 (Workflow-Input zyklen), Default 25.</summary>
+    public static int Zyklen => int.TryParse(Env("HAELPMI_E2E_ZYKLEN"), out var n) && n > 0 ? n : 25;
+
+    public static string Raum =>Env("HAELPMI_E2E_RAUM") ?? "E2E-A";
 
     public static string Raumnummer => Env("HAELPMI_E2E_RAUMNUMMER") ?? "101";
 

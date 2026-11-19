@@ -120,6 +120,128 @@ internal sealed class HaelpMiApp : IDisposable
     public Window? FindeSenderBanner() =>
         FindeFenster(AgentProzess, null, SenderBannerId) ?? FindeFensterMitKind(AgentProzess, "CancelButton", "AckedText");
 
+    /// <summary>Alle Alarmfenster des Agents; bei #136 stehen zwei Fenster derselben Session kurz nebeneinander.</summary>
+    public List<Window> AlleAlarmfenster()
+    {
+        var treffer = new List<Window>();
+        foreach (var fenster in FensterVon(AgentProzess))
+        {
+            try
+            {
+                if (fenster.Properties.AutomationId.ValueOrDefault == AlarmfensterId
+                    || fenster.FindFirstDescendant(cf => cf.ByAutomationId("OnMyWayButton")) is not null)
+                {
+                    treffer.Add(fenster.AsWindow());
+                }
+            }
+            catch (COMException)
+            {
+            }
+        }
+
+        return treffer;
+    }
+
+    public static IntPtr Handle(Window fenster)
+    {
+        try
+        {
+            return fenster.Properties.NativeWindowHandle.ValueOrDefault;
+        }
+        catch (COMException)
+        {
+            return IntPtr.Zero;
+        }
+    }
+
+    /// <summary>Toast des Agents über die Fenster-AutomationId (z. B. "LicenseReminderToastWindow").</summary>
+    public Window? FindeToast(string automationId) => FindeFenster(AgentProzess, null, automationId);
+
+    /// <summary>
+    /// Fenster des Prozesses, das ein Element mit <paramref name="automationId"/> enthält, samt Element.
+    /// Ein Dialog mit Owner erscheint in UIA je nach Lage unter dem Desktop oder unter seinem Owner; beides wird durchsucht.
+    /// </summary>
+    public AutomationElement? FindeElement(string prozessName, string automationId)
+    {
+        foreach (var fenster in FensterVon(prozessName))
+        {
+            try
+            {
+                if (fenster.FindFirstDescendant(cf => cf.ByAutomationId(automationId)) is { } element)
+                {
+                    return element;
+                }
+            }
+            catch (COMException)
+            {
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>MessageBox des Prozesses, auch wenn sie in UIA unter ihrem Owner hängt.</summary>
+    public AutomationElement? FindeDialogUeberall(string prozessName)
+    {
+        if (FindeDialog(prozessName) is { } oben)
+        {
+            return oben;
+        }
+
+        foreach (var fenster in FensterVon(prozessName))
+        {
+            try
+            {
+                if (fenster.FindFirstDescendant(cf => cf.ByClassName("#32770")) is { } dialog)
+                {
+                    return dialog;
+                }
+            }
+            catch (COMException)
+            {
+            }
+        }
+
+        return null;
+    }
+
+    public static void BestaetigeDialog(AutomationElement dialog)
+    {
+        var ok = dialog.FindFirstDescendant(cf => cf.ByControlType(FlaUI.Core.Definitions.ControlType.Button).And(cf.ByName("OK")))
+            ?? dialog.FindFirstDescendant(cf => cf.ByAutomationId("2"))
+            ?? throw new InvalidOperationException("Knopf 'OK' im Dialog nicht gefunden.");
+        ok.AsButton().Invoke();
+    }
+
+    /// <summary>Text eines Elements, leer wenn es fehlt oder nicht sichtbar ist (z. B. in einem eingeklappten Banner).</summary>
+    public static string SichtbarerText(AutomationElement wurzel, string automationId)
+    {
+        try
+        {
+            var element = wurzel.FindFirstDescendant(cf => cf.ByAutomationId(automationId));
+            return element is null || element.IsOffscreen ? string.Empty : element.Properties.Name.ValueOrDefault ?? string.Empty;
+        }
+        catch (COMException)
+        {
+            return string.Empty;
+        }
+    }
+
+    /// <summary>Schließt ein Sender-Banner über seinen eigenen Schließen-Knopf, sonst über das Fenster.</summary>
+    public async Task SchliesseBannerAsync(Window banner)
+    {
+        try
+        {
+            Element(banner, "CloseBannerButton").AsButton().Invoke();
+        }
+        catch (Exception ex) when (ex is COMException or InvalidOperationException)
+        {
+        }
+
+        await Task.Delay(300);
+        await SchliesseSenderBannerAsync();
+    }
+
     /// <summary>Schließt alle offenen Sender-Banner, z. B. aus einem vorherigen Test.</summary>
     public async Task SchliesseSenderBannerAsync()
     {

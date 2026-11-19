@@ -10,6 +10,18 @@ on:
         description: 'Test-VMs, kommagetrennt (a, b oder a,b). Nur mit a und b laufen T4/T5.'
         type: string
         default: 'a,b'
+      produkt_ref:
+        description: 'Tag oder voller Commit-SHA, aus dem Agent, Konfiguration und Installer gebaut werden (leer = dieser Stand). Die Tests kommen immer von diesem Stand.'
+        type: string
+        default: ''
+      filter:
+        description: 'Zusätzlicher dotnet-test-Filter, angehängt als &(…), z. B. Bereich=Basis|Bereich=R136'
+        type: string
+        default: ''
+      zyklen:
+        description: 'Zyklen für T10 (Regression #136), 1 bis 100'
+        type: string
+        default: '25'
   pull_request:
     types: [labeled]
 
@@ -59,8 +71,52 @@ jobs:
     defaults:
       run:
         shell: pwsh
+    outputs:
+      produkt_ref: ${{ steps.lauf.outputs.produkt_ref }}
+      filter: ${{ steps.lauf.outputs.filter }}
+      zyklen: ${{ steps.lauf.outputs.zyklen }}
     steps:
       - uses: actions/checkout@v4
+
+      # Werte nur über env und erst nach der Prüfung verwenden (Script-Injection). Beim Label-Lauf aus
+      # ci/e2e/lauf.env: workflow_dispatch startet nur Workflows, die auf dem Default-Branch liegen.
+      - name: Laufparameter
+        id: lauf
+        env:
+          EREIGNIS: ${{ github.event_name }}
+          IN_PRODUKT_REF: ${{ inputs.produkt_ref }}
+          IN_FILTER: ${{ inputs.filter }}
+          IN_ZYKLEN: ${{ inputs.zyklen }}
+        run: |
+          $werte = @{ PRODUKT_REF = "$env:IN_PRODUKT_REF"; FILTER = "$env:IN_FILTER"; ZYKLEN = "$env:IN_ZYKLEN" }
+          if ($env:EREIGNIS -ne 'workflow_dispatch') {
+              $werte = @{ PRODUKT_REF = ''; FILTER = ''; ZYKLEN = '' }
+              foreach ($zeile in Get-Content -LiteralPath ci/e2e/lauf.env) {
+                  if ($zeile -match '^\s*(#|$)') { continue }
+                  if ($zeile -cnotmatch '^(PRODUKT_REF|FILTER|ZYKLEN)=(.*)$') { throw 'ci/e2e/lauf.env: nur PRODUKT_REF=, FILTER= und ZYKLEN= sind erlaubt.' }
+                  $werte[$Matches[1]] = $Matches[2].Trim()
+              }
+          }
+          if ($werte.PRODUKT_REF -cnotmatch '^[A-Za-z0-9._/-]*$' -or $werte.PRODUKT_REF.StartsWith('-')) { throw 'produkt_ref: nur A-Z, a-z, 0-9, ".", "_", "/" und "-" erlaubt.' }
+          if ($werte.FILTER -cnotmatch '^[A-Za-z0-9=!&|()_.~-]*$') { throw 'filter: nur A-Z, a-z, 0-9 und =!&|()_.~- erlaubt.' }
+          if (-not $werte.ZYKLEN) { $werte.ZYKLEN = '25' }
+          if ($werte.ZYKLEN -cnotmatch '^[0-9]{1,3}$' -or [int]$werte.ZYKLEN -lt 1 -or [int]$werte.ZYKLEN -gt 100) { throw 'zyklen: ganze Zahl von 1 bis 100.' }
+          "produkt_ref=$($werte.PRODUKT_REF)" >> $env:GITHUB_OUTPUT
+          "filter=$($werte.FILTER)" >> $env:GITHUB_OUTPUT
+          "zyklen=$($werte.ZYKLEN)" >> $env:GITHUB_OUTPUT
+          $quelle = if ($werte.PRODUKT_REF) { Join-Path $PWD 'produkt' } else { "$PWD" }
+          "QUELLE=$quelle" >> $env:GITHUB_ENV
+          $produkt = if ($werte.PRODUKT_REF) { $werte.PRODUKT_REF } else { '(dieser Stand)' }
+          "### E2E-Laufparameter`n`n- produkt_ref: $produkt`n- filter: $($werte.FILTER)`n- zyklen: $($werte.ZYKLEN)" >> $env:GITHUB_STEP_SUMMARY
+
+      # Agent, Konfiguration und Installer aus einem anderen Stand (Vergleichslauf, z. B. v0.46.1 für #136).
+      - name: Produktstand auschecken
+        if: steps.lauf.outputs.produkt_ref != ''
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.lauf.outputs.produkt_ref }}
+          path: produkt
+
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 8.0.x
@@ -69,7 +125,7 @@ jobs:
       - name: Nutzlast veröffentlichen
         run: |
           foreach ($p in 'HaelpMi.Agent', 'HaelpMi.Config', 'HaelpMi.UpdateService') {
-              dotnet publish "src/$p/$p.csproj" -c Release -r win-x64 -p:Platform=x64 --self-contained true -p:PublishReadyToRun=true -o installer/payload
+              dotnet publish "$env:QUELLE/src/$p/$p.csproj" -c Release -r win-x64 -p:Platform=x64 --self-contained true -p:PublishReadyToRun=true -o "$env:QUELLE/installer/payload"
               if ($LASTEXITCODE) { exit $LASTEXITCODE }
           }
 
@@ -93,7 +149,7 @@ jobs:
       # Eigene Test-Kundengruppe pro Lauf mit Lizenz, siehe Kopf von testlizenz-erzeugen.ps1.
       - name: Testlizenz erzeugen
         id: lizenz
-        run: ci/e2e/testlizenz-erzeugen.ps1 -Payload installer/payload -Ausgabe e2e-installer/lizenz.json
+        run: ci/e2e/testlizenz-erzeugen.ps1 -Payload "$env:QUELLE/installer/payload" -Ausgabe e2e-installer/lizenz.json
 
       # User vor Admin: der Admin-Installer bettet installer/UserInstallerPayload/HaelpMi-User-Setup.exe ein.
       # Ohne /DCustomerGroupId gilt im Installer die Null-GUID, deren Nachrichten MessageValidation.IsPlausible verwirft.
@@ -106,15 +162,18 @@ jobs:
           if (-not [guid]::TryParse($env:GRUPPE, [ref]$g) -or $g -eq [guid]::Empty) { throw "Keine gültige CustomerGroupId aus der Testlizenz: '$env:GRUPPE'" }
           if ($env:SCHLUESSEL -notmatch '^[0-9A-Fa-f]{64}$') { throw 'Kein gültiger Lizenzschlüssel aus der Testlizenz.' }
           $gemeinsam = "/DCustomerGroupId=$env:GRUPPE", '/DIsTestInstaller=true', "/DLicensePublicKeyHex=$env:SCHLUESSEL"
-          & $env:ISCC @gemeinsam "/O$PWD\installer\UserInstallerPayload" /FHaelpMi-User-Setup installer/HaelpMi.iss
+          $q = $env:QUELLE
+          & $env:ISCC @gemeinsam "/O$q\installer\UserInstallerPayload" /FHaelpMi-User-Setup "$q\installer\HaelpMi.iss"
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
-          if (-not (Test-Path installer/UserInstallerPayload/HaelpMi-User-Setup.exe)) { throw 'User-Installer fehlt in installer\UserInstallerPayload, der Admin-Installer würde ohne ihn scheitern.' }
-          & $env:ISCC @gemeinsam "/O$PWD\e2e-installer\a" /FHaelpMi-Admin-Setup installer/HaelpMi-Admin.iss
+          if (-not (Test-Path "$q\installer\UserInstallerPayload\HaelpMi-User-Setup.exe")) { throw 'User-Installer fehlt in installer\UserInstallerPayload, der Admin-Installer würde ohne ihn scheitern.' }
+          & $env:ISCC @gemeinsam "/O$PWD\e2e-installer\a" /FHaelpMi-Admin-Setup "$q\installer\HaelpMi-Admin.iss"
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           New-Item -ItemType Directory -Force -Path e2e-installer/b | Out-Null
-          Copy-Item installer/UserInstallerPayload/HaelpMi-User-Setup.exe e2e-installer/b/
-          Copy-Item e2e-installer/lizenz.json e2e-installer/a/
-          Copy-Item e2e-installer/lizenz.json e2e-installer/b/
+          Copy-Item "$q\installer\UserInstallerPayload\HaelpMi-User-Setup.exe" e2e-installer/b/
+          foreach ($datei in 'lizenz.json', 'lizenz-bald.json', 'lizenz-abgelaufen.json') {
+              Copy-Item "e2e-installer/$datei" e2e-installer/a/
+              Copy-Item "e2e-installer/$datei" e2e-installer/b/
+          }
 
       - name: E2E-Tests bauen
         run: dotnet build tests/HaelpMi.E2E.Tests -c Release
@@ -157,6 +216,9 @@ jobs:
       HAELPMI_E2E_LIZENZ: C:\haelpmi-e2e\installer\lizenz.json
       HAELPMI_E2E_RAUM: E2E-A
       HAELPMI_E2E_RAUMNUMMER: '101'
+      HAELPMI_E2E_PRODUKT_REF: ${{ needs.build.outputs.produkt_ref }}
+      HAELPMI_E2E_ZYKLEN: ${{ needs.build.outputs.zyklen }}
+      E2E_FILTER: ${{ needs.build.outputs.filter }}
       GERAET: A
     steps:
       - uses: actions/download-artifact@v4
@@ -189,6 +251,11 @@ jobs:
         run: |
           $filter = "Category=E2E&Geraet=$env:GERAET"
           if (",$env:VMS," -notlike '*,a,*' -or ",$env:VMS," -notlike '*,b,*') { $filter += '&Teil!=ZweiGeraete' }
+          if ($env:E2E_FILTER) {
+              if ($env:E2E_FILTER -cnotmatch '^[A-Za-z0-9=!&|()_.~-]*$') { throw 'Ungültiger Filter aus dem Build-Job.' }
+              $filter += "&($env:E2E_FILTER)"
+          }
+          "Filter: $filter"
           dotnet test "$env:HAELPMI_E2E_DIR\tests\HaelpMi.E2E.Tests.dll" --filter $filter `
               --logger "trx;LogFileName=e2e-$env:GERAET.trx" --results-directory "$env:HAELPMI_E2E_DIR\out\trx"
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
@@ -231,6 +298,9 @@ jobs:
       HAELPMI_E2E_LIZENZ: C:\haelpmi-e2e\installer\lizenz.json
       HAELPMI_E2E_RAUM: E2E-B
       HAELPMI_E2E_RAUMNUMMER: '102'
+      HAELPMI_E2E_PRODUKT_REF: ${{ needs.build.outputs.produkt_ref }}
+      HAELPMI_E2E_ZYKLEN: ${{ needs.build.outputs.zyklen }}
+      E2E_FILTER: ${{ needs.build.outputs.filter }}
       GERAET: B
     steps:
       - uses: actions/download-artifact@v4
@@ -263,6 +333,11 @@ jobs:
         run: |
           $filter = "Category=E2E&Geraet=$env:GERAET"
           if (",$env:VMS," -notlike '*,a,*' -or ",$env:VMS," -notlike '*,b,*') { $filter += '&Teil!=ZweiGeraete' }
+          if ($env:E2E_FILTER) {
+              if ($env:E2E_FILTER -cnotmatch '^[A-Za-z0-9=!&|()_.~-]*$') { throw 'Ungültiger Filter aus dem Build-Job.' }
+              $filter += "&($env:E2E_FILTER)"
+          }
+          "Filter: $filter"
           dotnet test "$env:HAELPMI_E2E_DIR\tests\HaelpMi.E2E.Tests.dll" --filter $filter `
               --logger "trx;LogFileName=e2e-$env:GERAET.trx" --results-directory "$env:HAELPMI_E2E_DIR\out\trx"
           if ($LASTEXITCODE) { exit $LASTEXITCODE }

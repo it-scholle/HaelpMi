@@ -83,7 +83,7 @@ public partial class GeraetATests
         });
 
     // Gegenstück: GeraetBTests.T5_Alarm_VonA_MitRueckmeldung.
-    [Fact, TestPriority(50)]
+    [Fact, TestPriority(50), Trait("Bereich", "Basis")]
     [Trait("Teil", ZweiGeraete.Teil), Trait("FR", "FR-50"), Trait("FR", "FR-53")]
     public Task T5_Alarm_AnB_MitRueckmeldung() =>
         Artefakte.SichereAsync(nameof(T5_Alarm_AnB_MitRueckmeldung), async () =>
