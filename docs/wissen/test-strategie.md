@@ -43,7 +43,7 @@ bestehenden Dateien, sondern verbindet sie:
 |---|---|
 | Patch (x.x.**Y**) | **Smoke-Set**: die mit 🔹 markierten Tests unten (~15 Stück, wenige Minuten) |
 | Minor (x.**Y**.0) | **Volles coded Set**: alle `HaelpMi.Core.Tests` + alle `HaelpMi.Installer.Tests` |
-| Major/1.0+ | Zusätzlich: FlaUI-UI-Suite + Audio-Loopback-Suite, sobald gebaut (siehe unten) |
+| Major/1.0+ | Zusätzlich: FlaUI-UI-Suite (E2E auf PVE-VMs, siehe Abschnitt H) + Audio-Loopback-Suite, sobald gebaut |
 
 Vor jedem Release zusätzlich: `docs/handbuch/entwickler-alpha-testplan.md` von Hand durchgehen (das schrumpft mit
 der Zeit, siehe oben).
@@ -142,6 +142,50 @@ geworfen" unterscheiden.
 | F1 | Ton wird beim Alarmempfang tatsächlich HÖRBAR abgespielt (Loopback-Aufnahme zeigt Audiopegel) | Manuell — F0 prüft nur "hängt nicht/wirft nicht", nicht "war wirklich etwas zu hören" |
 | F2 | Ton wird auch bei stummgeschaltetem Standard-Windows-Ausgabegerät abgespielt (Mehrgeräte-Ausgabe, NAudio) | Manuell — der unsicherste Punkt im ganzen Testplan |
 | F3 | Korrekter Ton je `IncomingSoundId` wird gewählt | Teilweise coded (`IncomingSoundCatalog_Resolve_FallsBackToFirstOption_ForUnknownId`), Wiedergabe selbst nicht |
+
+## H. E2E (FlaUI auf PVE-VMs)
+
+Projekt `tests/HaelpMi.E2E.Tests` (xUnit + FlaUI.UIA3), Workflow `.github/workflows/e2e.yml`.
+Läuft auf zwei Wegwerf-VMs (A = Admin-Gerät, B = User-Gerät), die vor jedem Lauf auf den
+Snapshot `clean-base` zurückgesetzt werden. Betrieb der Umgebung: `docs/betrieb.md`, Abschnitt
+"E2E-Umgebung".
+
+| # | Test | Gerät | FR-Bezug |
+|---|---|---|---|
+| T1 | Stille Installation (Admin- bzw. User-Installer): Programmordner, ProgramData, Rolle in `deployment.json`, unveränderte DeviceId/Raum in `settings.json`, Startmenü-Verknüpfung, geplante Aufgabe, Agent läuft; nur A: Firewall-Regeln 51500/51501 | A, B | FR-3, FR-4, FR-34, FR-35, FR-37, NFR-2 |
+| T2 | Verknüpfung "HälpMi Dashboard" öffnet das Admin-Dashboard ohne neuen `crash.log`-Eintrag | A | FR-4 |
+| T3 | Selbsttest: Alarmfenster im Vordergrund mit "Raum (Nummer)", "Bin unterwegs", Schließen erst danach aktiv | A | FR-27, FR-40, FR-51 |
+| T4 | Discovery: die Gegenseite steht nach spätestens 60 s mit Adresse in `devices.json` | A, B | – |
+| T5 | Alarm per Hotkey von A an B: Banner auf A, Popup auf B mit Raum von A (Latenz wird gemessen), Rückmeldung von B, "Empfangen: 1 von 1" auf A | A, B | FR-40, FR-50, FR-51, FR-53 |
+
+T4/T5 (Trait `Teil=ZweiGeraete`) laufen nur, wenn A und B beteiligt sind. Die beiden Geräte
+stimmen sich über Markendateien ab, die `ci/e2e/rendezvous-relay.sh` spiegelt.
+
+Auslöser: Label `e2e` an einem PR aus diesem Repo (nicht aus Forks) oder `workflow_dispatch`
+(Input `vms`: `a`, `b` oder `a,b`). Kein Zeitplan (Entscheidung E6 in #163: PVE 2 läuft nicht
+dauerhaft).
+
+Gate-Einordnung:
+
+| Version-Sprung | E2E |
+|---|---|
+| Patch | nicht gefordert |
+| Minor | empfohlen, wenn Installer, Agent, UI oder Netzwerk berührt sind (Label `e2e` am PR) |
+| Major/1.0+ | grüner Lauf mit `a,b` gefordert (ist die FlaUI-UI-Suite aus der Gate-Tabelle oben) |
+
+Bekannte Umgehungen in der Testvorbereitung (keine Produktkorrektur):
+
+- **Firewall-Programmregel:** Vor `dotnet test` legt der Workflow eine eingehende Programmregel
+  für `HaelpMi.Agent.exe` an, weil sonst beim ersten Agent-Start der Firewall-Dialog das
+  Alarmfenster verdeckt. Das ist ein Produktbefund: Der Admin-Installer legt nur Regeln für
+  51500/51501 an, nicht für 51502–51506, der User-Installer gar keine. Die Regel lebt nur bis
+  zum nächsten Reset.
+- **Eigene Kundengruppe und Testlizenz pro Lauf** (`ci/e2e/testlizenz-erzeugen.ps1`): Ohne
+  `/DCustomerGroupId` gilt im Installer die Null-GUID, deren Nachrichten
+  `MessageValidation.IsPlausible` verwirft; ohne gültige Lizenz hat ein User-Gerät Kontingent 0.
+  Der Workflow erzeugt deshalb pro Lauf Gruppe, Schlüsselpaar und signierte Lizenz wie der
+  Install-Creator für einen Test-Installer. Der private Schlüssel existiert nur im Speicher des
+  Build-Jobs.
 
 ## G. Datenschutz/Sicherheit (Randnotiz, kein eigener Testlauf nötig)
 
