@@ -30,6 +30,52 @@ jobs:
       - run: dotnet test tests/HaelpMi.Core.Tests -c Release --no-build --logger "console;verbosity=normal"
       - run: dotnet test tests/HaelpMi.InstallCreator.Tests -c Release --no-build --logger "console;verbosity=normal"
 
+  # Prüft, dass ISPP (installer/HaelpMiVersion.iss.inc) dieselbe Version aus
+  # Directory.Build.props liest wie MSBuild. Inno Setup wie in e2e.yml (gleiche Version und Prüfsumme).
+  installer-version:
+    name: Installer-Version (ISPP)
+    runs-on: windows-latest
+    env:
+      INNO_VERSION: 7.1.1
+      INNO_SHA256: 8a5a6711c3766a6e5fb74f280ba0e3551e719ce94538d901fdbd1f8f9920b3f0
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+      - name: Inno Setup installieren (Prüfsumme wird verifiziert)
+        run: |
+          $datei = "innosetup-$env:INNO_VERSION-x64.exe"
+          $tag = 'is-' + ($env:INNO_VERSION -replace '\.', '_')
+          $pfad = Join-Path $env:RUNNER_TEMP $datei
+          Invoke-WebRequest "https://github.com/jrsoftware/issrc/releases/download/$tag/$datei" -OutFile $pfad
+          $ist = (Get-FileHash $pfad -Algorithm SHA256).Hash
+          if ($ist -ne $env:INNO_SHA256) { throw "SHA256 von $datei ist $ist, erwartet $env:INNO_SHA256" }
+          $ziel = Join-Path $env:RUNNER_TEMP 'inno'
+          $p = Start-Process $pfad -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/SP-', "/DIR=`"$ziel`"" -PassThru
+          $p.WaitForExit()
+          if ($p.ExitCode) { throw "Inno-Setup-Installation endete mit $($p.ExitCode)" }
+          "ISCC=$(Join-Path $ziel 'ISCC.exe')" >> $env:GITHUB_ENV
+      - name: Version vergleichen
+        run: |
+          $erwartet = (Select-Xml -Path Directory.Build.props -XPath '/Project/PropertyGroup/Version').Node.InnerText
+          if (-not $erwartet) { throw 'Keine Version in Directory.Build.props.' }
+          # Prüfskript neben den echten Skripten, damit SourcePath wie beim Installer-Build auf installer\ zeigt.
+          $skript = Join-Path $PWD 'installer\ci-versionspruefung.iss'
+          Set-Content -LiteralPath $skript -Encoding utf8 -Value @(
+              '#include "HaelpMiVersion.iss.inc"'
+              '#if MyAppVersion != Erwartet'
+              '  #error ISPP liest eine andere Version als Directory.Build.props'
+              '#endif'
+              '[Setup]'
+              'AppName=Versionspruefung'
+              'AppVersion={#MyAppVersion}'
+              'DefaultDirName={autopf}\Versionspruefung'
+              'Output=no'
+          )
+          & $env:ISCC "/DErwartet=$erwartet" $skript
+          if ($LASTEXITCODE) { throw "ISCC endete mit $LASTEXITCODE (erwartet: $erwartet)" }
+
   secrets:
     name: Secrets (gitleaks)
     runs-on: ubuntu-latest

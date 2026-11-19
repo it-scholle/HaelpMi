@@ -51,5 +51,4 @@ Bei #151 aufgefallen, nicht Teil des Tickets, jeweils als eigenes Issue angelegt
 
 - Nach Abschluss von `release-1.0-MVP`: Branch-Modell auf `develop`/`main` umstellen
   (ADR 0010), dazu Commit-Format und Merge-Art nach Teil A.
-- Versionsnummer nur noch an einer Stelle: ISPP liest `Directory.Build.props` (eigenes Ticket).
 - Weitere Tickets im Milestone `release-1.0-MVP`.
