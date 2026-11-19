@@ -3,32 +3,25 @@
 ; stehen, und vor dem Element darf "<Version>" nicht vorkommen (auch nicht im Kommentar).
 ; Die CI vergleicht das Ergebnis mit dem echten XML-Wert (.github/workflows/ci.yml).
 
-; Schrägstrich, damit ISPP keinen Backslash als Escape-Zeichen liest; Windows akzeptiert beides.
-#define VersionPropsPath AddBackslash(SourcePath) + "../Directory.Build.props"
+#define VersionPropsPath AddBackslash(SourcePath) + "..\Directory.Build.props"
 #if !FileExists(VersionPropsPath)
-  #pragma message "Nicht gefunden: " + VersionPropsPath
   #error Directory.Build.props nicht gefunden (installer-Ordner muss daneben liegen)
 #endif
-#define MyAppVersion ""
-#define VersionPropsHandle 0
-#define VersionPropsLine ""
-#define VersionStart 0
-#define VersionEnd 0
 
+#define VersionPropsHandle
+#define VersionPropsLine ""
 #sub ReadVersionPropsLine
   #define VersionPropsLine = FileRead(VersionPropsHandle)
-  #define VersionStart = Pos("<Version>", VersionPropsLine)
-  #define VersionEnd = Pos("</Version>", VersionPropsLine)
-  #define MyAppVersion = (VersionStart > 0 && VersionEnd > VersionStart) ? Copy(VersionPropsLine, VersionStart + 9, VersionEnd - VersionStart - 9) : ""
+  #pragma message "DIAG Zeile: " + VersionPropsLine
 #endsub
-
-#for {VersionPropsHandle = FileOpen(VersionPropsPath); VersionPropsHandle && !FileEof(VersionPropsHandle) && MyAppVersion == ""; 0} ReadVersionPropsLine
-
+#for {VersionPropsHandle = FileOpen(VersionPropsPath); VersionPropsHandle && !FileEof(VersionPropsHandle) && Pos("<Version>", VersionPropsLine) == 0; ""} ReadVersionPropsLine
 #if VersionPropsHandle
   #expr FileClose(VersionPropsHandle)
 #endif
 
+#define VersionStart Pos("<Version>", VersionPropsLine) + 9
+#define MyAppVersion Copy(VersionPropsLine, VersionStart, Pos("</Version>", VersionPropsLine) - VersionStart)
 #pragma message "MyAppVersion " + MyAppVersion + " aus " + VersionPropsPath
-#if MyAppVersion == ""
+#if VersionStart == 9 || MyAppVersion == ""
   #error Version nicht ermittelt: kein <Version>-Element in Directory.Build.props gefunden
 #endif
