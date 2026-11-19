@@ -58,7 +58,7 @@ public partial class GeraetBTests
             DrueckeHotkey(HotkeyP1);
             Rendezvous.Signal("t6-b-p1-aus");
             await WarteKeinFensterAsync(app.FindeSenderBanner, TimeSpan.FromSeconds(5), "P1 auf B ausgelöst: B ist dort kein Sender, trotzdem erscheint ein Banner.");
-        });
+        }, "t6");
 
     // Gegenstück: GeraetATests.T7_ConfigSync_AendertProfil.
     [Fact, TestPriority(70)]
@@ -110,7 +110,7 @@ public partial class GeraetBTests
             await app.SchliesseSenderBannerAsync();
 
             Assert.True(AgentPid() == pid, $"Der Agent auf B wurde während des Config-Syncs neu gestartet (PID {pid} -> {AgentPid()}).");
-        });
+        }, "t7");
 
     // Gegenstück: GeraetATests.T8_GeraetDeaktivierenUndAktivieren. Erwartung: deaktiviert = empfängt und sendet nicht.
     [Fact, TestPriority(80)]
@@ -118,38 +118,49 @@ public partial class GeraetBTests
     public Task T8_Deaktiviert_WederEmpfangNochVersand() =>
         Artefakte.SichereAsync(nameof(T8_Deaktiviert_WederEmpfangNochVersand), async () =>
         {
+            var befunde = new List<string>();
             using var app = new HaelpMiApp();
             Window? Toast() => app.FindeFenster(AgentProzess, null, "LicenseLimitToastWindow");
 
             await Rendezvous.WaitForAsync("t8-aus", GegenseiteTimeout);
             await WarteBisAsync(() => LiesEinstellungen()?.LicenseOverride == LicenseOverride.ForceDisabled, NegativDauer,
                 () => $"settings.json auf B: LicenseOverride={LiesEinstellungen()?.LicenseOverride} statt ForceDisabled {NegativDauer.TotalSeconds:0} s nach dem Deaktivieren.");
-            await WarteBisAsync(() => Toast() is not null, NegativDauer, "Kein Hinweis-Toast (LicenseLimitToastWindow) auf dem deaktivierten Gerät B.");
+            await PruefeBefundAsync(befunde, () => WarteBisAsync(() => Toast() is not null, NegativDauer,
+                "Produktbefund: kein Hinweis-Toast (LicenseLimitToastWindow) auf dem deaktivierten Gerät B."));
             _ausgabe.WriteLine($"Toast auf B: '{(Toast() is { } toast ? NameVon(toast, "MessageText") : "-")}'");
             Rendezvous.Signal("t8-b-gesperrt");
 
-            await KeinFensterBisMarkeAsync(app.FindeAlarmfenster, "t8-a-gesendet", SchrittTimeout, TimeSpan.FromSeconds(10),
-                "Produktbefund: das deaktivierte Gerät B zeigt ein Alarmfenster.");
+            await PruefeBefundAsync(befunde, () => KeinFensterBisMarkeAsync(app.FindeAlarmfenster, "t8-a-gesendet", SchrittTimeout, TimeSpan.FromSeconds(10),
+                "Produktbefund: das deaktivierte Gerät B zeigt ein Alarmfenster."));
+            if (app.FindeAlarmfenster() is { } fremd)
+            {
+                await app.QuittiereUndSchliesseAsync(fremd, "B (deaktiviert)");
+            }
 
             DrueckeHotkey(HotkeyP2Neu);
-            Window dialog;
+            Window? dialog = null;
             try
             {
                 dialog = app.WarteAuf(() => app.FindeDialog(AgentProzess), "Hinweis-Dialog", TimeSpan.FromSeconds(10));
             }
             catch (TimeoutException)
             {
-                Assert.Fail("Kein Hinweis-Dialog, nachdem das deaktivierte Gerät B das Tastenkürzel gedrückt hat.");
-                throw;
+                befunde.Add("Produktbefund: kein Hinweis-Dialog, nachdem das deaktivierte Gerät B das Tastenkürzel gedrückt hat.");
             }
 
-            _ausgabe.WriteLine($"Hinweis-Dialog auf B: '{dialog.Title}'");
-            var ok = dialog.FindFirstDescendant(cf => cf.ByControlType(ControlType.Button).And(cf.ByName("OK")))
-                ?? dialog.FindFirstDescendant(cf => cf.ByAutomationId("2"))
-                ?? throw new InvalidOperationException("Knopf 'OK' im Hinweis-Dialog nicht gefunden.");
-            ok.AsButton().Invoke();
+            if (dialog is not null)
+            {
+                _ausgabe.WriteLine($"Hinweis-Dialog auf B: '{dialog.Title}'");
+                var ok = dialog.FindFirstDescendant(cf => cf.ByControlType(ControlType.Button).And(cf.ByName("OK")))
+                    ?? dialog.FindFirstDescendant(cf => cf.ByAutomationId("2"))
+                    ?? throw new InvalidOperationException("Knopf 'OK' im Hinweis-Dialog nicht gefunden.");
+                ok.AsButton().Invoke();
+            }
+
             Rendezvous.Signal("t8-b-f12-aus");
-            await WarteKeinFensterAsync(app.FindeSenderBanner, TimeSpan.FromSeconds(3), "Produktbefund: das deaktivierte Gerät B zeigt ein Sender-Banner.");
+            await PruefeBefundAsync(befunde, () => WarteKeinFensterAsync(app.FindeSenderBanner, TimeSpan.FromSeconds(3),
+                "Produktbefund: das deaktivierte Gerät B zeigt ein Sender-Banner."));
+            await app.SchliesseSenderBannerAsync();
 
             await Rendezvous.WaitForAsync("t8-an", SchrittTimeout);
             await WarteBisAsync(() => LiesEinstellungen() is { } s && s.LicenseOverride != LicenseOverride.ForceDisabled, NegativDauer,
@@ -171,7 +182,8 @@ public partial class GeraetBTests
             app.ErwarteBanner("P2 von B nach dem Aktivieren");
             await Rendezvous.WaitForAsync("t8-a-fertig", SchrittTimeout);
             await app.SchliesseSenderBannerAsync();
-        });
+            MeldeBefunde(befunde);
+        }, "t8");
 
     private static bool ProfileAngekommen(Guid p1, Guid p2, Guid a, Guid b)
     {

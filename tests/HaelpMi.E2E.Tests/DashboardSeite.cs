@@ -147,12 +147,14 @@ internal sealed class DashboardSeite
     /// <returns>Id der neuen Gruppe.</returns>
     public async Task<Guid> NeueGruppeAsync()
     {
-        static HashSet<Guid> GruppenIds() => (ZweiGeraete.LiesConfig()?.DeviceGroups ?? new()).Select(g => g.Id).ToHashSet();
+        // "Alle" steht erst nach dem ersten Speichern in der Datei und wäre sonst die "neue" Gruppe.
+        static HashSet<Guid> GruppenIds(SharedConfig? config) =>
+            (config?.DeviceGroups ?? new()).Where(g => !g.IsBuiltInAllDevicesGroup).Select(g => g.Id).ToHashSet();
 
-        var vorher = KonfigVorher().DeviceGroups.Select(g => g.Id).ToHashSet();
+        var vorher = GruppenIds(KonfigVorher());
         Element("NewGroupButton").AsButton().Invoke();
         Guid? neu = null;
-        await WarteBisAsync(() => (neu = GruppenIds().Except(vorher).Cast<Guid?>().FirstOrDefault()) is not null, SpeicherTimeout,
+        await WarteBisAsync(() => (neu = GruppenIds(ZweiGeraete.LiesConfig()).Except(vorher).Cast<Guid?>().FirstOrDefault()) is not null, SpeicherTimeout,
             "Neue Gruppe ist nicht in shared-config.json angekommen.");
         await WarteBisAsync(() => Wert(Element("GroupNameBox")) == "Neue Gruppe" && Element("GroupNameBox").IsEnabled, LockTimeout,
             () => $"Neue Gruppe wird nicht bearbeitbar: Edit-Lock nicht gewährt (Statustext: '{Statustext("GroupStatusText")}').");

@@ -114,8 +114,14 @@ public partial class GeraetATests
             await Rendezvous.WaitForAsync("b-quittiert", TimeSpan.FromMinutes(2));
             await WarteBisAsync(() => AufDemWeg(banner).Any(n => n.StartsWith(raumB + " - ", StringComparison.Ordinal)),
                 TimeSpan.FromSeconds(15), $"'Bin unterwegs' von B (Raum '{raumB}') erscheint nicht unter 'Auf dem Weg'.");
-            Assert.Equal("Empfangen: 1 von 1", Element(banner, "AckedText").Name);
+            Assert.True(Element(banner, "AckedText").Name == "Empfangen: 1 von 1", AckBefund(Element(banner, "AckedText").Name));
         });
+
+    // Der Zähler zeigt nur das Ergebnis der letzten Senderunde (RepeatingAlarmSession._lastAckedCount); kommt die
+    // Empfangsbestätigung nicht binnen AlarmAckTimeout, bleibt er auf 0, obwohl B schon "Bin unterwegs" gemeldet hat.
+    internal static string AckBefund(string angezeigt) =>
+        $"Produktbefund: das Sender-Banner zeigt '{angezeigt}' statt 'Empfangen: 1 von 1', obwohl B den Alarm empfangen " +
+        "und 'Bin unterwegs' gemeldet hat (Empfangsbestätigung nicht binnen AlarmAckTimeout angekommen, siehe audit.log beider Geräte).";
 
     // Ein frisch installiertes Gerät hat noch kein Alarm-Profil, ohne eines lehnt der Agent den Selbsttest ab.
     // Profil anlegen über das Dashboard ist Gegenstand späterer Tests, hier genügt der Datenstand.

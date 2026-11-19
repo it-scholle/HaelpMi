@@ -26,6 +26,7 @@ public partial class GeraetATests
             var raumB = RaumVon(await WarteAufGeraetAsync(b, DiscoveryTimeout));
             var geraetA = new EntityRef(EntityKind.Device, a);
             var geraetB = new EntityRef(EntityKind.Device, b);
+            var befunde = new List<string>();
 
             using var app = new HaelpMiApp();
             await app.SchliesseSenderBannerAsync();
@@ -67,8 +68,8 @@ public partial class GeraetATests
             Rendezvous.Signal("t6-p1-aus");
             var banner = app.ErwarteBanner("P1 (A an B)");
             await Rendezvous.WaitForAsync("t6-b-p1-quittiert", SchrittTimeout);
-            await WarteBisAsync(() => NameVon(banner, "AckedText") == "Empfangen: 1 von 1", TimeSpan.FromSeconds(15),
-                () => $"P1: Banner zeigt '{NameVon(banner, "AckedText")}' statt 'Empfangen: 1 von 1'.");
+            await PruefeBefundAsync(befunde, () => WarteBisAsync(() => NameVon(banner, "AckedText") == "Empfangen: 1 von 1", TimeSpan.FromSeconds(15),
+                () => "P1: " + AckBefund(NameVon(banner, "AckedText"))));
             await app.SchliesseSenderBannerAsync();
 
             // P2 hat nur B als Sender: auf A darf F10 nichts auslösen.
@@ -100,7 +101,8 @@ public partial class GeraetATests
             // P1 hat nur A als Sender.
             await Rendezvous.WaitForAsync("t6-b-p1-aus", SchrittTimeout);
             await WarteKeinFensterAsync(app.FindeAlarmfenster, NegativDauer, "P1 auf B ausgelöst: B ist dort kein Sender, trotzdem erscheint auf A ein Alarmfenster.");
-        });
+            MeldeBefunde(befunde);
+        }, "t6");
 
     // Gegenstück: GeraetBTests.T7_ConfigSync_KommtOhneNeustartAn.
     [Fact, TestPriority(70)]
@@ -130,7 +132,7 @@ public partial class GeraetATests
             await Rendezvous.WaitForAsync("t7-f12-aus", SchrittTimeout);
             await app.QuittiereUndSchliesseAsync(app.ErwartePopup("P2 mit neuem Tastenkürzel von B"), "A");
             Rendezvous.Signal("t7-a-quittiert");
-        });
+        }, "t7");
 
     // Gegenstück: GeraetBTests.T8_Deaktiviert_WederEmpfangNochVersand.
     [Fact, TestPriority(80)]
@@ -139,6 +141,7 @@ public partial class GeraetATests
         Artefakte.SichereAsync(nameof(T8_GeraetDeaktivierenUndAktivieren), async () =>
         {
             var b = await DeviceIdDerGegenseiteAsync("b");
+            var befunde = new List<string>();
             using var app = new HaelpMiApp();
             var seite = DashboardSeite.Oeffne(app);
             seite.WaehleTabPerId("DevicesTabItem");
@@ -153,18 +156,26 @@ public partial class GeraetATests
 
             await Rendezvous.WaitForAsync("t8-b-gesperrt", SchrittTimeout);
             DrueckeHotkey(HotkeyP1);
-            await WarteKeinFensterAsync(app.FindeSenderBanner, NegativDauer,
-                "A zeigt ein Sender-Banner für P1, obwohl der einzige Empfänger B deaktiviert ist.");
+            await PruefeBefundAsync(befunde, () => WarteKeinFensterAsync(app.FindeSenderBanner, NegativDauer,
+                "Produktbefund: A zeigt ein Sender-Banner für P1, obwohl der einzige Empfänger B deaktiviert ist."));
+            await app.SchliesseSenderBannerAsync();
 
             // Am Empfängerfilter von A vorbei: belegt die Empfangssperre von B für sich allein.
             var ergebnis = await SendeDirektAnAsync(b);
             Rendezvous.Signal("t8-a-gesendet");
-            Assert.True(ergebnis.AckedCount == 0,
-                $"Produktbefund: das deaktivierte Gerät B hat einen direkt gesendeten Alarm bestätigt ({ergebnis.AckedCount} von {ergebnis.TargetCount}).");
+            _ausgabe.WriteLine($"Direktversand an das deaktivierte B: {ergebnis.AckedCount} von {ergebnis.TargetCount} bestätigt.");
+            if (ergebnis.AckedCount != 0)
+            {
+                befunde.Add($"Produktbefund: das deaktivierte Gerät B hat einen direkt gesendeten Alarm bestätigt ({ergebnis.AckedCount} von {ergebnis.TargetCount}).");
+            }
 
             await Rendezvous.WaitForAsync("t8-b-f12-aus", SchrittTimeout);
-            await WarteKeinFensterAsync(app.FindeAlarmfenster, NegativDauer,
-                "Produktbefund: das deaktivierte Gerät B kann weiter Alarme senden, A zeigt ein Alarmfenster.");
+            await PruefeBefundAsync(befunde, () => WarteKeinFensterAsync(app.FindeAlarmfenster, NegativDauer,
+                "Produktbefund: das deaktivierte Gerät B kann weiter Alarme senden, A zeigt ein Alarmfenster."));
+            if (app.FindeAlarmfenster() is { } fremd)
+            {
+                await app.QuittiereUndSchliesseAsync(fremd, "A (Alarm vom deaktivierten B)");
+            }
 
             seite.Fenster.SetForeground();
             (await GeraeteSchalterAsync(seite, b)).Click();
@@ -180,14 +191,15 @@ public partial class GeraetATests
             Rendezvous.Signal("t8-a-f9-aus");
             var banner = app.ErwarteBanner("P1 nach dem Aktivieren");
             await Rendezvous.WaitForAsync("t8-b-quittiert", SchrittTimeout);
-            await WarteBisAsync(() => NameVon(banner, "AckedText") == "Empfangen: 1 von 1", TimeSpan.FromSeconds(15),
-                () => $"Nach dem Aktivieren zeigt das Banner '{NameVon(banner, "AckedText")}' statt 'Empfangen: 1 von 1'.");
+            await PruefeBefundAsync(befunde, () => WarteBisAsync(() => NameVon(banner, "AckedText") == "Empfangen: 1 von 1", TimeSpan.FromSeconds(15),
+                () => "Nach dem Aktivieren: " + AckBefund(NameVon(banner, "AckedText"))));
             await app.SchliesseSenderBannerAsync();
 
             await Rendezvous.WaitForAsync("t8-b-f12-an", SchrittTimeout);
             await app.QuittiereUndSchliesseAsync(app.ErwartePopup("P2 von B nach dem Aktivieren"), "A");
             Rendezvous.Signal("t8-a-fertig");
-        });
+            MeldeBefunde(befunde);
+        }, "t8");
 
     private static async Task RichteProfilEinAsync(DashboardSeite seite, Guid id, string name, int schwelle, HotkeyDefinition hotkey)
     {

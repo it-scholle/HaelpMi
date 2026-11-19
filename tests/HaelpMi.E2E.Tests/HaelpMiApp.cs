@@ -351,6 +351,25 @@ internal sealed class HaelpMiApp : IDisposable
         await WarteBisAsync(() => !AlarmfensterOffen(), TimeSpan.FromSeconds(10), $"{wer}: Alarmfenster ist nach dem Schließen noch offen.");
     }
 
+    /// <summary>
+    /// Prüfung, deren Fehlschlag ein Produktbefund ist: der Test läuft weiter und prüft den Rest,
+    /// <see cref="MeldeBefunde"/> lässt ihn am Ende trotzdem scheitern.
+    /// </summary>
+    public static async Task PruefeBefundAsync(List<string> befunde, Func<Task> pruefung)
+    {
+        try
+        {
+            await pruefung();
+        }
+        catch (Xunit.Sdk.XunitException ex)
+        {
+            befunde.Add(ex.Message);
+        }
+    }
+
+    public static void MeldeBefunde(List<string> befunde) =>
+        Assert.True(befunde.Count == 0, string.Join(Environment.NewLine, befunde.Prepend($"{befunde.Count} Produktbefund(e):")));
+
     public void Dispose() => Automation.Dispose();
 
     // Ein Fenster kann zwischen Suchen und Abfragen verschwinden; das zählt als "noch nicht".
