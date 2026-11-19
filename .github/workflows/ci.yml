@@ -30,6 +30,22 @@ jobs:
       - run: dotnet test tests/HaelpMi.Core.Tests -c Release --no-build --logger "console;verbosity=normal"
       - run: dotnet test tests/HaelpMi.InstallCreator.Tests -c Release --no-build --logger "console;verbosity=normal"
 
+  exec-bits:
+    name: Ausführbar-Bit (Hooks, Skripte)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Ohne Mode 100755 ignoriert Git die Hooks still, und scripts/*.sh brechen mit "Permission denied" ab.
+      # lib/ fehlt absichtlich: wird per "." eingelesen, nicht ausgeführt.
+      - run: |
+          bad=$(git ls-files -s -- 'scripts/*.sh' ':(glob).githooks/*' | awk '$1 != "100755" {print $4}')
+          if [ -n "$bad" ]; then
+            echo "Nicht als ausführbar markiert (Mode 100755 fehlt):"
+            echo "$bad"
+            echo "Beheben mit: git update-index --chmod=+x <datei>"
+            exit 1
+          fi
+
   secrets:
     name: Secrets (gitleaks)
     runs-on: ubuntu-latest
