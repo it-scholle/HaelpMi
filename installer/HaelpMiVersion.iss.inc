@@ -10,11 +10,9 @@
 
 #define VersionPropsHandle
 #define VersionPropsLine ""
-#sub ReadVersionPropsLine
-  #define VersionPropsLine = FileRead(VersionPropsHandle)
-  #pragma message "DIAG Zeile: " + VersionPropsLine
-#endsub
-#for {VersionPropsHandle = FileOpen(VersionPropsPath); VersionPropsHandle && !FileEof(VersionPropsHandle) && Pos("<Version>", VersionPropsLine) == 0; ""} ReadVersionPropsLine
+; Zuweisung direkt im Schleifenrumpf statt per #sub: ein #define im #sub legt eine eigene
+; Variable an, die außerhalb nicht sichtbar ist.
+#for {VersionPropsHandle = FileOpen(VersionPropsPath); VersionPropsHandle && !FileEof(VersionPropsHandle) && Pos("<Version>", VersionPropsLine) == 0; ""} VersionPropsLine = FileRead(VersionPropsHandle)
 #if VersionPropsHandle
   #expr FileClose(VersionPropsHandle)
 #endif
