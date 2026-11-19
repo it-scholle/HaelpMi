@@ -16,6 +16,7 @@
                  gerade gewählten Sender, grün = zugeordnet. -->
             <Style x:Key="ToggleListItemStyle" TargetType="ListBoxItem">
                 <Setter Property="Padding" Value="6,4" />
+                <Setter Property="AutomationProperties.Name" Value="{Binding DisplayName}" />
                 <Style.Triggers>
                     <DataTrigger Binding="{Binding IsAssigned}" Value="True">
                         <Setter Property="Background" Value="{StaticResource SuccessLightBrush}" />
@@ -29,6 +30,7 @@
                  Übertragen-Modus bedeutet dieselbe Markierung stattdessen "als Ziel gewählt". -->
             <Style x:Key="SenderItemContainerStyle" TargetType="ListBoxItem">
                 <Setter Property="Padding" Value="6,4" />
+                <Setter Property="AutomationProperties.Name" Value="{Binding DisplayName}" />
                 <Style.Triggers>
                     <DataTrigger Binding="{Binding IsHighlighted}" Value="True">
                         <Setter Property="Background" Value="{StaticResource AccentLightBrush}" />
@@ -460,7 +462,9 @@
 
                                             <ToggleButton Grid.Column="0" Style="{StaticResource ToggleSwitchStyle}" IsChecked="{Binding IsActive, Mode=OneWay}"
                                                           IsEnabled="{Binding CanToggle}" Tag="{Binding DeviceId}" VerticalAlignment="Center" Margin="0,0,10,0"
-                                                          Click="DeviceActiveToggle_Click" ToolTip="{Binding ToggleTooltip}" />
+                                                          Click="DeviceActiveToggle_Click" ToolTip="{Binding ToggleTooltip}"
+                                                          AutomationProperties.AutomationId="{Binding DeviceId, StringFormat='DeviceActiveToggle_{0}'}"
+                                                          AutomationProperties.Name="{Binding ComputerName}" />
 
                                             <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
                                                 <TextBlock Text="{Binding ComputerName}" FontWeight="SemiBold" VerticalAlignment="Center" />

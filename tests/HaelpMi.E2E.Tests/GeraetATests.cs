@@ -13,7 +13,7 @@ namespace HaelpMi.E2E.Tests;
 [TestCaseOrderer("HaelpMi.Installer.Tests.PriorityOrderer", "HaelpMi.E2E.Tests")]
 [Trait("Category", "E2E")]
 [Trait("Geraet", "A")]
-public class GeraetATests
+public partial class GeraetATests
 {
     private static readonly TimeSpan FensterTimeout = TimeSpan.FromSeconds(30);
 
@@ -21,7 +21,7 @@ public class GeraetATests
 
     public GeraetATests(ITestOutputHelper ausgabe) => _ausgabe = ausgabe;
 
-    [Fact, TestPriority(10)]
+    [Fact, TestPriority(10), Trait("Bereich", "Basis")]
     [Trait("FR", "FR-3"), Trait("FR", "FR-4"), Trait("FR", "FR-34"), Trait("FR", "FR-35"), Trait("FR", "FR-37"), Trait("FR", "NFR-2")]
     public Task T1_AdminInstaller_InstalliertStill() =>
         Artefakte.SichereAsync(nameof(T1_AdminInstaller_InstalliertStill),
@@ -72,7 +72,7 @@ public class GeraetATests
             HaelpMiApp.BeendeKonfiguration();
         });
 
-    [Fact, TestPriority(40)]
+    [Fact, TestPriority(40), Trait("Bereich", "Basis")]
     [Trait("Teil", ZweiGeraete.Teil)]
     public Task T4_Discovery_AKenntB() =>
         Artefakte.SichereAsync(nameof(T4_Discovery_AKenntB), async () =>
@@ -102,7 +102,7 @@ public class GeraetATests
             Window banner;
             try
             {
-                banner = app.WarteAufFenster(AgentProzess, null, SenderBannerId, TimeSpan.FromSeconds(10));
+                banner = app.WarteAufSenderBanner(TimeSpan.FromSeconds(10));
             }
             catch (TimeoutException)
             {

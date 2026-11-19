@@ -13,7 +13,7 @@ namespace HaelpMi.E2E.Tests;
 [TestCaseOrderer("HaelpMi.Installer.Tests.PriorityOrderer", "HaelpMi.E2E.Tests")]
 [Trait("Category", "E2E")]
 [Trait("Geraet", "B")]
-public class GeraetBTests
+public partial class GeraetBTests
 {
     private static readonly TimeSpan PopupTimeout = TimeSpan.FromSeconds(10);
 
@@ -21,13 +21,13 @@ public class GeraetBTests
 
     public GeraetBTests(ITestOutputHelper ausgabe) => _ausgabe = ausgabe;
 
-    [Fact, TestPriority(10)]
+    [Fact, TestPriority(10), Trait("Bereich", "Basis")]
     [Trait("FR", "FR-3"), Trait("FR", "FR-4"), Trait("FR", "FR-34"), Trait("FR", "FR-35"), Trait("FR", "FR-37"), Trait("FR", "NFR-2")]
     public Task T1_UserInstaller_InstalliertStill() =>
         Artefakte.SichereAsync(nameof(T1_UserInstaller_InstalliertStill),
             () => Installation.InstalliereUndPruefeAsync(Role.User, "B"));
 
-    [Fact, TestPriority(40)]
+    [Fact, TestPriority(40), Trait("Bereich", "Basis")]
     [Trait("Teil", ZweiGeraete.Teil)]
     public Task T4_Discovery_BKenntA() =>
         Artefakte.SichereAsync(nameof(T4_Discovery_BKenntA), async () =>

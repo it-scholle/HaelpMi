@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Globalization;
 using System.Runtime.InteropServices;
 using FlaUI.Core.AutomationElements;
 using FlaUI.Core.Input;
@@ -87,30 +88,207 @@ internal sealed class HaelpMiApp : IDisposable
         return WarteAufFenster(KonfigProzess, TitelEinstellungen, null, timeout);
     }
 
-    public Window WarteAufAlarmfenster(TimeSpan timeout) => WarteAufFenster(AgentProzess, null, AlarmfensterId, timeout);
+    public Window WarteAufAlarmfenster(TimeSpan timeout) => WarteAuf(FindeAlarmfenster, "Alarmfenster", timeout);
 
-    public bool AlarmfensterOffen() => FindeFenster(AgentProzess, null, AlarmfensterId) is not null;
+    public Window WarteAufSenderBanner(TimeSpan timeout) => WarteAuf(FindeSenderBanner, "Sender-Banner", timeout);
 
-    /// <param name="titel">Fenstertitel (UIA-Name) oder null.</param>
-    /// <param name="automationId">AutomationId des Fensters oder null.</param>
-    public Window WarteAufFenster(string prozessName, string? titel, string? automationId, TimeSpan timeout)
+    /// <summary>Wie <see cref="WarteAufAlarmfenster"/>, aber ein Ausbleiben ist ein Testfehler mit <paramref name="fall"/> in der Meldung.</summary>
+    public Window ErwartePopup(string fall) => Erwarte(FindeAlarmfenster, $"{fall}: kein Alarmfenster", TimeSpan.FromSeconds(15));
+
+    public Window ErwarteBanner(string fall) =>
+        Erwarte(FindeSenderBanner, $"{fall}: kein Sender-Banner nach dem Hotkey (Hotkey nicht registriert oder kein gültiger Empfänger)", TimeSpan.FromSeconds(10));
+
+    private Window Erwarte(Func<Window?> suche, string meldung, TimeSpan timeout)
+    {
+        try
+        {
+            return WarteAuf(suche, meldung, timeout);
+        }
+        catch (TimeoutException)
+        {
+            Assert.Fail($"{meldung} nach {timeout.TotalSeconds:0} s.");
+            throw;
+        }
+    }
+
+    public bool AlarmfensterOffen() => FindeAlarmfenster() is not null;
+
+    // Fenster-AutomationIds gibt es erst seit v0.47.x; ältere Stände (Vergleich mit v0.46.1) erkennt man an den Kindern.
+    public Window? FindeAlarmfenster() =>
+        FindeFenster(AgentProzess, null, AlarmfensterId) ?? FindeFensterMitKind(AgentProzess, "OnMyWayButton");
+
+    public Window? FindeSenderBanner() =>
+        FindeFenster(AgentProzess, null, SenderBannerId) ?? FindeFensterMitKind(AgentProzess, "CancelButton", "AckedText");
+
+    /// <summary>Schließt alle offenen Sender-Banner, z. B. aus einem vorherigen Test.</summary>
+    public async Task SchliesseSenderBannerAsync()
+    {
+        for (var i = 0; i < 10 && FindeSenderBanner() is { } banner; i++)
+        {
+            try
+            {
+                banner.Close();
+            }
+            catch (COMException)
+            {
+            }
+
+            await Task.Delay(500);
+        }
+    }
+
+    /// <summary>Negativprüfung: über die ganze <paramref name="dauer"/> darf <paramref name="suche"/> kein Fenster finden.</summary>
+    public static async Task WarteKeinFensterAsync(Func<Window?> suche, TimeSpan dauer, string meldung)
+    {
+        var ende = DateTime.UtcNow + dauer;
+        while (DateTime.UtcNow < ende)
+        {
+            if (suche() is not null)
+            {
+                Assert.Fail(meldung);
+            }
+
+            await Task.Delay(300);
+        }
+    }
+
+    /// <summary>Wie <see cref="WarteKeinFensterAsync"/>, aber bis die Marke da ist und danach noch <paramref name="nachlauf"/>.</summary>
+    public static async Task KeinFensterBisMarkeAsync(Func<Window?> suche, string marke, TimeSpan timeout, TimeSpan nachlauf, string meldung)
+    {
+        var markeDa = Rendezvous.WaitForAsync(marke, timeout);
+        while (!markeDa.IsCompleted)
+        {
+            if (suche() is not null)
+            {
+                Assert.Fail(meldung);
+            }
+
+            await Task.WhenAny(markeDa, Task.Delay(300));
+        }
+
+        await markeDa;
+        await WarteKeinFensterAsync(suche, nachlauf, meldung);
+    }
+
+    /// <summary>Agent beenden und über den Autostart neu starten.</summary>
+    /// <returns>PID des neuen Agent-Prozesses.</returns>
+    public static async Task<int> AgentNeustartAsync()
+    {
+        var alt = AgentPid();
+        BeendeAlles();
+        StarteAgentUeberAutostart();
+        await WarteAufAgentAsync(TimeSpan.FromSeconds(60));
+        var neu = AgentPid() ?? throw new InvalidOperationException($"{AgentProzess} läuft nach dem Neustart nicht.");
+        Assert.NotEqual(alt, neu);
+        return neu;
+    }
+
+    public static int? AgentPid()
+    {
+        var prozesse = Process.GetProcessesByName(AgentProzess);
+        var pid = prozesse.FirstOrDefault(p => p.SessionId == Prozess.EigeneSitzung)?.Id;
+        foreach (var p in prozesse) p.Dispose();
+        return pid;
+    }
+
+    /// <summary>Einträge aus audit.log (alle <see cref="E2EUmgebung.LogOrdner"/>) mit Zeitstempel ab <paramref name="seit"/>.</summary>
+    public static List<string> AuditLogZeilen(DateTimeOffset seit)
+    {
+        var zeilen = new List<string>();
+        foreach (var ordner in E2EUmgebung.LogOrdner())
+        {
+            var datei = Path.Combine(ordner, "audit.log");
+            if (!File.Exists(datei))
+            {
+                continue;
+            }
+
+            try
+            {
+                using var stream = new FileStream(datei, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+                using var leser = new StreamReader(stream);
+                while (leser.ReadLine() is { } zeile)
+                {
+                    var tab = zeile.IndexOf('\t');
+                    if (tab > 0
+                        && DateTimeOffset.TryParse(zeile[..tab], CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var zeit)
+                        && zeit >= seit)
+                    {
+                        zeilen.Add(zeile);
+                    }
+                }
+            }
+            catch (IOException)
+            {
+            }
+        }
+
+        return zeilen;
+    }
+
+    /// <summary>Erstes Fenster des Prozesses, das alle genannten Kind-AutomationIds enthält; die Fenster-AutomationId spielt keine Rolle.</summary>
+    public Window? FindeFensterMitKind(string prozessName, params string[] kindAutomationIds)
+    {
+        foreach (var fenster in FensterVon(prozessName))
+        {
+            try
+            {
+                if (kindAutomationIds.All(id => fenster.FindFirstDescendant(cf => cf.ByAutomationId(id)) is not null))
+                {
+                    return fenster.AsWindow();
+                }
+            }
+            catch (COMException)
+            {
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>Standard-Dialog (MessageBox, Fensterklasse #32770) des Prozesses.</summary>
+    public Window? FindeDialog(string prozessName)
+    {
+        foreach (var fenster in FensterVon(prozessName))
+        {
+            try
+            {
+                if (fenster.Properties.ClassName.ValueOrDefault == "#32770")
+                {
+                    return fenster.AsWindow();
+                }
+            }
+            catch (COMException)
+            {
+            }
+        }
+
+        return null;
+    }
+
+    public Window WarteAuf(Func<Window?> suche, string beschreibung, TimeSpan timeout)
     {
         var frist = DateTime.UtcNow + timeout;
         while (true)
         {
-            if (FindeFenster(prozessName, titel, automationId) is { } fenster)
+            if (suche() is { } fenster)
             {
                 return fenster;
             }
 
             if (DateTime.UtcNow > frist)
             {
-                throw new TimeoutException($"Fenster '{titel ?? automationId}' von {prozessName} ist nach {timeout} nicht erschienen.");
+                throw new TimeoutException($"{beschreibung} ist nach {timeout} nicht erschienen.");
             }
 
             Thread.Sleep(300);
         }
     }
+
+    /// <param name="titel">Fenstertitel (UIA-Name) oder null.</param>
+    /// <param name="automationId">AutomationId des Fensters oder null.</param>
+    public Window WarteAufFenster(string prozessName, string? titel, string? automationId, TimeSpan timeout) =>
+        WarteAuf(() => FindeFenster(prozessName, titel, automationId), $"Fenster '{titel ?? automationId}' von {prozessName}", timeout);
 
     public static bool IstImVordergrund(Window fenster) =>
         fenster.Properties.NativeWindowHandle.ValueOrDefault == GetForegroundWindow();
@@ -131,39 +309,69 @@ internal sealed class HaelpMiApp : IDisposable
         wurzel.FindFirstDescendant(cf => cf.ByAutomationId(automationId))
         ?? throw new InvalidOperationException($"Element '{automationId}' nicht gefunden.");
 
-    public static async Task WarteBisAsync(Func<bool> bedingung, TimeSpan timeout, string meldung)
+    public static Task WarteBisAsync(Func<bool> bedingung, TimeSpan timeout, string meldung) =>
+        WarteBisAsync(bedingung, timeout, () => meldung);
+
+    /// <param name="meldung">Erst beim Fehlschlag ausgewertet, zeigt also den Zustand nach Ablauf der Frist.</param>
+    public static async Task WarteBisAsync(Func<bool> bedingung, TimeSpan timeout, Func<string> meldung)
     {
         var frist = DateTime.UtcNow + timeout;
-        while (!bedingung())
+        while (!Gilt(bedingung))
         {
             if (DateTime.UtcNow > frist)
             {
-                Assert.Fail(meldung);
+                Assert.Fail(meldung());
             }
 
             await Task.Delay(300);
         }
     }
 
+    /// <summary>Name (bei Textelementen der angezeigte Text) eines Kind-Elements; leer, wenn es (noch) nicht da ist.</summary>
+    public static string NameVon(AutomationElement wurzel, string automationId)
+    {
+        try
+        {
+            return wurzel.FindFirstDescendant(cf => cf.ByAutomationId(automationId))?.Properties.Name.ValueOrDefault ?? string.Empty;
+        }
+        catch (COMException)
+        {
+            return string.Empty;
+        }
+    }
+
+    /// <summary>"Bin unterwegs", warten bis Schließen frei wird, schließen.</summary>
+    public async Task QuittiereUndSchliesseAsync(Window popup, string wer)
+    {
+        Element(popup, "OnMyWayButton").AsButton().Invoke();
+        var schliessen = Element(popup, "CloseButton").AsButton();
+        await WarteBisAsync(() => schliessen.IsEnabled, TimeSpan.FromSeconds(15),
+            () => $"{wer}: Schließen wird nach 'Bin unterwegs' nicht aktiv ({NameVon(popup, "ThresholdStatusText")}).");
+        schliessen.Invoke();
+        await WarteBisAsync(() => !AlarmfensterOffen(), TimeSpan.FromSeconds(10), $"{wer}: Alarmfenster ist nach dem Schließen noch offen.");
+    }
+
     public void Dispose() => Automation.Dispose();
 
-    private Window? FindeFenster(string prozessName, string? titel, string? automationId)
+    // Ein Fenster kann zwischen Suchen und Abfragen verschwinden; das zählt als "noch nicht".
+    private static bool Gilt(Func<bool> bedingung)
     {
-        var pids = Process.GetProcessesByName(prozessName).Select(p => { using (p) return p.Id; }).ToHashSet();
-        if (pids.Count == 0)
+        try
         {
-            return null;
+            return bedingung();
         }
+        catch (Exception ex) when (ex is COMException or InvalidOperationException)
+        {
+            return false;
+        }
+    }
 
-        foreach (var element in Automation.GetDesktop().FindAllChildren())
+    public Window? FindeFenster(string prozessName, string? titel, string? automationId)
+    {
+        foreach (var element in FensterVon(prozessName))
         {
             try
             {
-                if (!pids.Contains(element.Properties.ProcessId.ValueOrDefault))
-                {
-                    continue;
-                }
-
                 if (titel is not null && element.Properties.Name.ValueOrDefault != titel)
                 {
                     continue;
@@ -183,6 +391,32 @@ internal sealed class HaelpMiApp : IDisposable
         }
 
         return null;
+    }
+
+    private List<AutomationElement> FensterVon(string prozessName)
+    {
+        var pids = Process.GetProcessesByName(prozessName).Select(p => { using (p) return p.Id; }).ToHashSet();
+        var treffer = new List<AutomationElement>();
+        if (pids.Count == 0)
+        {
+            return treffer;
+        }
+
+        foreach (var element in Automation.GetDesktop().FindAllChildren())
+        {
+            try
+            {
+                if (pids.Contains(element.Properties.ProcessId.ValueOrDefault))
+                {
+                    treffer.Add(element);
+                }
+            }
+            catch (COMException)
+            {
+            }
+        }
+
+        return treffer;
     }
 
     [DllImport("user32.dll")]

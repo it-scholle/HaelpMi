@@ -147,7 +147,7 @@ jobs:
     needs: [reset, build]
     if: (github.event_name == 'workflow_dispatch' || (github.event.label.name == 'e2e' && github.event.pull_request.head.repo.full_name == github.repository)) && contains(format(',{0},', inputs.vms || 'a,b'), ',a,')
     runs-on: [self-hosted, haelpmi-e2e, vm-a]
-    timeout-minutes: 60
+    timeout-minutes: 120
     defaults:
       run:
         shell: pwsh
@@ -177,6 +177,14 @@ jobs:
           Get-NetFirewallRule -DisplayName $name -ErrorAction SilentlyContinue | Remove-NetFirewallRule
           New-NetFirewallRule -DisplayName $name -Direction Inbound -Action Allow -Profile Any `
               -Program 'C:\Program Files\HaelpMi\HaelpMi.Agent.exe' | Out-Null
+      # Ebenfalls Umgehung eines Produktbefunds: das Konfigurationsprogramm (Admin-Dashboard) öffnet selbst Sockets
+      # für Config-Sync und Edit-Lock (UDP 51502), ohne dass ein Installer dafür eine Regel anlegt.
+      - name: Testvorbereitung – Firewall-Freigabe für das Konfigurationsprogramm (Umgehung)
+        run: |
+          $name = 'HaelpMi E2E Config (Testvorbereitung)'
+          Get-NetFirewallRule -DisplayName $name -ErrorAction SilentlyContinue | Remove-NetFirewallRule
+          New-NetFirewallRule -DisplayName $name -Direction Inbound -Action Allow -Profile Any `
+              -Program 'C:\Program Files\HaelpMi\HaelpMi.Config.exe' | Out-Null
       - name: E2E-Tests
         run: |
           $filter = "Category=E2E&Geraet=$env:GERAET"
@@ -213,7 +221,7 @@ jobs:
     needs: [reset, build]
     if: (github.event_name == 'workflow_dispatch' || (github.event.label.name == 'e2e' && github.event.pull_request.head.repo.full_name == github.repository)) && contains(format(',{0},', inputs.vms || 'a,b'), ',b,')
     runs-on: [self-hosted, haelpmi-e2e, vm-b]
-    timeout-minutes: 60
+    timeout-minutes: 120
     defaults:
       run:
         shell: pwsh
@@ -243,6 +251,14 @@ jobs:
           Get-NetFirewallRule -DisplayName $name -ErrorAction SilentlyContinue | Remove-NetFirewallRule
           New-NetFirewallRule -DisplayName $name -Direction Inbound -Action Allow -Profile Any `
               -Program 'C:\Program Files\HaelpMi\HaelpMi.Agent.exe' | Out-Null
+      # Ebenfalls Umgehung eines Produktbefunds: das Konfigurationsprogramm (Admin-Dashboard) öffnet selbst Sockets
+      # für Config-Sync und Edit-Lock (UDP 51502), ohne dass ein Installer dafür eine Regel anlegt.
+      - name: Testvorbereitung – Firewall-Freigabe für das Konfigurationsprogramm (Umgehung)
+        run: |
+          $name = 'HaelpMi E2E Config (Testvorbereitung)'
+          Get-NetFirewallRule -DisplayName $name -ErrorAction SilentlyContinue | Remove-NetFirewallRule
+          New-NetFirewallRule -DisplayName $name -Direction Inbound -Action Allow -Profile Any `
+              -Program 'C:\Program Files\HaelpMi\HaelpMi.Config.exe' | Out-Null
       - name: E2E-Tests
         run: |
           $filter = "Category=E2E&Geraet=$env:GERAET"
@@ -280,14 +296,14 @@ jobs:
     needs: [reset, build]
     if: (github.event_name == 'workflow_dispatch' || (github.event.label.name == 'e2e' && github.event.pull_request.head.repo.full_name == github.repository)) && contains(format(',{0},', inputs.vms || 'a,b'), ',a,') && contains(format(',{0},', inputs.vms || 'a,b'), ',b,')
     runs-on: [self-hosted, pve-orchestrator]
-    timeout-minutes: 65
+    timeout-minutes: 125
     defaults:
       run:
         shell: bash
     steps:
       - uses: actions/checkout@v4
       # Läuft ab Start der Test-Jobs, also auch während deren Artefakt-Downloads (im ersten Lauf ~22 min).
-      - run: ci/e2e/rendezvous-relay.sh --timeout 60 9101 9102
+      - run: ci/e2e/rendezvous-relay.sh --timeout 120 9101 9102
 
   stop:
     name: VMs herunterfahren
