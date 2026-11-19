@@ -7,6 +7,7 @@ Details stehen in der Git-Historie. Der eingefrorene Stand `legacy/main-0.39.x` 
 ## [Unveröffentlicht]
 ### Neu
 ### Verbessert
+- Branch-Modell auf `develop`/`main` mit Stabilisierungs-Branch `release-X.Y` umgestellt, Conventional Commits, Hook `pre-push` (#194)
 - Struktur an die MasterAgents-Vorlage angeglichen: Doku-Struktur (`docs/`), Arbeitsregeln in `AGENTS.md`, Entscheidungen als ADR, Design-System-Verzeichnis `design/` (#151)
 - Einheitliche Linien-Icons (Lucide) statt Schriftzeichen und Einzelzeichnungen; Icon-Buttons haben eine Textalternative für Screenreader (#151)
 - Farben und Logo liegen nur noch einmal zentral vor (#151)

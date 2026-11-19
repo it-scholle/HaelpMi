@@ -1,57 +1,58 @@
 # Git-Ablauf in HälpMi
 
-Anleitung zur Mechanik. Die gültigen Regeln stehen in `AGENTS.md` (Teil A und Teil B, „Ausnahmen
-von Teil A“), die Begründung in `docs/entscheidungen/0004-branch-modell-release-zyklen.md`.
+Anleitung zur Mechanik. Die gültigen Regeln stehen in `AGENTS.md` (Teil A „Branches, Commits,
+Merge“ und „Release und Hotfix“, Teil B „Ausnahmen von Teil A“), die Begründung in
+`docs/entscheidungen/0010-vorschlag-branch-modell-develop-main.md`.
 
-## Versionierung
+## Branches
 
-Format `MAJOR.MINOR.PATCH`, ein einziger Strom für das ganze Produkt. Quelle: `<Version>` in
-`Directory.Build.props`, gespiegelt in `MyAppVersion` in `installer/HaelpMiCommon.iss.inc`; beide
-bei jedem Sprung von Hand synchron halten.
+| Branch        | Zweck                                                                 |
+|---------------|-----------------------------------------------------------------------|
+| `develop`     | Integration, GitHub-Default. Ticket-PRs zielen hierhin.               |
+| `release-X.Y` | Stabilisierung vor dem Release (aktuell `release-2.0`). Ruht, bis der Milestone-Umfang in `develop` erledigt ist. |
+| `main`        | Nur Releases, mit Tag. Kein direkter Push (Hook `pre-push`).          |
+| `hotfix/…`    | Schwere Fehler im Release, von `main`.                                |
 
-- PATCH: Bugfix, Doku, Refactoring ohne Verhaltensänderung
-- MINOR: neues Feature oder dringender Produktions-Fix
-- MAJOR: Breaking Change oder offizielles Release
-
-Der Grad wird beim Commit entschieden; die Versionsnummer im Titel (`vX.Y.Z: Beschreibung (#N)`)
-codiert ihn bereits.
+Der Name des Release-Zyklus steht im Milestone (z. B. `release-2.0-…`), nicht im Ziel-Branch der
+Ticket-PRs.
 
 ## Ablauf pro Ticket
 
-1. Issue prüfen (kein `status:in-progress`/`status:review`), `scripts/claim-issue.sh <nr>`.
-2. Branch aus dem Issue: `gh issue develop <nr> --base <release-branch> --name <präfix>/<kurz>`,
+1. Issue prüfen (kein `status:in-progress`/`status:review`), `bash scripts/claim-issue.sh <nr>`.
+2. Branch aus dem Issue: `gh issue develop <nr> --base develop --name <präfix>/<nr>-<kurz>`,
    dann eigener Worktree (`EnterWorktree` oder `git worktree add`).
-3. Arbeiten, committen, die für den Grad passende Test-Stufe ausführen (`AGENTS.md`,
-   „Test-Stufen“). Berührt ein Commit `src/HaelpMi.InstallCreator/`, `src/HaelpMi.UpdateSigner/`
-   oder `Directory.Build.props`, baut der Hook den Install-Creator neu
+3. Arbeiten und committen nach Conventional Commits: `typ: Beschreibung (#N)`
+   (`feat`, `fix`, `docs`, `chore`, `refactor`, `test`). Keine Versionsnummer im Commit.
+   Berührt ein Commit `src/HaelpMi.InstallCreator/`, `src/HaelpMi.UpdateSigner/` oder
+   `Directory.Build.props`, baut der Hook den Install-Creator neu
    (`docs/wissen/installcreator-rebuild-hook.md`).
-4. Branch nach jedem Commit, mindestens einmal pro Aufgabe, pushen: `git push -u origin <branch>`.
-5. Auf den aktuellen Ziel-Branch rebasen: `git rebase <release-branch>` (alle Worktrees teilen
-   dieselben Refs). Konflikte hier lösen, siehe „Versionsnummer-Kollisionen“.
-6. Nach dem Rebase erneut testen; ein konfliktfreier Rebase garantiert nicht, dass zwei
-   Änderungen zusammen funktionieren.
-7. PR öffnen, `scripts/finish-issue.sh <nr>`; auf OK des Repo-Owners warten.
-8. Nach dem OK: prüfen, ob sich der Ziel-Branch inzwischen bewegt hat (dann zurück zu 5), Ticket
-   als ein Commit integrieren (FF bzw. PR-Merge), Tag `vX.Y.Z` setzen, pushen.
-9. Aufräumen: `git worktree remove <pfad>`, `git branch -d <branch>`,
-   `git push origin --delete <branch>`.
+4. Branch regelmäßig pushen: `git push -u origin <branch>`.
+5. Vor dem PR den aktuellen Stand holen: `git fetch && git merge origin/develop`. Kein Rebase,
+   kein Force-Push.
+6. Tests ausführen (`AGENTS.md`, „Tests“), PR nach `develop` mit `Closes #N` öffnen,
+   `bash scripts/finish-issue.sh <nr>`; auf OK des Auftraggebers warten.
+7. Nach dem OK (`AGENTS.md`, „Merge durch den Agent“): `develop` erneut einmergen, CI grün,
+   Squash-Merge (`gh pr merge <pr> --squash --delete-branch`). Der Merge schließt das Issue.
+8. Aufräumen: `git worktree remove <pfad>`, `git branch -D <branch>`.
 
-`main` wird nur am Ende eines Release-Zyklus nach Freigabe des Repo-Owners per Fast-Forward aus
-dem Release-Branch aktualisiert.
+## Release
 
-## Versionsnummer-Kollisionen
-
-Haben zwei Branches parallel dieselbe Nummer gewählt, behält der zuerst gelandete Commit seine
-Nummer, der später integrierte rückt auf die nächste freie (inklusive Tag). Nur den eigenen, gerade
-erst angelegten Tag löschen, nie einen Tag, der schon vor dem eigenen Rebase existierte.
-
-Ein bereits laufender, teilweise aufgelöster Merge wird zu Ende gebracht statt auf Rebase
-umgestellt.
+1. Milestone-Umfang in `develop` erledigt: `develop` per Fast-Forward nach `release-X.Y`
+   übernehmen (PR `develop` → `release-X.Y`).
+2. Auf `release-X.Y` nur noch Fehlerbehebungen: Ticket-Branch von `release-X.Y`, PR dorthin.
+3. Repo-Owner testet `release-X.Y` und gibt frei.
+4. Version aus den Commits seit dem letzten Release ableiten, in `Directory.Build.props` und
+   `installer/HaelpMiCommon.iss.inc` setzen (bis #168), `CHANGELOG.md` ergänzen.
+5. PR `release-X.Y` → `main`, Merge oder Fast-Forward (nie Squash), Tag `vX.Y.Z`,
+   GitHub-Release mit den CHANGELOG-Notizen.
+6. `release-X.Y` in `develop` mergen. Nächster Zyklus: neuer Milestone und Branch
+   `release-X.Y+1` vom aktuellen `develop`.
 
 ## Fehlschläge
 
 - Tests rot: bis zu 3 Korrekturversuche, danach nachfragen statt raten.
-- Push abgelehnt (Auth, nicht fast-forward): nie automatisch force-pushen, nachfragen.
+- Push abgelehnt (Auth, nicht fast-forward): nie force-pushen, Remote-Stand einmergen oder
+  nachfragen.
 
 ## Status-Tabelle im Chat
 
@@ -63,23 +64,20 @@ Bei aktiver Branch-, Versions- oder Git-Arbeit (nicht bei reinen Rückfragen), o
 ----------------------------------------------------------------------
 | Bereich         | <Feature/Bereich>                                |
 | Branch          | <Branch-Name oder "-">                           |
-| Version Ziel    | <vX.Y.Z des Ziel-Branches>                       |
-| Version (diese) | <vX.Y.Z bzw. "-" wenn noch offen>                |
-| Status          | Klären | Implementieren | Testen | Rebasen |
-|                 | Mergen | Fertig                                  |
+| Ziel            | <develop | release-X.Y | main>                    |
+| Status          | Klären | Implementieren | Testen | PR | Fertig  |
 ----------------------------------------------------------------------
 Zusammenfassung: ...
 Offene Fragen: ... (oder "keine")
 ----------------------------------------------------------------------
 ```
 
-Grund: Der Ziel-Branch kann sich durch parallele Sessions zwischen zwei Antworten bewegen; die feste
-Struktur hält fest, auf welchem Stand eine Antwort aufbaut.
-
 ## Vorgeschichte
 
-- 09.08.2026: Ein im Worktree fertiger Fix (v0.7.6) wurde nie zurückgeführt; `main` sprang direkt
-  zu einem anderen, parallelen Fix. Seitdem verpflichtender Rebase-/Merge-Ablauf.
-- 14.08.2026: GitHub-Remote `origin`; Merges wurden bis 20.08.2026 automatisch gepusht.
+- 09.08.2026: Ein im Worktree fertiger Fix (v0.7.6) wurde nie zurückgeführt. Seitdem
+  verpflichtender Merge-Ablauf.
 - 15.08.2026: Branch-Pflicht für alle Sessions, auch interaktive.
 - 20.08.2026: automatische Integration bei grünen Tests ausgesetzt, Merge nur nach Freigabe.
+- 24.08.2026 – 19.11.2026: rotierende Release-Branches mit Versionsnummer pro Ticket-Commit
+  (ADR 0004), letzter Zyklus `release-1.0-MVP` bis v0.47.11.
+- 19.11.2026: Umstellung auf `develop`/`main` mit Stabilisierungs-Branch `release-X.Y` (ADR 0010, #194).

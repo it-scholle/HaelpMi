@@ -1,13 +1,15 @@
 # Status
 
-Stand: 2026-11-18
+Stand: 2026-11-19
 
 ## Aktueller Stand
 
-- Aktive Linie: `release-1.0-MVP` (GitHub-Default-Branch), Version 0.47.x. Status
-  „stable+buggy“: Alarmversand/-empfang, Selbsttest, Config-Sync, Discovery/Boot-Call und
+- Version 1.0 (v0.47.11, Endstand von `release-1.0-MVP`) ist veröffentlicht. Entwicklung läuft
+  auf `develop` (GitHub-Default), Ziel ist Milestone `release-2.0-…` mit Stabilisierungs-Branch
+  `release-2.0` (#194, ADR 0010). Status „stable+buggy“: Alarmversand/-empfang, Selbsttest, Config-Sync, Discovery/Boot-Call und
   Install-Creator/Installer funktionieren weitgehend, ohne Anspruch auf Produktionsreife.
-- `main` ist der eingefrorene, getestete Stable-Anker; `legacy/main-0.39.x` ist der alte,
+- `main` nimmt nur noch Releases auf und steht noch auf v0.16.5 (1.0 wurde bisher nicht nach
+  `main` übernommen); `legacy/main-0.39.x` ist der alte,
   nicht mehr weiterentwickelte Stand (siehe `docs/entscheidungen/0001-neustart-auf-v0-16.md`).
 - Update-Pipeline (Update-Dienst, P2P-Verteilung) ist in dieser Linie inaktiv; Updates erfolgen
   manuell per Installer.
@@ -49,7 +51,8 @@ Bei #151 aufgefallen, nicht Teil des Tickets, jeweils als eigenes Issue angelegt
 
 ## Nächste Schritte
 
-- Nach Abschluss von `release-1.0-MVP`: Branch-Modell auf `develop`/`main` umstellen
-  (ADR 0010), dazu Commit-Format und Merge-Art nach Teil A.
+- Version 1.0 nach `main` übernehmen und taggen (Freigabe Repo-Owner offen).
+- Repo-Ruleset „Block-all“ an das neue Modell anpassen: verlangt lineare Historie auf allen
+  Branches, Teil A sieht aber Merges `develop` → Ticket-Branch und `release-X.Y` → `main` vor (#160).
 - Versionsnummer nur noch an einer Stelle: ISPP liest `Directory.Build.props` (eigenes Ticket).
-- Weitere Tickets im Milestone `release-1.0-MVP`.
+- Tickets im Milestone `release-2.0-…`; zurückgestellte Themen im Milestone `Backlog`.
