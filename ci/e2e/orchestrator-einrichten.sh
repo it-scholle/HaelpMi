@@ -8,6 +8,8 @@
 #     SSH-Login dauert ~25 s.
 #   - Debian 12 bringt kein curl mit, zum Holen dieses Skripts vorher:
 #       apt-get update && apt-get install -y curl ca-certificates
+#   - pve-lib.sh, pve-reset.sh, pve-stop.sh und wachhalten.sh aus ci/e2e ins selbe
+#     Verzeichnis wie dieses Skript legen; sie werden nach /opt/haelpmi-ci kopiert.
 #
 #   orchestrator-einrichten.sh [--pve-host <adresse>]   einrichten
 #   orchestrator-einrichten.sh --pruefen                nur prüfen, Exit 1 bei Abweichung
@@ -38,7 +40,10 @@ RUNNER_DIR=/opt/actions-runner
 RUNNER_MARKER="$RUNNER_DIR/.haelpmi-archiv-sha256"
 CI_ETC=/etc/haelpmi-ci
 CI_OPT=/opt/haelpmi-ci
+CI_STATE=/var/lib/haelpmi-ci
 WACHHALTEN="$CI_OPT/wachhalten.sh"
+QUELLE="$(dirname "$(readlink -f "$0")")"
+CI_SKRIPTE=(pve-lib.sh pve-reset.sh pve-stop.sh wachhalten.sh)
 SYSTEMD_DIR=/etc/systemd/system
 UNIT=haelpmi-e2e-wachhalten
 PAKETE=(curl jq openssh-client mosquitto-clients ca-certificates)
@@ -91,9 +96,17 @@ Persistent=true
 WantedBy=timers.target
 "
 
-WACHHALTEN_PLATZHALTER='#!/usr/bin/env bash
-echo "Wachhalte-Skript folgt mit #164"
-exit 0
+# Frühere Fassungen legten statt wachhalten.sh nur einen Platzhalter mit diesem Text ab.
+WACHHALTEN_PLATZHALTER='Wachhalte-Skript folgt mit #164'
+
+E2E_CONF_VORLAGE='# Adressen der Test-VMs (SSH mit dem Schlüssel des Orchestrators)
+VM_9101_IP=
+VM_9102_IP=
+VM_9103_IP=
+VM_9110_IP=
+SSH_USER=hmadmin
+# Optional, durch Leerzeichen getrennt; ohne Angabe "9101 9102"
+WACHHALTEN_VMIDS=
 '
 
 # --- Hilfsfunktionen ----------------------------------------------------------------------
@@ -286,11 +299,37 @@ setze_pve_conf() {
     [[ -n "$node" ]] || return 2
 }
 
-ist_wachhalten() { [[ -x "$WACHHALTEN" ]]; }
-setze_wachhalten() {
+ist_skript() { # <name>
+    local ziel="$CI_OPT/$1"
+    [[ -f "$ziel" ]] || return 1
+    ! grep -qF "$WACHHALTEN_PLATZHALTER" "$ziel" || return 1
+    [[ "$(stat -c '%a %U' "$ziel")" == "755 root" ]] || return 1
+    # Ohne Quelle neben diesem Skript (z. B. --pruefen aus einem anderen Verzeichnis)
+    # lässt sich nur das Vorhandensein prüfen.
+    [[ ! -f "$QUELLE/$1" ]] || cmp -s "$QUELLE/$1" "$ziel"
+}
+setze_skript() { # <name>
+    [[ -f "$QUELLE/$1" ]] || return 2
     install -d -m 755 "$CI_OPT"
-    [[ -e "$WACHHALTEN" ]] || printf '%s' "$WACHHALTEN_PLATZHALTER" > "$WACHHALTEN"
-    chmod 755 "$WACHHALTEN"
+    install -m 755 -o root -g root "$QUELLE/$1" "$CI_OPT/$1"
+}
+
+ist_ci_state() { rechte_ok "$CI_STATE" 750 "$NUTZER"; }
+setze_ci_state() {
+    install -d "$CI_STATE"
+    setze_rechte "$CI_STATE" 750 "$NUTZER"
+}
+
+ist_e2e_conf() { rechte_ok "$CI_ETC/e2e.conf" 600 "$NUTZER"; }
+setze_e2e_conf() {
+    if [[ ! -e "$CI_ETC/e2e.conf" ]]; then
+        (umask 077 && printf '%s' "$E2E_CONF_VORLAGE" > "$CI_ETC/e2e.conf")
+    fi
+    setze_rechte "$CI_ETC/e2e.conf" 600 "$NUTZER"
+}
+
+ist_e2e_conf_gefuellt() {
+    [[ -n "$(conf_wert "$CI_ETC/e2e.conf" VM_9101_IP)" && -n "$(conf_wert "$CI_ETC/e2e.conf" VM_9102_IP)" ]]
 }
 
 ist_unit() { inhalt_gleich "$SYSTEMD_DIR/$UNIT.$1" "$2"; }
@@ -324,7 +363,14 @@ schritt "$CI_ETC/mqtt.conf ausgefüllt" ist_mqtt_gefuellt von_hand \
     "MQTT_USER und MQTT_PASS von Hand eintragen"
 schritt "$CI_ETC/pve.conf (PVE_API, PVE_NODE)" ist_pve_conf setze_pve_conf \
     "Adresse per --pve-host oder PVE_HOST angeben; Node notfalls per PVE_NODE"
-schritt "$WACHHALTEN vorhanden" ist_wachhalten setze_wachhalten
+schritt "$CI_ETC/e2e.conf (600, $NUTZER)" ist_e2e_conf setze_e2e_conf
+schritt "$CI_ETC/e2e.conf: VM_9101_IP und VM_9102_IP" ist_e2e_conf_gefuellt von_hand \
+    "Adressen der Test-VMs von Hand eintragen"
+schritt "$CI_STATE (750, $NUTZER)" ist_ci_state setze_ci_state
+for s in "${CI_SKRIPTE[@]}"; do
+    schritt "$CI_OPT/$s (755, aktuell)" "ist_skript $s" "setze_skript $s" \
+        "$s aus ci/e2e neben dieses Skript legen und erneut starten"
+done
 schritt "$UNIT.service" ist_service setze_service
 schritt "$UNIT.timer" ist_timer setze_timer
 schritt "$UNIT.timer aktiviert und aktiv" ist_timer_aktiv setze_timer_aktiv

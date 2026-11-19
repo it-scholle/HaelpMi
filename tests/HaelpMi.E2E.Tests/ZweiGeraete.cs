@@ -1,0 +1,104 @@
+using HaelpMi.Core.Licensing;
+using HaelpMi.Core.Models;
+using HaelpMi.Core.Storage;
+using Xunit;
+
+namespace HaelpMi.E2E.Tests;
+
+/// <summary>
+/// Gemeinsame Schritte für T4/T5. Jedes Gerät führt seinen Teil selbst aus und stimmt sich
+/// über <see cref="Rendezvous"/> ab; die Testmethoden stehen in GeraetATests/GeraetBTests,
+/// weil xUnit die Reihenfolge von Klassen innerhalb einer Sammlung nicht festlegt.
+/// </summary>
+internal static class ZweiGeraete
+{
+    /// <summary>Wert des Traits "Teil"; ein Lauf mit nur einer VM filtert diese Tests per "Teil!=ZweiGeraete" heraus.</summary>
+    public const string Teil = "ZweiGeraete";
+
+    public static readonly TimeSpan GegenseiteTimeout = TimeSpan.FromMinutes(15);
+    public static readonly TimeSpan DiscoveryTimeout = TimeSpan.FromSeconds(60);
+
+    // A und B schreiben dieselbe shared-config.json, deshalb feste Werte statt Zufall.
+    private static readonly Guid ProfilId = new("e2e00000-0000-4000-8000-000000000005");
+    private const int ConfigVersion = 1000;
+
+    /// <summary>Strg+Alt+Umschalt+F11, kollidiert mit keinem Windows-Standardkürzel.</summary>
+    public static readonly HotkeyDefinition AlarmHotkey =
+        new(HotkeyModifiers.Control | HotkeyModifiers.Alt | HotkeyModifiers.Shift, 0x7A);
+
+    // Hotkeys und Boot-Call kommen erst nach dem Prozessstart im Hintergrund (StartBackgroundServices).
+    private static readonly TimeSpan AgentAnlaufzeit = TimeSpan.FromSeconds(10);
+
+    public static Guid EigeneDeviceId() =>
+        JsonFileStore.Load<OwnSettings>(AppPaths.SettingsFilePath)?.DeviceId
+        ?? throw new InvalidOperationException($"{AppPaths.SettingsFilePath} fehlt, T1 lief nicht.");
+
+    /// <param name="geraet">"a" oder "b"; T1 legt die DeviceId als Inhalt der Marke "&lt;geraet&gt;-installiert" ab.</param>
+    public static async Task<Guid> DeviceIdDerGegenseiteAsync(string geraet) =>
+        Guid.Parse((await Rendezvous.WaitForAsync($"{geraet}-installiert", GegenseiteTimeout)).Trim());
+
+    /// <summary>Wartet, bis devices.json das Gerät mit Adresse enthält.</summary>
+    public static async Task<DeviceEntry> WarteAufGeraetAsync(Guid deviceId, TimeSpan timeout)
+    {
+        var frist = DateTime.UtcNow + timeout;
+        while (true)
+        {
+            var eintrag = new DeviceStore().Load().FirstOrDefault(d => d.DeviceId == deviceId && !string.IsNullOrEmpty(d.IpAddress));
+            if (eintrag is not null)
+            {
+                return eintrag;
+            }
+
+            if (DateTime.UtcNow > frist)
+            {
+                Assert.Fail($"{AppPaths.DevicesFilePath} enthält Gerät {deviceId} nach {timeout} nicht (Boot-Call nicht angekommen, siehe netzwerk.txt).");
+            }
+
+            await Task.Delay(1000);
+        }
+    }
+
+    /// <summary>
+    /// Agent stoppen, auf A und B identische shared-config.json mit einem Profil A→B
+    /// (Schwelle 1, <see cref="AlarmHotkey"/>) schreiben, Agent über den Autostart neu starten.
+    /// </summary>
+    public static async Task BereiteAlarmprofilVorAsync(Guid sender, Guid empfaenger)
+    {
+        PruefeLizenz();
+        HaelpMiApp.BeendeAlles();
+
+        var config = new SharedConfig { ConfigVersion = ConfigVersion };
+        config.AlarmProfiles.Add(new AlarmProfile
+        {
+            Id = ProfilId,
+            Name = "E2E-Alarm",
+            Text = "E2E-Alarm A an B",
+            Hotkey = AlarmHotkey,
+            ResponseThreshold = 1,
+            RecipientAssignments =
+            {
+                new RecipientAssignment
+                {
+                    Sender = new EntityRef(EntityKind.Device, sender),
+                    Recipients = { new EntityRef(EntityKind.Device, empfaenger) },
+                },
+            },
+        });
+        new SharedConfigStore().Save(config);
+
+        HaelpMiApp.StarteAgentUeberAutostart();
+        await HaelpMiApp.WarteAufAgentAsync(TimeSpan.FromSeconds(60));
+        await Task.Delay(AgentAnlaufzeit);
+    }
+
+    /// <summary>Ohne gültige Lizenz gilt für User-Geräte Kontingent 0 (LicenseLimitGuard), B könnte weder senden noch empfangen.</summary>
+    private static void PruefeLizenz()
+    {
+        var deployment = JsonFileStore.Load<DeploymentInfo>(Path.Combine(E2EUmgebung.ProgrammOrdner, "deployment.json"))
+            ?? throw new InvalidOperationException("deployment.json fehlt.");
+        var ergebnis = LicenseReader.Load(deployment.CustomerGroupId, Convert.FromHexString(deployment.LicensePublicKeyHex));
+        Assert.True(ergebnis.Status == LicenseStatus.Valid,
+            $"Lizenzstatus {ergebnis.Status} statt Valid. Der Workflow erzeugt pro Lauf eine Test-Kundengruppe samt Lizenz " +
+            "(HAELPMI_E2E_LIZENZ); ohne sie sperrt LicenseLimitGuard das User-Gerät B.");
+    }
+}
