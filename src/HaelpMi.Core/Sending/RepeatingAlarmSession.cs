@@ -63,7 +63,10 @@ public sealed class RepeatingAlarmSession : IDisposable
     private readonly HashSet<Guid> _onTheWayResponderIds = new();
     private readonly List<string> _onTheWayNames = new();
     private readonly DateTimeOffset _startedAtUtc;
-    private int _lastAckedCount;
+    // Über die ganze Session gesammelt statt pro Runde: eine verspätete oder verlorene
+    // Quittung einer späteren Runde darf einen schon bestätigten Empfänger nicht wieder
+    // auf "nicht empfangen" zurücksetzen. "Bin unterwegs" zählt ebenfalls als Empfang.
+    private readonly HashSet<Guid> _receivedDeviceIds = new();
     private bool _pingingActive = true;
     private bool _cancelledByUser;
 
@@ -104,7 +107,7 @@ public sealed class RepeatingAlarmSession : IDisposable
                 }
 
                 var result = await _alarmSender.SendAsync(Profile, AlarmSessionId, _ownIdentity, Targets, ct: _stopCts.Token);
-                _lastAckedCount = result.AckedCount;
+                MarkReceived(result.AckedDeviceIds);
                 await RaiseAndRelayAsync(stillSending: true);
 
                 try
@@ -188,6 +191,7 @@ public sealed class RepeatingAlarmSession : IDisposable
         }
 
         _onTheWayNames.Add($"{message.ResponderRoomName} - {message.ResponderComputerName} ({message.ResponderUser})");
+        MarkReceived(new[] { message.ResponderDeviceId });
 
         // Fire-and-forget: RelayStatusAsync/SendEnvelopeAsync already swallow per-target
         // failures internally, so there is nothing here that can throw unobserved.
@@ -217,12 +221,35 @@ public sealed class RepeatingAlarmSession : IDisposable
         }
     }
 
+    private void MarkReceived(IEnumerable<Guid> deviceIds)
+    {
+        lock (_receivedDeviceIds)
+        {
+            foreach (var deviceId in deviceIds)
+            {
+                if (Targets.Any(t => t.DeviceId == deviceId))
+                {
+                    _receivedDeviceIds.Add(deviceId);
+                }
+            }
+        }
+    }
+
+    private int ReceivedCount()
+    {
+        lock (_receivedDeviceIds)
+        {
+            return _receivedDeviceIds.Count;
+        }
+    }
+
     private async Task<AlarmStatusRelayMessage> RaiseAndRelayAsync(bool stillSending)
     {
+        var ackedCount = ReceivedCount();
         var status = new AlarmSessionStatus
         {
             TargetCount = Targets.Count,
-            AckedCount = _lastAckedCount,
+            AckedCount = ackedCount,
             OnTheWayNames = _onTheWayNames.ToList(),
             StillSending = stillSending,
         };
@@ -230,7 +257,7 @@ public sealed class RepeatingAlarmSession : IDisposable
 
         var relay = new AlarmStatusRelayMessage(
             _ownIdentity.CustomerGroupId, Profile.Id, AlarmSessionId,
-            Targets.Count, _lastAckedCount, status.OnTheWayNames, stillSending, DateTimeOffset.UtcNow);
+            Targets.Count, ackedCount, status.OnTheWayNames, stillSending, DateTimeOffset.UtcNow);
         await _feedbackChannel.RelayStatusAsync(Targets, relay);
         return relay;
     }
