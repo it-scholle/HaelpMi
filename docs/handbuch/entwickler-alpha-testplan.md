@@ -277,8 +277,8 @@ selbstmodifizierende Software mit einem Windows-Dienst mit Systemrechten - genau
 Teil, den ich am wenigsten selbst verifizieren konnte.
 
 - [ ] Zwei Geräte auf unterschiedlichen (künstlich erzeugten) Versionsständen bringen
-      (z. B. eine mit geänderter `MyAppVersion` in
-      `HälpMi\installer\HaelpMiCommon.iss.inc` neu gebaute Test-Installation)
+      (z. B. eine mit geänderter `<Version>` in
+      `HälpMi\Directory.Build.props` neu gebaute Test-Installation)
 - [ ] Beobachten, ob das ältere Gerät die neuere Version überhaupt bemerkt (Log/Audit)
 - [ ] **Falls es zu einem Absturz, Hänger oder halb-installierten Zustand kommt: nicht
       selbst reparieren versuchen** - Zustand (Prozesse, Dateien unter `{app}` und

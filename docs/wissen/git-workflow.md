@@ -6,8 +6,8 @@ von Teil A“), die Begründung in `docs/entscheidungen/0004-branch-modell-relea
 ## Versionierung
 
 Format `MAJOR.MINOR.PATCH`, ein einziger Strom für das ganze Produkt. Quelle: `<Version>` in
-`Directory.Build.props`, gespiegelt in `MyAppVersion` in `installer/HaelpMiCommon.iss.inc`; beide
-bei jedem Sprung von Hand synchron halten.
+`Directory.Build.props`, sonst nirgends. Der Installer liest sie beim Kompilieren per ISPP
+(`installer/HaelpMiVersion.iss.inc`); die CI prüft, dass er denselben Wert ermittelt.
 
 - PATCH: Bugfix, Doku, Refactoring ohne Verhaltensänderung
 - MINOR: neues Feature oder dringender Produktions-Fix
