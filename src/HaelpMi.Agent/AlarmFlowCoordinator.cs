@@ -68,6 +68,8 @@ public sealed class AlarmFlowCoordinator
     /// <summary>Issue #59/#60: true, solange dieses Gerät wegen Lizenzüberschreitung deaktiviert ist.</summary>
     public bool IsOwnDeviceLicenseDisabled() => _licenseLimitGuard.IsOwnDeviceDisabled();
 
+    public LicenseBlockReason GetOwnLicenseBlockReason() => _licenseLimitGuard.GetOwnBlockReason();
+
     /// <summary>
     /// Issue #61-Nachtrag ("Löschen deaktiviert nicht wirklich"): true, sobald ein Admin
     /// dieses Gerät im Geräte-Tab gelöscht hat (siehe OwnSettings.Removed) - anders als
@@ -208,9 +210,10 @@ public sealed class AlarmFlowCoordinator
             return;
         }
 
-        if (_licenseLimitGuard.IsOwnDeviceDisabled())
+        var blockReason = _licenseLimitGuard.GetOwnBlockReason();
+        if (blockReason != LicenseBlockReason.None)
         {
-            ShowLicenseLimitBlockedMessage();
+            ShowLicenseBlockedMessage(blockReason);
             return;
         }
 
@@ -247,12 +250,10 @@ public sealed class AlarmFlowCoordinator
         _ = RunSessionAsync(session);
     }
 
-    private static void ShowLicenseLimitBlockedMessage() =>
+    private static void ShowLicenseBlockedMessage(LicenseBlockReason reason) =>
         System.Windows.MessageBox.Show(
-            "Die Lizenz ist ausgeschöpft (mehr Geräte angemeldet als das Lizenzkontingent erlaubt). " +
-            "Dieses Gerät ist deaktiviert und kann keine Alarme senden, bis ein Admin es im Dashboard " +
-            "aktiviert oder eine neue Lizenz eingespielt wird.",
-            "HälpMi - Lizenz ausgeschöpft", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Warning);
+            LicenseBlockTexts.Message(reason),
+            $"HälpMi - {LicenseBlockTexts.Title(reason)}", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Warning);
 
     private static void ShowDeviceRemovedBlockedMessage() =>
         System.Windows.MessageBox.Show(

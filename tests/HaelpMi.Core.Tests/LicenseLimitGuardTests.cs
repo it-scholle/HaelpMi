@@ -231,4 +231,105 @@ public class LicenseLimitGuardTests
         Assert.False(firstUserGuard.IsOwnDeviceDisabled()); // Admin + 1. User = beide Plätze belegt, passt
         Assert.True(secondUserGuard.IsOwnDeviceDisabled()); // dritter Beteiligter (Admin zählt mit) - überzählig
     }
+
+    [Fact]
+    public void GetBlockReasons_ManuallyDisabled_ForForceDisabledUserDevice_EvenWithFreeSeats()
+    {
+        var adminIdentity = MakeIdentity(Guid.NewGuid(), Role.Admin, DateTimeOffset.UtcNow.AddDays(-2));
+        var userDeviceId = Guid.NewGuid();
+        var devices = new List<DeviceEntry>
+        {
+            new()
+            {
+                DeviceId = userDeviceId, Role = Role.User, FirstSeenUtc = DateTimeOffset.UtcNow.AddDays(-1),
+                LicenseOverride = LicenseOverride.ForceDisabled, LicenseOverrideSetAtUtc = DateTimeOffset.UtcNow,
+            },
+        };
+        var guard = new LicenseLimitGuard(() => adminIdentity, () => ValidLicense(5), () => devices);
+
+        var reasons = guard.GetBlockReasons();
+
+        Assert.Equal(LicenseBlockReason.ManuallyDisabled, reasons[userDeviceId]);
+        Assert.False(reasons.ContainsKey(adminIdentity.DeviceId));
+    }
+
+    [Fact]
+    public void GetBlockReasons_LimitExceeded_OnlyForDevicesBeyondTheLimit()
+    {
+        var adminIdentity = MakeIdentity(Guid.NewGuid(), Role.Admin, DateTimeOffset.UtcNow.AddDays(-3));
+        var licensed = Guid.NewGuid();
+        var beyond = Guid.NewGuid();
+        var devices = new List<DeviceEntry>
+        {
+            new() { DeviceId = licensed, Role = Role.User, FirstSeenUtc = DateTimeOffset.UtcNow.AddDays(-2) },
+            new() { DeviceId = beyond, Role = Role.User, FirstSeenUtc = DateTimeOffset.UtcNow.AddDays(-1) },
+        };
+        var guard = new LicenseLimitGuard(() => adminIdentity, () => ValidLicense(2), () => devices);
+
+        var reasons = guard.GetBlockReasons();
+
+        Assert.Equal(LicenseBlockReason.LimitExceeded, reasons[beyond]);
+        Assert.False(reasons.ContainsKey(licensed));
+    }
+
+    [Fact]
+    public void GetBlockReasons_NoLicense_ForUserDevices_WhenLicenseIsMissing()
+    {
+        var adminIdentity = MakeIdentity(Guid.NewGuid(), Role.Admin, DateTimeOffset.UtcNow.AddDays(-2));
+        var userDeviceId = Guid.NewGuid();
+        var devices = new List<DeviceEntry> { new() { DeviceId = userDeviceId, Role = Role.User, FirstSeenUtc = DateTimeOffset.UtcNow } };
+        var guard = new LicenseLimitGuard(() => adminIdentity, MissingLicense, () => devices);
+
+        Assert.Equal(LicenseBlockReason.NoLicense, guard.GetBlockReasons()[userDeviceId]);
+    }
+
+    [Fact]
+    public void GetOwnBlockReason_ManuallyDisabled_WinsOverMissingLicense()
+    {
+        var identity = MakeIdentity(Guid.NewGuid(), Role.User, DateTimeOffset.UtcNow) with { LicenseOverride = LicenseOverride.ForceDisabled };
+        var guard = new LicenseLimitGuard(() => identity, MissingLicense, () => new List<DeviceEntry>());
+
+        Assert.Equal(LicenseBlockReason.ManuallyDisabled, guard.GetOwnBlockReason());
+    }
+
+    [Fact]
+    public void GetOwnBlockReason_NoLicense_WhenLicenseIsInvalid()
+    {
+        var identity = MakeIdentity(Guid.NewGuid(), Role.User, DateTimeOffset.UtcNow);
+        var guard = new LicenseLimitGuard(() => identity, InvalidLicense, () => new List<DeviceEntry>());
+
+        Assert.Equal(LicenseBlockReason.NoLicense, guard.GetOwnBlockReason());
+    }
+
+    [Fact]
+    public void GetOwnBlockReason_LimitExceeded_ForNewestUserDeviceBeyondTheLimit()
+    {
+        var identity = MakeIdentity(Guid.NewGuid(), Role.User, DateTimeOffset.UtcNow);
+        var devices = new List<DeviceEntry> { new() { DeviceId = Guid.NewGuid(), Role = Role.User, FirstSeenUtc = DateTimeOffset.UtcNow.AddDays(-1) } };
+        var guard = new LicenseLimitGuard(() => identity, () => ValidLicense(1), () => devices);
+
+        Assert.Equal(LicenseBlockReason.LimitExceeded, guard.GetOwnBlockReason());
+    }
+
+    [Fact]
+    public void GetOwnBlockReason_None_WhenWithinLimit()
+    {
+        var identity = MakeIdentity(Guid.NewGuid(), Role.User, DateTimeOffset.UtcNow);
+        var guard = new LicenseLimitGuard(() => identity, () => ValidLicense(1), () => new List<DeviceEntry>());
+
+        Assert.Equal(LicenseBlockReason.None, guard.GetOwnBlockReason());
+    }
+
+    [Theory]
+    [InlineData(LicenseBlockReason.ManuallyDisabled)]
+    [InlineData(LicenseBlockReason.NoLicense)]
+    [InlineData(LicenseBlockReason.LimitExceeded)]
+    public void LicenseBlockTexts_DifferPerReason(LicenseBlockReason reason)
+    {
+        var others = Enum.GetValues<LicenseBlockReason>().Where(r => r != reason && r != LicenseBlockReason.None);
+
+        Assert.NotEmpty(LicenseBlockTexts.Message(reason));
+        Assert.All(others, other => Assert.NotEqual(LicenseBlockTexts.Message(other), LicenseBlockTexts.Message(reason)));
+        Assert.All(others, other => Assert.NotEqual(LicenseBlockTexts.Title(other), LicenseBlockTexts.Title(reason)));
+    }
 }
