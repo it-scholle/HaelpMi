@@ -80,19 +80,44 @@ internal sealed class DashboardSeite
     }
 
     /// <summary>Klickt den ersten Listeneintrag, dessen UIA-Name passt.</summary>
-    public async Task KlickeListenEintragAsync(string listId, Func<string, bool> passt, string beschreibung)
+    /// <param name="wirkung">
+    /// Woran der Klick zu erkennen ist. Ein Klick, der in einen gerade laufenden Speichervorgang fällt, verpufft;
+    /// ohne erkennbare Wirkung nach 5 s wird deshalb genau einmal erneut geklickt.
+    /// </param>
+    public async Task KlickeListenEintragAsync(string listId, Func<string, bool> passt, string beschreibung, Func<bool>? wirkung = null)
     {
-        AutomationElement? eintrag = null;
-        // Während eines Speichervorgangs ist die Liste gesperrt, ein Klick ginge ins Leere.
-        await WarteBisAsync(() => Element(listId).IsEnabled && (eintrag = FindeListenEintrag(listId, passt)) is not null, TimeSpan.FromSeconds(15),
-            () => $"Eintrag '{beschreibung}' fehlt in {listId}. Vorhanden: {string.Join(" | ", ListenNamen(listId))}");
+        for (var versuch = 1; ; versuch++)
+        {
+            AutomationElement? eintrag = null;
+            // Während eines Speichervorgangs ist die Liste gesperrt, ein Klick ginge ins Leere.
+            await WarteBisAsync(() => Element(listId).IsEnabled && (eintrag = FindeListenEintrag(listId, passt)) is not null, TimeSpan.FromSeconds(15),
+                () => $"Eintrag '{beschreibung}' fehlt in {listId}. Vorhanden: {string.Join(" | ", ListenNamen(listId))}");
 
-        Fenster.SetForeground();
-        eintrag!.Patterns.ScrollItem.PatternOrDefault?.ScrollIntoView();
-        Thread.Sleep(200);
-        eintrag.Click();
-        Thread.Sleep(300);
+            Fenster.SetForeground();
+            eintrag!.Patterns.ScrollItem.PatternOrDefault?.ScrollIntoView();
+            Thread.Sleep(200);
+            eintrag.Click();
+            Thread.Sleep(300);
+
+            if (wirkung is null || versuch == 2)
+            {
+                return;
+            }
+
+            var bis = DateTime.UtcNow + TimeSpan.FromSeconds(5);
+            while (DateTime.UtcNow < bis)
+            {
+                if (wirkung())
+                {
+                    return;
+                }
+
+                await Task.Delay(250);
+            }
+        }
     }
+
+    public bool HatListenEintraege(string listId) => ListenNamen(listId).Count > 0;
 
     public List<string> ListenNamen(string listId)
     {

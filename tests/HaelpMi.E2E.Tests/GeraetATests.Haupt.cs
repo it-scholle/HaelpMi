@@ -38,7 +38,8 @@ public partial class GeraetATests
                 c => c.DeviceGroups.Any(g => g.Id == gruppe && g.Name == GruppeName), "GroupStatusText");
             await seite.KlickeListenEintragAsync("GroupDevicesList",
                 n => n.Contains($" - {E2EUmgebung.Raum} (", StringComparison.Ordinal) && n.Contains("dieses Gerät", StringComparison.Ordinal),
-                $"Gerät A ({E2EUmgebung.Raum})");
+                $"Gerät A ({E2EUmgebung.Raum})",
+                () => LiesConfig()?.DeviceGroups.FirstOrDefault(g => g.Id == gruppe)?.DeviceIds.Contains(a) == true);
             await WarteBisAsync(() => LiesConfig()?.DeviceGroups.FirstOrDefault(g => g.Id == gruppe)?.DeviceIds.Contains(a) == true,
                 TimeSpan.FromSeconds(15), $"Gerät A ist nach dem Klick nicht Mitglied von '{GruppeName}' in shared-config.json.");
 
@@ -49,15 +50,19 @@ public partial class GeraetATests
             seite.WaehleTab("Alarm-Profile");
             var p1 = await seite.NeuesProfilAsync();
             await RichteProfilEinAsync(seite, p1, P1Name, 1, HotkeyP1);
-            await seite.KlickeListenEintragAsync("SenderUsersList", eintragA, "Sender A");
-            await seite.KlickeListenEintragAsync("RecipientUsersList", eintragB, "Empfänger B");
-            await WarteAufZuordnungAsync(p1, geraetA, geraetB);
+            await seite.KlickeListenEintragAsync("SenderUsersList", eintragA, "Sender A", () => seite.HatListenEintraege("RecipientUsersList"));
+            await seite.KlickeListenEintragAsync("RecipientUsersList", eintragB, "Empfänger B", () => HatZuordnung(p1, geraetA, geraetB));
+            await WarteAufZuordnungAsync(seite, p1, geraetA, geraetB);
 
             var p2 = await seite.NeuesProfilAsync();
             await RichteProfilEinAsync(seite, p2, P2Name, 2, HotkeyP2);
+            var gruppeRef = new EntityRef(EntityKind.Group, gruppe);
+            // Die Empfängerliste von Sender A ist noch gefüllt, erkennbar ist der Wechsel an der Markierung von B.
             await seite.KlickeListenEintragAsync("SenderUsersList", eintragB, "Sender B");
-            await seite.KlickeListenEintragAsync("RecipientGroupsList", n => n.Contains($"Gruppe: {GruppeName}", StringComparison.Ordinal), $"Gruppe {GruppeName}");
-            await WarteAufZuordnungAsync(p2, geraetB, new EntityRef(EntityKind.Group, gruppe));
+            await Task.Delay(500);
+            await seite.KlickeListenEintragAsync("RecipientGroupsList", n => n.Contains($"Gruppe: {GruppeName}", StringComparison.Ordinal), $"Gruppe {GruppeName}",
+                () => HatZuordnung(p2, geraetB, gruppeRef));
+            await WarteAufZuordnungAsync(seite, p2, geraetB, gruppeRef);
 
             BeendeKonfiguration();
             Rendezvous.Signal("t6-profile-da", $"{p1}\n{p2}");
@@ -141,6 +146,11 @@ public partial class GeraetATests
         Artefakte.SichereAsync(nameof(T8_GeraetDeaktivierenUndAktivieren), async () =>
         {
             var b = await DeviceIdDerGegenseiteAsync("b");
+            var config = LiesConfig();
+            var p1 = config?.AlarmProfiles.FirstOrDefault(p => p.Name == P1Name);
+            Assert.True(p1 is not null && HatZuordnung(p1.Id, new EntityRef(EntityKind.Device, EigeneDeviceId()), new EntityRef(EntityKind.Device, b))
+                && config!.AlarmProfiles.Any(p => p.Name == P2NameNeu && p.Hotkey == HotkeyP2Neu),
+                $"Vorbedingung fehlt: {P1Name} (A an B) aus T6 und {P2NameNeu} mit neuem Tastenkürzel aus T7 sind nicht in shared-config.json.");
             var befunde = new List<string>();
             using var app = new HaelpMiApp();
             var seite = DashboardSeite.Oeffne(app);
@@ -208,11 +218,13 @@ public partial class GeraetATests
         await seite.SetzeHotkeyAsync(hotkey, c => Profil(c, id)?.Hotkey == hotkey);
     }
 
-    private static Task WarteAufZuordnungAsync(Guid profil, EntityRef sender, EntityRef empfaenger) =>
-        WarteBisAsync(
-            () => LiesConfig() is { } c && Profil(c, profil)?.RecipientAssignments.Any(z => z.Sender == sender && z.Recipients.Contains(empfaenger)) == true,
-            TimeSpan.FromSeconds(15),
-            $"Zuordnung {sender.Kind} {sender.Id} an {empfaenger.Kind} {empfaenger.Id} ist nicht in shared-config.json angekommen.");
+    private static bool HatZuordnung(Guid profil, EntityRef sender, EntityRef empfaenger) =>
+        LiesConfig() is { } c && Profil(c, profil)?.RecipientAssignments.Any(z => z.Sender == sender && z.Recipients.Contains(empfaenger)) == true;
+
+    private static Task WarteAufZuordnungAsync(DashboardSeite seite, Guid profil, EntityRef sender, EntityRef empfaenger) =>
+        WarteBisAsync(() => HatZuordnung(profil, sender, empfaenger), TimeSpan.FromSeconds(15),
+            () => $"Zuordnung {sender.Kind} {sender.Id} an {empfaenger.Kind} {empfaenger.Id} ist nicht in shared-config.json angekommen " +
+            $"(Statustext '{seite.Statustext()}', Empfängerliste: {string.Join(" | ", seite.ListenNamen("RecipientUsersList"))}).");
 
     private static AlarmProfile? Profil(SharedConfig config, Guid id) => config.AlarmProfiles.FirstOrDefault(p => p.Id == id);
 
