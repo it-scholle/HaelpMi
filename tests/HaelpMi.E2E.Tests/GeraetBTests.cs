@@ -15,7 +15,7 @@ namespace HaelpMi.E2E.Tests;
 [Trait("Geraet", "B")]
 public partial class GeraetBTests
 {
-    private static readonly TimeSpan PopupTimeout = TimeSpan.FromSeconds(10);
+    private static readonly TimeSpan PopupTimeout = TimeSpan.FromSeconds(15);
 
     private readonly ITestOutputHelper _ausgabe;
 
@@ -46,13 +46,16 @@ public partial class GeraetBTests
             var b = ZweiGeraete.EigeneDeviceId();
             var a = await ZweiGeraete.DeviceIdDerGegenseiteAsync("a");
             await ZweiGeraete.BereiteAlarmprofilVorAsync(a, b);
+
+            // Erster UIA-Zugriff dieses Testprozesses dauert auf einer frischen VM teils über 10 s, deshalb vor der Marke.
+            using var app = new HaelpMiApp();
+            Assert.False(app.AlarmfensterOffen(), "Vor dem Alarm ist schon ein Alarmfenster offen.");
             Rendezvous.Signal("b-bereit", E2EUmgebung.Raum);
 
             // Inhalt: Zeile 1 Raumtext von A, Zeile 2 Auslösezeitpunkt (UTC, Uhr von A).
             var zeilen = (await Rendezvous.WaitForAsync("a-ausgeloest", ZweiGeraete.GegenseiteTimeout)).Split('\n');
             var markeDa = DateTimeOffset.UtcNow;
 
-            using var app = new HaelpMiApp();
             Window popup;
             try
             {

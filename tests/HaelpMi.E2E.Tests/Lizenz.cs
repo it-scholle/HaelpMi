@@ -59,8 +59,7 @@ internal static class Lizenz
         aenderung();
         Rendezvous.Signal($"t9-{stufe}-{geraet}-gewechselt");
         await Rendezvous.WaitForAsync($"t9-{stufe}-{(geraet == "a" ? "b" : "a")}-gewechselt", timeout);
-        HaelpMiApp.StarteAgentUeberAutostart();
-        await HaelpMiApp.WarteAufAgentAsync(TimeSpan.FromSeconds(60));
+        await HaelpMiApp.StarteAgentAsync();
         await Task.Delay(ZweiGeraete.AgentAnlaufzeit);
     }
 

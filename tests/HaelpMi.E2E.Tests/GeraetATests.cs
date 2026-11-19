@@ -111,9 +111,27 @@ public partial class GeraetATests
                 throw;
             }
 
-            await Rendezvous.WaitForAsync("b-quittiert", TimeSpan.FromMinutes(2));
-            await WarteBisAsync(() => AufDemWeg(banner).Any(n => n.StartsWith(raumB + " - ", StringComparison.Ordinal)),
-                TimeSpan.FromSeconds(15), $"'Bin unterwegs' von B (Raum '{raumB}') erscheint nicht unter 'Auf dem Weg'.");
+            try
+            {
+                await Rendezvous.WaitForAsync("b-quittiert", TimeSpan.FromMinutes(2));
+                await WarteBisAsync(() => AufDemWeg(banner).Any(n => n.StartsWith(raumB + " - ", StringComparison.Ordinal)),
+                    TimeSpan.FromSeconds(15), $"'Bin unterwegs' von B (Raum '{raumB}') erscheint nicht unter 'Auf dem Weg'.");
+            }
+            catch
+            {
+                // Sonst wiederholt A den Alarm bis in T6 hinein und B bekommt dort weiter dessen Fenster.
+                try
+                {
+                    Element(banner, "CancelButton").AsButton().Invoke();
+                }
+                catch (Exception ex) when (ex is System.Runtime.InteropServices.COMException or InvalidOperationException)
+                {
+                }
+
+                await app.SchliesseSenderBannerAsync();
+                throw;
+            }
+
             Assert.True(Element(banner, "AckedText").Name == "Empfangen: 1 von 1", AckBefund(Element(banner, "AckedText").Name));
         });
 

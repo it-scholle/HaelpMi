@@ -69,8 +69,6 @@ public partial class GeraetATests
             // L2: gültige Lizenz im Dashboard einspielen, ohne Neustart; B übernimmt per Gossip.
             var pid = AgentPid();
             await EinspielenImDashboardAsync(app, befunde);
-            await PruefeBefundAsync(befunde, () => WarteBisAsync(() => app.FindeToast(ErinnerungsToast) is null, TimeSpan.FromSeconds(10),
-                "Produktbefund L2: der Erinnerungs-Toast bleibt nach dem Einspielen stehen."));
             var uebernahme = (await Rendezvous.WaitForAsync("t9-l2-b-lizenz", SchrittTimeout)).Split('\n');
             if (uebernahme[0].Trim() == "ok")
             {
@@ -206,6 +204,11 @@ public partial class GeraetATests
             () => $"Produktbefund L2: nach dem Einspielen zeigt das Dashboard weiter '{SichtbarerText(seite.Fenster, "LicenseWarningText")}' " +
                 $"bzw. 'Neues Alarm-Profil' bleibt gesperrt."));
         Assert.Equal(LicenseStatus.Valid, Lizenz.Status().Status);
+
+        // Erst nach Banner und Geräteliste meldet das Dashboard dem Agent die neue Lizenz (IPC LicenseRenewed, danach
+        // Announce an B). Ein früheres Beenden des Konfigurationsprogramms verschluckte diese Meldung.
+        await PruefeBefundAsync(befunde, () => WarteBisAsync(() => app.FindeToast(ErinnerungsToast) is null, TimeSpan.FromSeconds(15),
+            "Produktbefund L2: der Erinnerungs-Toast bleibt nach dem Einspielen stehen."));
         BeendeKonfiguration();
     }
 

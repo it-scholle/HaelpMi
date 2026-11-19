@@ -138,8 +138,7 @@ internal static class ZweiGeraete
         });
         new SharedConfigStore().Save(config);
 
-        HaelpMiApp.StarteAgentUeberAutostart();
-        await HaelpMiApp.WarteAufAgentAsync(TimeSpan.FromSeconds(60));
+        await HaelpMiApp.StarteAgentAsync();
         await Task.Delay(AgentAnlaufzeit);
     }
 

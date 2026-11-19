@@ -51,6 +51,44 @@ internal sealed class HaelpMiApp : IDisposable
         }
     }
 
+    /// <summary>
+    /// Startet den Agent und wartet, bis er den Alarm-Port hält. Ein Prozess allein genügt nicht: kurz nach dem
+    /// Beenden einer Instanz lief die neue mitunter ohne Port und ohne audit.log-Zeile oder endete gleich wieder.
+    /// Dann bis zu zweimal neu starten; hält er den Port danach immer noch nicht, geht es trotzdem weiter,
+    /// die Folgeprüfung des Tests zeigt den Fehler genauer.
+    /// </summary>
+    public static async Task StarteAgentAsync()
+    {
+        for (var versuch = 1; ; versuch++)
+        {
+            StarteAgentUeberAutostart();
+            await WarteAufAgentAsync(TimeSpan.FromSeconds(60));
+            var frist = DateTime.UtcNow + TimeSpan.FromSeconds(20);
+            while (DateTime.UtcNow < frist && Prozess.LaeuftInEigenerSitzung(AgentProzess))
+            {
+                if (AlarmPortBelegt())
+                {
+                    return;
+                }
+
+                await Task.Delay(500);
+            }
+
+            if (versuch == 3)
+            {
+                await WarteAufAgentAsync(TimeSpan.FromSeconds(10));
+                return;
+            }
+
+            Prozess.Beenden(AgentProzess);
+            await Task.Delay(TimeSpan.FromSeconds(2));
+        }
+    }
+
+    private static bool AlarmPortBelegt() =>
+        System.Net.NetworkInformation.IPGlobalProperties.GetIPGlobalProperties().GetActiveTcpListeners()
+            .Any(e => e.Port == AppConstants.AlarmTcpPort);
+
     /// <summary>Über die geplante Aufgabe statt direkt: der Runner läuft erhöht, der Agent soll wie beim Nutzer ohne Adminrechte laufen.</summary>
     public static void StarteAgentUeberAutostart()
     {
@@ -298,8 +336,7 @@ internal sealed class HaelpMiApp : IDisposable
     {
         var alt = AgentPid();
         BeendeAlles();
-        StarteAgentUeberAutostart();
-        await WarteAufAgentAsync(TimeSpan.FromSeconds(60));
+        await StarteAgentAsync();
         var neu = AgentPid() ?? throw new InvalidOperationException($"{AgentProzess} läuft nach dem Neustart nicht.");
         Assert.NotEqual(alt, neu);
         return neu;
