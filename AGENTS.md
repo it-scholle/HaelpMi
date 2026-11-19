@@ -309,6 +309,24 @@ Teil A gilt projektübergreifend und kommt aus der MasterAgents-Blueprint. Teil 
 - Fehlschlag: bis zu 3 Korrekturversuche mit jeweils neuer, begründeter Vermutung, danach stoppen und berichten.
 - Durch Anforderungsänderungen hinfällige Tests vor dem Entfernen mit `[Fact(Skip = "…")]` und Begründung markieren und im PR nennen.
 
+## E2E-Tests
+Suite `tests/HaelpMi.E2E.Tests` (FlaUI auf zwei PVE-VMs, Testfälle T1 ff. mit Trait `Bereich`); Umfang, Auslösung und Laufparameter in `docs/wissen/test-strategie.md`. Unit-Tests bleiben zusätzlich Pflicht, ersetzen E2E in den folgenden Fällen aber nicht.
+- Pflicht:
+  - Neues nutzer- oder netzwerkrelevantes Feature (UI, Alarmweg, Config-Sync, Lizenz, Installer, Geräteverwaltung): mindestens ein neuer T-Fall oder die Erweiterung eines bestehenden, mit Trait `Bereich`.
+  - Bugfix eines im E2E beobachtbaren Fehlers: zuerst ein Regressionstest, der den Fehler reproduziert. Nachweis: Lauf mit `produkt_ref` auf dem Stand vor dem Fix zeigt den Fehler, Lauf auf dem Ticket-Branch nicht (Muster T10).
+  - Größere Änderung (Umbau oder Refactoring in Agent, Core-Netzwerk, Lizenzierung, Installer oder einem UI-Fenster): Lauf der betroffenen Bereiche (Filter) vor `status:review`, auch ohne neuen Test.
+  - Keine Pflicht: reine Doku, Kosmetik ohne Verhaltensänderung, Änderungen nur an Tests oder Entwickler-Werkzeugen. Im Zweifel gilt die Pflicht.
+- Ticket: Jedes Feature- und Bug-Issue hat den Abschnitt „Testfälle (E2E)“ mit den neuen oder angepassten T-Fällen (Nummer, Bereich, erwartetes Ergebnis) oder „nicht E2E-relevant“ mit Begründung (Vorlagen in `.github/ISSUE_TEMPLATE/`).
+- PR: Abschnitt „E2E“ der PR-Vorlage vollständig: Tests ergänzt oder angepasst, Lauf-URL, Ergebnis, Produktbefunde.
+- Session:
+  - Schreibt bzw. passt die Tests im selben Ticket-Branch an wie die Änderung.
+  - Startet den Lauf selbst (Label `e2e` am PR), wertet Log und Artefakte aus und trägt die Lauf-URL in den PR ein.
+  - Fehler im Test selbst (Selektor, Timing, Vorbereitung): bis zu 3 Korrekturrunden wie unter „Test-Stufen“, danach stoppen und berichten.
+  - Fehler im Produkt: Test nicht abschwächen oder überspringen. Gehört der Fehler zum Ticket, dort beheben; sonst als Issue-Vorschlag melden (Teil A „Tickets“) und im PR unter „Produktbefunde“ nennen.
+  - Bricht ein bestehender Test durch eine gewollte Verhaltensänderung, wird er im selben Ticket angepasst und die Änderung im PR begründet.
+- Gate, zusätzlich zu „Test-Stufen“: Patch – Lauf der betroffenen Bereiche, sofern E2E-relevant; Minor – volle Suite (`a,b`, ohne Filter); Major/1.0+ – volle Suite einschließlich aller Regressionsfälle wie T10 (`Bereich=R136`) mindestens mit Standard-Zyklenzahl.
+- Voraussetzung: PVE 2 und die Test-VMs laufen. Kommt kein Lauf zustande (PVE 2 aus, Wecken nicht automatisiert, Suite noch nicht im Ziel-Branch), steht im PR „E2E: ausstehend“ mit Grund und die Session meldet das dem Auftraggeber, statt grün zu behaupten. Gemergt wird erst nach grünem Lauf oder ausdrücklichem Verzicht des Auftraggebers.
+
 ## Logging
 - Audit-Ereignisse: Alarm ausgelöst, empfangen, beantwortet (Geräte-IDs, Zeitpunkte, nie Alarmtext); Autostart-Einrichtung inkl. Fehler; Rollen- und Lizenzänderungen. Klarnamen nur im Alarm-Log (siehe Datenschutz).
 - Aufbewahrung Audit-Log: 1 Jahr (im aktuellen Stand nicht umgesetzt, siehe `docs/STATUS.md`)

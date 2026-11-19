@@ -6,6 +6,13 @@ Closes #
 ## Wie getestet
 <!-- Welche Tests, welche Befehle, was manuell geprüft? -->
 
+## E2E
+<!-- Nach AGENTS.md Teil B „E2E-Tests“. Nicht E2E-relevant: „entfällt“ mit Begründung. -->
+- Tests ergänzt oder angepasst: <!-- T-Nummern und Bereich; angepasste Tests mit Grund -->
+- Lauf: <!-- URL des Laufs (Label `e2e`), Filter, ggf. `produkt_ref`; kein Lauf möglich: „ausstehend“ mit Grund -->
+- Ergebnis: <!-- grün / rot (welche Tests) / ausstehend -->
+- Produktbefunde: <!-- gemeldete Issue-Vorschläge, sonst „keine“ -->
+
 ## Review
 <!-- Womit geprüft (frische Agent-Instanz)? Behobene schwere Funde, übrige Funde, was nicht geprüft wurde. Keine Instanz verfügbar: hier vermerken. -->
 
@@ -24,6 +31,7 @@ Closes #
 ## Checkliste
 <!-- Abhaken oder mit „entfällt“ markieren. -->
 - [ ] Tests ergänzt; bei Bugs zuerst ein Regressionstest
+- [ ] E2E nach AGENTS.md „E2E-Tests“: Tests ergänzt oder angepasst, Lauf ausgewertet (Abschnitt „E2E“ ausgefüllt)
 - [ ] Lint und CI grün (Lint noch nicht eingerichtet: „entfällt“)
 - [ ] Version in `Directory.Build.props` und `installer/HaelpMiCommon.iss.inc` synchron erhöht
 - [ ] Branch auf aktuellem Stand des Ziel-Branches (`release-*`)

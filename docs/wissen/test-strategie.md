@@ -48,6 +48,10 @@ bestehenden Dateien, sondern verbindet sie:
 Vor jedem Release zusätzlich: `docs/handbuch/entwickler-alpha-testplan.md` von Hand durchgehen (das schrumpft mit
 der Zeit, siehe oben).
 
+E2E: Wann neue Tests oder ein Lauf Pflicht sind und welches E2E-Gate je Versionssprung gilt, regelt
+`AGENTS.md` Teil B, Abschnitt "E2E-Tests". Suite und Testfälle: siehe E2E-Suite
+(`tests/HaelpMi.E2E.Tests`, PR #170).
+
 ---
 
 ## A. Identität & Deployment (Installer-Lebenszyklus)
