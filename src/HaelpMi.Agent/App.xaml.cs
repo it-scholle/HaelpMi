@@ -309,8 +309,9 @@ public partial class App : System.Windows.Application
     /// <summary>
     /// Issue #59/#60-Nachtrag "Lizenz sofort verteilen": ein Peer hat in seinem Boot-Call
     /// eine Lizenz mitgeteilt - eigenständig nachprüfen (Signatur + Kundengruppe, siehe
-    /// LicenseImporter.TryAdoptFromPeer) und nur bei echtem Zugewinn (keine eigene Lizenz
-    /// oder die mitgeteilte ist neuer) übernehmen. Betrifft typischerweise ein Gerät, das
+    /// LicenseImporter.TryAdoptFromPeer) und nur bei echtem Zugewinn übernehmen: keine eigene
+    /// Lizenz, oder die mitgeteilte ist gültig und die eigene abgelaufen, oder bei gleichem
+    /// Status ist die mitgeteilte neuer. Betrifft typischerweise ein Gerät, das
     /// bisher als lizenzlos/lizenzüberschritten galt und jetzt durch die frisch importierte
     /// Lizenz des Admins wieder ins Kontingent passt.
     /// </summary>

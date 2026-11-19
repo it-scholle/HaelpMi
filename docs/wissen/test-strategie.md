@@ -166,11 +166,12 @@ Snapshot `clean-base` zurückgesetzt werden. Betrieb der Umgebung: `docs/betrieb
 | T8 | Gerät B im Dashboard deaktivieren: B empfängt nicht (auch nicht bei Direktversand am Filter von A vorbei) und sendet nicht, Toast und Hinweis auf B; nach dem Aktivieren beide Richtungen wieder | A, B | – |
 | T9 | Lizenz in fünf Stufen, Dateiwechsel jeweils mit gestoppten Agents auf beiden Geräten (sonst Übernahme per Gossip). L1 ohne Lizenz: A Erinnerungs-Toast, Banner, Bearbeitung gesperrt, Selbsttest geht; B Sperr-Toast, Hotkey nur mit Hinweis, Direktversand unbestätigt. L2 Import im Dashboard ohne Neustart: Toast weg, Bearbeitung frei, B übernimmt per Gossip (Latenz wird gemessen), Alarm A an B. L3 läuft in 10 Tagen ab: Warnung ohne Sperre, Alarm geht, "Später erinnern" hält über einen Neustart. L4 abgelaufen: Alarme in beide Richtungen (Soft-Expiry), A Toast und Sperre, Hinweis auf B nur protokolliert. L5 gültige Lizenz zurück | A, B | – |
 | T10 | Regression #136, `zyklen` Durchläufe (Default 25) mit eigenem Profil A an B (Schwelle 1, Config-Version 5000). Variante N: "Bin unterwegs" mit Versatz von -400 bis +400 ms zur nächsten Repeat-Welle (Phase aus den ms-Zeitstempeln "alarm received" in `audit.log` von B), sofort schließen, 8 s auf ein zweites Fenster achten. Variante W: A schickt nach dem Schließen dieselbe Session per `AlarmSender` noch einmal (Nachwelle), B beobachtet 8 s. Ergebnis je Zyklus in `out\r136-<Agent-Version>.csv`, Quoten in `r136-zusammenfassung.json`. Rot, wenn W ohne `produkt_ref` ein zweites Fenster zeigt; mit `produkt_ref` nur Messung | A, B | – |
+| T12 | Regression #183: A mit `lizenz.json`, B mit `lizenz-abgelaufen-neuer.json` (später ausgestellt, abgelaufen); B startet nach A neu, damit Boot-Call und Antwort die Lizenzen austauschen. A behält die gültige Lizenz (kein "Lizenz von Peer" im `audit.log`), B übernimmt sie binnen 60 s. Danach beide wieder `lizenz.json` | A, B | – |
 
-T4 bis T10 (Trait `Teil=ZweiGeraete`) laufen nur, wenn A und B beteiligt sind. Die beiden Geräte
+T4 bis T12 (Trait `Teil=ZweiGeraete`) laufen nur, wenn A und B beteiligt sind. Die beiden Geräte
 stimmen sich über Markendateien ab, die `ci/e2e/rendezvous-relay.sh` spiegelt. Trait `Bereich`:
 `Haupt` (T6 bis T9) setzt Installation, Discovery und Alarm voraus (`Basis`: T1, T4, T5), ein
-Teillauf filtert deshalb z. B. auf `Bereich=Basis|Bereich=Haupt`. `R136` (T10) braucht nur `Basis`.
+Teillauf filtert deshalb z. B. auf `Bereich=Basis|Bereich=Haupt`. `R136` (T10) und `R183` (T12) brauchen nur `Basis`.
 
 Auslöser: Label `e2e` an einem PR aus diesem Repo (nicht aus Forks) oder `workflow_dispatch`
 (Input `vms`: `a`, `b` oder `a,b`). Kein Zeitplan (Entscheidung E6 in #163: PVE 2 läuft nicht
@@ -205,8 +206,8 @@ Bekannte Umgehungen in der Testvorbereitung (keine Produktkorrektur):
   `MessageValidation.IsPlausible` verwirft; ohne gültige Lizenz hat ein User-Gerät Kontingent 0.
   Der Workflow erzeugt deshalb pro Lauf Gruppe, Schlüsselpaar und signierte Lizenz wie der
   Install-Creator für einen Test-Installer. Der private Schlüssel existiert nur im Speicher des
-  Build-Jobs. Mit demselben Schlüssel entstehen für T9 `lizenz-bald.json` (läuft in 10 Tagen ab) und
-  `lizenz-abgelaufen.json`; `lizenz.json` gilt 365 Tage, weil ab 30 Tagen Restlaufzeit schon der
+  Build-Jobs. Mit demselben Schlüssel entstehen für T9 `lizenz-bald.json` (läuft in 10 Tagen ab),
+  `lizenz-abgelaufen.json` und für T12 `lizenz-abgelaufen-neuer.json`; `lizenz.json` gilt 365 Tage, weil ab 30 Tagen Restlaufzeit schon der
   Erinnerungs-Toast erscheint.
 - **Override von B vor T9:** Das Wieder-Aktivieren in T8 setzt `ForceEnabled` statt `None`, B wäre
   damit auch ohne Lizenz aktiv. T9 setzt den Override bei gestoppten Agents auf beiden Geräten auf
