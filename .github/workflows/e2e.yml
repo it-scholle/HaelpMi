@@ -206,7 +206,7 @@ jobs:
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           New-Item -ItemType Directory -Force -Path e2e-installer/user | Out-Null
           Copy-Item "$q\installer\UserInstallerPayload\HaelpMi-User-Setup.exe" e2e-installer/user/
-          foreach ($datei in 'lizenz.json', 'lizenz-bald.json', 'lizenz-abgelaufen.json') {
+          foreach ($datei in 'lizenz.json', 'lizenz-bald.json', 'lizenz-abgelaufen.json', 'lizenz-abgelaufen-neuer.json') {
               Copy-Item "e2e-installer/$datei" e2e-installer/admin/
               Copy-Item "e2e-installer/$datei" e2e-installer/user/
           }
