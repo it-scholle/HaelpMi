@@ -135,8 +135,6 @@ public partial class GeraetATests
             Assert.True(Element(banner, "AckedText").Name == "Empfangen: 1 von 1", AckBefund(Element(banner, "AckedText").Name));
         });
 
-    // Der Zähler zeigt nur das Ergebnis der letzten Senderunde (RepeatingAlarmSession._lastAckedCount); kommt die
-    // Empfangsbestätigung nicht binnen AlarmAckTimeout, bleibt er auf 0, obwohl B schon "Bin unterwegs" gemeldet hat.
     internal static string AckBefund(string angezeigt) =>
         $"Produktbefund: das Sender-Banner zeigt '{angezeigt}' statt 'Empfangen: 1 von 1', obwohl B den Alarm empfangen " +
         "und 'Bin unterwegs' gemeldet hat (Empfangsbestätigung nicht binnen AlarmAckTimeout angekommen, siehe audit.log beider Geräte).";

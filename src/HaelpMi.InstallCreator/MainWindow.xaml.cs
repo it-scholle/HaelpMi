@@ -534,7 +534,7 @@ public partial class MainWindow : Window
     // Sucht statt eines fest angenommenen Dateinamens die zuletzt geschriebene .exe im
     // Output-Ordner - robust gegenüber der je nach Test-Bezeichnung wechselnden
     // Ausgabedatei (siehe /F-Override oben), ohne die ISCC-Versionsnummer selbst kennen
-    // zu müssen (die steckt nur in der .iss, nicht hier im C#-Code).
+    // zu müssen (die liest ISPP selbst aus Directory.Build.props).
     private string? _lastBuiltInstallerPath;
 
     private void ShowSuccessToast(string outputDir)

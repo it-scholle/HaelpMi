@@ -236,6 +236,10 @@ Ohne `/DCustomerGroupId=...`/`/DIsTestInstaller=...` fällt das auf eine Nullen-
 `IsTestInstaller=true` zurück - taugt nur zum lokalen Testen, nie für eine echte
 Kunden-Auslieferung (siehe Kommentare in `HälpMi\installer\HaelpMiCommon.iss.inc`).
 
+Die Versionsnummer liest ISCC selbst aus `HälpMi\Directory.Build.props` (über
+`installer\HaelpMiVersion.iss.inc`). Dafür muss der Ordner `installer` wie im Repo direkt
+neben `Directory.Build.props` liegen; eine Versionsangabe auf der Kommandozeile ist nicht nötig.
+
 ## Deinstallation
 
 Über "Apps & Features" - entfernt bewusst *alles*, nicht nur den Programmordner: den
