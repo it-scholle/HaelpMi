@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using HaelpMi.Core.Audio;
 using HaelpMi.Core.Interop;
 using HaelpMi.Core.Licensing;
@@ -34,7 +33,7 @@ public sealed class AlarmFlowCoordinator
     private readonly DeviceStore _deviceStore = new();
     private readonly MultiDeviceAlarmPlayer _audioPlayer;
     private readonly LicenseLimitGuard _licenseLimitGuard;
-    private readonly ConcurrentDictionary<Guid, AlarmPopupWindow> _openPopups = new();
+    private readonly ReceivedAlarmSessions<AlarmPopupWindow> _receivedSessions = new(AppConstants.AlarmAutoCloseAfterLastSignal);
 
     public AlarmFlowCoordinator(
         Func<LiveIdentity> identityProvider,
@@ -69,37 +68,53 @@ public sealed class AlarmFlowCoordinator
     {
         var request = args.Request;
 
-        // Bugfix 25.08.2026 (Issue #9-Nachtrag): bei Fast User Switching bekommt JEDE
-        // angemeldete Sitzung ein empfangenes Alarmsignal (siehe AlarmChannel), auch eine
-        // gerade weggeschaltete. Ein NEUES erzwungenes Popup dort kann niemand sehen oder
+        // Bei Fast User Switching bekommt JEDE angemeldete Sitzung ein empfangenes
+        // Alarmsignal (siehe AlarmChannel), auch eine gerade weggeschaltete. Ein NEUES erzwungenes Popup dort kann niemand sehen oder
         // wegklicken - lieber gar nicht erst zeigen, als eine Zustellung vortäuschen, die
         // niemand wahrnimmt. Der Ack ans sendende Gerät ist davon unabhängig (Geräte-Ebene,
         // siehe AlarmTcpListener) - nur die lokale Anzeige wird hier unterdrückt. Ein schon
         // offenes Popup (aus der Zeit, als diese Sitzung noch aktiv war) wird trotzdem
-        // weiter aktualisiert, siehe unten - das erzeugt kein neues Popup.
-        if (!_openPopups.ContainsKey(request.AlarmSessionId) && !ActiveSessionDetector.IsCurrentSessionActive())
+        // weiter aktualisiert - das erzeugt kein neues Popup.
+        var sessionVisible = ActiveSessionDetector.IsCurrentSessionActive();
+        IncomingAlarmAction? action = null;
+
+        // Schneller Ausstieg ohne UI-Thread: hängt der Dispatcher, liefe das Invoke unten ins
+        // Zeitlimit und eine Welle einer längst abgeschlossenen Session löste trotzdem den Ton
+        // aus. Maßgeblich bleibt die Entscheidung im Dispatcher.
+        if (_receivedSessions.IsCompleted(request.AlarmSessionId))
         {
-            _auditLog.Append($"alarm popup unterdrückt (Sitzung nicht aktiv sichtbar): alarmSessionId={request.AlarmSessionId}");
+            _auditLog.Append($"alarm-Welle für bereits abgeschlossene Session ignoriert: alarmSessionId={request.AlarmSessionId}");
             return;
         }
 
         var settings = _settingsProvider();
         var soundOption = IncomingSoundCatalog.Resolve(settings.IncomingSoundId);
 
-        // Issue #92: Timeout statt unbegrenztem Invoke - direkt nach Logon ist der
-        // Dispatcher (siehe AlarmDispatcherReadyTimeout) unter Umständen noch nicht am
-        // Pumpen, sonst würde dieser Aufruf den Empfangsthread bis zum Ende von OnStartup
-        // blockieren und der Ack unten käme beim Sender nie rechtzeitig an. Das Popup wird
-        // trotzdem gezeigt, sobald der Dispatcher tatsächlich läuft - läuft er schon
-        // (Normalfall), verhält sich das wie das bisherige Invoke.
+        // Timeout statt unbegrenztem Invoke - direkt nach Logon ist der Dispatcher (siehe
+        // AlarmDispatcherReadyTimeout) unter Umständen noch nicht am Pumpen, sonst würde dieser
+        // Aufruf den Empfangsthread bis zum Ende von OnStartup blockieren und der Ack käme beim
+        // Sender nie rechtzeitig an. Achtung: Startet die Aktion nicht innerhalb des Zeitlimits,
+        // verwirft WPF sie - diese Welle zeigt dann kein Fenster, nur den Ton; erst die nächste
+        // Repeat-Welle öffnet es. Läuft der Dispatcher (Normalfall), wie ein normales Invoke.
         System.Windows.Application.Current.Dispatcher.Invoke(() =>
         {
-            if (_openPopups.TryGetValue(request.AlarmSessionId, out var existing))
+            // Entscheidung erst hier auf dem UI-Thread: ein gerade laufendes Schließen ist dann
+            // vollständig verbucht, und eine Welle derselben Session öffnet kein zweites Fenster.
+            action = _receivedSessions.Decide(request.AlarmSessionId, sessionVisible, out var existing);
+            switch (action)
             {
-                // Same alarm, still on screen - just refresh it (FR-52), don't spam a
-                // second window for every 5-second repeat.
-                existing.NotifyNewSignalReceived(request.SentAtUtc);
-                return;
+                case IncomingAlarmAction.IgnoreCompletedSession:
+                    // Der Ack an den Sender (AlarmTcpListener) läuft unabhängig von dieser Methode.
+                    _auditLog.Append($"alarm-Welle für bereits abgeschlossene Session ignoriert: alarmSessionId={request.AlarmSessionId}");
+                    return;
+                case IncomingAlarmAction.SuppressInactiveSession:
+                    _auditLog.Append($"alarm popup unterdrückt (Sitzung nicht aktiv sichtbar): alarmSessionId={request.AlarmSessionId}");
+                    return;
+                case IncomingAlarmAction.RefreshOpenPopup:
+                    // Same alarm, still on screen - just refresh it (FR-52), don't spam a
+                    // second window for every 5-second repeat.
+                    existing!.NotifyNewSignalReceived(request.SentAtUtc);
+                    return;
             }
 
             var popup = new AlarmPopupWindow(
@@ -115,11 +130,16 @@ public sealed class AlarmFlowCoordinator
                 request.SentAtUtc);
 
             popup.OnMyWayRequested += (_, _) => _ = ReportOnMyWayAsync(request, args);
-            popup.Closed += (_, _) => _openPopups.TryRemove(request.AlarmSessionId, out _);
+            popup.Closed += (_, _) => _receivedSessions.PopupClosed(request.AlarmSessionId, popup.IsCloseAllowed);
 
-            _openPopups[request.AlarmSessionId] = popup;
+            _receivedSessions.PopupShown(request.AlarmSessionId, popup);
             popup.Show();
         }, AppConstants.AlarmDispatcherReadyTimeout);
+
+        if (action is IncomingAlarmAction.IgnoreCompletedSession or IncomingAlarmAction.SuppressInactiveSession)
+        {
+            return;
+        }
 
         _ = _audioPlayer.PlayOnAllActiveDevicesAsync(soundOption);
     }
@@ -127,7 +147,8 @@ public sealed class AlarmFlowCoordinator
     /// <summary>Every aggregated status update from the sender (FR-51): keeps a still-open receiver popup's threshold gate current.</summary>
     private void HandleStatusRelay(AlarmStatusRelayMessage relay)
     {
-        if (!_openPopups.TryGetValue(relay.AlarmSessionId, out var popup))
+        var popup = _receivedSessions.StatusRelayReceived(relay.AlarmSessionId, relay.SenderStillSending);
+        if (popup is null)
         {
             return;
         }
@@ -135,7 +156,7 @@ public sealed class AlarmFlowCoordinator
         // Issue #92: gleicher Grund/gleiche Frist wie in HandleIncomingAlarmRequest oben -
         // ein Status-Relay kann ebenso in das Startup-Fenster vor Dispatcher.Run() fallen.
         System.Windows.Application.Current.Dispatcher.Invoke(
-            () => popup.UpdateOnTheWayCount(relay.OnTheWayUserNames.Count),
+            () => popup.UpdateOnTheWayCount(relay.OnTheWayUserNames.Count, relay.SenderStillSending),
             AppConstants.AlarmDispatcherReadyTimeout);
     }
 

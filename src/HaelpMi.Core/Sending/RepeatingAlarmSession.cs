@@ -143,8 +143,18 @@ public sealed class RepeatingAlarmSession : IDisposable
                 ? AlarmStopReason.ThresholdReached
                 : AlarmStopReason.MaxDuration;
 
-        await RaiseAndRelayAsync(stillSending: false);
+        var finalRelay = await RaiseAndRelayAsync(stillSending: false);
         Finished?.Invoke(this, EventArgs.Empty);
+
+        // Issue #136 Fixvorschlag 5: zusätzliche Exemplare dieses letzten "fertig"-Relays,
+        // fire-and-forget - siehe AppConstants.AlarmFinalRelayBurstCount. Bewusst NICHT
+        // awaited und nach Finished, nicht davor: ein Abbrechen soll weiterhin sofort beim
+        // Sender verschwinden (09.08.2026), die zusätzliche Zustellsicherheit ist reine
+        // Netzwerk-Härtung ohne Einfluss auf die lokale Sender-Statusanzeige.
+        _ = RelayBurstSender.SendRemainingAsync(
+            () => _feedbackChannel.RelayStatusAsync(Targets, finalRelay),
+            AppConstants.AlarmFinalRelayBurstCount,
+            AppConstants.AlarmFinalRelayBurstSpacing);
 
         // Weiterhin bis zu AlarmAutoCloseAfterLastSignal (dieselbe 1-Minute-Frist, nach
         // der sich ein Empfänger-Popup ohnehin von selbst schließt) auf OnMyWayReceived
@@ -207,7 +217,7 @@ public sealed class RepeatingAlarmSession : IDisposable
         }
     }
 
-    private async Task RaiseAndRelayAsync(bool stillSending)
+    private async Task<AlarmStatusRelayMessage> RaiseAndRelayAsync(bool stillSending)
     {
         var status = new AlarmSessionStatus
         {
@@ -222,6 +232,7 @@ public sealed class RepeatingAlarmSession : IDisposable
             _ownIdentity.CustomerGroupId, Profile.Id, AlarmSessionId,
             Targets.Count, _lastAckedCount, status.OnTheWayNames, stillSending, DateTimeOffset.UtcNow);
         await _feedbackChannel.RelayStatusAsync(Targets, relay);
+        return relay;
     }
 
     public void Dispose()

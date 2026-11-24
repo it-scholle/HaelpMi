@@ -3,6 +3,7 @@ using System.Windows.Interop;
 using System.Windows.Threading;
 using HaelpMi.Core.Interop;
 using HaelpMi.Core.Models;
+using HaelpMi.Core.Sending;
 
 namespace HaelpMi.UI.Windows;
 
@@ -27,14 +28,16 @@ public partial class AlarmPopupWindow : Window
     private static int _openCount;
 
     private readonly IDisposable _screensaverGuard;
-    private readonly int _responseThreshold;
+    private readonly AlarmCloseGate _closeGate;
     private readonly DispatcherTimer _autoCloseTimer;
     private DateTimeOffset _lastSignalUtc;
-    private bool _thresholdReached;
     private bool _autoClosing;
 
     public Guid AlarmProfileId { get; }
     public Guid AlarmSessionId { get; }
+
+    /// <summary>Siehe <see cref="AlarmCloseGate.IsCloseAllowed"/>; false auch nach einem Auto-Close ohne ausreichende Rückmeldung.</summary>
+    public bool IsCloseAllowed => _closeGate.IsCloseAllowed;
 
     /// <summary>Raised when "Bin unterwegs" is clicked - the hosting coordinator sends the actual network message (FR-51).</summary>
     public event EventHandler? OnMyWayRequested;
@@ -55,7 +58,7 @@ public partial class AlarmPopupWindow : Window
 
         AlarmProfileId = alarmProfileId;
         AlarmSessionId = alarmSessionId;
-        _responseThreshold = Math.Max(1, responseThreshold);
+        _closeGate = new AlarmCloseGate(responseThreshold);
         _lastSignalUtc = sentAtUtc;
 
         RoomText.Text = string.IsNullOrWhiteSpace(senderRoomNumber) ? senderRoomName : $"{senderRoomName} ({senderRoomNumber})";
@@ -64,7 +67,7 @@ public partial class AlarmPopupWindow : Window
         var remoteSuffix = senderIsRemoteSession ? " - (Remote)" : string.Empty;
         SenderSubText.Text = $"Ausgelöst von: {senderComputerName} - {senderUser}{remoteSuffix}";
         TimestampText.Text = sentAtUtc.ToLocalTime().ToString("HH:mm:ss");
-        UpdateThresholdStatus(0);
+        UpdateThresholdStatus();
 
         var offset = (System.Threading.Interlocked.Increment(ref _openCount) - 1) % 6 * 28;
         Loaded += (_, _) =>
@@ -104,20 +107,19 @@ public partial class AlarmPopupWindow : Window
         }
     }
 
-    /// <summary>Call whenever a new <see cref="Networking.Protocol.AlarmStatusRelayMessage"/> arrives for this session (FR-47/FR-51).</summary>
-    public void UpdateOnTheWayCount(int onTheWayCount)
+    /// <summary>Call whenever a new <see cref="Core.Networking.Protocol.AlarmStatusRelayMessage"/> arrives for this session (FR-47/FR-51), see <see cref="AlarmCloseGate"/>.</summary>
+    public void UpdateOnTheWayCount(int onTheWayCount, bool senderStillSending)
     {
-        _thresholdReached = onTheWayCount >= _responseThreshold;
-        CloseButton.IsEnabled = _thresholdReached;
-        UpdateThresholdStatus(onTheWayCount);
+        _closeGate.ApplyStatusRelay(onTheWayCount, senderStillSending);
+        CloseButton.IsEnabled = _closeGate.IsCloseAllowed;
+        UpdateThresholdStatus();
     }
 
-    private void UpdateThresholdStatus(int onTheWayCount)
+    private void UpdateThresholdStatus()
     {
-        var remaining = Math.Max(0, _responseThreshold - onTheWayCount);
-        ThresholdStatusText.Text = remaining == 0
-            ? $"{onTheWayCount} Person(en) sind unterwegs - Fenster kann jetzt geschlossen werden."
-            : $"{onTheWayCount} Person(en) sind unterwegs - noch {remaining} bis das Fenster schließbar wird.";
+        ThresholdStatusText.Text = _closeGate.IsCloseAllowed
+            ? $"{_closeGate.OnTheWayCount} Person(en) sind unterwegs - Fenster kann jetzt geschlossen werden."
+            : $"{_closeGate.OnTheWayCount} Person(en) sind unterwegs - noch {_closeGate.MissingResponses} bis das Fenster schließbar wird.";
     }
 
     private void AutoCloseTimer_Tick(object? sender, EventArgs e)
@@ -153,7 +155,7 @@ public partial class AlarmPopupWindow : Window
 
     private void OnClosing(object? sender, System.ComponentModel.CancelEventArgs e)
     {
-        if (!_thresholdReached && !_autoClosing)
+        if (!_closeGate.IsCloseAllowed && !_autoClosing)
         {
             e.Cancel = true; // FR-51: "nicht über normale Fenstersteuerung deaktivierbar", erst ab Schwellwert oder Auto-Close
         }
