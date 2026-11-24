@@ -49,7 +49,7 @@ vm_ip() { # <vmid>
 # --- PVE-API ------------------------------------------------------------------------------
 
 # Header per Prozess-Substitution, damit das Token weder in der Prozessliste noch im Log steht.
-# -k: PVE 2 hat nur sein selbstsigniertes Zertifikat, eine eigene CA gibt es im Heimnetz nicht.
+# -k: der Test-Host hat nur sein selbstsigniertes Zertifikat, eine eigene CA gibt es im Heimnetz nicht.
 pve_get() { # <pfad> <ausgabedatei> -> gibt HTTP-Status aus
     curl -ksS --max-time 15 -o "$2" -w '%{http_code}' \
         -H @<(printf 'Authorization: %s\n' "$(cat "$CI_ETC/pve-token")") \

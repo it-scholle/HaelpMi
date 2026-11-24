@@ -5,15 +5,16 @@
 #
 #   wachhalten.sh [--trocken]
 #
-# VMs aus WACHHALTEN_VMIDS in e2e.conf, Default "9101 9102". Ist mqtt.conf ausgefüllt, hält
-# eine retained MQTT-Sperre PVE 2 während des Laufs wach.
-# Exit 0 auch wenn PVE 2 nicht erreichbar ist; Exit 1, wenn ein Runner nicht online kam.
+# VMs aus WACHHALTEN_VMIDS in e2e.conf, Default "9101 9102 9103". Ist mqtt.conf ausgefüllt, hält
+# eine retained MQTT-Sperre (Topic MQTT_TOPIC, Default siehe unten) den Test-Host während des
+# Laufs wach.
+# Exit 0 auch wenn der Test-Host nicht erreichbar ist; Exit 1, wenn ein Runner nicht online kam.
 set -euo pipefail
 DIR="$(dirname "$(readlink -f "$0")")"
 # shellcheck source=ci/e2e/pve-lib.sh
 . "$DIR/pve-lib.sh"
 
-MQTT_TOPIC=homelab/desktop-pve/lock/haelpmi-e2e
+MQTT_TOPIC_STANDARD=haelpmi-e2e/lock
 SPERRE_MINUTEN=45
 
 trocken_arg=()
@@ -27,12 +28,14 @@ while [[ $# -gt 0 ]]; do
 done
 
 ci_lade_conf
-read -ra vmids <<< "${WACHHALTEN_VMIDS:-9101 9102}"
+read -ra vmids <<< "${WACHHALTEN_VMIDS:-9101 9102 9103}"
 
 MQTT_HOST="$(conf_wert "$CI_ETC/mqtt.conf" MQTT_HOST)"
 MQTT_PORT="$(conf_wert "$CI_ETC/mqtt.conf" MQTT_PORT)"
 MQTT_USER="$(conf_wert "$CI_ETC/mqtt.conf" MQTT_USER)"
 MQTT_PASS="$(conf_wert "$CI_ETC/mqtt.conf" MQTT_PASS)"
+MQTT_TOPIC="$(conf_wert "$CI_ETC/mqtt.conf" MQTT_TOPIC)"
+MQTT_TOPIC="${MQTT_TOPIC:-$MQTT_TOPIC_STANDARD}"
 
 mqtt_aktiv() {
     [[ -n "$MQTT_HOST" && -n "$MQTT_USER" && -n "$MQTT_PASS" ]]
@@ -87,7 +90,7 @@ if marker_juenger_als 180; then
 fi
 
 if ! pve_erreichbar 300; then
-    log "PVE 2 nach 5 min nicht erreichbar, Wachhalten übersprungen"
+    log "Test-Host nach 5 min nicht erreichbar, Wachhalten übersprungen"
     exit 0
 fi
 

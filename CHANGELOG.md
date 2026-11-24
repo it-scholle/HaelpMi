@@ -6,7 +6,9 @@ Details stehen in der Git-Historie. Der eingefrorene Stand `legacy/main-0.39.x` 
 
 ## [Unveröffentlicht]
 ### Neu
+- E2E: drittes Testgerät C (VM 9103) mit den Testfällen T11 (Discovery mit drei Geräten) und T12 (Alarm an zwei Empfänger mit Schwelle 2); Workflow, Relay und Skripte arbeiten mit beliebig vielen Test-VMs aus `ci/e2e/geraete.json`, die Umgebung läuft auf pve-nzxt (#202)
 ### Verbessert
+- Branch-Modell auf `develop`/`main` mit Stabilisierungs-Branch `release-X.Y` umgestellt, Conventional Commits, Hook `pre-push` (#194)
 - Struktur an die MasterAgents-Vorlage angeglichen: Doku-Struktur (`docs/`), Arbeitsregeln in `AGENTS.md`, Entscheidungen als ADR, Design-System-Verzeichnis `design/` (#151)
 - Einheitliche Linien-Icons (Lucide) statt Schriftzeichen und Einzelzeichnungen; Icon-Buttons haben eine Textalternative für Screenreader (#151)
 - Farben und Logo liegen nur noch einmal zentral vor (#151)

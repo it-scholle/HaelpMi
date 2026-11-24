@@ -1,0 +1,5 @@
+[
+  { "geraet": "a", "name": "A", "vmid": 9101, "rolle": "admin", "raumnummer": "101" },
+  { "geraet": "b", "name": "B", "vmid": 9102, "rolle": "user", "raumnummer": "102" },
+  { "geraet": "c", "name": "C", "vmid": 9103, "rolle": "user", "raumnummer": "103" }
+]
