@@ -100,3 +100,9 @@ Bei Fehlern:
 Pflege der Vorlage: Die Test-VMs sind Klone einer Vorlage (eingerichtet mit
 `ci/e2e/vorlage-einrichten.ps1`). Eine neue Vorlage heißt: alle Klone neu anlegen, Runner neu
 registrieren und den Snapshot `clean-base` neu setzen.
+
+Die Vorlage braucht ein .NET-10-SDK x64 (bringt die Windows Desktop Runtime 10 mit), weil die
+Test-Jobs `dotnet test` mit der `net10.0-windows`-Test-DLL auf der VM ausführen. Das Skript
+`vorlage-einrichten.ps1` installiert es nicht; von Hand als Admin:
+`winget install --id Microsoft.DotNet.SDK.10 --exact --silent --accept-package-agreements --accept-source-agreements`.
+Prüfen: `dotnet --list-runtimes` zeigt `Microsoft.WindowsDesktop.App 10.0.x`.

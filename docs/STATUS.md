@@ -1,6 +1,6 @@
 # Status
 
-Stand: 2026-11-18
+Stand: 2026-11-24
 
 ## Aktueller Stand
 
