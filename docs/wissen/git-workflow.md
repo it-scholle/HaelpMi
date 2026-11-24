@@ -22,7 +22,10 @@ Ticket-PRs.
 2. Branch aus dem Issue: `gh issue develop <nr> --base develop --name <präfix>/<nr>-<kurz>`,
    dann eigener Worktree (`EnterWorktree` oder `git worktree add`).
 3. Arbeiten und committen nach Conventional Commits: `typ: Beschreibung (#N)`
-   (`feat`, `fix`, `docs`, `chore`, `refactor`, `test`). Keine Versionsnummer im Commit.
+   (`feat`, `fix`, `docs`, `chore`, `refactor`, `test`). Die Version setzt erst der Merge
+   (Schritt 7). Signierte Commits sind nur auf `develop` und `main` Pflicht; den Squash-Merge
+   signiert GitHub. Auf Ticket-Branches meldet GitHub beim Push „Commits must have verified
+   signatures“, nimmt den Push aber an, bis das Ruleset angepasst ist.
    Berührt ein Commit `src/HaelpMi.InstallCreator/`, `src/HaelpMi.UpdateSigner/` oder
    `Directory.Build.props`, baut der Hook den Install-Creator neu
    (`docs/wissen/installcreator-rebuild-hook.md`).
@@ -31,8 +34,12 @@ Ticket-PRs.
    kein Force-Push.
 6. Tests ausführen (`AGENTS.md`, „Tests“), PR nach `develop` mit `Closes #N` öffnen,
    `bash scripts/finish-issue.sh <nr>`; auf OK des Auftraggebers warten.
-7. Nach dem OK (`AGENTS.md`, „Merge durch den Agent“): `develop` erneut einmergen, CI grün,
-   Squash-Merge (`gh pr merge <pr> --squash --delete-branch`). Der Merge schließt das Issue.
+7. Nach dem OK (`AGENTS.md`, „Merge durch den Agent“): `develop` erneut einmergen, nächste
+   freie PATCH-Version auf `develop` in `Directory.Build.props` und
+   `installer/HaelpMiCommon.iss.inc` setzen (bis #168), PR-Titel `vX.Y.Z: Beschreibung (#N)`,
+   CI grün, Squash-Merge mit diesem Titel (`gh pr merge <pr> --squash --subject "<Titel>"`),
+   danach `git tag vX.Y.Z <merge-commit> && git push origin vX.Y.Z` und den Branch lokal und
+   remote löschen. Der Merge schließt das Issue.
 8. Aufräumen: `git worktree remove <pfad>`, `git branch -D <branch>`.
 
 ## Release
@@ -41,10 +48,10 @@ Ticket-PRs.
    übernehmen (PR `develop` → `release-X.Y`).
 2. Auf `release-X.Y` nur noch Fehlerbehebungen: Ticket-Branch von `release-X.Y`, PR dorthin.
 3. Repo-Owner testet `release-X.Y` und gibt frei.
-4. Version aus den Commits seit dem letzten Release ableiten, in `Directory.Build.props` und
-   `installer/HaelpMiCommon.iss.inc` setzen (bis #168), `CHANGELOG.md` ergänzen.
-5. PR `release-X.Y` → `main`, Merge oder Fast-Forward (nie Squash), Tag `vX.Y.Z`,
-   GitHub-Release mit den CHANGELOG-Notizen.
+4. Release-Version aus den Commits seit dem letzten Release ableiten, in `Directory.Build.props`
+   und `installer/HaelpMiCommon.iss.inc` setzen (bis #168), `CHANGELOG.md` ergänzen.
+5. PR `release-X.Y` → `main`, Merge oder Fast-Forward (nie Squash). Den Release-Tag und das
+   GitHub-Release mit den CHANGELOG-Notizen setzt der Repo-Owner.
 6. `release-X.Y` in `develop` mergen. Nächster Zyklus: neuer Milestone und Branch
    `release-X.Y+1` vom aktuellen `develop`.
 
@@ -81,3 +88,5 @@ Offene Fragen: ... (oder "keine")
 - 24.08.2026 – 19.11.2026: rotierende Release-Branches mit Versionsnummer pro Ticket-Commit
   (ADR 0004), letzter Zyklus `release-1.0-MVP` bis v0.47.11.
 - 19.11.2026: Umstellung auf `develop`/`main` mit Stabilisierungs-Branch `release-X.Y` (ADR 0010, #194).
+- 24.11.2026: PATCH-Version und Tag pro Merge nach `develop` bleiben; Signaturpflicht nur auf
+  `develop`/`main` (Repo-Owner, #204 Punkte 11 und 12).

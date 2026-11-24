@@ -33,3 +33,5 @@ Teil B streichen.
 
 ## Umsetzung
 2026-11-19 (#194): `develop` und `release-2.0` vom Endstand von `release-1.0-MVP` (v0.47.11) angelegt, `develop` ist GitHub-Default, offene PRs umgehängt, Milestone `release-1.0-MVP` geschlossen. Abweichend von Möglichkeit 1 bleibt ein Stabilisierungs-Branch `release-X.Y` zwischen `develop` und `main` (AGENTS.md Teil B, „Release-Stabilisierung über `release-X.Y`“). `pre-push` aus der Vorlage übernommen.
+
+Abweichend von der Vorlage (Repo-Owner, 2026-11-24, #204 Punkt 12): Jeder Squash-Merge nach `develop` erhöht weiter die PATCH-Version und bekommt einen Tag `vX.Y.Z`, damit jeder Zwischenstand im Install-Creator und im E2E eindeutig erkennbar bleibt. Den Release-Tag setzt der Repo-Owner.

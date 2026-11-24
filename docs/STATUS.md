@@ -44,7 +44,8 @@ Bei #151 aufgefallen, nicht Teil des Tickets, jeweils als eigenes Issue angelegt
   `tests/HaelpMi.InstallCreator.Tests` fehlt dort. (#159)
 - Repo-Ruleset „Block-all“: GitHub meldet beim Push „Commits must have verified signatures“
   und „Changes must be made through a pull request“, nimmt den Push per Bypass aber an.
-  Commits auf `release-1.0-MVP` sind unsigniert. (#160)
+  Commits auf `release-1.0-MVP` sind unsigniert. Entscheidung (#204, Punkt 11): Signaturpflicht
+  nur auf `develop`/`main`; das Ruleset passt der Repo-Owner an. (#160)
 - `.ico` ohne 20/24/40/64-px-Stufen (siehe `design/KATALOG.md`). (#161)
 - Linter/Formatierer (`.editorconfig` + `dotnet format`) einrichten: eigenes Ticket, weil im
   Bestandscode viele Funde zu erwarten sind. (#162)
