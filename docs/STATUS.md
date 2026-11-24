@@ -59,5 +59,4 @@ Bei #151 aufgefallen, nicht Teil des Tickets, jeweils als eigenes Issue angelegt
   Branches außer `develop`, das Ruleset für `develop` ebenfalls. Teil A und `release-X.Y` brauchen
   aber Merge-Commits (`release-X.Y` bzw. `main` → `develop`, `release-X.Y` → `main`) und einen
   Fast-Forward `develop` → `release-X.Y`, den ein GitHub-PR nicht kann. Vor dem ersten Release klären.
-- Versionsnummer nur noch an einer Stelle: ISPP liest `Directory.Build.props` (eigenes Ticket).
 - Tickets im Milestone `v1.0`, danach `Regelentwicklung`; zurückgestellte Themen in `release-2.0-…` bzw. `Backlog`.

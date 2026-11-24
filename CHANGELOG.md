@@ -12,6 +12,7 @@ Details stehen in der Git-Historie. Der eingefrorene Stand `legacy/main-0.39.x` 
 - Struktur an die MasterAgents-Vorlage angeglichen: Doku-Struktur (`docs/`), Arbeitsregeln in `AGENTS.md`, Entscheidungen als ADR, Design-System-Verzeichnis `design/` (#151)
 - Einheitliche Linien-Icons (Lucide) statt Schriftzeichen und Einzelzeichnungen; Icon-Buttons haben eine Textalternative für Screenreader (#151)
 - Farben und Logo liegen nur noch einmal zentral vor (#151)
+- Versionsnummer steht nur noch in `Directory.Build.props`; der Installer liest sie beim Bauen von dort (#168)
 ### Behoben
 - Eine gültige Lizenz wird nicht mehr durch eine später ausgestellte, aber abgelaufene Lizenz eines anderen Geräts ersetzt (#183)
 
