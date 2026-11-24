@@ -4,14 +4,14 @@ using HaelpMi.Core.Storage;
 
 namespace HaelpMi.E2E.Tests;
 
-/// <summary>Lizenzdateien und -zustand für T9 und T12. Die Varianten erzeugt ci/e2e/testlizenz-erzeugen.ps1 neben lizenz.json.</summary>
+/// <summary>Lizenzdateien und -zustand für T9 und T14. Die Varianten erzeugt ci/e2e/testlizenz-erzeugen.ps1 neben lizenz.json.</summary>
 internal static class Lizenz
 {
     public const string Gueltig = "lizenz.json";
     public const string Bald = "lizenz-bald.json";
     public const string Abgelaufen = "lizenz-abgelaufen.json";
 
-    /// <summary>Später ausgestellt als <see cref="Gueltig"/>, aber schon abgelaufen (T12).</summary>
+    /// <summary>Später ausgestellt als <see cref="Gueltig"/>, aber schon abgelaufen (T14).</summary>
     public const string AbgelaufenNeuer = "lizenz-abgelaufen-neuer.json";
 
     public static string Quelle(string datei)
@@ -56,7 +56,7 @@ internal static class Lizenz
     /// </summary>
     /// <param name="stufe">Teil des Markennamens, z. B. "l3".</param>
     /// <param name="geraet">"a" oder "b".</param>
-    /// <param name="test">Markenpräfix des aufrufenden Tests, z. B. "t12".</param>
+    /// <param name="test">Markenpräfix des aufrufenden Tests, z. B. "t14".</param>
     public static async Task WechselnAsync(string stufe, string geraet, Action aenderung, TimeSpan timeout, string test = "t9")
     {
         HaelpMiApp.BeendeAlles();

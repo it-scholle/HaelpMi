@@ -7,9 +7,9 @@ on:
   workflow_dispatch:
     inputs:
       vms:
-        description: 'Test-VMs, kommagetrennt (a, b oder a,b). Nur mit a und b laufen T4/T5.'
+        description: 'Test-VMs, kommagetrennt, Geräte aus ci/e2e/geraete.json (z. B. a,b oder a,b,c). T4–T10 brauchen a und b, T11/T12 a, b und c.'
         type: string
-        default: 'a,b'
+        default: 'a,b,c'
       produkt_ref:
         description: 'Tag oder voller Commit-SHA, aus dem Agent, Konfiguration und Installer gebaut werden (leer = dieser Stand). Die Tests kommen immer von diesem Stand.'
         type: string
@@ -28,19 +28,53 @@ on:
 permissions:
   contents: read
 
-# Eine Umgebung auf PVE 2, ein Lauf zur Zeit; ein laufender Lauf wird nie abgebrochen,
+# Eine Umgebung auf dem Test-Host pve-nzxt, ein Lauf zur Zeit; ein laufender Lauf wird nie abgebrochen,
 # sonst bleiben die VMs an. Nur echte E2E-Läufe teilen sich die Gruppe: jedes andere Label
 # erzeugt einen Lauf ohne Jobs, der sonst einen wartenden echten Lauf aus der Warteschlange verdrängt.
 concurrency:
-  group: ${{ (github.event_name == 'workflow_dispatch' || github.event.label.name == 'e2e') && 'e2e-pve2' || format('e2e-noop-{0}', github.run_id) }}
+  group: ${{ (github.event_name == 'workflow_dispatch' || github.event.label.name == 'e2e') && 'e2e-pve-nzxt' || format('e2e-noop-{0}', github.run_id) }}
   cancel-in-progress: false
 
-env:
-  VMS: ${{ inputs.vms || 'a,b' }}
-
 jobs:
+  # Geräteauswahl aus dem Input vms bzw. beim Label-Lauf aus VMS= in ci/e2e/lauf.env, leer = alle Geräte
+  # aus ci/e2e/geraete.json. Einzige Stelle, an der die Auswahl geprüft und in die Matrix übersetzt wird.
+  plan:
+    name: Lauf planen
+    if: github.event_name == 'workflow_dispatch' || (github.event.label.name == 'e2e' && github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    defaults:
+      run:
+        shell: bash
+    outputs:
+      vms: ${{ steps.geraete.outputs.vms }}
+      matrix: ${{ steps.geraete.outputs.matrix }}
+      relay: ${{ steps.geraete.outputs.relay }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Geräte
+        id: geraete
+        env:
+          EREIGNIS: ${{ github.event_name }}
+          IN_VMS: ${{ inputs.vms }}
+        run: |
+          auswahl="$IN_VMS"
+          if [[ "$EREIGNIS" != workflow_dispatch ]]; then
+              auswahl="$(sed -n 's/^VMS=//p' ci/e2e/lauf.env | tail -n 1 | tr -d '\r')"
+          fi
+          vms="$(ci/e2e/geraete.sh pruefen "$auswahl")"
+          matrix="$(ci/e2e/geraete.sh matrix "$vms")"
+          anzahl="$(jq length <<< "$matrix")"
+          {
+              echo "vms=$vms"
+              echo "matrix=$matrix"
+              if (( anzahl >= 2 )); then echo relay=true; else echo relay=false; fi
+          } >> "$GITHUB_OUTPUT"
+          printf '### E2E-Geräte\n\n- vms: %s\n- VMIDs: %s\n' "$vms" "$(ci/e2e/geraete.sh vmids "$vms")" >> "$GITHUB_STEP_SUMMARY"
+
   reset:
     name: VMs zurücksetzen
+    needs: plan
     if: github.event_name == 'workflow_dispatch' || (github.event.label.name == 'e2e' && github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: [self-hosted, pve-orchestrator]
     timeout-minutes: 20
@@ -50,15 +84,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Snapshot clean-base, Start, Runner online
+        env:
+          VMS: ${{ needs.plan.outputs.vms }}
         run: |
-          [[ "$VMS" =~ ^[ab](,[ab])*$ ]] || { echo "Ungültige Eingabe vms: $VMS" >&2; exit 2; }
-          ids=()
-          if [[ ",$VMS," == *,a,* ]]; then ids+=(9101); fi
-          if [[ ",$VMS," == *,b,* ]]; then ids+=(9102); fi
+          vmids="$(ci/e2e/geraete.sh vmids "$VMS")"
+          read -ra ids <<< "$vmids"
           ci/e2e/pve-reset.sh "${ids[@]}"
 
   build:
     name: Installer und Tests bauen
+    needs: plan
     if: github.event_name == 'workflow_dispatch' || (github.event.label.name == 'e2e' && github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: windows-latest
     timeout-minutes: 30
@@ -93,8 +128,9 @@ jobs:
               $werte = @{ PRODUKT_REF = ''; FILTER = ''; ZYKLEN = '' }
               foreach ($zeile in Get-Content -LiteralPath ci/e2e/lauf.env) {
                   if ($zeile -match '^\s*(#|$)') { continue }
-                  if ($zeile -cnotmatch '^(PRODUKT_REF|FILTER|ZYKLEN)=(.*)$') { throw 'ci/e2e/lauf.env: nur PRODUKT_REF=, FILTER= und ZYKLEN= sind erlaubt.' }
-                  $werte[$Matches[1]] = $Matches[2].Trim()
+                  if ($zeile -cnotmatch '^(PRODUKT_REF|FILTER|ZYKLEN|VMS)=(.*)$') { throw 'ci/e2e/lauf.env: nur PRODUKT_REF=, FILTER=, ZYKLEN= und VMS= sind erlaubt.' }
+                  # VMS wertet der Job plan aus.
+                  if ($Matches[1] -ne 'VMS') { $werte[$Matches[1]] = $Matches[2].Trim() }
               }
           }
           if ($werte.PRODUKT_REF -cnotmatch '^[A-Za-z0-9._/-]*$' -or $werte.PRODUKT_REF.StartsWith('-')) { throw 'produkt_ref: nur A-Z, a-z, 0-9, ".", "_", "/" und "-" erlaubt.' }
@@ -166,31 +202,31 @@ jobs:
           & $env:ISCC @gemeinsam "/O$q\installer\UserInstallerPayload" /FHaelpMi-User-Setup "$q\installer\HaelpMi.iss"
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           if (-not (Test-Path "$q\installer\UserInstallerPayload\HaelpMi-User-Setup.exe")) { throw 'User-Installer fehlt in installer\UserInstallerPayload, der Admin-Installer würde ohne ihn scheitern.' }
-          & $env:ISCC @gemeinsam "/O$PWD\e2e-installer\a" /FHaelpMi-Admin-Setup "$q\installer\HaelpMi-Admin.iss"
+          & $env:ISCC @gemeinsam "/O$PWD\e2e-installer\admin" /FHaelpMi-Admin-Setup "$q\installer\HaelpMi-Admin.iss"
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
-          New-Item -ItemType Directory -Force -Path e2e-installer/b | Out-Null
-          Copy-Item "$q\installer\UserInstallerPayload\HaelpMi-User-Setup.exe" e2e-installer/b/
+          New-Item -ItemType Directory -Force -Path e2e-installer/user | Out-Null
+          Copy-Item "$q\installer\UserInstallerPayload\HaelpMi-User-Setup.exe" e2e-installer/user/
           foreach ($datei in 'lizenz.json', 'lizenz-bald.json', 'lizenz-abgelaufen.json', 'lizenz-abgelaufen-neuer.json') {
-              Copy-Item "e2e-installer/$datei" e2e-installer/a/
-              Copy-Item "e2e-installer/$datei" e2e-installer/b/
+              Copy-Item "e2e-installer/$datei" e2e-installer/admin/
+              Copy-Item "e2e-installer/$datei" e2e-installer/user/
           }
 
       - name: E2E-Tests bauen
         run: dotnet build tests/HaelpMi.E2E.Tests -c Release
 
-      # Je VM ein eigenes Artefakt: die VMs laden mit wenigen hundert KB/s, der Admin-Installer
-      # enthält den User-Installer schon, A braucht ihn nicht ein zweites Mal.
+      # Je Rolle ein eigenes Artefakt: die VMs laden mit wenigen hundert KB/s, der Admin-Installer
+      # enthält den User-Installer schon, das Admin-Gerät braucht ihn nicht ein zweites Mal.
       - uses: actions/upload-artifact@v4
         with:
-          name: installer-a
-          path: e2e-installer/a/
+          name: installer-admin
+          path: e2e-installer/admin/
           if-no-files-found: error
           retention-days: 3
           compression-level: 0
       - uses: actions/upload-artifact@v4
         with:
-          name: installer-b
-          path: e2e-installer/b/
+          name: installer-user
+          path: e2e-installer/user/
           if-no-files-found: error
           retention-days: 3
           compression-level: 0
@@ -201,29 +237,35 @@ jobs:
           if-no-files-found: error
           retention-days: 3
 
-  test-a:
-    name: Tests auf VM A (Admin)
-    needs: [reset, build]
-    if: (github.event_name == 'workflow_dispatch' || (github.event.label.name == 'e2e' && github.event.pull_request.head.repo.full_name == github.repository)) && contains(format(',{0},', inputs.vms || 'a,b'), ',a,')
-    runs-on: [self-hosted, haelpmi-e2e, vm-a]
+  # Ein Job je gewähltem Gerät (Matrix aus plan). Runner-Label vm-<gerät>, Rolle und Raumnummer aus ci/e2e/geraete.json.
+  test:
+    name: Tests auf VM ${{ matrix.name }}
+    needs: [plan, reset, build]
+    if: github.event_name == 'workflow_dispatch' || (github.event.label.name == 'e2e' && github.event.pull_request.head.repo.full_name == github.repository)
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    runs-on: [self-hosted, haelpmi-e2e, 'vm-${{ matrix.geraet }}']
     timeout-minutes: 120
     defaults:
       run:
         shell: pwsh
     env:
       HAELPMI_E2E_DIR: C:\haelpmi-e2e
-      HAELPMI_E2E_INSTALLER: C:\haelpmi-e2e\installer\HaelpMi-Admin-Setup.exe
+      HAELPMI_E2E_INSTALLER: C:\haelpmi-e2e\installer\${{ matrix.rolle == 'admin' && 'HaelpMi-Admin-Setup.exe' || 'HaelpMi-User-Setup.exe' }}
       HAELPMI_E2E_LIZENZ: C:\haelpmi-e2e\installer\lizenz.json
-      HAELPMI_E2E_RAUM: E2E-A
-      HAELPMI_E2E_RAUMNUMMER: '101'
+      HAELPMI_E2E_RAUM: E2E-${{ matrix.name }}
+      HAELPMI_E2E_RAUMNUMMER: ${{ matrix.raumnummer }}
+      HAELPMI_E2E_GERAETE: ${{ needs.plan.outputs.vms }}
       HAELPMI_E2E_PRODUKT_REF: ${{ needs.build.outputs.produkt_ref }}
       HAELPMI_E2E_ZYKLEN: ${{ needs.build.outputs.zyklen }}
       E2E_FILTER: ${{ needs.build.outputs.filter }}
-      GERAET: A
+      GERAET: ${{ matrix.name }}
     steps:
       - uses: actions/download-artifact@v4
         with:
-          name: installer-a
+          name: installer-${{ matrix.rolle }}
           path: C:\haelpmi-e2e\installer
       - uses: actions/download-artifact@v4
         with:
@@ -247,10 +289,14 @@ jobs:
           Get-NetFirewallRule -DisplayName $name -ErrorAction SilentlyContinue | Remove-NetFirewallRule
           New-NetFirewallRule -DisplayName $name -Direction Inbound -Action Allow -Profile Any `
               -Program 'C:\Program Files\HaelpMi\HaelpMi.Config.exe' | Out-Null
+      # Tests mit Trait Teil laufen nur, wenn alle beteiligten Geräte im Lauf sind.
       - name: E2E-Tests
         run: |
           $filter = "Category=E2E&Geraet=$env:GERAET"
-          if (",$env:VMS," -notlike '*,a,*' -or ",$env:VMS," -notlike '*,b,*') { $filter += '&Teil!=ZweiGeraete' }
+          $imLauf = ",$env:HAELPMI_E2E_GERAETE,"
+          $ab = $imLauf -like '*,a,*' -and $imLauf -like '*,b,*'
+          if (-not $ab) { $filter += '&Teil!=ZweiGeraete' }
+          if (-not ($ab -and $imLauf -like '*,c,*')) { $filter += '&Teil!=DreiGeraete' }
           if ($env:E2E_FILTER) {
               if ($env:E2E_FILTER -cnotmatch '^[A-Za-z0-9=!&|()_.~-]*$') { throw 'Ungültiger Filter aus dem Build-Job.' }
               $filter += "&($env:E2E_FILTER)"
@@ -279,97 +325,16 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: e2e-a
+          name: e2e-${{ matrix.geraet }}
           path: e2e-out/
           if-no-files-found: warn
 
-  test-b:
-    name: Tests auf VM B (User)
-    needs: [reset, build]
-    if: (github.event_name == 'workflow_dispatch' || (github.event.label.name == 'e2e' && github.event.pull_request.head.repo.full_name == github.repository)) && contains(format(',{0},', inputs.vms || 'a,b'), ',b,')
-    runs-on: [self-hosted, haelpmi-e2e, vm-b]
-    timeout-minutes: 120
-    defaults:
-      run:
-        shell: pwsh
-    env:
-      HAELPMI_E2E_DIR: C:\haelpmi-e2e
-      HAELPMI_E2E_INSTALLER: C:\haelpmi-e2e\installer\HaelpMi-User-Setup.exe
-      HAELPMI_E2E_LIZENZ: C:\haelpmi-e2e\installer\lizenz.json
-      HAELPMI_E2E_RAUM: E2E-B
-      HAELPMI_E2E_RAUMNUMMER: '102'
-      HAELPMI_E2E_PRODUKT_REF: ${{ needs.build.outputs.produkt_ref }}
-      HAELPMI_E2E_ZYKLEN: ${{ needs.build.outputs.zyklen }}
-      E2E_FILTER: ${{ needs.build.outputs.filter }}
-      GERAET: B
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          name: installer-b
-          path: C:\haelpmi-e2e\installer
-      - uses: actions/download-artifact@v4
-        with:
-          name: e2e-tests
-          path: C:\haelpmi-e2e\tests
-      # Testvorbereitung, Umgehung eines Produktbefunds: beim ersten Agent-Start fragt die Windows-Firewall
-      # nach einer Freigabe für HaelpMi.Agent.exe: der Admin-Installer legt nur Portregeln für 51500/51501 an,
-      # nicht für 51502–51506, der User-Installer gar keine. Der Dialog verdeckt das Alarmfenster. Die Programmregel
-      # ersetzt keine Produktkorrektur; sie lebt nur bis zum nächsten Reset auf clean-base.
-      - name: Testvorbereitung – Firewall-Freigabe für den Agent (Umgehung)
-        run: |
-          $name = 'HaelpMi E2E Agent (Testvorbereitung)'
-          Get-NetFirewallRule -DisplayName $name -ErrorAction SilentlyContinue | Remove-NetFirewallRule
-          New-NetFirewallRule -DisplayName $name -Direction Inbound -Action Allow -Profile Any `
-              -Program 'C:\Program Files\HaelpMi\HaelpMi.Agent.exe' | Out-Null
-      # Ebenfalls Umgehung eines Produktbefunds: das Konfigurationsprogramm (Admin-Dashboard) öffnet selbst Sockets
-      # für Config-Sync und Edit-Lock (UDP 51502), ohne dass ein Installer dafür eine Regel anlegt.
-      - name: Testvorbereitung – Firewall-Freigabe für das Konfigurationsprogramm (Umgehung)
-        run: |
-          $name = 'HaelpMi E2E Config (Testvorbereitung)'
-          Get-NetFirewallRule -DisplayName $name -ErrorAction SilentlyContinue | Remove-NetFirewallRule
-          New-NetFirewallRule -DisplayName $name -Direction Inbound -Action Allow -Profile Any `
-              -Program 'C:\Program Files\HaelpMi\HaelpMi.Config.exe' | Out-Null
-      - name: E2E-Tests
-        run: |
-          $filter = "Category=E2E&Geraet=$env:GERAET"
-          if (",$env:VMS," -notlike '*,a,*' -or ",$env:VMS," -notlike '*,b,*') { $filter += '&Teil!=ZweiGeraete' }
-          if ($env:E2E_FILTER) {
-              if ($env:E2E_FILTER -cnotmatch '^[A-Za-z0-9=!&|()_.~-]*$') { throw 'Ungültiger Filter aus dem Build-Job.' }
-              $filter += "&($env:E2E_FILTER)"
-          }
-          "Filter: $filter"
-          dotnet test "$env:HAELPMI_E2E_DIR\tests\HaelpMi.E2E.Tests.dll" --filter $filter `
-              --logger "trx;LogFileName=e2e-$env:GERAET.trx" --results-directory "$env:HAELPMI_E2E_DIR\out\trx"
-          if ($LASTEXITCODE) { exit $LASTEXITCODE }
-      - name: Ende melden
-        if: always()
-        run: |
-          $rv = Join-Path $env:HAELPMI_E2E_DIR 'rv'
-          New-Item -ItemType Directory -Force -Path $rv | Out-Null
-          $tmp = Join-Path $rv ".ende.$([guid]::NewGuid().ToString('N')).tmp"
-          Set-Content -LiteralPath $tmp -Value '' -NoNewline
-          Move-Item -LiteralPath $tmp -Destination (Join-Path $rv "$($env:GERAET.ToLower())-ende") -Force
-      # upload-artifact nimmt hier nur Pfade unterhalb des Workspace an.
-      - name: Ergebnisse einsammeln
-        if: always()
-        run: |
-          $ziel = Join-Path $env:GITHUB_WORKSPACE 'e2e-out'
-          New-Item -ItemType Directory -Force -Path (Join-Path $ziel 'programdata') | Out-Null
-          if (Test-Path "$env:HAELPMI_E2E_DIR\out") { Copy-Item "$env:HAELPMI_E2E_DIR\out\*" $ziel -Recurse -Force }
-          Copy-Item "$env:ProgramData\HaelpMi\*.log" (Join-Path $ziel 'programdata') -ErrorAction SilentlyContinue
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: e2e-b
-          path: e2e-out/
-          if-no-files-found: warn
-
-  # Spiegelt die Rendezvous-Marken zwischen A und B, bis beide "ende" gemeldet haben.
+  # Spiegelt die Rendezvous-Marken zwischen den Geräten, bis jedes "<gerät>-ende" gemeldet hat.
   # Wartet auch auf build: scheitert der Build, starten keine Tests und das Relay liefe ins Zeitlimit.
   koordination:
     name: Rendezvous-Relay
-    needs: [reset, build]
-    if: (github.event_name == 'workflow_dispatch' || (github.event.label.name == 'e2e' && github.event.pull_request.head.repo.full_name == github.repository)) && contains(format(',{0},', inputs.vms || 'a,b'), ',a,') && contains(format(',{0},', inputs.vms || 'a,b'), ',b,')
+    needs: [plan, reset, build]
+    if: (github.event_name == 'workflow_dispatch' || (github.event.label.name == 'e2e' && github.event.pull_request.head.repo.full_name == github.repository)) && needs.plan.outputs.relay == 'true'
     runs-on: [self-hosted, pve-orchestrator]
     timeout-minutes: 125
     defaults:
@@ -378,11 +343,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       # Läuft ab Start der Test-Jobs, also auch während deren Artefakt-Downloads (im ersten Lauf ~22 min).
-      - run: ci/e2e/rendezvous-relay.sh --timeout 120 9101 9102
+      - name: Relay
+        env:
+          VMS: ${{ needs.plan.outputs.vms }}
+        run: |
+          relay="$(ci/e2e/geraete.sh relay "$VMS")"
+          read -ra seiten <<< "$relay"
+          ci/e2e/rendezvous-relay.sh --timeout 120 "${seiten[@]}"
 
   stop:
     name: VMs herunterfahren
-    needs: [reset, test-a, test-b, koordination]
+    needs: [plan, reset, test, koordination]
     if: always() && (github.event_name == 'workflow_dispatch' || (github.event.label.name == 'e2e' && github.event.pull_request.head.repo.full_name == github.repository)) && needs.reset.result != 'skipped'
     runs-on: [self-hosted, pve-orchestrator]
     timeout-minutes: 10
@@ -392,9 +363,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Herunterfahren
+        env:
+          VMS: ${{ needs.plan.outputs.vms }}
         run: |
-          [[ "$VMS" =~ ^[ab](,[ab])*$ ]] || { echo "Ungültige Eingabe vms: $VMS" >&2; exit 2; }
-          ids=()
-          if [[ ",$VMS," == *,a,* ]]; then ids+=(9101); fi
-          if [[ ",$VMS," == *,b,* ]]; then ids+=(9102); fi
+          vmids="$(ci/e2e/geraete.sh vmids "$VMS")"
+          read -ra ids <<< "$vmids"
           ci/e2e/pve-stop.sh "${ids[@]}"

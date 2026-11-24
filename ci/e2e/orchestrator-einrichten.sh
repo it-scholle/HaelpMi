@@ -17,7 +17,7 @@
 #
 # Umgebungsvariablen (alle optional):
 #   RUNNER_TOKEN  Registrierungstoken für den GitHub-Runner (gilt 1 h), nur beim ersten Lauf nötig
-#   PVE_HOST      Adresse von PVE 2, alternativ zu --pve-host
+#   PVE_HOST      Adresse des Test-Hosts (<pve-host>), alternativ zu --pve-host
 #   PVE_NODE      Node-Name; ohne Angabe per API ermittelt
 #
 # Die PVE-API hat keinen DNS-Namen, daher die Adresse immer per --pve-host oder PVE_HOST.
@@ -105,7 +105,7 @@ VM_9102_IP=
 VM_9103_IP=
 VM_9110_IP=
 SSH_USER=hmadmin
-# Optional, durch Leerzeichen getrennt; ohne Angabe "9101 9102"
+# Optional, durch Leerzeichen getrennt; ohne Angabe "9101 9102 9103"
 WACHHALTEN_VMIDS=
 '
 
@@ -131,7 +131,7 @@ inhalt_gleich() { # <datei> <soll-inhalt>
 }
 
 # Header per Prozess-Substitution, damit das Token weder in der Prozessliste noch im Log steht.
-# -k: PVE 2 hat nur sein selbstsigniertes Zertifikat, eine eigene CA gibt es im Heimnetz nicht.
+# -k: der Test-Host hat nur sein selbstsigniertes Zertifikat, eine eigene CA gibt es im Heimnetz nicht.
 pve_get() { # <api-basis> <pfad> <ausgabedatei> -> gibt HTTP-Status aus
     curl -ksS --max-time 15 -o "$3" -w '%{http_code}' \
         -H @<(printf 'Authorization: %s\n' "$(cat "$CI_ETC/pve-token")") \
@@ -329,7 +329,10 @@ setze_e2e_conf() {
 }
 
 ist_e2e_conf_gefuellt() {
-    [[ -n "$(conf_wert "$CI_ETC/e2e.conf" VM_9101_IP)" && -n "$(conf_wert "$CI_ETC/e2e.conf" VM_9102_IP)" ]]
+    local id
+    for id in 9101 9102 9103; do
+        [[ -n "$(conf_wert "$CI_ETC/e2e.conf" "VM_${id}_IP")" ]] || return 1
+    done
 }
 
 ist_unit() { inhalt_gleich "$SYSTEMD_DIR/$UNIT.$1" "$2"; }
@@ -357,14 +360,14 @@ schritt "Runner registriert (haelpmi-orch, pve-orchestrator)" ist_registriert se
 schritt "Runner-Dienst aktiv" ist_dienst setze_dienst "erst nach der Registrierung möglich"
 schritt "$CI_ETC (700, $NUTZER)" ist_ci_etc setze_ci_etc
 schritt "$CI_ETC/pve-token (600, $NUTZER)" ist_pve_token setze_pve_token \
-    "auf PVE 2: pveum user token add haelpmi-ci@pve orchestrator --privsep 1 --output-format json, Ausgabe nach $CI_ETC/pve-token.json legen, erneut starten"
+    "auf dem Test-Host: pveum user token add haelpmi-ci@pve orchestrator --privsep 1 --output-format json, Ausgabe nach $CI_ETC/pve-token.json legen, erneut starten"
 schritt "$CI_ETC/mqtt.conf (600, $NUTZER)" ist_mqtt setze_mqtt
 schritt "$CI_ETC/mqtt.conf ausgefüllt" ist_mqtt_gefuellt von_hand \
     "MQTT_USER und MQTT_PASS von Hand eintragen"
 schritt "$CI_ETC/pve.conf (PVE_API, PVE_NODE)" ist_pve_conf setze_pve_conf \
     "Adresse per --pve-host oder PVE_HOST angeben; Node notfalls per PVE_NODE"
 schritt "$CI_ETC/e2e.conf (600, $NUTZER)" ist_e2e_conf setze_e2e_conf
-schritt "$CI_ETC/e2e.conf: VM_9101_IP und VM_9102_IP" ist_e2e_conf_gefuellt von_hand \
+schritt "$CI_ETC/e2e.conf: VM_9101_IP bis VM_9103_IP" ist_e2e_conf_gefuellt von_hand \
     "Adressen der Test-VMs von Hand eintragen"
 schritt "$CI_STATE (750, $NUTZER)" ist_ci_state setze_ci_state
 for s in "${CI_SKRIPTE[@]}"; do
