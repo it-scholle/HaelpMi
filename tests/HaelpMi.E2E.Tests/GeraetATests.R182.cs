@@ -6,7 +6,7 @@ using static HaelpMi.E2E.Tests.ZweiGeraete;
 
 namespace HaelpMi.E2E.Tests;
 
-// T11 Regressionstest #182, Gegenstück in GeraetBTests.R182.cs.
+// T13 Regressionstest #182, Gegenstück in GeraetBTests.R182.cs.
 public partial class GeraetATests
 {
     private static readonly TimeSpan R182Beobachtung = TimeSpan.FromSeconds(15);
@@ -17,8 +17,8 @@ public partial class GeraetATests
     /// </summary>
     [Fact, TestPriority(110)]
     [Trait("Teil", ZweiGeraete.Teil), Trait("Bereich", "R182")]
-    public Task T11_Regression182_ZaehlerBleibtNachEmpfang() =>
-        Artefakte.SichereAsync(nameof(T11_Regression182_ZaehlerBleibtNachEmpfang), async () =>
+    public Task T13_Regression182_ZaehlerBleibtNachEmpfang() =>
+        Artefakte.SichereAsync(nameof(T13_Regression182_ZaehlerBleibtNachEmpfang), async () =>
         {
             var a = EigeneDeviceId();
             var b = await DeviceIdDerGegenseiteAsync("b");
@@ -30,11 +30,11 @@ public partial class GeraetATests
             await app.SchliesseSenderBannerAsync();
             DrueckeHotkey(AlarmHotkey);
             Rendezvous.Signal("t11-aus");
-            var banner = app.ErwarteBanner("T11");
+            var banner = app.ErwarteBanner("T13");
             try
             {
                 await WarteBisAsync(() => NameVon(banner, "AckedText") == "Empfangen: 1 von 1", TimeSpan.FromSeconds(15),
-                    () => $"T11: B hat die erste Welle nicht quittiert, Banner zeigt '{NameVon(banner, "AckedText")}'.");
+                    () => $"T13: B hat die erste Welle nicht quittiert, Banner zeigt '{NameVon(banner, "AckedText")}'.");
                 Rendezvous.Signal("t11-empfangen");
                 await Rendezvous.WaitForAsync("t11-b-weg", SchrittTimeout);
 
@@ -53,7 +53,7 @@ public partial class GeraetATests
 
                 var wellen = AuditLogZeilen(seit).Count(z => z.Contains($"alarm sent alarmProfileId={ProfilId}", StringComparison.Ordinal));
                 Assert.True(wellen >= 1,
-                    $"T11: A hat nach dem Beenden des Agents auf B in {R182Beobachtung.TotalSeconds:0} s keine weitere Welle gesendet, der Fall ist nicht geprüft.");
+                    $"T13: A hat nach dem Beenden des Agents auf B in {R182Beobachtung.TotalSeconds:0} s keine weitere Welle gesendet, der Fall ist nicht geprüft.");
                 Assert.True(abweichend.Count == 0,
                     $"Regression #182: nach {wellen} unquittierten Wellen zeigte das Sender-Banner '{string.Join("', '", abweichend)}' statt 'Empfangen: 1 von 1'.");
             }

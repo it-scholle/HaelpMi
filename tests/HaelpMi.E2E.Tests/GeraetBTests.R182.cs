@@ -5,14 +5,14 @@ using static HaelpMi.E2E.Tests.ZweiGeraete;
 
 namespace HaelpMi.E2E.Tests;
 
-// T11 Regressionstest #182, Auswertung in GeraetATests.R182.cs.
+// T13 Regressionstest #182, Auswertung in GeraetATests.R182.cs.
 public partial class GeraetBTests
 {
     /// <summary>Empfängt die erste Welle, beendet dann den Agent, damit A keine weitere Quittung bekommt, und startet ihn danach wieder.</summary>
     [Fact, TestPriority(110)]
     [Trait("Teil", ZweiGeraete.Teil), Trait("Bereich", "R182")]
-    public Task T11_Regression182_QuittiertNurErsteWelle() =>
-        Artefakte.SichereAsync(nameof(T11_Regression182_QuittiertNurErsteWelle), async () =>
+    public Task T13_Regression182_QuittiertNurErsteWelle() =>
+        Artefakte.SichereAsync(nameof(T13_Regression182_QuittiertNurErsteWelle), async () =>
         {
             var b = EigeneDeviceId();
             var a = await DeviceIdDerGegenseiteAsync("a");
@@ -22,7 +22,7 @@ public partial class GeraetBTests
 
             using var app = new HaelpMiApp();
             await Rendezvous.WaitForAsync("t11-aus", GegenseiteTimeout);
-            app.ErwartePopup("T11");
+            app.ErwartePopup("T13");
             try
             {
                 await Rendezvous.WaitForAsync("t11-empfangen", SchrittTimeout);
