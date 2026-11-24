@@ -32,6 +32,12 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 
+# Add-Type lädt HaelpMi.Core.dll in die Laufzeit von PowerShell selbst; eine ältere .NET-Version als die
+# des Produkts kann die Assembly nicht laden.
+if ([Environment]::Version.Major -lt 10) {
+    throw "PowerShell $($PSVersionTable.PSVersion) läuft auf .NET $([Environment]::Version), HaelpMi.Core braucht .NET 10. PowerShell 7.6 oder neuer verwenden."
+}
+
 # Signaturbasis aus HaelpMi.Core selbst (License.GetSigningPayload), damit das Format nicht doppelt gepflegt wird.
 Add-Type -Path (Join-Path $Payload 'BouncyCastle.Cryptography.dll')
 Add-Type -Path (Join-Path $Payload 'HaelpMi.Core.dll')

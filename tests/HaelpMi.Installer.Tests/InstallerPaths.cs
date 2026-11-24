@@ -49,7 +49,7 @@ internal static class InstallerPaths
         return candidates.FirstOrDefault();
     }
 
-    // Läuft von tests\HaelpMi.Installer.Tests\bin\<config>\net8.0-windows\ aus - vier
+    // Läuft von tests\HaelpMi.Installer.Tests\bin\<config>\net10.0-windows\ aus - vier
     // Ebenen hoch zum Repo-Root (dem Ordner mit HaelpMi.sln), analog zu TestSupport.cs
     // in HaelpMi.Core.Tests, nur eben ohne Abhängigkeit auf HaelpMi.Core.
     private static string FindRepoRoot()

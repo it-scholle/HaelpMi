@@ -146,8 +146,8 @@ Getrennte Schlüssel, nie verwechseln oder zusammenlegen (Regeln: `AGENTS.md` Te
 | Paket / Werkzeug | Version | Wo | Wofür |
 |---|---|---|---|
 | `NAudio` (MIT) | 2.2.1 | Core | Alarmton gleichzeitig über alle Ausgabegeräte (WASAPI) |
-| `BouncyCastle.Cryptography` | 2.4.0 | Core, UpdateSigner, InstallCreator | Ed25519 (in .NET 8 nicht nativ) |
-| `Microsoft.Extensions.Hosting.WindowsServices` | 8.0.1 | UpdateService | SCM-Integration |
+| `BouncyCastle.Cryptography` | 2.4.0 | Core, UpdateSigner, InstallCreator | Ed25519 (in .NET 10 nicht nativ) |
+| `Microsoft.Extensions.Hosting.WindowsServices` | 10.0.15 | UpdateService | SCM-Integration |
 | `xunit`, `xunit.runner.visualstudio`, `Microsoft.NET.Test.Sdk` | 2.9.2 / 2.8.2 / 17.11.1 | Tests | Test-Framework |
 | Inno Setup (`ISCC.exe`) | – | `installer/` | Installer (nicht WiX) |
 
