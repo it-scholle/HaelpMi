@@ -5,7 +5,7 @@ Alarm aus, die zugeordneten Arbeitsplätze erhalten sofort ein erzwungenes Popup
 sprechen direkt miteinander (P2P, kein zentraler Server); ein App-interner Admin pflegt Gruppen und
 Alarm-Profile über ein Dashboard, Änderungen verteilen sich automatisch an alle Geräte.
 
-Status: Version 1.0 (v0.47.11) veröffentlicht, Weiterentwicklung auf `develop`, „stable+buggy“ (siehe [`docs/STATUS.md`](docs/STATUS.md)).
+Status: Entwicklungsstand v0.47.x auf `develop`, Version 1.0 ist geplant (Milestone `v1.0`), „stable+buggy“ (siehe [`docs/STATUS.md`](docs/STATUS.md)).
 
 ## Einstieg
 1. Repo klonen.

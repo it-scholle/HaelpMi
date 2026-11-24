@@ -1,12 +1,13 @@
 # Status
 
-Stand: 2026-11-19
+Stand: 2026-11-24
 
 ## Aktueller Stand
 
-- Version 1.0 (v0.47.11, Endstand von `release-1.0-MVP`) ist veröffentlicht. Entwicklung läuft
-  auf `develop` (GitHub-Default), Ziel ist Milestone `release-2.0-…` mit Stabilisierungs-Branch
-  `release-2.0` (#194, ADR 0010). Status „stable+buggy“: Alarmversand/-empfang, Selbsttest, Config-Sync, Discovery/Boot-Call und
+- `release-1.0-MVP` ist mit v0.47.11 abgeschlossen, ein Release gibt es daraus nicht. Entwicklung
+  läuft auf `develop` (GitHub-Default) mit PATCH-Version und Tag pro Merge. Ziel ist Milestone
+  `v1.0` (geplant 08.01.2027); vorher kommt der Hotfix v0.46.2-rc.1 (#210). Stabilisierungs-Branch
+  `release-X.Y` nach #194 und ADR 0010. Status „stable+buggy“: Alarmversand/-empfang, Selbsttest, Config-Sync, Discovery/Boot-Call und
   Install-Creator/Installer funktionieren weitgehend, ohne Anspruch auf Produktionsreife.
 - `main` nimmt nur noch Releases auf und steht noch auf v0.16.5 (1.0 wurde bisher nicht nach
   `main` übernommen); `legacy/main-0.39.x` ist der alte,
@@ -54,7 +55,9 @@ Bei #151 aufgefallen, nicht Teil des Tickets, jeweils als eigenes Issue angelegt
 ## Nächste Schritte
 
 - Version 1.0 nach `main` übernehmen und taggen (Freigabe Repo-Owner offen).
-- Repo-Ruleset „Block-all“ an das neue Modell anpassen: verlangt lineare Historie auf allen
-  Branches, Teil A sieht aber Merges `develop` → Ticket-Branch und `release-X.Y` → `main` vor (#160).
+- Rulesets an das neue Modell anpassen (#160): „Block-all“ verlangt lineare Historie auf allen
+  Branches außer `develop`, das Ruleset für `develop` ebenfalls. Teil A und `release-X.Y` brauchen
+  aber Merge-Commits (`release-X.Y` bzw. `main` → `develop`, `release-X.Y` → `main`) und einen
+  Fast-Forward `develop` → `release-X.Y`, den ein GitHub-PR nicht kann. Vor dem ersten Release klären.
 - Versionsnummer nur noch an einer Stelle: ISPP liest `Directory.Build.props` (eigenes Ticket).
-- Tickets im Milestone `release-2.0-…`; zurückgestellte Themen im Milestone `Backlog`.
+- Tickets im Milestone `v1.0`, danach `Regelentwicklung`; zurückgestellte Themen in `release-2.0-…` bzw. `Backlog`.
