@@ -53,7 +53,7 @@ Aufbewahrungsfrist, Rotation und eine Hash-Kette für das Audit-Log gibt es im a
 ## E2E-Umgebung
 
 Testfälle und Auslöser: `docs/wissen/test-strategie.md`, Abschnitt H. Die Umgebung läuft auf dem
-Test-Host pve-nzxt (bis 11/2026 PVE 2 bzw. pve-desktop; API `https://10.10.32.0:8006`, Node
+Test-Host pve-nzxt (bis 11/2026 PVE 2 bzw. pve-desktop; API `https://<pve-host>:8006`, Node
 `pve-nzxt`). Sie besteht aus dem Orchestrator-LXC 9100 (Self-Hosted-Runner `pve-orchestrator`) und
 den Test-VMs mit je einem eigenen Runner (Labels `haelpmi-e2e` und `vm-<gerät>`):
 
@@ -82,10 +82,10 @@ Orchestrator einrichten:
 
 | Datei | Schlüssel |
 |---|---|
-| `pve.conf` | `PVE_API`, `PVE_NODE` (pve-nzxt: `https://10.10.32.0:8006`, `pve-nzxt`) |
+| `pve.conf` | `PVE_API`, `PVE_NODE` (z. B. `https://<pve-host>:8006`, `pve-nzxt`) |
 | `pve-token` | `PVEAPIToken=<id>=<wert>` (Token nur mit VM.Audit, VM.PowerMgmt, VM.Snapshot.Rollback) |
 | `e2e.conf` | `VM_<vmid>_IP` (mindestens 9101 bis 9103), `SSH_USER`, optional `WACHHALTEN_VMIDS` (Default `9101 9102 9103`) |
-| `mqtt.conf` | `MQTT_HOST`, `MQTT_PORT`, `MQTT_USER`, `MQTT_PASS`, optional `MQTT_TOPIC` (Default `homelab/pve-nzxt/lock/haelpmi-e2e`) |
+| `mqtt.conf` | `MQTT_HOST`, `MQTT_PORT`, `MQTT_USER`, `MQTT_PASS`, optional `MQTT_TOPIC` (Default `haelpmi-e2e/lock`) |
 
 Skripte unter `ci/e2e/` (alle außer `geraete.sh` mit `--trocken`):
 

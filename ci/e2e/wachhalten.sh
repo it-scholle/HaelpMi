@@ -14,7 +14,7 @@ DIR="$(dirname "$(readlink -f "$0")")"
 # shellcheck source=ci/e2e/pve-lib.sh
 . "$DIR/pve-lib.sh"
 
-MQTT_TOPIC_STANDARD=homelab/pve-nzxt/lock/haelpmi-e2e
+MQTT_TOPIC_STANDARD=haelpmi-e2e/lock
 SPERRE_MINUTEN=45
 
 trocken_arg=()

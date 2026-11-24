@@ -18,6 +18,12 @@ internal static class DreiGeraete
 
     public const string AlarmText = "E2E-Alarm A an B und C";
 
+    /// <summary>
+    /// Marke von C nach T12, auch bei einem Fehlschlag. Bewusst ohne Präfix "t12-": nach einem Abbruch von T12
+    /// soll A trotzdem darauf warten können (<see cref="Rendezvous.WaitForAsync"/> endet sonst sofort).
+    /// </summary>
+    public const string CGestoppt = "c-t12-gestoppt";
+
     /// <summary>Wartet auf die DeviceIds aus den Marken "a-installiert", "b-installiert" und "c-installiert".</summary>
     public static async Task<(Guid A, Guid B, Guid C)> DeviceIdsAsync() =>
         (await ZweiGeraete.DeviceIdDerGegenseiteAsync("a"),

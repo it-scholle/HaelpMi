@@ -22,7 +22,21 @@ public partial class GeraetBTests
     // B meldet zuerst "Bin unterwegs": bei Schwelle 2 bleibt Schließen gesperrt, bis auch C gemeldet hat.
     [Fact, TestPriority(56), Trait("Bereich", "Basis")]
     [Trait("Teil", DreiGeraete.Teil), Trait("FR", "FR-47"), Trait("FR", "FR-51")]
-    public Task T12_Alarm_VonA_ErsteRueckmeldung() =>
+    public async Task T12_Alarm_VonA_ErsteRueckmeldung()
+    {
+        try
+        {
+            await T12_Rumpf();
+        }
+        catch
+        {
+            // Erst nach SichereAsync, damit der Screenshot eines Fehlschlags das Alarmfenster noch zeigt.
+            await RaeumeT12AlarmfensterAufAsync();
+            throw;
+        }
+    }
+
+    private Task T12_Rumpf() =>
         Artefakte.SichereAsync(nameof(T12_Alarm_VonA_ErsteRueckmeldung), async () =>
         {
             await DreiGeraete.BereiteAlarmprofilVorAsync();
@@ -55,4 +69,30 @@ public partial class GeraetBTests
             schliessen.Invoke();
             await WarteBisAsync(() => !app.AlarmfensterOffen(), TimeSpan.FromSeconds(10), "Alarmfenster ist auf B nach dem Schließen noch offen.");
         }, "t12");
+
+    // Ein offenes Alarmfenster stört T6. A bricht seinen Alarm beim eigenen Fehlschlag ab, das Fenster kann also
+    // noch von selbst zugehen; sonst bleibt Schließen bei Schwelle 2 gesperrt und nur ein Agent-Neustart hilft.
+    private async Task RaeumeT12AlarmfensterAufAsync()
+    {
+        try
+        {
+            using var app = new HaelpMiApp();
+            var frist = DateTime.UtcNow + TimeSpan.FromSeconds(10);
+            while (app.AlarmfensterOffen() && DateTime.UtcNow < frist)
+            {
+                await Task.Delay(500);
+            }
+
+            if (app.AlarmfensterOffen())
+            {
+                _ausgabe.WriteLine("T12: Alarmfenster auf B nach dem Fehlschlag noch offen, Agent wird neu gestartet.");
+                await AgentNeustartMitAnlaufAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            // Das Aufräumen darf den eigentlichen Testfehler nicht überdecken.
+            _ausgabe.WriteLine($"T12: Aufräumen auf B fehlgeschlagen: {ex.Message}");
+        }
+    }
 }

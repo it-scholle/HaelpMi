@@ -87,7 +87,7 @@ public class GeraetCTests
         {
             // Erst nach SichereAsync, damit der Screenshot eines Fehlschlags das Alarmfenster noch zeigt.
             BeendeAlles();
-            Rendezvous.Signal("t12-c-gestoppt");
+            Rendezvous.Signal(DreiGeraete.CGestoppt);
         }
     }
 }

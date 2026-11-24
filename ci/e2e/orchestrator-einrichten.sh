@@ -17,7 +17,7 @@
 #
 # Umgebungsvariablen (alle optional):
 #   RUNNER_TOKEN  Registrierungstoken für den GitHub-Runner (gilt 1 h), nur beim ersten Lauf nötig
-#   PVE_HOST      Adresse des Test-Hosts (pve-nzxt: 10.10.32.0), alternativ zu --pve-host
+#   PVE_HOST      Adresse des Test-Hosts (<pve-host>), alternativ zu --pve-host
 #   PVE_NODE      Node-Name; ohne Angabe per API ermittelt
 #
 # Die PVE-API hat keinen DNS-Namen, daher die Adresse immer per --pve-host oder PVE_HOST.

@@ -22,7 +22,29 @@ public partial class GeraetATests
     // Ein Alarm an zwei Empfänger mit Schwelle 2: B meldet zuerst, C danach; erst dann sind beide Fenster schließbar.
     [Fact, TestPriority(56), Trait("Bereich", "Basis")]
     [Trait("Teil", DreiGeraete.Teil), Trait("FR", "FR-47"), Trait("FR", "FR-50"), Trait("FR", "FR-53")]
-    public Task T12_Alarm_AnBUndC_Schwelle2() =>
+    public async Task T12_Alarm_AnBUndC_Schwelle2()
+    {
+        try
+        {
+            await T12_Rumpf();
+        }
+        catch
+        {
+            // Auch beim Fehlschlag erst weiter, wenn C seinen Agent beendet hat, sonst läuft C in T6 hinein.
+            try
+            {
+                await Rendezvous.WaitForAsync(DreiGeraete.CGestoppt, SchrittTimeout);
+            }
+            catch (TimeoutException ex)
+            {
+                _ausgabe.WriteLine($"T12: {ex.Message}");
+            }
+
+            throw;
+        }
+    }
+
+    private Task T12_Rumpf() =>
         Artefakte.SichereAsync(nameof(T12_Alarm_AnBUndC_Schwelle2), async () =>
         {
             var (_, b, c) = await DreiGeraete.BereiteAlarmprofilVorAsync();
@@ -67,7 +89,7 @@ public partial class GeraetATests
             await app.SchliesseBannerAsync(banner);
             Rendezvous.Signal("t12-a-fertig");
             // C beendet danach seinen Agent; ab T6 soll C nicht mehr mitspielen (siehe GeraetCTests).
-            await Rendezvous.WaitForAsync("t12-c-gestoppt", SchrittTimeout);
+            await Rendezvous.WaitForAsync(DreiGeraete.CGestoppt, SchrittTimeout);
             MeldeBefunde(befunde);
         }, "t12");
 }
