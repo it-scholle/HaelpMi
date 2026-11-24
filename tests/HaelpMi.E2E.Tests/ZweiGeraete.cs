@@ -81,7 +81,7 @@ internal static class ZweiGeraete
         JsonFileStore.Load<OwnSettings>(AppPaths.SettingsFilePath)?.DeviceId
         ?? throw new InvalidOperationException($"{AppPaths.SettingsFilePath} fehlt, T1 lief nicht.");
 
-    /// <param name="geraet">"a" oder "b"; T1 legt die DeviceId als Inhalt der Marke "&lt;geraet&gt;-installiert" ab.</param>
+    /// <param name="geraet">"a", "b" oder "c"; T1 legt die DeviceId als Inhalt der Marke "&lt;geraet&gt;-installiert" ab.</param>
     public static async Task<Guid> DeviceIdDerGegenseiteAsync(string geraet) =>
         Guid.Parse((await Rendezvous.WaitForAsync($"{geraet}-installiert", GegenseiteTimeout)).Trim());
 
@@ -114,7 +114,15 @@ internal static class ZweiGeraete
     /// ConfigVersion der geschriebenen Datei. Muss über der AppliedConfigVersion beider Geräte liegen,
     /// sobald vorher schon Config-Sync lief, sonst gilt die Datei bei einem späteren Abgleich als veraltet.
     /// </param>
-    public static async Task BereiteAlarmprofilVorAsync(Guid sender, Guid empfaenger, int version = 1000)
+    public static Task BereiteAlarmprofilVorAsync(Guid sender, Guid empfaenger, int version = 1000) =>
+        BereiteAlarmprofilVorAsync(sender, new[] { empfaenger }, version, 1, "E2E-Alarm A an B");
+
+    /// <summary>
+    /// Wie <see cref="BereiteAlarmprofilVorAsync(Guid, Guid, int)"/>, aber mit mehreren Empfängern; jedes
+    /// beteiligte Gerät ruft es mit denselben Werten auf.
+    /// </summary>
+    /// <param name="schwelle">ResponseThreshold: Anzahl "Bin unterwegs", ab der die Alarmfenster schließbar werden.</param>
+    public static async Task BereiteAlarmprofilVorAsync(Guid sender, IReadOnlyList<Guid> empfaenger, int version, int schwelle, string text)
     {
         PruefeLizenz();
         HaelpMiApp.BeendeAlles();
@@ -124,15 +132,15 @@ internal static class ZweiGeraete
         {
             Id = ProfilId,
             Name = "E2E-Alarm",
-            Text = "E2E-Alarm A an B",
+            Text = text,
             Hotkey = AlarmHotkey,
-            ResponseThreshold = 1,
+            ResponseThreshold = schwelle,
             RecipientAssignments =
             {
                 new RecipientAssignment
                 {
                     Sender = new EntityRef(EntityKind.Device, sender),
-                    Recipients = { new EntityRef(EntityKind.Device, empfaenger) },
+                    Recipients = empfaenger.Select(id => new EntityRef(EntityKind.Device, id)).ToList(),
                 },
             },
         });
