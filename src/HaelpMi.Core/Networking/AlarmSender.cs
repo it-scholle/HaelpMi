@@ -16,6 +16,7 @@ public sealed class AlarmSendResult
 {
     public required int TargetCount { get; init; }
     public required int AckedCount { get; init; }
+    public required IReadOnlyCollection<Guid> AckedDeviceIds { get; init; }
 }
 
 /// <summary>
@@ -53,7 +54,7 @@ public sealed class AlarmSender
         var proceed = await confirmation.ConfirmAsync(profile, targets, ct);
         if (!proceed)
         {
-            return new AlarmSendResult { TargetCount = targets.Count, AckedCount = 0 };
+            return new AlarmSendResult { TargetCount = targets.Count, AckedCount = 0, AckedDeviceIds = Array.Empty<Guid>() };
         }
 
         var request = new AlarmRequestMessage(
@@ -62,20 +63,23 @@ public sealed class AlarmSender
             ownIdentity.IsRemoteSession, profile.Text, profile.ResponseThreshold, DateTimeOffset.UtcNow);
         _audit?.Invoke($"alarm sent alarmProfileId={profile.Id} sessionId={alarmSessionId} targetCount={targets.Count}");
 
-        var ackedCount = 0;
+        var ackedDeviceIds = new List<Guid>();
         var sendTasks = targets.Select(async target =>
         {
             var acked = await SendToOneAsync(request, target, ct);
             if (acked)
             {
-                Interlocked.Increment(ref ackedCount);
+                lock (ackedDeviceIds)
+                {
+                    ackedDeviceIds.Add(target.DeviceId);
+                }
             }
             progress?.Report(new AlarmSendProgress { Target = target, Acked = acked });
         });
 
         await Task.WhenAll(sendTasks);
 
-        return new AlarmSendResult { TargetCount = targets.Count, AckedCount = ackedCount };
+        return new AlarmSendResult { TargetCount = targets.Count, AckedCount = ackedDeviceIds.Count, AckedDeviceIds = ackedDeviceIds };
     }
 
     private static async Task<bool> SendToOneAsync(AlarmRequestMessage request, DeviceEntry target, CancellationToken ct)
