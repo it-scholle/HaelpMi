@@ -1,7 +1,7 @@
 namespace HaelpMi.E2E.Tests;
 
 /// <summary>
-/// Gemeinsame Werte für T11/T12 mit drei Geräten: A (Admin), B und C (User). Die Testmethoden stehen in
+/// Gemeinsame Werte für T11, T12 und T14 mit drei Geräten: A (Admin), B und C (User). Die Testmethoden stehen in
 /// GeraetATests, GeraetBTests und GeraetCTests, die Abstimmung läuft wie bei <see cref="ZweiGeraete"/> über
 /// <see cref="Rendezvous"/>.
 /// </summary>
@@ -12,6 +12,9 @@ internal static class DreiGeraete
 
     /// <summary>Über T5 (1000), unter dem, was das Dashboard ab T6 daraus hochzählt, und unter T10 (5000).</summary>
     public const int ConfigVersion = 1100;
+
+    /// <summary>T14: über T12, unter dem, was das Dashboard ab T6 daraus hochzählt, und unter T10 (5000).</summary>
+    public const int ConfigVersionR136 = 1200;
 
     /// <summary>Zwei Empfänger, beide müssen "Bin unterwegs" melden, bevor die Alarmfenster schließbar werden.</summary>
     public const int Schwelle = 2;
@@ -24,6 +27,9 @@ internal static class DreiGeraete
     /// </summary>
     public const string CGestoppt = "c-t12-gestoppt";
 
+    /// <summary>Wie <see cref="CGestoppt"/>, nach T14.</summary>
+    public const string CGestopptT14 = "c-t14-gestoppt";
+
     /// <summary>Wartet auf die DeviceIds aus den Marken "a-installiert", "b-installiert" und "c-installiert".</summary>
     public static async Task<(Guid A, Guid B, Guid C)> DeviceIdsAsync() =>
         (await ZweiGeraete.DeviceIdDerGegenseiteAsync("a"),
@@ -31,11 +37,12 @@ internal static class DreiGeraete
          await ZweiGeraete.DeviceIdDerGegenseiteAsync("c"));
 
     /// <summary>Profil A an B und C mit <see cref="Schwelle"/>; jedes der drei Geräte schreibt es selbst.</summary>
+    /// <param name="version">ConfigVersion, Standard <see cref="ConfigVersion"/> (T12).</param>
     /// <returns>Die DeviceIds aus <see cref="DeviceIdsAsync"/>.</returns>
-    public static async Task<(Guid A, Guid B, Guid C)> BereiteAlarmprofilVorAsync()
+    public static async Task<(Guid A, Guid B, Guid C)> BereiteAlarmprofilVorAsync(int version = ConfigVersion)
     {
         var ids = await DeviceIdsAsync();
-        await ZweiGeraete.BereiteAlarmprofilVorAsync(ids.A, new[] { ids.B, ids.C }, ConfigVersion, Schwelle, AlarmText);
+        await ZweiGeraete.BereiteAlarmprofilVorAsync(ids.A, new[] { ids.B, ids.C }, version, Schwelle, AlarmText);
         return ids;
     }
 }

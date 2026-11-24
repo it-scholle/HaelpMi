@@ -9,7 +9,7 @@ using static HaelpMi.E2E.Tests.ZweiGeraete;
 namespace HaelpMi.E2E.Tests;
 
 /// <summary>
-/// Testteil für VM C, ein zweites User-Gerät neben B. Nach T12 beendet C seinen Agent: sonst verteilte C in T9
+/// Testteil für VM C, ein zweites User-Gerät neben B. Nach T12 und nach T14 beendet C seinen Agent: sonst verteilte C in T9
 /// seine Lizenz per Gossip an A und B (TryAdoptFromPeer) und wäre in T6 bis T10 ein unbeteiligter, aber
 /// antwortender Peer.
 /// </summary>
@@ -88,6 +88,24 @@ public class GeraetCTests
             // Erst nach SichereAsync, damit der Screenshot eines Fehlschlags das Alarmfenster noch zeigt.
             BeendeAlles();
             Rendezvous.Signal(DreiGeraete.CGestoppt);
+        }
+    }
+
+    // Gegenstücke: GeraetATests.T14_Regression136_DreiGeraete_SendetWellen, GeraetBTests.T14_Regression136_DreiGeraete_FensterBleibtZu.
+    // Startet den nach T12 beendeten Agent über die Profilvorbereitung neu und beendet ihn danach wieder.
+    [Fact, TestPriority(57)]
+    [Trait("Teil", DreiGeraete.Teil), Trait("Bereich", "R136")]
+    public async Task T14_Regression136_DreiGeraete_FensterBleibtZu()
+    {
+        try
+        {
+            await Artefakte.SichereAsync(nameof(T14_Regression136_DreiGeraete_FensterBleibtZu),
+                () => R136Messung.DreiGeraeteEmpfaengerAsync("c", _ausgabe), "t14");
+        }
+        finally
+        {
+            BeendeAlles();
+            Rendezvous.Signal(DreiGeraete.CGestopptT14);
         }
     }
 }
