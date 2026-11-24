@@ -1,0 +1,37 @@
+#!/bin/sh
+# Sperrt direkte Pushes auf main, Force-Pushes und das Überschreiben von Tags.
+# Aktivieren (einmal pro Klon): git config core.hooksPath .githooks
+# Das erstmalige Anlegen von main in einem neuen Repo ist erlaubt.
+
+zero=$(git hash-object --stdin </dev/null | tr '0-9a-f' '0')
+blocked=0
+
+while read -r _ local_sha remote_ref remote_sha; do
+	[ "$remote_sha" = "$zero" ] && continue # neuer Branch oder Tag
+
+	if [ "$remote_ref" = "refs/heads/main" ]; then
+		echo "pre-push: Push auf main ist gesperrt. Änderungen kommen nur per PR nach main." >&2
+		blocked=1
+		continue
+	fi
+
+	[ "$local_sha" = "$zero" ] && continue # Branch löschen
+
+	case "$remote_ref" in
+	refs/tags/*)
+		echo "pre-push: Tag $remote_ref existiert schon und wird nicht überschrieben." >&2
+		blocked=1
+		continue
+		;;
+	esac
+
+	if ! git cat-file -e "$remote_sha^{commit}" 2>/dev/null; then
+		echo "pre-push: Remote-Stand von $remote_ref ist lokal unbekannt. Erst 'git fetch' und develop einmergen." >&2
+		blocked=1
+	elif ! git merge-base --is-ancestor "$remote_sha" "$local_sha"; then
+		echo "pre-push: Force-Push auf $remote_ref ist gesperrt. Stattdessen den Remote-Stand einmergen." >&2
+		blocked=1
+	fi
+done
+
+exit $blocked
