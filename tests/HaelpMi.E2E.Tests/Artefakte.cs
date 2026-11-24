@@ -47,8 +47,8 @@ internal static class Artefakte
         return ziel;
     }
 
-    // Der User-Installer legt keine Firewall-Regeln an, der Admin-Installer nur für 51500/51501;
-    // Feedback (51505) und Config-Sync (51502/51503) haben keine Regel.
+    // Die Installer legen Programmregeln an ("HälpMi Agent", beim Admin zusätzlich "HälpMi Konfiguration"),
+    // ältere Stände Portregeln nur für 51500/51501; für Vergleichsläufe werden beide Arten aufgelistet.
     private const string NetzwerkDiagnose = """
         '--- Firewall-Profile ---'
         Get-NetFirewallProfile | Format-Table Name, Enabled, DefaultInboundAction -AutoSize | Out-String -Width 200

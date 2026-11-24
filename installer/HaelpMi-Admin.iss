@@ -1,11 +1,7 @@
 ; HälpMi installer (Inno Setup) - Admin-Installer (FR-35): schreibt Role=Admin in
-; deployment.json (HaelpMiCommon.iss.inc/GetRoleValue) UND legt zusätzlich zwei
-; eingehende Firewall-Regeln an (UDP {#DiscoveryUdpPort} für die Geräte-Erkennung, TCP
-; {#AlarmTcpPort} für den Alarmkanal, siehe Pflichtenheft 6./8.) - der Admin-Rechner dient
-; laut FR-35 zugleich als Testgerät, braucht die Regeln also eher als ein reines
-; User-Gerät. Für ein echtes Verwaltungsnetzwerk ist GPO-Rollout weiterhin der eigentlich
-; vorgesehene Weg für die Regeln auf User-Geräten - diese Variante ist der praktische
-; Ersatz dafür auf einzelnen Testrechnern ohne GPO-Infrastruktur.
+; deployment.json (HaelpMiCommon.iss.inc/GetRoleValue) und legt neben der Firewall-
+; Programmregel für den Agent auch eine für HaelpMi.Config.exe an, weil das Dashboard
+; selbst Sockets öffnet (EnsureFirewallRules).
 ;
 ; Bewusst eine ZWEITE, separate Installer-Datei statt eines Assistenten-Schrittes im
 ; User-Installer: das Elevation-/Rollen-Bedürfnis ist damit schon am Dateinamen sichtbar,

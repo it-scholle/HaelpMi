@@ -26,6 +26,10 @@ public class LifecycleTests
     private const string TestRoomNumber = "9001";
     private static readonly TimeSpan InstallerTimeout = TimeSpan.FromMinutes(3);
 
+    // Wie AgentFirewallRule/ConfigFirewallRule in installer/HaelpMiCommon.iss.inc.
+    private const string AgentFirewallRule = "HälpMi Agent";
+    private const string ConfigFirewallRule = "HälpMi Konfiguration";
+
     private readonly ITestOutputHelper _output;
 
     public LifecycleTests(ITestOutputHelper output) => _output = output;
@@ -56,6 +60,10 @@ public class LifecycleTests
         AssertAgentIsRunning();
         AssertServiceExists("HaelpMiUpdateService");
         AssertScheduledTaskExists("HaelpMi Agent");
+
+        // Ohne Programmregel zeigt Windows beim ersten Lauschen des Agents den Firewall-Dialog.
+        AssertFirewallRuleExists(AgentFirewallRule);
+        AssertFirewallRuleDoesNotExist(ConfigFirewallRule);
     }
 
     [Fact, TestPriority(20)]
@@ -184,10 +192,11 @@ public class LifecycleTests
         AssertServiceDoesNotExist("HaelpMiUpdateService");
         AssertScheduledTaskDoesNotExist("HaelpMi Agent");
         AssertNoHaelpMiProcessesRunning();
+        AssertFirewallRuleDoesNotExist(AgentFirewallRule);
     }
 
     [Fact, TestPriority(80)]
-    public async Task Step80_AdminInstaller_CreatesFirewallRules_UserInstallerDoesNot()
+    public async Task Step80_AdminInstaller_CreatesFirewallRulesForAgentAndConfig_UninstallRemovesThem()
     {
         var adminInstallerPath = RequireInstaller(InstallerPaths.FindAdminInstaller(), "Admin-Installer");
         Assert.False(Directory.Exists(InstallerPaths.ProgramFilesInstallDir), "Voraussetzung: Step70 muss vollständig aufgeräumt haben.");
@@ -198,14 +207,16 @@ public class LifecycleTests
 
         var deployment = JsonFileStore.Load<DeploymentInfo>(InstallerPaths.DeploymentJsonPath);
         Assert.Equal(Role.Admin, deployment!.Role);
-        AssertFirewallRuleExists("HälpMi Discovery");
-        AssertFirewallRuleExists("HälpMi Alarm");
+        AssertFirewallRuleExists(AgentFirewallRule);
+        AssertFirewallRuleExists(ConfigFirewallRule);
+        AssertFirewallRuleDoesNotExist("HälpMi Discovery");
+        AssertFirewallRuleDoesNotExist("HälpMi Alarm");
 
         // Aufräumen für Step90+: Admin-Installation wieder silent entfernen, inkl. Firewall-Regeln.
         var uninstallerPath = RequireInstaller(InstallerPaths.FindUninstaller(), "Uninstaller (unins000.exe)");
         await ProcessRunner.RunAsync(uninstallerPath, "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART", InstallerTimeout);
-        AssertFirewallRuleDoesNotExist("HälpMi Discovery");
-        AssertFirewallRuleDoesNotExist("HälpMi Alarm");
+        AssertFirewallRuleDoesNotExist(AgentFirewallRule);
+        AssertFirewallRuleDoesNotExist(ConfigFirewallRule);
     }
 
     [Fact, TestPriority(90)]
@@ -236,6 +247,8 @@ public class LifecycleTests
         var deploymentAfterSwitch = JsonFileStore.Load<DeploymentInfo>(InstallerPaths.DeploymentJsonPath)!;
         Assert.Equal(Role.User, deploymentAfterSwitch.Role);
         Assert.Equal(customerGroupIdAsAdmin, deploymentAfterSwitch.CustomerGroupId);
+        AssertFirewallRuleExists(AgentFirewallRule);
+        AssertFirewallRuleDoesNotExist(ConfigFirewallRule);
 
         // Endgültiges Aufräumen der gesamten Testreihe.
         var uninstallerPath = RequireInstaller(InstallerPaths.FindUninstaller(), "Uninstaller (unins000.exe)");
