@@ -16,8 +16,9 @@ internal static class BlockedHintDialog
     private static extern int MessageBoxW(IntPtr hWnd, string text, string caption, uint type);
 
     // Bewusst Win32 statt WPF-MessageBox: die nimmt ohne Owner das aktive Fenster des Agents,
-    // auf einem gesperrten Gerät meist den Sperr-Toast. Der Hinweis hing dann unter dem Toast
-    // statt als eigenes Fenster im Vordergrund.
+    // auf einem gesperrten Gerät meist den Sperr-Toast. Der Hinweis ist dann kein Fenster auf
+    // oberster Ebene (UI Automation führt ihn unter dem Toast) und verschwindet, sobald der
+    // Toast schließt.
     public static void Show(SendBlockNotice notice)
     {
         if (MessageBoxW(IntPtr.Zero, notice.Message, $"HälpMi - {notice.Title}", MB_ICONWARNING | MB_SETFOREGROUND | MB_TOPMOST) == 0)
