@@ -23,20 +23,20 @@ public partial class GeraetATests
             var a = EigeneDeviceId();
             var b = await DeviceIdDerGegenseiteAsync("b");
             await BereiteAlarmprofilVorAsync(a, b, 6000);
-            await Rendezvous.WaitForAsync("t11-b-bereit", GegenseiteTimeout);
+            await Rendezvous.WaitForAsync("t13-b-bereit", GegenseiteTimeout);
             await WarteAufGeraetAsync(b, DiscoveryTimeout);
 
             using var app = new HaelpMiApp();
             await app.SchliesseSenderBannerAsync();
             DrueckeHotkey(AlarmHotkey);
-            Rendezvous.Signal("t11-aus");
+            Rendezvous.Signal("t13-aus");
             var banner = app.ErwarteBanner("T13");
             try
             {
                 await WarteBisAsync(() => NameVon(banner, "AckedText") == "Empfangen: 1 von 1", TimeSpan.FromSeconds(15),
                     () => $"T13: B hat die erste Welle nicht quittiert, Banner zeigt '{NameVon(banner, "AckedText")}'.");
-                Rendezvous.Signal("t11-empfangen");
-                await Rendezvous.WaitForAsync("t11-b-weg", SchrittTimeout);
+                Rendezvous.Signal("t13-empfangen");
+                await Rendezvous.WaitForAsync("t13-b-weg", SchrittTimeout);
 
                 var seit = DateTimeOffset.UtcNow;
                 var abweichend = new List<string>();
@@ -68,7 +68,7 @@ public partial class GeraetATests
                 }
 
                 await app.SchliesseSenderBannerAsync();
-                Rendezvous.Signal("t11-fertig");
+                Rendezvous.Signal("t13-fertig");
             }
-        }, "t11");
+        }, "t13");
 }

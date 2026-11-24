@@ -18,23 +18,23 @@ public partial class GeraetBTests
             var a = await DeviceIdDerGegenseiteAsync("a");
             await BereiteAlarmprofilVorAsync(a, b, 6000);
             await WarteAufGeraetAsync(a, DiscoveryTimeout);
-            Rendezvous.Signal("t11-b-bereit");
+            Rendezvous.Signal("t13-b-bereit");
 
             using var app = new HaelpMiApp();
-            await Rendezvous.WaitForAsync("t11-aus", GegenseiteTimeout);
+            await Rendezvous.WaitForAsync("t13-aus", GegenseiteTimeout);
             app.ErwartePopup("T13");
             try
             {
-                await Rendezvous.WaitForAsync("t11-empfangen", SchrittTimeout);
+                await Rendezvous.WaitForAsync("t13-empfangen", SchrittTimeout);
             }
             finally
             {
                 BeendeAlles();
-                Rendezvous.Signal("t11-b-weg");
+                Rendezvous.Signal("t13-b-weg");
             }
 
-            await Rendezvous.WaitForAsync("t11-fertig", SchrittTimeout);
+            await Rendezvous.WaitForAsync("t13-fertig", SchrittTimeout);
             await StarteAgentAsync();
             await Task.Delay(AgentAnlaufzeit);
-        }, "t11");
+        }, "t13");
 }
