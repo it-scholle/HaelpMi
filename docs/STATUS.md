@@ -42,10 +42,11 @@ Bei #151 aufgefallen, nicht Teil des Tickets, jeweils als eigenes Issue angelegt
 - `scripts/*.sh` sind nicht ausführbar (Mode 100644); nur `bash scripts/…` funktioniert. (#158)
 - `docs/wissen/test-strategie.md` nennt `tests/HaelpMi.Audio.Tests` (nur im Legacy-Stand),
   `tests/HaelpMi.InstallCreator.Tests` fehlt dort. (#159)
-- Repo-Ruleset „Block-all“: GitHub meldet beim Push „Commits must have verified signatures“
-  und „Changes must be made through a pull request“, nimmt den Push per Bypass aber an.
-  Commits auf `release-1.0-MVP` sind unsigniert. Entscheidung (#204, Punkt 11): Signaturpflicht
-  nur auf `develop`/`main`; das Ruleset passt der Repo-Owner an. (#160)
+- Repo-Ruleset „Block-all“ (alle Branches außer `develop`): GitHub meldet beim Push auf
+  Ticket-Branches „Changes must be made through a pull request“ und beim Löschen „Cannot delete
+  this branch“, nimmt beides per Owner-Bypass aber an. Signaturpflicht nur noch auf `main`
+  (Ruleset „Signaturen main“), `develop` verlangt PR und grüne Pflicht-Checks ohne Approval
+  (Ruleset „develop: Checks statt Approval“); Entscheidungen 11, 19 und 20 in #204. (#160)
 - `.ico` ohne 20/24/40/64-px-Stufen (siehe `design/KATALOG.md`). (#161)
 - Linter/Formatierer (`.editorconfig` + `dotnet format`) einrichten: eigenes Ticket, weil im
   Bestandscode viele Funde zu erwarten sind. (#162)

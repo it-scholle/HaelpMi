@@ -23,9 +23,9 @@ Ticket-PRs.
    dann eigener Worktree (`EnterWorktree` oder `git worktree add`).
 3. Arbeiten und committen nach Conventional Commits: `typ: Beschreibung (#N)`
    (`feat`, `fix`, `docs`, `chore`, `refactor`, `test`). Die Version setzt erst der Merge
-   (Schritt 7). Signierte Commits sind nur auf `develop` und `main` Pflicht; den Squash-Merge
-   signiert GitHub. Auf Ticket-Branches meldet GitHub beim Push „Commits must have verified
-   signatures“, nimmt den Push aber an, bis das Ruleset angepasst ist.
+   (Schritt 7). Signierte Commits sind nur auf `main` Pflicht; den Squash-Merge nach `develop`
+   signiert GitHub ohnehin. Auf Ticket-Branches meldet GitHub beim Push „Changes must be made
+   through a pull request“ (Ruleset „Block-all“), nimmt den Push per Bypass aber an.
    Berührt ein Commit `src/HaelpMi.InstallCreator/`, `src/HaelpMi.UpdateSigner/` oder
    `Directory.Build.props`, baut der Hook den Install-Creator neu
    (`docs/wissen/installcreator-rebuild-hook.md`).
@@ -89,4 +89,4 @@ Offene Fragen: ... (oder "keine")
   (ADR 0004), letzter Zyklus `release-1.0-MVP` bis v0.47.11.
 - 19.11.2026: Umstellung auf `develop`/`main` mit Stabilisierungs-Branch `release-X.Y` (ADR 0010, #194).
 - 24.11.2026: PATCH-Version und Tag pro Merge nach `develop` bleiben; Signaturpflicht nur auf
-  `develop`/`main` (Repo-Owner, #204 Punkte 11 und 12).
+  `main`, `develop` ohne Approval mit Pflicht-Checks (Repo-Owner, #204 Punkte 11, 12, 19, 20).
