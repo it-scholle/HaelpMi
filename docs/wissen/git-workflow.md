@@ -16,6 +16,11 @@ Merge“ und „Release und Hotfix“, Teil B „Ausnahmen von Teil A“), die B
 Der Name des Release-Zyklus steht im Milestone (z. B. `release-2.0-…`), nicht im Ziel-Branch der
 Ticket-PRs.
 
+## Versionsnummer
+
+Einzige Quelle ist `<Version>` in `Directory.Build.props`. Der Installer liest sie beim Kompilieren
+per ISPP (`installer/HaelpMiVersion.iss.inc`); die CI prüft, dass er denselben Wert ermittelt.
+
 ## Ablauf pro Ticket
 
 1. Issue prüfen (kein `status:in-progress`/`status:review`), `bash scripts/claim-issue.sh <nr>`.
@@ -35,8 +40,7 @@ Ticket-PRs.
 6. Tests ausführen (`AGENTS.md`, „Tests“), PR nach `develop` mit `Closes #N` öffnen,
    `bash scripts/finish-issue.sh <nr>`; auf OK des Auftraggebers warten.
 7. Nach dem OK (`AGENTS.md`, „Merge durch den Agent“): `develop` erneut einmergen, nächste
-   freie PATCH-Version auf `develop` in `Directory.Build.props` und
-   `installer/HaelpMiCommon.iss.inc` setzen (bis #168), PR-Titel `vX.Y.Z: Beschreibung (#N)`,
+   freie PATCH-Version auf `develop` in `Directory.Build.props` setzen, PR-Titel `vX.Y.Z: Beschreibung (#N)`,
    CI grün, Squash-Merge mit diesem Titel (`gh pr merge <pr> --squash --subject "<Titel>"`),
    danach `git tag vX.Y.Z <merge-commit> && git push origin vX.Y.Z` und den Branch lokal und
    remote löschen. Der Merge schließt das Issue.
@@ -49,7 +53,7 @@ Ticket-PRs.
 2. Auf `release-X.Y` nur noch Fehlerbehebungen: Ticket-Branch von `release-X.Y`, PR dorthin.
 3. Repo-Owner testet `release-X.Y` und gibt frei.
 4. Release-Version aus den Commits seit dem letzten Release ableiten, in `Directory.Build.props`
-   und `installer/HaelpMiCommon.iss.inc` setzen (bis #168), `CHANGELOG.md` ergänzen.
+   setzen, `CHANGELOG.md` ergänzen.
 5. PR `release-X.Y` → `main`, Merge oder Fast-Forward (nie Squash). Den Release-Tag und das
    GitHub-Release mit den CHANGELOG-Notizen setzt der Repo-Owner.
 6. `release-X.Y` in `develop` mergen. Nächster Zyklus: neuer Milestone und Branch

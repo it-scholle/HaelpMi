@@ -33,7 +33,7 @@ Closes #
 - [ ] Tests ergänzt; bei Bugs zuerst ein Regressionstest
 - [ ] E2E nach AGENTS.md „E2E-Tests“: Tests ergänzt oder angepasst, Lauf ausgewertet (Abschnitt „E2E“ ausgefüllt)
 - [ ] Lint und CI grün (Lint noch nicht eingerichtet: „entfällt“)
-- [ ] Version in `Directory.Build.props` und `installer/HaelpMiCommon.iss.inc` synchron erhöht
+- [ ] Version in `Directory.Build.props` erhöht
 - [ ] Branch auf aktuellem Stand des Ziel-Branches (`release-*`)
 - [ ] Doku und Handbuch aktualisiert
 - [ ] Keine Secrets und keine personenbezogenen Daten
