@@ -1,5 +1,6 @@
 using FlaUI.Core.AutomationElements;
 using FlaUI.Core.Definitions;
+using HaelpMi.Core.Licensing;
 using HaelpMi.Core.Models;
 using HaelpMi.Installer.Tests;
 using Xunit;
@@ -151,6 +152,12 @@ public partial class GeraetBTests
             if (dialog is not null)
             {
                 _ausgabe.WriteLine($"Hinweis-Dialog auf B: '{dialog.Title}'");
+                var erwartet = $"HälpMi - {LicenseBlockTexts.Title(LicenseBlockReason.ManuallyDisabled)}";
+                if (dialog.Title != erwartet)
+                {
+                    befunde.Add($"Produktbefund: Der Hinweis-Dialog auf B heißt '{dialog.Title}', erwartet '{erwartet}' (Grund: deaktiviert).");
+                }
+
                 var ok = dialog.FindFirstDescendant(cf => cf.ByControlType(ControlType.Button).And(cf.ByName("OK")))
                     ?? dialog.FindFirstDescendant(cf => cf.ByAutomationId("2"))
                     ?? throw new InvalidOperationException("Knopf 'OK' im Hinweis-Dialog nicht gefunden.");
