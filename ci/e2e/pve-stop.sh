@@ -22,10 +22,10 @@ while [[ $# -gt 0 ]]; do
 done
 [[ ${#vmids[@]} -gt 0 ]] || { echo "Aufruf: pve-stop.sh [--trocken] <vmid>..." >&2; exit 2; }
 
-# Abschalten von PVE 2 nach einem Lauf (MQTT-Sperre, Übergabe an das Backup) folgt mit dem
+# Abschalten des Test-Hosts nach einem Lauf (MQTT-Sperre, Übergabe an das Backup) folgt mit dem
 # privaten Backup-Ticket; bis dahin bleibt der Host an.
 host_aus_falls_erwuenscht() {
-    log "Host-Abschaltung noch nicht umgesetzt, PVE 2 bleibt an"
+    log "Host-Abschaltung noch nicht umgesetzt, der Test-Host bleibt an"
 }
 
 ci_lade_conf

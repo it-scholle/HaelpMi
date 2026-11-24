@@ -9,7 +9,7 @@ using static HaelpMi.E2E.Tests.ZweiGeraete;
 
 namespace HaelpMi.E2E.Tests;
 
-// T13 Regressionstest #133, Gegenstück in GeraetBTests.R133.cs.
+// T15 Regressionstest #133, Gegenstück in GeraetBTests.R133.cs.
 public partial class GeraetATests
 {
     private static readonly TimeSpan BannerBeobachtung = TimeSpan.FromSeconds(10);
@@ -20,12 +20,12 @@ public partial class GeraetATests
     /// </summary>
     [Fact, TestPriority(130)]
     [Trait("Teil", ZweiGeraete.Teil), Trait("Bereich", "R133")]
-    public Task T13_Regression133_DeaktivierenOhneLizenzbanner() =>
-        Artefakte.SichereAsync(nameof(T13_Regression133_DeaktivierenOhneLizenzbanner), async () =>
+    public Task T15_Regression133_DeaktivierenOhneLizenzbanner() =>
+        Artefakte.SichereAsync(nameof(T15_Regression133_DeaktivierenOhneLizenzbanner), async () =>
         {
             var b = await DeviceIdDerGegenseiteAsync("b");
             await WarteAufGeraetAsync(b, DiscoveryTimeout);
-            await Rendezvous.WaitForAsync("t13-b-bereit", GegenseiteTimeout);
+            await Rendezvous.WaitForAsync("t15-b-bereit", GegenseiteTimeout);
 
             using var app = new HaelpMiApp();
             var seite = DashboardSeite.Oeffne(app);
@@ -38,7 +38,7 @@ public partial class GeraetATests
             schalter.Click();
             await WarteBisAsync(() => UeberschreibungVon(b) == LicenseOverride.ForceDisabled, TimeSpan.FromSeconds(10),
                 () => $"devices.json: B hat nach dem Deaktivieren LicenseOverride={UeberschreibungVon(b)} statt ForceDisabled.");
-            Rendezvous.Signal("t13-aus");
+            Rendezvous.Signal("t15-aus");
 
             var ende = DateTime.UtcNow + BannerBeobachtung;
             while (DateTime.UtcNow < ende)
@@ -51,15 +51,39 @@ public partial class GeraetATests
                 await Task.Delay(300);
             }
 
-            await Rendezvous.WaitForAsync("t13-b-geprueft", SchrittTimeout);
-            seite.Fenster.SetForeground();
+            await Rendezvous.WaitForAsync("t15-b-geprueft", SchrittTimeout);
+            _ausgabe.WriteLine($"T15: Schalter von B im offenen Dashboard nach dem Deaktivieren: {SchalterSuche(seite, b)}");
+
+            // Das Wieder-Aktivieren ist hier nur Aufräumen (im selben Fenster prüft es T8). Im seit dem Deaktivieren
+            // offenen Fenster fand die UI-Automation den sichtbaren Schalter schon einmal nicht mehr; ein neu
+            // geöffnetes Dashboard macht das Aufräumen davon unabhängig.
+            seite = DashboardSeite.Oeffne(app);
+            seite.WaehleTabPerId("DevicesTabItem");
             (await GeraeteSchalterAsync(seite, b)).Click();
             await WarteBisAsync(() => UeberschreibungVon(b) is { } wert && wert != LicenseOverride.ForceDisabled, TimeSpan.FromSeconds(10),
                 () => $"devices.json: B hat nach dem Aktivieren LicenseOverride={UeberschreibungVon(b)}.");
             BeendeKonfiguration();
-            Rendezvous.Signal("t13-an");
-            await Rendezvous.WaitForAsync("t13-b-fertig", SchrittTimeout);
-        }, "t13");
+            Rendezvous.Signal("t15-an");
+            await Rendezvous.WaitForAsync("t15-b-fertig", SchrittTimeout);
+        }, "t15");
+
+    /// <summary>Diagnose für das Log: ob die UI-Automation den Schalter im Fenster findet, sonst welche Schalter oder welcher Fehler.</summary>
+    private static string SchalterSuche(DashboardSeite seite, Guid deviceId)
+    {
+        const string praefix = "DeviceActiveToggle_";
+        try
+        {
+            var ids = seite.Fenster.FindAllDescendants()
+                .Select(e => e.Properties.AutomationId.ValueOrDefault ?? "")
+                .Where(id => id.StartsWith(praefix, StringComparison.Ordinal))
+                .ToList();
+            return ids.Contains(praefix + deviceId) ? "gefunden" : $"nicht gefunden, vorhanden: [{string.Join(", ", ids)}]";
+        }
+        catch (Exception ex)
+        {
+            return $"Suche gescheitert: {ex.GetType().FullName}: {ex.Message}";
+        }
+    }
 
     /// <summary>Titel des Lizenzbanners, falls sichtbar. Sucht auch per Text, weil ältere Stände den Titel ohne AutomationId zeigen.</summary>
     private static string? SichtbaresLizenzbanner(DashboardSeite seite)

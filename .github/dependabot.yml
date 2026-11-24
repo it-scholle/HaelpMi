@@ -1,4 +1,4 @@
-# Ohne target-branch zielt Dependabot auf den GitHub-Default-Branch, also den jeweils aktiven release-*-Branch.
+# Ohne target-branch zielt Dependabot auf den GitHub-Default-Branch, also `develop`.
 version: 2
 updates:
   - package-ecosystem: nuget
