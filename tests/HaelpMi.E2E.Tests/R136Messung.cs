@@ -13,7 +13,7 @@ using static HaelpMi.E2E.Tests.ZweiGeraete;
 namespace HaelpMi.E2E.Tests;
 
 /// <summary>
-/// Messung für die Regressionstests #136 auf Empfängerseite: T10 (B) und T14 (B und C). Ein Zyklus in Variante N
+/// Messung für die Regressionstests "Alarmfenster öffnet nach dem Schließen erneut" auf Empfängerseite: T10 (B) und T14 (B und C). Ein Zyklus in Variante N
 /// klickt "Bin unterwegs" mit einem Versatz zur nächsten erwarteten Repeat-Welle, schließt sofort und achtet danach
 /// auf ein zweites Alarmfenster derselben Session. Ergebnisse als CSV-Zeilen (<see cref="R136Zeile"/>).
 /// </summary>
@@ -132,7 +132,7 @@ internal static class R136Messung
         }
 
         Assert.True(fehler == 0,
-            $"Regression #136 mit drei Geräten auf {geraet.ToUpperInvariant()}: in {fehler} von {zeilen.Count} Zyklen erschien ein zweites Alarmfenster, " +
+            $"Alarmfenster nach dem Schließen (drei Geräte) auf {geraet.ToUpperInvariant()}: in {fehler} von {zeilen.Count} Zyklen erschien ein zweites Alarmfenster, " +
             $"wurde Schließen nicht frei oder blieb das Fenster offen (Agent {version}). Details: {Path.GetFileName(csv)} im Artefakt.");
     }
 

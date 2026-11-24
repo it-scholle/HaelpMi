@@ -195,4 +195,27 @@ public class ReceivedAlarmSessionsTests
 
         Assert.Equal(IncomingAlarmAction.ShowNewPopup, sessions.Decide(sessionId, sessionVisible: true, out _));
     }
+
+    [Fact]
+    public void IsCompleted_MatchesDecide_ForTheFastExitOutsideTheUiThread()
+    {
+        var sessions = NewSessions();
+        var closedRegularly = Guid.NewGuid();
+        var popup = ShowFirstWave(sessions, closedRegularly, 1);
+        Assert.False(sessions.IsCompleted(closedRegularly));
+        ApplyRelay(sessions, closedRegularly, 1, senderStillSending: true);
+        sessions.PopupClosed(closedRegularly, popup.Gate.IsCloseAllowed);
+
+        var cancelledBySender = Guid.NewGuid();
+        sessions.StatusRelayReceived(cancelledBySender, senderStillSending: false);
+
+        var autoClosed = Guid.NewGuid();
+        var autoPopup = ShowFirstWave(sessions, autoClosed, 1);
+        sessions.PopupClosed(autoClosed, autoPopup.Gate.IsCloseAllowed);
+
+        Assert.True(sessions.IsCompleted(closedRegularly));
+        Assert.True(sessions.IsCompleted(cancelledBySender));
+        Assert.False(sessions.IsCompleted(autoClosed));
+        Assert.False(sessions.IsCompleted(Guid.NewGuid()));
+    }
 }

@@ -68,9 +68,8 @@ public sealed class AlarmFlowCoordinator
     {
         var request = args.Request;
 
-        // Bei Fast User Switching bekommt JEDE
-        // angemeldete Sitzung ein empfangenes Alarmsignal (siehe AlarmChannel), auch eine
-        // gerade weggeschaltete. Ein NEUES erzwungenes Popup dort kann niemand sehen oder
+        // Bei Fast User Switching bekommt JEDE angemeldete Sitzung ein empfangenes
+        // Alarmsignal (siehe AlarmChannel), auch eine gerade weggeschaltete. Ein NEUES erzwungenes Popup dort kann niemand sehen oder
         // wegklicken - lieber gar nicht erst zeigen, als eine Zustellung vortäuschen, die
         // niemand wahrnimmt. Der Ack ans sendende Gerät ist davon unabhängig (Geräte-Ebene,
         // siehe AlarmTcpListener) - nur die lokale Anzeige wird hier unterdrückt. Ein schon
@@ -79,15 +78,24 @@ public sealed class AlarmFlowCoordinator
         var sessionVisible = ActiveSessionDetector.IsCurrentSessionActive();
         IncomingAlarmAction? action = null;
 
+        // Schneller Ausstieg ohne UI-Thread: hängt der Dispatcher, liefe das Invoke unten ins
+        // Zeitlimit und eine Welle einer längst abgeschlossenen Session löste trotzdem den Ton
+        // aus. Maßgeblich bleibt die Entscheidung im Dispatcher.
+        if (_receivedSessions.IsCompleted(request.AlarmSessionId))
+        {
+            _auditLog.Append($"alarm-Welle für bereits abgeschlossene Session ignoriert: alarmSessionId={request.AlarmSessionId}");
+            return;
+        }
+
         var settings = _settingsProvider();
         var soundOption = IncomingSoundCatalog.Resolve(settings.IncomingSoundId);
 
-        // Issue #92: Timeout statt unbegrenztem Invoke - direkt nach Logon ist der
-        // Dispatcher (siehe AlarmDispatcherReadyTimeout) unter Umständen noch nicht am
-        // Pumpen, sonst würde dieser Aufruf den Empfangsthread bis zum Ende von OnStartup
-        // blockieren und der Ack unten käme beim Sender nie rechtzeitig an. Das Popup wird
-        // trotzdem gezeigt, sobald der Dispatcher tatsächlich läuft - läuft er schon
-        // (Normalfall), verhält sich das wie das bisherige Invoke.
+        // Timeout statt unbegrenztem Invoke - direkt nach Logon ist der Dispatcher (siehe
+        // AlarmDispatcherReadyTimeout) unter Umständen noch nicht am Pumpen, sonst würde dieser
+        // Aufruf den Empfangsthread bis zum Ende von OnStartup blockieren und der Ack käme beim
+        // Sender nie rechtzeitig an. Achtung: Startet die Aktion nicht innerhalb des Zeitlimits,
+        // verwirft WPF sie - diese Welle zeigt dann kein Fenster, nur den Ton; erst die nächste
+        // Repeat-Welle öffnet es. Läuft der Dispatcher (Normalfall), wie ein normales Invoke.
         System.Windows.Application.Current.Dispatcher.Invoke(() =>
         {
             // Entscheidung erst hier auf dem UI-Thread: ein gerade laufendes Schließen ist dann

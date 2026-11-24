@@ -43,6 +43,9 @@ public sealed class ReceivedAlarmSessions<TPopup>(TimeSpan completedRetention, F
         return sessionVisible ? IncomingAlarmAction.ShowNewPopup : IncomingAlarmAction.SuppressInactiveSession;
     }
 
+    /// <summary>Threadsicher, für einen Vorab-Ausstieg außerhalb des UI-Threads; maßgeblich bleibt <see cref="Decide"/>.</summary>
+    public bool IsCompleted(Guid alarmSessionId) => _completed.IsCompleted(alarmSessionId);
+
     public void PopupShown(Guid alarmSessionId, TPopup popup) => _openPopups[alarmSessionId] = popup;
 
     /// <param name="closeAllowed">

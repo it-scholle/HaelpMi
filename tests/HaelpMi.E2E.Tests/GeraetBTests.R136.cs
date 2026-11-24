@@ -7,14 +7,14 @@ using static HaelpMi.E2E.Tests.ZweiGeraete;
 
 namespace HaelpMi.E2E.Tests;
 
-// T10 und T14 Regressionstests #136, Gegenstücke in GeraetATests.R136.cs und GeraetCTests.cs, Messung in R136Messung.cs.
+// T10 und T14 (Alarmfenster öffnet nach dem Schließen erneut), Gegenstücke in GeraetATests.R136.cs und GeraetCTests.cs, Messung in R136Messung.cs.
 public partial class GeraetBTests
 {
     /// <summary>
     /// Empfänger-Seite und Auswertung. Pro Zyklus zwei Varianten:
     /// N (natürlich): "Bin unterwegs" mit Versatz φ zur nächsten erwarteten Repeat-Welle, φ wandert über die Zyklen
     /// von -400 bis +400 ms; sofort schließen, sobald frei; danach auf ein zweites Fenster derselben Session achten.
-    /// W (Nachwelle): A schickt dieselbe Session nach dem Schließen erneut - deterministisch der Fall aus #136.
+    /// W (Nachwelle): A schickt dieselbe Session nach dem Schließen erneut - deterministisch der Fehlerfall "Fenster öffnet nach dem Schließen erneut".
     /// Ohne produkt_ref muss W ohne Treffer bleiben, mit produkt_ref (Vergleichslauf gegen einen alten Stand) wird nur gemessen.
     /// </summary>
     [Fact, TestPriority(100)]

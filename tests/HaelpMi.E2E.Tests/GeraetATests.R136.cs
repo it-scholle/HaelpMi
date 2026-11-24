@@ -10,7 +10,7 @@ using static HaelpMi.E2E.Tests.ZweiGeraete;
 
 namespace HaelpMi.E2E.Tests;
 
-// T10 und T14 Regressionstests #136, Gegenstücke und Auswertung in GeraetBTests.R136.cs und GeraetCTests.cs.
+// T10 und T14 (Alarmfenster öffnet nach dem Schließen erneut), Gegenstücke und Auswertung in GeraetBTests.R136.cs und GeraetCTests.cs.
 public partial class GeraetATests
 {
     /// <summary>
