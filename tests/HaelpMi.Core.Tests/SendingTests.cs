@@ -294,6 +294,16 @@ public class SendingTests
     }
 
     [Theory]
+    [InlineData(0, 5000)]
+    [InlineData(2000, 3000)]
+    [InlineData(5000, 0)]
+    [InlineData(9000, 0)]
+    public void TimeUntilNextWave_CountsFromWaveStart(int waveDurationMs, int expectedMs)
+    {
+        Assert.Equal(TimeSpan.FromMilliseconds(expectedMs), RepeatingAlarmSession.TimeUntilNextWave(TimeSpan.FromMilliseconds(waveDurationMs)));
+    }
+
+    [Theory]
     [InlineData(2000)] // Empfänger quittiert spät, z. B. weil sein UI-Thread beim ersten Alarm noch beschäftigt ist
     [InlineData(6000)] // Empfänger quittiert gar nicht mehr (Agent beendet, PC aus): jede Welle läuft in den Ack-Timeout
     public async Task RepeatingAlarmSession_SlowAck_KeepsRepeatInterval(int ackDelayMs)
