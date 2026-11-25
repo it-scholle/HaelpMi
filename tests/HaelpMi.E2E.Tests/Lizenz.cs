@@ -84,25 +84,4 @@ internal static class Lizenz
         await HaelpMiApp.StarteAgentAsync();
         await Task.Delay(ZweiGeraete.AgentAnlaufzeit);
     }
-
-    /// <summary>
-    /// Testvorbereitung: nach T8 steht B auf ForceEnabled (Wieder-Aktivieren setzt das statt None) und wäre damit
-    /// auch ohne Lizenz immer aktiv. Nur bei gestopptem Agent aufrufen, sonst überschreibt er die Datei.
-    /// </summary>
-    public static void EigeneUeberschreibungZuruecksetzen()
-    {
-        var settings = JsonFileStore.Load<OwnSettings>(AppPaths.SettingsFilePath) ?? throw new InvalidOperationException("settings.json fehlt.");
-        settings.LicenseOverride = LicenseOverride.None;
-        settings.LicenseOverrideSetAtUtc = DateTimeOffset.UtcNow;
-        JsonFileStore.Save(AppPaths.SettingsFilePath, settings);
-    }
-
-    /// <summary>Gegenstück zu <see cref="EigeneUeberschreibungZuruecksetzen"/> in devices.json von A.</summary>
-    public static void UeberschreibungZuruecksetzen(Guid deviceId)
-    {
-        var store = new DeviceStore();
-        var geraete = store.Load();
-        DeviceStore.SetLicenseOverride(geraete, deviceId, LicenseOverride.None, DateTimeOffset.UtcNow);
-        store.Save(geraete);
-    }
 }

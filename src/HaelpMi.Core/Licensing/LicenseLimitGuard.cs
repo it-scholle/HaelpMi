@@ -58,8 +58,33 @@ public sealed class LicenseLimitGuard
         return LicenseLimitEvaluator.GetDisabledDeviceIds(BuildKnownDevices(identity), EffectiveUserLimit());
     }
 
+    public LicenseBlockReason GetOwnBlockReason()
+    {
+        var identity = _identityProvider();
+        var known = BuildKnownDevices(identity);
+        return LicenseLimitEvaluator.IsWithinLimit(identity.DeviceId, known, EffectiveUserLimit())
+            ? LicenseBlockReason.None
+            : ReasonFor(known[0].Override);
+    }
+
+    /// <summary>Sperrgrund je gesperrtem Gerät (eigenes eingeschlossen); nicht enthaltene Geräte sind aktiv.</summary>
+    public IReadOnlyDictionary<Guid, LicenseBlockReason> GetBlockReasons()
+    {
+        var known = BuildKnownDevices(_identityProvider());
+        var overrides = known.GroupBy(d => d.DeviceId).ToDictionary(g => g.Key, g => g.First().Override);
+        return LicenseLimitEvaluator.GetDisabledDeviceIds(known, EffectiveUserLimit())
+            .ToDictionary(id => id, id => ReasonFor(overrides[id]));
+    }
+
     /// <summary>Issue #61 (Geräte-Tab "x/y lizenziert"): dieselbe Regel wie <see cref="GetDisabledDeviceIds"/>, hier nur als reiner Anzeigewert.</summary>
     public int? GetEffectiveUserLimit() => EffectiveUserLimit();
+
+    private LicenseBlockReason ReasonFor(LicenseOverride effectiveOverride) =>
+        effectiveOverride == LicenseOverride.ForceDisabled ? LicenseBlockReason.ManuallyDisabled
+        : HasNoValidLicense() ? LicenseBlockReason.NoLicense
+        : LicenseBlockReason.LimitExceeded;
+
+    private bool HasNoValidLicense() => _licenseProvider().Status is LicenseStatus.Missing or LicenseStatus.Invalid;
 
     private int? EffectiveUserLimit()
     {

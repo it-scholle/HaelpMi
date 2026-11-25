@@ -28,8 +28,8 @@ zurücksetzen.
    installer\inno-compiler\ISCC.exe installer\HaelpMi.iss
    installer\inno-compiler\ISCC.exe installer\HaelpMi-Admin.iss
    ```
-   (Test-Installer, kein `/DCustomerGroupId`/`/DInstallerPassword` nötig - siehe
-   Standardwerte in `HaelpMiCommon.iss.inc`.) Dieses Projekt baut die Installer bewusst
+   (Test-Installer, kein `/DCustomerGroupId`/`/DInstallerPassword` nötig - beide Installer
+   bekommen dieselbe zufällige Test-Kundengruppe, siehe `HaelpMiKundengruppe.iss.inc`.) Dieses Projekt baut die Installer bewusst
    NICHT selbst - das ist ein separater, langsamer Schritt und gehört in die Build-Pipeline
    davor, nicht in jeden einzelnen Testlauf.
 3. Bildschirm nicht gesperrt/im Hintergrund - `WizardAutomation.cs` steuert Inno Setups

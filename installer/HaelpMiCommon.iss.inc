@@ -23,20 +23,7 @@
 #define DiscoveryUdpPort 51500
 #define AlarmTcpPort 51501
 
-; FR-35/FR-49: die gemeinsame Kunden-/Gruppen-ID, die Admin- und User-Installer eines
-; Kunden verknüpft. Wird vom (noch nicht existierenden) Install-Creator pro Kunde per
-; ISCC-Kommandozeile gesetzt: "ISCC /DCustomerGroupId={guid} /DIsTestInstaller=false ...".
-; Format wie ein .NET Guid ("D"-Format, 36 Zeichen, OHNE geschweifte Klammern) - genau wie
-; bei GenerateDeviceId unten, da System.Text.Json keine andere Schreibweise akzeptiert.
-; Ohne diese Angabe (z. B. beim manuellen Kompilieren zu Entwicklungszwecken) fällt das
-; auf eine Nullen-ID + "Test" zurück - ein damit gebauter Installer taugt nur zum lokalen
-; Testen, niemals für eine echte Kunden-Auslieferung (siehe deployment.json unten).
-#ifndef CustomerGroupId
-  #define CustomerGroupId "00000000-0000-0000-0000-000000000000"
-#endif
-#ifndef IsTestInstaller
-  #define IsTestInstaller "true"
-#endif
+#include "HaelpMiKundengruppe.iss.inc"
 
 ; Issue #39: menschenlesbares Pendant zur CustomerGroupId, das der Kunde tatsächlich zu
 ; sehen bekommt (z. B. im "Über mich"-Popup) - die UUID selbst bleibt rein intern. Vom
