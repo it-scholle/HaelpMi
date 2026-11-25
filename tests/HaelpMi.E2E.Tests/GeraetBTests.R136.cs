@@ -15,7 +15,8 @@ public partial class GeraetBTests
     /// N (natürlich): "Bin unterwegs" mit Versatz φ zur nächsten erwarteten Repeat-Welle, φ wandert über die Zyklen
     /// von -400 bis +400 ms; sofort schließen, sobald frei; danach auf ein zweites Fenster derselben Session achten.
     /// W (Nachwelle): A schickt dieselbe Session nach dem Schließen erneut - deterministisch der Fehlerfall "Fenster öffnet nach dem Schließen erneut".
-    /// Ohne produkt_ref muss W ohne Treffer bleiben, mit produkt_ref (Vergleichslauf gegen einen alten Stand) wird nur gemessen.
+    /// W muss ohne Treffer bleiben, auch mit produkt_ref; die Marke [T10W] in der Meldung macht das Fehlerbild für Negativtests
+    /// (ERWARTET_ROT=T10W) von anderen Fehlschlägen unterscheidbar.
     /// </summary>
     [Fact, TestPriority(100)]
     [Trait("Teil", ZweiGeraete.Teil), Trait("Bereich", "R136")]
@@ -81,14 +82,8 @@ public partial class GeraetBTests
 
             var wTreffer = zeilen.Count(z => z.Variante == "W" && z.Treffer);
             var wAuswertbar = zeilen.Count(z => z.Variante == "W" && !z.Uebersprungen);
-            if (E2EUmgebung.ProduktRef is { } produkt)
-            {
-                _ausgabe.WriteLine($"Vergleichslauf gegen {produkt} (Agent {version}): nur gemessen, Nachwelle {wTreffer} von {wAuswertbar} Zyklen mit zweitem Fenster.");
-                return;
-            }
-
             Assert.True(wTreffer == 0,
-                $"Regression #136: nach einer Nachwelle derselben Session erschien in {wTreffer} von {wAuswertbar} Zyklen erneut ein Alarmfenster " +
+                $"[T10W] Regression #136: nach einer Nachwelle derselben Session erschien in {wTreffer} von {wAuswertbar} Zyklen erneut ein Alarmfenster " +
                 $"(Agent {version}). Details: {Path.GetFileName(csv)} und r136-zusammenfassung.json im Artefakt.");
         }, "t10");
 

@@ -302,6 +302,8 @@ Teil A gilt projektübergreifend und kommt aus der MasterAgents-Blueprint. Teil 
 - Bei aktiver Branch- oder Versionsarbeit den Stand im Chat als Tabelle zusammenfassen (Bereich, Branch, Version Ziel-Branch, Version dieser Änderung, Status), ohne Fettdruck. Vorlage: `docs/wissen/git-workflow.md`.
 
 ## Test-Stufen
+- Grundregel für alle Testarten (Unit, Installer, E2E, Negativtests, Messläufe, CI): Grün heißt, das Ergebnis ist gewollt; rot heißt, es ist ungewollt. Rot nur bei Produktfehler, unerwartetem Fehlschlag, Infrastrukturfehler oder einem Negativtest, der den Fehler nicht erkennt. Keine Läufe „rot, aber eigentlich okay“ und keine Tests, die unter bestimmten Parametern nur messen.
+- Negativtest: absichtlicher Lauf, der einen bekannten Fehler nachweisen soll (z. B. Gegenprobe auf dem Stand vor dem Fix). Er ist grün genau dann, wenn genau die erwarteten Tests fehlschlagen und alle anderen bestehen. Er wird gekennzeichnet (E2E: `erwartung=negativ`, Run-Name und Summary „Negativtest (erwartet: Fehler) – PRODUKT_REF=…“) und zählt nie als Gate.
 - Patch: Smoke-Set (die mit 🔹 markierten Tests in `docs/wissen/test-strategie.md`).
 - Minor: volle coded Suite (Core, InstallCreator, Installer).
 - Major/1.0+: zusätzlich FlaUI-UI-Suite und Audio-Loopback-Suite, sobald gebaut.
@@ -314,7 +316,7 @@ Teil A gilt projektübergreifend und kommt aus der MasterAgents-Blueprint. Teil 
 Suite `tests/HaelpMi.E2E.Tests` (FlaUI auf PVE-VMs, Testfälle T1 ff. mit Trait `Bereich`); Umfang, Auslösung und Laufparameter in `docs/wissen/test-strategie.md`. Unit-Tests bleiben zusätzlich Pflicht, ersetzen E2E in den folgenden Fällen aber nicht.
 - Pflicht:
   - Neues nutzer- oder netzwerkrelevantes Feature (UI, Alarmweg, Config-Sync, Lizenz, Installer, Geräteverwaltung): mindestens ein neuer T-Fall oder die Erweiterung eines bestehenden, mit Trait `Bereich`.
-  - Bugfix eines im E2E beobachtbaren Fehlers: zuerst ein Regressionstest, der den Fehler reproduziert. Nachweis: Lauf mit `produkt_ref` auf dem Stand vor dem Fix zeigt den Fehler, Lauf auf dem Ticket-Branch nicht (Muster T10).
+  - Bugfix eines im E2E beobachtbaren Fehlers: zuerst ein Regressionstest, der den Fehler reproduziert. Nachweis (Muster T10): Negativtest auf dem Stand vor dem Fix (`produkt_ref`, `erwartung=negativ`, `erwartet_rot` mit den T-Kürzeln, z. B. `T22` oder `T10W`) ist grün, positiver Lauf auf dem Ticket-Branch ist grün. Parameter und Fehlerbild-Marken: `docs/wissen/test-strategie.md`.
   - Größere Änderung (Umbau oder Refactoring in Agent, Core-Netzwerk, Lizenzierung, Installer oder einem UI-Fenster): Lauf der betroffenen Bereiche (Filter) vor `status:review`, auch ohne neuen Test.
   - Keine Pflicht: reine Doku, Kosmetik ohne Verhaltensänderung, Änderungen nur an Tests oder Entwickler-Werkzeugen. Im Zweifel gilt die Pflicht.
 - Ticket: Jedes Feature- und Bug-Issue hat den Abschnitt „Testfälle (E2E)“ mit den neuen oder angepassten T-Fällen (Nummer, Bereich, erwartetes Ergebnis) oder „nicht E2E-relevant“ mit Begründung (Vorlagen in `.github/ISSUE_TEMPLATE/`).

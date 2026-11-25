@@ -82,15 +82,8 @@ internal static class R136Mehrfach
         var treffer = auswertbar.Count(z => z.Treffer);
         var haengend = auswertbar.Count(z => z.Haengt);
         var ohneNachwelle = auswertbar.Count(z => z.WellenEmpfangen == 0);
-        if (E2EUmgebung.ProduktRef is { } produkt)
-        {
-            ausgabe.WriteLine($"Vergleichslauf gegen {produkt} (Agent {version}): nur gemessen, {treffer} von {auswertbar.Count} Zyklen mit mehr als einem Alarmfenster " +
-                $"oder Rücksetzung, {haengend} hängend, {ohneNachwelle} ohne empfangene Nachwelle.");
-            return;
-        }
-
         Assert.True(treffer == 0 && haengend == 0,
-            $"Regression #136 (Mehrfach-Nachwelle) auf {geraet.ToUpperInvariant()}: in {treffer} von {auswertbar.Count} Zyklen mehr als ein Alarmfenster " +
+            $"[T19F] Regression #136 (Mehrfach-Nachwelle) auf {geraet.ToUpperInvariant()}: in {treffer} von {auswertbar.Count} Zyklen mehr als ein Alarmfenster " +
             $"oder 'Bin unterwegs' wieder aktiv, in {haengend} Zyklen Schließen nie frei oder Fenster blieb offen (Agent {version}). " +
             $"Details: {Path.GetFileName(csv)} und r136-mehrfach-{geraet}-zusammenfassung.json im Artefakt.");
 

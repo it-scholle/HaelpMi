@@ -1,17 +1,19 @@
 #!/usr/bin/env python3
-"""Wertet einen E2E-Messlauf (ERWARTUNG=rot) aus den trx-Dateien der Geräte aus.
+"""Wertet einen E2E-Negativtest (ERWARTUNG=negativ) aus den trx-Dateien der Geräte aus.
 
-Aufruf: erwartung-auswerten.py <ergebnis-verzeichnis> <geraete> [muster]
+Aufruf: erwartung-auswerten.py <ergebnis-verzeichnis> <geraete> <erwartet-rot> [produkt-ref]
 
   ergebnis-verzeichnis  enthält je Gerät das heruntergeladene Artefakt e2e-<gerät>/
                         (trx/*.trx und dotnet-test-exitcode.txt aus dem Test-Job)
   geraete               Geräteauswahl des Laufs, z. B. "a,b,c"
-  muster                regulärer Ausdruck (Python re.search) auf den vollen Testnamen;
-                        leer = jeder fehlgeschlagene Test gilt als erwartet
+  erwartet-rot          kommagetrennte T-Kürzel, z. B. "T6,T10W". "T10" steht für jeden Fehlschlag eines
+                        Tests T10_…, "T10W" nur für einen Fehlschlag von T10_…, dessen Meldung die Marke
+                        "[T10W]" trägt (ein bestimmtes Fehlerbild des Tests).
+  produkt-ref           nur für den Bericht
 
-Urteil "Fehler reproduziert" (Exit 0) nur, wenn mindestens ein erwarteter Test fehlschlägt und
-nichts Unerwartetes vorliegt. Unerwartet ist: ein fehlgeschlagener Test außerhalb des Musters,
-jedes andere Ergebnis als Passed/Failed/NotExecuted, ein abgebrochener Testlauf, ein Gerät ohne
+Urteil "Negativtest bestanden" (Exit 0) genau dann, wenn jedes Kürzel mindestens einen passenden
+Fehlschlag hat und nichts Unerwartetes vorliegt. Unerwartet ist: ein Fehlschlag, der zu keinem Kürzel
+passt, jedes andere Ergebnis als Passed/Failed/NotExecuted, ein abgebrochener Testlauf, ein Gerät ohne
 Artefakt oder Exit-Code, ein Exit-Code ungleich 0 ohne fehlgeschlagenen Test. Sonst Exit 1.
 Exit 2 = Aufruf ungültig. Den Bericht (Markdown) schreibt das Skript auf stdout.
 """
@@ -25,21 +27,46 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 NS = {"t": "http://microsoft.com/schemas/VisualStudio/TeamTest/2010"}
-NEUTRAL = {"Passed", "NotExecuted"}
 MELDUNG_MAX = 300
+KUERZEL = re.compile(r"T([0-9]{1,3})([A-Z]?)")
+TESTNAME = re.compile(r"(?:^|\.)T([0-9]{1,3})_[^.]*$")
+
+
+@dataclass(frozen=True)
+class Kuerzel:
+    text: str
+    nummer: int
+    variante: str
+
+    def passt(self, nummer: int | None, meldung: str) -> bool:
+        if nummer != self.nummer:
+            return False
+        return not self.variante or f"[{self.text}]" in meldung
 
 
 @dataclass
 class Auswertung:
+    kuerzel: list[Kuerzel]
     erwartet: list[str] = field(default_factory=list)
     unerwartet: list[str] = field(default_factory=list)
     hinweise: list[str] = field(default_factory=list)
     bestanden: int = 0
-    ausgefuehrt: list[str] = field(default_factory=list)
+    getroffen: set[str] = field(default_factory=set)
 
     @property
-    def reproduziert(self) -> bool:
-        return bool(self.erwartet) and not self.unerwartet
+    def fehlend(self) -> list[str]:
+        return [k.text for k in self.kuerzel if k.text not in self.getroffen]
+
+    @property
+    def bestanden_urteil(self) -> bool:
+        return not self.fehlend and not self.unerwartet
+
+
+def kuerzel_lesen(text: str) -> list[Kuerzel] | None:
+    teile = [t.strip() for t in text.split(",")]
+    if not teile or any(not KUERZEL.fullmatch(t) for t in teile) or len(set(teile)) != len(teile):
+        return None
+    return [Kuerzel(t, int(m.group(1)), m.group(2)) for t in teile if (m := KUERZEL.fullmatch(t))]
 
 
 def kurz(text: str) -> str:
@@ -48,12 +75,17 @@ def kurz(text: str) -> str:
     return zeile if len(zeile) <= MELDUNG_MAX else zeile[: MELDUNG_MAX - 1] + "…"
 
 
-def meldung(ergebnis: ET.Element) -> str:
+def meldung_roh(ergebnis: ET.Element) -> str:
     knoten = ergebnis.find("t:Output/t:ErrorInfo/t:Message", NS)
-    return kurz(knoten.text or "") if knoten is not None and knoten.text else "(keine Meldung)"
+    return knoten.text if knoten is not None and knoten.text else ""
 
 
-def trx_auswerten(datei: Path, geraet: str, muster: re.Pattern[str] | None, a: Auswertung) -> int:
+def testnummer(name: str) -> int | None:
+    treffer = TESTNAME.search(name)
+    return int(treffer.group(1)) if treffer else None
+
+
+def trx_auswerten(datei: Path, geraet: str, a: Auswertung) -> int:
     """Gibt die Zahl der fehlgeschlagenen Tests in der Datei zurück."""
     try:
         wurzel = ET.parse(datei).getroot()
@@ -66,7 +98,7 @@ def trx_auswerten(datei: Path, geraet: str, muster: re.Pattern[str] | None, a: A
     if lauf not in ("Completed", "Failed"):
         a.unerwartet.append(f"{geraet}: Testlauf in {datei.name} endete mit „{lauf or 'unbekannt'}“")
     # Testhost-Absturz oder xunit "Catastrophic failure" setzt in der trx nur outcome="Failed" und eine
-    # RunInfo mit Error; die danach geplanten Tests fehlen. Ohne diese Prüfung gälte der Lauf als reproduziert.
+    # RunInfo mit Error; die danach geplanten Tests fehlen. Ohne diese Prüfung gälte der Lauf als bestanden.
     for info in wurzel.iterfind("t:ResultSummary/t:RunInfos/t:RunInfo", NS):
         if info.get("outcome") == "Error":
             text = info.find("t:Text", NS)
@@ -76,25 +108,27 @@ def trx_auswerten(datei: Path, geraet: str, muster: re.Pattern[str] | None, a: A
     for ergebnis in wurzel.iterfind("t:Results/t:UnitTestResult", NS):
         name = ergebnis.get("testName", "(ohne Namen)")
         ausgang = ergebnis.get("outcome", "")
-        if ausgang in ("Passed", "Failed"):
-            a.ausgefuehrt.append(name)
         if ausgang == "Passed":
             a.bestanden += 1
         elif ausgang == "NotExecuted":
             a.hinweise.append(f"{geraet}: `{name}` nicht ausgeführt")
         elif ausgang == "Failed":
             fehlgeschlagen += 1
-            zeile = f"{geraet}: `{name}` – {meldung(ergebnis)}"
-            if muster is None or muster.search(name):
-                a.erwartet.append(zeile)
+            roh = meldung_roh(ergebnis)
+            zeile = f"{geraet}: `{name}` – {kurz(roh) if roh else '(keine Meldung)'}"
+            nummer = testnummer(name)
+            passende = [k.text for k in a.kuerzel if k.passt(nummer, roh)]
+            if passende:
+                a.getroffen.update(passende)
+                a.erwartet.append(f"{zeile} ({', '.join(passende)})")
             else:
-                a.unerwartet.append(zeile + " (passt nicht zu ERWARTET_ROT)")
+                a.unerwartet.append(zeile + " (passt zu keinem Kürzel in ERWARTET_ROT)")
         else:
             a.unerwartet.append(f"{geraet}: `{name}` mit Ergebnis „{ausgang or 'unbekannt'}“")
     return fehlgeschlagen
 
 
-def geraet_auswerten(verzeichnis: Path, geraet: str, muster: re.Pattern[str] | None, a: Auswertung) -> None:
+def geraet_auswerten(verzeichnis: Path, geraet: str, a: Auswertung) -> None:
     artefakt = verzeichnis / f"e2e-{geraet}"
     if not artefakt.is_dir():
         a.unerwartet.append(f"{geraet}: Artefakt e2e-{geraet} fehlt (Test-Job nicht gelaufen?)")
@@ -109,7 +143,7 @@ def geraet_auswerten(verzeichnis: Path, geraet: str, muster: re.Pattern[str] | N
         exitcode = int(exitcode_text)
 
     trx_dateien = sorted((artefakt / "trx").rglob("*.trx")) if (artefakt / "trx").is_dir() else []
-    fehlgeschlagen = sum(trx_auswerten(d, geraet, muster, a) for d in trx_dateien)
+    fehlgeschlagen = sum(trx_auswerten(d, geraet, a) for d in trx_dateien)
 
     if not trx_dateien:
         if exitcode == 0:
@@ -122,26 +156,27 @@ def geraet_auswerten(verzeichnis: Path, geraet: str, muster: re.Pattern[str] | N
         a.unerwartet.append(f"{geraet}: dotnet test endete mit Exit-Code {exitcode}, aber ohne fehlgeschlagenen Test")
 
 
-def bericht(a: Auswertung, geraete: list[str], muster_text: str) -> str:
-    urteil = "Fehler reproduziert ✔" if a.reproduziert else "Fehler nicht reproduziert ✘"
+def bericht(a: Auswertung, geraete: list[str], produkt_ref: str) -> str:
+    urteil = "bestanden: erwarteter Fehler nachgewiesen ✔" if a.bestanden_urteil else "NICHT bestanden ✘"
     zeilen = [
-        "### Messlauf (ERWARTUNG=rot)",
+        f"### Negativtest (erwartet: Fehler) – PRODUKT_REF={produkt_ref or '(dieser Stand)'}",
         "",
-        f"**Gesamturteil: {urteil}**",
+        f"**Gesamturteil: Negativtest {urteil}**",
         "",
-        "Messlauf gegen `produkt_ref`: prüft nicht den Stand dieses Branches und zählt nie als E2E-Gate.",
+        "Negativtest gegen `produkt_ref`: prüft nicht den Stand dieses Branches und zählt nie als E2E-Gate.",
         "",
         f"- Geräte: {', '.join(geraete)}",
-        f"- ERWARTET_ROT: `{muster_text}`" if muster_text else "- ERWARTET_ROT: (leer, jeder Fehlschlag gilt als erwartet)",
+        f"- ERWARTET_ROT: `{','.join(k.text for k in a.kuerzel)}`",
         f"- bestanden: {a.bestanden}, erwartet fehlgeschlagen: {len(a.erwartet)}, unerwartet: {len(a.unerwartet)}",
         "",
     ]
-    if not a.reproduziert:
-        if not a.erwartet:
-            grund = "Kein erwarteter Test ist fehlgeschlagen: der Fehler trat auf diesem Stand nicht auf."
-        else:
-            grund = "Der Fehler trat auf, aber es gab zusätzlich unerwartete Ergebnisse (siehe unten)."
-        zeilen += [f"Grund: {grund}", ""]
+    if a.fehlend:
+        zeilen += [
+            f"Grund: Kein Fehlschlag für {', '.join(a.fehlend)} – der Regressionstest erkennt den Fehler auf diesem Stand nicht.",
+            "",
+        ]
+    if a.unerwartet:
+        zeilen += ["Grund: unerwartete Ergebnisse (siehe unten).", ""]
     for titel, eintraege in (
         ("Erwartete Fehlschläge", a.erwartet),
         ("Unerwartete Ergebnisse", a.unerwartet),
@@ -154,28 +189,28 @@ def bericht(a: Auswertung, geraete: list[str], muster_text: str) -> str:
 
 
 def main(argumente: list[str]) -> int:
-    if len(argumente) not in (2, 3):
+    if len(argumente) not in (3, 4):
         print(__doc__, file=sys.stderr)
         return 2
     verzeichnis = Path(argumente[0])
     geraete = [g for g in argumente[1].split(",") if g]
-    muster_text = argumente[2] if len(argumente) == 3 else ""
+    produkt_ref = argumente[3] if len(argumente) == 4 else ""
     if not geraete or not all(re.fullmatch(r"[a-z]", g) for g in geraete):
         print(f"Ungültige Geräteauswahl: '{argumente[1]}'", file=sys.stderr)
         return 2
-    try:
-        muster = re.compile(muster_text) if muster_text else None
-    except re.error as fehler:
-        print(f"ERWARTET_ROT ist kein gültiger regulärer Ausdruck: {fehler}", file=sys.stderr)
+    kuerzel = kuerzel_lesen(argumente[2])
+    if kuerzel is None:
+        print(f"ERWARTET_ROT ungültig: '{argumente[2]}' (erwartet: T-Kürzel wie T6,T10W, ohne Doppelte)", file=sys.stderr)
+        return 2
+    if not re.fullmatch(r"[A-Za-z0-9._/-]*", produkt_ref):
+        print("produkt-ref ungültig", file=sys.stderr)
         return 2
 
-    a = Auswertung()
+    a = Auswertung(kuerzel)
     for geraet in geraete:
-        geraet_auswerten(verzeichnis, geraet, muster, a)
-    if muster is not None and len(a.ausgefuehrt) > 1 and all(muster.search(n) for n in a.ausgefuehrt):
-        a.hinweise.append("ERWARTET_ROT passt auf alle ausgeführten Tests und wirkt damit wie ein leeres Muster")
-    print(bericht(a, geraete, muster_text))
-    return 0 if a.reproduziert else 1
+        geraet_auswerten(verzeichnis, geraet, a)
+    print(bericht(a, geraete, produkt_ref))
+    return 0 if a.bestanden_urteil else 1
 
 
 if __name__ == "__main__":

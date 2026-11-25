@@ -51,8 +51,8 @@ class Lauf:
             (d / "trx").mkdir()
             (d / "trx" / f"e2e-{g.upper()}.trx").write_text(inhalt, encoding="utf-8")
 
-    def auswerten(self, geraete: str, muster: str | None = None) -> tuple[int, str]:
-        argumente = [str(self.pfad), geraete] + ([muster] if muster is not None else [])
+    def auswerten(self, geraete: str, erwartet_rot: str, produkt_ref: str = "v0.47.32") -> tuple[int, str]:
+        argumente = [str(self.pfad), geraete, erwartet_rot, produkt_ref]
         puffer = io.StringIO()
         with redirect_stdout(puffer):
             code = auswerten.main(argumente)
@@ -66,7 +66,7 @@ GRUEN_A = trx([("GeraetATests.T1_Installation", "Passed", "")])
 GRUEN_B = trx([("GeraetBTests.T4_Discovery", "Passed", "")])
 
 
-class ErwartungRotTests(unittest.TestCase):
+class NegativtestTests(unittest.TestCase):
     def setUp(self) -> None:
         self.lauf = Lauf()
 
@@ -76,77 +76,108 @@ class ErwartungRotTests(unittest.TestCase):
     def test_erwarteter_fehlschlag_ist_gruen(self) -> None:
         self.lauf.geraet("a", "1", trx([
             ("GeraetATests.T1_Installation", "Passed", ""),
-            ("GeraetATests.T22_Regression41_Banner", "Failed", "Kein Banner erschienen"),
+            ("HaelpMi.E2E.Tests.GeraetATests.T22_Regression41_Banner", "Failed", "Kein Banner erschienen"),
         ], lauf="Failed"))
         self.lauf.geraet("b", "0", GRUEN_B)
-        code, text = self.lauf.auswerten("a,b", "T22_")
+        code, text = self.lauf.auswerten("a,b", "T22")
         self.assertEqual(code, 0, text)
-        self.assertIn("Fehler reproduziert ✔", text)
+        self.assertIn("Negativtest (erwartet: Fehler) – PRODUKT_REF=v0.47.32", text)
+        self.assertIn("Negativtest bestanden", text)
         self.assertIn("Kein Banner erschienen", text)
 
-    def test_ohne_muster_zaehlt_jeder_fehlschlag(self) -> None:
-        self.lauf.geraet("a", "1", trx([("GeraetATests.T22_X", "Failed", "kaputt")], lauf="Failed"))
-        code, text = self.lauf.auswerten("a", "")
-        self.assertEqual(code, 0, text)
-
-    def test_alles_gruen_heisst_nicht_reproduziert(self) -> None:
+    def test_alles_gruen_ist_rot(self) -> None:
         self.lauf.geraet("a", "0", GRUEN_A)
         self.lauf.geraet("b", "0", GRUEN_B)
-        code, text = self.lauf.auswerten("a,b", "T22_")
+        code, text = self.lauf.auswerten("a,b", "T22")
         self.assertEqual(code, 1)
-        self.assertIn("nicht reproduziert ✘", text)
-        self.assertIn("Kein erwarteter Test", text)
+        self.assertIn("NICHT bestanden ✘", text)
+        self.assertIn("Kein Fehlschlag für T22", text)
 
-    def test_alles_gruen_ohne_muster_heisst_nicht_reproduziert(self) -> None:
-        self.lauf.geraet("a", "0", GRUEN_A)
-        code, _ = self.lauf.auswerten("a")
-        self.assertEqual(code, 1)
+    def test_jedes_kuerzel_muss_fehlschlagen(self) -> None:
+        self.lauf.geraet("a", "1", trx([
+            ("GeraetATests.T6_X", "Failed", "kaputt"),
+            ("GeraetATests.T22_Y", "Passed", ""),
+        ], lauf="Failed"))
+        code, text = self.lauf.auswerten("a", "T6,T22")
+        self.assertEqual(code, 1, text)
+        self.assertIn("Kein Fehlschlag für T22", text)
+
+    def test_mehrere_kuerzel_auf_mehreren_geraeten(self) -> None:
+        self.lauf.geraet("a", "1", trx([("GeraetATests.T6_X", "Failed", "kaputt")], lauf="Failed"))
+        self.lauf.geraet("b", "1", trx([
+            ("GeraetBTests.T10_Regression136_FensterBleibtZu", "Failed", "[T10W] Regression #136: 3 von 25"),
+            ("GeraetBTests.T4_Discovery", "Passed", ""),
+        ], lauf="Failed"))
+        code, text = self.lauf.auswerten("a,b", "T6, T10W")
+        self.assertEqual(code, 0, text)
+
+    def test_nummer_trifft_nicht_laengere_nummer(self) -> None:
+        # Früher als regulärer Ausdruck: "T2" traf auch T20 bis T29.
+        self.lauf.geraet("a", "1", trx([("GeraetATests.T22_X", "Failed", "kaputt")], lauf="Failed"))
+        code, text = self.lauf.auswerten("a", "T2")
+        self.assertEqual(code, 1, text)
+        self.assertIn("passt zu keinem Kürzel", text)
+
+    def test_variante_ohne_marke_ist_rot(self) -> None:
+        # T10 schlug fehl, aber nicht mit dem Fehlerbild W (z. B. Rendezvous-Timeout): kein Nachweis.
+        self.lauf.geraet("b", "1", trx([
+            ("GeraetBTests.T10_Regression136_FensterBleibtZu", "Failed", "Timeout beim Warten auf t10-3-aus"),
+        ], lauf="Failed"))
+        code, text = self.lauf.auswerten("b", "T10W")
+        self.assertEqual(code, 1, text)
+        self.assertIn("passt zu keinem Kürzel", text)
+        self.assertIn("Kein Fehlschlag für T10W", text)
+
+    def test_kuerzel_ohne_variante_nimmt_jede_meldung(self) -> None:
+        self.lauf.geraet("b", "1", trx([("GeraetBTests.T10_R", "Failed", "irgendwas")], lauf="Failed"))
+        code, text = self.lauf.auswerten("b", "T10")
+        self.assertEqual(code, 0, text)
 
     def test_zusaetzlicher_unerwarteter_fehlschlag_ist_rot(self) -> None:
         self.lauf.geraet("a", "1", trx([
             ("GeraetATests.T22_Regression41_Banner", "Failed", "Kein Banner"),
             ("GeraetATests.T5_Alarm", "Failed", "Timeout"),
         ], lauf="Failed"))
-        code, text = self.lauf.auswerten("a", "T22_")
+        code, text = self.lauf.auswerten("a", "T22")
         self.assertEqual(code, 1)
         self.assertIn("T5_Alarm", text)
-        self.assertIn("passt nicht zu ERWARTET_ROT", text)
+        self.assertIn("passt zu keinem Kürzel", text)
 
     def test_unerwarteter_fehlschlag_auf_anderem_geraet_ist_rot(self) -> None:
         self.lauf.geraet("a", "1", trx([("GeraetATests.T22_X", "Failed", "erwartet")], lauf="Failed"))
         self.lauf.geraet("b", "1", trx([("GeraetBTests.T4_Discovery", "Failed", "anders")], lauf="Failed"))
-        code, _ = self.lauf.auswerten("a,b", "T22_")
+        code, _ = self.lauf.auswerten("a,b", "T22")
         self.assertEqual(code, 1)
 
     def test_fehlendes_artefakt_ist_rot(self) -> None:
         self.lauf.geraet("a", "1", trx([("GeraetATests.T22_X", "Failed", "erwartet")], lauf="Failed"))
-        code, text = self.lauf.auswerten("a,b", "T22_")
+        code, text = self.lauf.auswerten("a,b", "T22")
         self.assertEqual(code, 1)
         self.assertIn("Artefakt e2e-b fehlt", text)
 
     def test_fehlender_exitcode_ist_rot(self) -> None:
         self.lauf.geraet("a", None, trx([("GeraetATests.T22_X", "Failed", "erwartet")], lauf="Failed"))
-        code, text = self.lauf.auswerten("a", "T22_")
+        code, text = self.lauf.auswerten("a", "T22")
         self.assertEqual(code, 1)
         self.assertIn("kein Exit-Code", text)
 
     def test_fehlende_trx_mit_exitcode_ungleich_null_ist_rot(self) -> None:
         self.lauf.geraet("a", "1", trx([("GeraetATests.T22_X", "Failed", "erwartet")], lauf="Failed"))
         self.lauf.geraet("b", "1", None)
-        code, text = self.lauf.auswerten("a,b", "T22_")
+        code, text = self.lauf.auswerten("a,b", "T22")
         self.assertEqual(code, 1)
         self.assertIn("keine trx-Datei", text)
 
     def test_geraet_ohne_ausgewaehlte_tests_ist_neutral(self) -> None:
         self.lauf.geraet("a", "1", trx([("GeraetATests.T22_X", "Failed", "erwartet")], lauf="Failed"))
         self.lauf.geraet("b", "0", None)
-        code, text = self.lauf.auswerten("a,b", "T22_")
+        code, text = self.lauf.auswerten("a,b", "T22")
         self.assertEqual(code, 0, text)
         self.assertIn("keine Tests ausgewählt", text)
 
     def test_abgebrochener_lauf_ist_rot(self) -> None:
         self.lauf.geraet("a", "1", trx([("GeraetATests.T22_X", "Failed", "erwartet")], lauf="Aborted"))
-        code, text = self.lauf.auswerten("a", "T22_")
+        code, text = self.lauf.auswerten("a", "T22")
         self.assertEqual(code, 1)
         self.assertIn("Aborted", text)
 
@@ -155,29 +186,20 @@ class ErwartungRotTests(unittest.TestCase):
         # die restlichen Tests fehlen dann in der trx.
         self.lauf.geraet("a", "1", trx([("GeraetATests.T22_X", "Failed", "erwartet")], lauf="Failed",
                                         laufmeldung="The active test run was aborted. Reason: Test host process crashed"))
-        code, text = self.lauf.auswerten("a", "T22_")
+        code, text = self.lauf.auswerten("a", "T22")
         self.assertEqual(code, 1, text)
         self.assertIn("Test host process crashed", text)
-
-    def test_muster_auf_alle_tests_gibt_hinweis(self) -> None:
-        self.lauf.geraet("a", "1", trx([
-            ("HaelpMi.E2E.Tests.GeraetATests.T22_X", "Failed", "erwartet"),
-            ("HaelpMi.E2E.Tests.GeraetATests.T1_Installation", "Passed", ""),
-        ], lauf="Failed"))
-        code, text = self.lauf.auswerten("a", "E2E")
-        self.assertEqual(code, 0, text)
-        self.assertIn("passt auf alle ausgeführten Tests", text)
 
     def test_exitcode_ohne_fehlschlag_ist_rot(self) -> None:
         self.lauf.geraet("a", "1", trx([("GeraetATests.T22_X", "Failed", "erwartet")], lauf="Failed"))
         self.lauf.geraet("b", "3", GRUEN_B)
-        code, text = self.lauf.auswerten("a,b", "T22_")
+        code, text = self.lauf.auswerten("a,b", "T22")
         self.assertEqual(code, 1)
         self.assertIn("ohne fehlgeschlagenen Test", text)
 
     def test_anderes_ergebnis_als_failed_ist_rot(self) -> None:
         self.lauf.geraet("a", "1", trx([("GeraetATests.T22_X", "Timeout", "")], lauf="Failed"))
-        code, _ = self.lauf.auswerten("a", "T22_")
+        code, _ = self.lauf.auswerten("a", "T22")
         self.assertEqual(code, 1)
 
     def test_nicht_ausgefuehrt_ist_neutral(self) -> None:
@@ -185,21 +207,27 @@ class ErwartungRotTests(unittest.TestCase):
             ("GeraetATests.T22_X", "Failed", "erwartet"),
             ("GeraetATests.T9_Lizenz", "NotExecuted", ""),
         ], lauf="Failed"))
-        code, text = self.lauf.auswerten("a", "T22_")
+        code, text = self.lauf.auswerten("a", "T22")
         self.assertEqual(code, 0, text)
         self.assertIn("nicht ausgeführt", text)
 
     def test_kaputte_trx_ist_rot(self) -> None:
         self.lauf.geraet("a", "1", "<TestRun")
-        code, _ = self.lauf.auswerten("a", "")
+        code, _ = self.lauf.auswerten("a", "T22")
         self.assertEqual(code, 1)
 
-    def test_ungueltiges_muster_bricht_ab(self) -> None:
-        code, _ = self.lauf.auswerten("a", "T22_(")
-        self.assertEqual(code, 2)
+    def test_ungueltige_kuerzel_brechen_ab(self) -> None:
+        for wert in ("", "T22_", "T22|T23", "t22", "T1234", "T10WW", "T6,T6", "T6,", "E2E", ".*", "T6;rm"):
+            with self.subTest(wert=wert):
+                code, _ = self.lauf.auswerten("a", wert)
+                self.assertEqual(code, 2)
 
     def test_ungueltige_geraete_brechen_ab(self) -> None:
-        code, _ = self.lauf.auswerten("a,../x", "")
+        code, _ = self.lauf.auswerten("a,../x", "T22")
+        self.assertEqual(code, 2)
+
+    def test_ungueltiger_produkt_ref_bricht_ab(self) -> None:
+        code, _ = self.lauf.auswerten("a", "T22", "v1`x")
         self.assertEqual(code, 2)
 
 

@@ -88,8 +88,8 @@ internal static class R136Messung
     /// <summary>
     /// T18 auf B und C (gleicher Ablauf): pro Zyklus Variante N gegen einen Alarm A an B und C mit Schwelle 2. Beide
     /// Empfänger zielen mit demselben Versatz auf dieselbe Welle; erst die zweite Rückmeldung gibt beide Fenster frei.
-    /// Ohne produkt_ref rot bei einem zweiten Fenster, bei nie freiem Schließen oder bei einem Fenster, das nach dem
-    /// Schließen offen blieb; mit produkt_ref (Vergleichslauf gegen einen alten Stand) wird nur gemessen.
+    /// Rot (Marke [T18F]) bei einem zweiten Fenster, bei nie freiem Schließen oder bei einem Fenster, das nach dem
+    /// Schließen offen blieb, auch mit produkt_ref.
     /// </summary>
     /// <param name="geraet">"b" oder "c"; Teil der Marken und Dateinamen.</param>
     public static async Task DreiGeraeteEmpfaengerAsync(string geraet, ITestOutputHelper ausgabe)
@@ -126,14 +126,8 @@ internal static class R136Messung
         ausgabe.WriteLine(zusammenfassung);
 
         var fehler = zeilen.Count(z => z.Treffer || z.Haengt || z.OriginalNochOffen);
-        if (E2EUmgebung.ProduktRef is { } produkt)
-        {
-            ausgabe.WriteLine($"Vergleichslauf gegen {produkt} (Agent {version}): nur gemessen, {fehler} von {zeilen.Count} Zyklen mit zweitem, nicht schließbarem oder offen gebliebenem Fenster.");
-            return;
-        }
-
         Assert.True(fehler == 0,
-            $"Alarmfenster nach dem Schließen (drei Geräte) auf {geraet.ToUpperInvariant()}: in {fehler} von {zeilen.Count} Zyklen erschien ein zweites Alarmfenster, " +
+            $"[T18F] Alarmfenster nach dem Schließen (drei Geräte) auf {geraet.ToUpperInvariant()}: in {fehler} von {zeilen.Count} Zyklen erschien ein zweites Alarmfenster, " +
             $"wurde Schließen nicht frei oder blieb das Fenster offen (Agent {version}). Details: {Path.GetFileName(csv)} im Artefakt.");
     }
 

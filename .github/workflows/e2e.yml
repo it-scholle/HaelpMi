@@ -1,4 +1,7 @@
 name: E2E
+# Negativtest im Namen sichtbar, damit ein erwartetes Ergebnis nie mit einem Gate-Lauf verwechselt wird.
+# Beim Label-Lauf steht ERWARTUNG in ci/e2e/lauf.env und ist hier noch nicht lesbar; dort kennzeichnen Job-Namen und Summary.
+run-name: "${{ github.event_name == 'workflow_dispatch' && inputs.erwartung == 'negativ' && format('Negativtest (erwartet: Fehler {0}) – PRODUKT_REF={1}', inputs.erwartet_rot, inputs.produkt_ref) || (github.event_name == 'workflow_dispatch' && format('E2E {0}', inputs.produkt_ref || github.ref_name) || github.event.pull_request.title) }}"
 
 # Läuft auf Self-Hosted-Runnern im Heimnetz (#163). Fork-Schutz deshalb in JEDEM Job:
 # nur workflow_dispatch oder ein Label "e2e" an einem PR aus diesem Repo, nie aus einem Fork.
@@ -23,12 +26,12 @@ on:
         type: string
         default: '25'
       erwartung:
-        description: 'gruen = normaler Lauf; rot = Messlauf (Gegenprobe auf dem Altstand, nur mit produkt_ref): grün, wenn die erwarteten Tests fehlschlagen und alle übrigen bestehen'
+        description: 'positiv = normaler Lauf (grün, wenn alle Tests bestehen); negativ = Negativtest gegen den Stand vor dem Fix (nur mit produkt_ref und erwartet_rot): grün, wenn genau die erwarteten Tests fehlschlagen'
         type: choice
-        options: [gruen, rot]
-        default: gruen
+        options: [positiv, negativ]
+        default: positiv
       erwartet_rot:
-        description: 'Nur mit erwartung=rot: regulärer Ausdruck auf den Testnamen der erwarteten Fehlschläge, z. B. T22_ (leer = jeder Fehlschlag)'
+        description: 'Nur mit erwartung=negativ (dort Pflicht): T-Kürzel der erwarteten Fehlschläge, kommagetrennt, z. B. T6,T10W'
         type: string
         default: ''
   pull_request:
@@ -150,13 +153,14 @@ jobs:
           if ($werte.FILTER -cnotmatch '^[A-Za-z0-9=!&|()_.~-]*$') { throw 'filter: nur A-Z, a-z, 0-9 und =!&|()_.~- erlaubt.' }
           if (-not $werte.ZYKLEN) { $werte.ZYKLEN = '25' }
           if ($werte.ZYKLEN -cnotmatch '^[0-9]{1,3}$' -or [int]$werte.ZYKLEN -lt 1 -or [int]$werte.ZYKLEN -gt 100) { throw 'zyklen: ganze Zahl von 1 bis 100.' }
-          if (-not $werte.ERWARTUNG) { $werte.ERWARTUNG = 'gruen' }
-          if ($werte.ERWARTUNG -cnotin 'gruen', 'rot') { throw 'erwartung: nur gruen oder rot.' }
-          # Ein Messlauf dreht das Urteil um; auf dem aktuellen Stand würde er echte Fehler als Erfolg melden.
-          if ($werte.ERWARTUNG -eq 'rot' -and -not $werte.PRODUKT_REF) { throw 'erwartung=rot (Messlauf) nur zusammen mit produkt_ref: die Gegenprobe läuft gegen den Stand vor dem Fix. produkt_ref (bzw. PRODUKT_REF= in ci/e2e/lauf.env) setzen oder erwartung=gruen wählen.' }
-          if ($werte.ERWARTET_ROT -and $werte.ERWARTUNG -ne 'rot') { throw 'erwartet_rot wirkt nur mit erwartung=rot: erwartung=rot setzen oder erwartet_rot leeren.' }
-          if ($werte.ERWARTET_ROT -cnotmatch '^[A-Za-z0-9_.|()^$*+?-]*$') { throw 'erwartet_rot: nur A-Z, a-z, 0-9 und _.|()^$*+?- erlaubt.' }
-          try { [void][regex]::new($werte.ERWARTET_ROT) } catch { throw "erwartet_rot ist kein gültiger regulärer Ausdruck: $($_.Exception.Message)" }
+          if (-not $werte.ERWARTUNG) { $werte.ERWARTUNG = 'positiv' }
+          if ($werte.ERWARTUNG -cnotin 'positiv', 'negativ') { throw 'erwartung: nur positiv oder negativ (leer = positiv).' }
+          $werte.ERWARTET_ROT = $werte.ERWARTET_ROT -replace ' ', ''
+          if ($werte.ERWARTET_ROT -cnotmatch '^(T[0-9]{1,3}[A-Z]?(,T[0-9]{1,3}[A-Z]?)*)?$') { throw 'erwartet_rot: T-Kürzel, kommagetrennt, z. B. T6,T10W (T, Testnummer, optional ein Großbuchstabe für das Fehlerbild).' }
+          # Ein Negativtest dreht das Urteil um; auf dem aktuellen Stand würde er echte Fehler als Erfolg melden.
+          if ($werte.ERWARTUNG -eq 'negativ' -and -not $werte.PRODUKT_REF) { throw 'erwartung=negativ (Negativtest) nur zusammen mit produkt_ref: er läuft gegen den Stand vor dem Fix. produkt_ref (bzw. PRODUKT_REF= in ci/e2e/lauf.env) setzen oder erwartung=positiv wählen.' }
+          if ($werte.ERWARTUNG -eq 'negativ' -and -not $werte.ERWARTET_ROT) { throw 'erwartung=negativ braucht erwartet_rot: die T-Kürzel der Tests, die auf dem Altstand fehlschlagen müssen, z. B. T22 oder T6,T10W.' }
+          if ($werte.ERWARTET_ROT -and $werte.ERWARTUNG -ne 'negativ') { throw 'erwartet_rot wirkt nur mit erwartung=negativ: erwartung=negativ setzen oder erwartet_rot leeren.' }
           "produkt_ref=$($werte.PRODUKT_REF)" >> $env:GITHUB_OUTPUT
           "filter=$($werte.FILTER)" >> $env:GITHUB_OUTPUT
           "zyklen=$($werte.ZYKLEN)" >> $env:GITHUB_OUTPUT
@@ -165,9 +169,10 @@ jobs:
           $quelle = if ($werte.PRODUKT_REF) { Join-Path $PWD 'produkt' } else { "$PWD" }
           "QUELLE=$quelle" >> $env:GITHUB_ENV
           $produkt = if ($werte.PRODUKT_REF) { $werte.PRODUKT_REF } else { '(dieser Stand)' }
+          if ($werte.ERWARTUNG -eq 'negativ') { "## Negativtest (erwartet: Fehler $($werte.ERWARTET_ROT)) – PRODUKT_REF=$($werte.PRODUKT_REF)`n`nGrün heißt: genau die erwarteten Tests schlagen fehl, alle anderen bestehen (Job 'Negativtest auswerten'). Zählt nie als E2E-Gate.`n" >> $env:GITHUB_STEP_SUMMARY }
           "### E2E-Laufparameter`n`n- produkt_ref: $produkt`n- filter: $($werte.FILTER)`n- zyklen: $($werte.ZYKLEN)`n- erwartung: $($werte.ERWARTUNG)`n- erwartet_rot: $($werte.ERWARTET_ROT)" >> $env:GITHUB_STEP_SUMMARY
 
-      # Agent, Konfiguration und Installer aus einem anderen Stand (Vergleichslauf, z. B. v0.46.1 für #136).
+      # Agent, Konfiguration und Installer aus einem anderen Stand (Negativtest auf dem Stand vor dem Fix, z. B. v0.46.1 für #136).
       - name: Produktstand auschecken
         if: steps.lauf.outputs.produkt_ref != ''
         uses: actions/checkout@v4
@@ -263,7 +268,7 @@ jobs:
 
   # Ein Job je gewähltem Gerät (Matrix aus plan). Runner-Label vm-<gerät>, Rolle und Raumnummer aus ci/e2e/geraete.json.
   test:
-    name: Tests auf VM ${{ matrix.name }}
+    name: Tests auf VM ${{ matrix.name }}${{ needs.build.outputs.erwartung == 'negativ' && ' (Negativtest)' || '' }}
     needs: [plan, reset, build]
     if: github.event_name == 'workflow_dispatch' || (github.event.label.name == 'e2e' && github.event.pull_request.head.repo.full_name == github.repository)
     strategy:
@@ -297,7 +302,7 @@ jobs:
           name: e2e-tests
           path: C:\haelpmi-e2e\tests
       # Tests mit Trait Teil laufen nur, wenn alle beteiligten Geräte im Lauf sind.
-      # Messlauf (erwartung=rot): Testfehler beenden den Job nicht, das Urteil fällt der Job auswertung aus trx und Exit-Code.
+      # Negativtest: Testfehler beenden den Job nicht, das Urteil fällt der Job auswertung aus trx und Exit-Code.
       - name: E2E-Tests
         run: |
           $filter = "Category=E2E&Geraet=$env:GERAET"
@@ -315,8 +320,8 @@ jobs:
           $code = $LASTEXITCODE
           New-Item -ItemType Directory -Force -Path "$env:HAELPMI_E2E_DIR\out" | Out-Null
           Set-Content -LiteralPath "$env:HAELPMI_E2E_DIR\out\dotnet-test-exitcode.txt" -Value $code
-          if ($env:E2E_ERWARTUNG -eq 'rot') {
-              if ($code) { "::notice::Messlauf: dotnet test endete mit $code, Urteil im Job 'Messlauf auswerten'." }
+          if ($env:E2E_ERWARTUNG -eq 'negativ') {
+              if ($code) { "::notice::Negativtest: dotnet test endete mit $code, Urteil im Job 'Negativtest auswerten'." }
               exit 0
           }
           if ($code) { exit $code }
@@ -344,12 +349,12 @@ jobs:
           path: e2e-out/
           if-no-files-found: warn
 
-  # Nur Messlauf (erwartung=rot): grün genau dann, wenn die erwarteten Tests fehlschlagen und sonst alles besteht.
+  # Nur Negativtest: grün genau dann, wenn jedes Kürzel aus erwartet_rot fehlschlägt und sonst alles besteht.
   # Läuft auch nach einem fehlgeschlagenen oder abgebrochenen Test-Job, damit das Urteil immer in der Summary steht.
   auswertung:
-    name: Messlauf auswerten
+    name: Negativtest auswerten
     needs: [plan, build, test]
-    if: always() && (github.event_name == 'workflow_dispatch' || (github.event.label.name == 'e2e' && github.event.pull_request.head.repo.full_name == github.repository)) && needs.build.result == 'success' && needs.build.outputs.erwartung == 'rot'
+    if: always() && (github.event_name == 'workflow_dispatch' || (github.event.label.name == 'e2e' && github.event.pull_request.head.repo.full_name == github.repository)) && needs.build.result == 'success' && needs.build.outputs.erwartung == 'negativ'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     defaults:
@@ -366,17 +371,18 @@ jobs:
         env:
           VMS: ${{ needs.plan.outputs.vms }}
           ERWARTET_ROT: ${{ needs.build.outputs.erwartet_rot }}
+          PRODUKT_REF: ${{ needs.build.outputs.produkt_ref }}
           TEST_ERGEBNIS: ${{ needs.test.result }}
         run: |
           code=0
-          python3 ci/e2e/erwartung-auswerten.py ergebnisse "$VMS" "$ERWARTET_ROT" > bericht.md || code=$?
+          python3 ci/e2e/erwartung-auswerten.py ergebnisse "$VMS" "$ERWARTET_ROT" "$PRODUKT_REF" > bericht.md || code=$?
           if [[ "$TEST_ERGEBNIS" != success ]]; then
-              printf '\n**Test-Jobs: %s** (nicht durch Testfehler, die zählen im Messlauf nicht als Job-Fehler) – Urteil ungültig.\n' "$TEST_ERGEBNIS" >> bericht.md
+              printf '\n**Test-Jobs: %s** (nicht durch Testfehler, die zählen im Negativtest nicht als Job-Fehler) – Urteil ungültig.\n' "$TEST_ERGEBNIS" >> bericht.md
               code=1
           fi
           cat bericht.md >> "$GITHUB_STEP_SUMMARY"
           cat bericht.md
-          if (( code != 0 )); then echo "::error::Messlauf: Fehler nicht reproduziert oder unerwartetes Ergebnis, siehe Summary."; fi
+          if (( code != 0 )); then echo "::error::Negativtest nicht bestanden: erwarteter Fehler nicht nachgewiesen oder unerwartetes Ergebnis, siehe Summary."; fi
           exit "$code"
 
   # Spiegelt die Rendezvous-Marken zwischen den Geräten, bis jedes "<gerät>-ende" gemeldet hat.
