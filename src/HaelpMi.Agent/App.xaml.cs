@@ -12,6 +12,7 @@ using HaelpMi.Core.Licensing;
 using HaelpMi.Core.Models;
 using HaelpMi.Core.Networking;
 using HaelpMi.Core.Runtime;
+using HaelpMi.Core.Sending;
 using HaelpMi.Core.Storage;
 using HaelpMi.UI.Windows;
 
@@ -749,6 +750,7 @@ public partial class App : System.Windows.Application
         _feedbackChannel.Start();
 
         _coordinator = new AlarmFlowCoordinator(BuildIdentity, () => _settings, _sharedConfigStore.LoadOrCreate, () => _license, _feedbackChannel);
+        _coordinator.MaintenanceHint.Due += (_, _) => Dispatcher.BeginInvoke(ShowMaintenanceHint);
 
         // Issue #9 (Fast User Switching ohne Logout/Reboot): AlarmChannel entscheidet
         // selbst, ob diese Sitzung den echten TCP-Port hält (Primary) oder als Satellite
@@ -852,6 +854,20 @@ public partial class App : System.Windows.Application
                 "HälpMi startet nach einem Geräteneustart NICHT automatisch (Task-Planer-Registrierung fehlgeschlagen, vermutlich durch eine Richtlinie blockiert). Bitte den Systemadministrator informieren - Details im lokalen Protokoll.",
                 System.Windows.Forms.ToolTipIcon.Warning);
         }
+    }
+
+    // Windows zeigt die Sprechblase als normale Benachrichtigung; als Absender erscheint die
+    // Dateibeschreibung des Agents (AssemblyTitle in HaelpMi.Agent.csproj).
+    private void ShowMaintenanceHint()
+    {
+        if (_trayIcon is null)
+        {
+            BetriebsLog.Warnung("Alarm", "Wartungshinweis nach Alarm ohne Empfänger nicht angezeigt: kein Tray-Icon.");
+            return;
+        }
+
+        _trayIcon.ShowBalloonTip(10000, SenderStatusTexts.MaintenanceHintTitle, SenderStatusTexts.MaintenanceHintText, System.Windows.Forms.ToolTipIcon.None);
+        BetriebsLog.Info("Alarm", "Wartungshinweis nach Alarm ohne Empfänger angezeigt.");
     }
 
     // Nutzerwunsch 05.08.2026: Tray-Icon zum Öffnen von Konfiguration/Dashboard - siehe

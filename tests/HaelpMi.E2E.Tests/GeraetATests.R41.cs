@@ -10,9 +10,11 @@ namespace HaelpMi.E2E.Tests;
 public partial class GeraetATests
 {
     /// <summary>
-    /// Alarm-Profil ohne Empfänger für A: Das Tastenkürzel muss trotzdem sichtbar reagieren. Erwartet das
-    /// Sender-Banner mit "Alarm nicht zugestellt", "Empfangen: 0 von 0" und einem Hinweis auf den Lösungsweg,
-    /// genau eine Welle im Audit-Log und keine Wiederholung. Vor dem Fix passierte nichts.
+    /// Alarm-Profil ohne Empfänger für A: Das Tastenkürzel muss trotzdem sichtbar reagieren (Owner-Entscheidung 29,
+    /// Entwurf B2). Erwartet das gewohnte Sender-Popup sofort mit "Kein Empfänger eingestellt!" und dem Info-Hinweis
+    /// auf das Dashboard, ohne Zähler und ohne "Abbrechen"; es blendet sich nach einigen Sekunden selbst aus. Im
+    /// Audit-Log genau eine Welle, keine Wiederholung. Den späteren Wartungshinweis (Windows-Benachrichtigung) prüft
+    /// der Handtestplan. Vor #41 passierte nichts, vor B2 meldete das Popup "Alarm nicht zugestellt".
     /// </summary>
     [Fact, TestPriority(155)]
     [Trait("Bereich", "R41"), Trait("FR", "FR-50"), Trait("FR", "FR-53")]
@@ -30,23 +32,24 @@ public partial class GeraetATests
             var banner = app.ErwarteBanner("Regression #41 (T22, Profil ohne Empfänger)");
             try
             {
-                await WarteBisAsync(() => NameVon(banner, "StatusText") == "Alarm nicht zugestellt", TimeSpan.FromSeconds(10),
-                    "T22: Das Banner meldet nicht \"Alarm nicht zugestellt\".");
-                Assert.Equal("Empfangen: 0 von 0", NameVon(banner, "AckedText"));
-                var hinweis = NameVon(banner, "NoRecipientsText");
-                _ausgabe.WriteLine($"T22: Hinweis '{hinweis}'");
-                Assert.Contains("kein Gerät", hinweis);
-                Assert.Contains("Dashboard", hinweis);
-                Assert.False(Element(banner, "CancelButton").IsEnabled, "T22: 'Abbrechen' ist noch aktiv, der Alarm läuft also weiter.");
+                await WarteBisAsync(() => NameVon(banner, "StatusText") == "Kein Empfänger eingestellt!", TimeSpan.FromSeconds(5),
+                    () => $"T22: Das Popup meldet '{NameVon(banner, "StatusText")}' statt \"Kein Empfänger eingestellt!\".");
+                Assert.Equal("Info: Ein Admin muss im Dashboard Empfänger für dieses Profil einrichten.", SichtbarerText(banner, "NoRecipientsText"));
+                Assert.True(SichtbarerText(banner, "CancelButton") == string.Empty, "T22: Das Popup zeigt einen Abbrechen-Knopf.");
+                Assert.True(SichtbarerText(banner, "AckedText") == string.Empty,
+                    $"T22: Das Popup zeigt den Zähler '{SichtbarerText(banner, "AckedText")}'.");
+
+                await WarteBisAsync(() => app.FindeSenderBanner() is null, TimeSpan.FromSeconds(15),
+                    "T22: Das Popup blendet sich nicht von selbst aus.");
 
                 // Länger als zwei Wiederholungstakte (5 s): Es darf bei genau einer Welle bleiben.
-                await Task.Delay(TimeSpan.FromSeconds(12));
+                var rest = seit + TimeSpan.FromSeconds(12) - DateTimeOffset.UtcNow;
+                if (rest > TimeSpan.Zero)
+                {
+                    await Task.Delay(rest);
+                }
                 var wellen = AuditLogZeilen(seit).Count(z => z.Contains($"alarm sent alarmProfileId={ProfilId}", StringComparison.Ordinal));
                 Assert.True(wellen == 1, $"T22: {wellen} Wellen im audit.log statt genau einer.");
-
-                Element(banner, "CloseBannerButton").AsButton().Invoke();
-                await WarteBisAsync(() => app.FindeSenderBanner() is null, TimeSpan.FromSeconds(10),
-                    "T22: Das Sender-Banner schließt sich nach 'Schließen' nicht.");
             }
             finally
             {

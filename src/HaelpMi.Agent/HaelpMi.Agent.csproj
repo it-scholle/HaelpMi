@@ -13,6 +13,10 @@
     <UseWindowsForms>true</UseWindowsForms>
     <RootNamespace>HaelpMi.Agent</RootNamespace>
     <AssemblyName>HaelpMi.Agent</AssemblyName>
+    <!-- ANNAHME: Windows nennt diese Dateibeschreibung als Absender der Benachrichtigungen des Agents. Der
+         Wartungshinweis nach einem Alarm ohne Empfänger soll ohne Produktnamen auskommen,
+         damit Umstehende den stillen Alarm nicht erkennen. -->
+    <AssemblyTitle>Arbeitsplatz-Dienst</AssemblyTitle>
     <ApplicationIcon>..\..\design\icons\haelpmi_icon.ico</ApplicationIcon>
     <Platforms>x64;ARM64</Platforms>
     <!-- Kein InvariantGlobalization: WPF-Texteingabefelder lösen beim Klicken die aktuelle

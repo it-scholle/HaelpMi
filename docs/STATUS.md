@@ -28,6 +28,11 @@ Stand: 2026-11-25
   Gossip überschreibt direkt gemeldete Adresse, Boot-Call vor Alarm-Port). Andere Ursachen aus dem
   Ticket (Mutex, Abbruch von `StartBackgroundServices`) sind damit nicht ausgeschlossen.
 
+- #232 (PR #233): Als Absender der Windows-Benachrichtigung „Wartung erforderlich“ zeigt Windows die
+  Dateibeschreibung des Agents. Sie ist dafür auf „Arbeitsplatz-Dienst“ gesetzt
+  (`src/HaelpMi.Agent/HaelpMi.Agent.csproj`, `AssemblyTitle`) und erscheint so auch im
+  Task-Manager. Unter Windows noch nicht von Hand geprüft (Handtestplan).
+
 ## Bekannte Abweichungen von `AGENTS.md` Teil A
 
 Nicht als Ausnahme freigegeben, Umsetzung steht noch aus:

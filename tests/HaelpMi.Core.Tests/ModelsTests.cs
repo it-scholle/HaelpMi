@@ -45,7 +45,7 @@ public class ModelsTests
     // Empfänger-Zuordnung, die Task #20 (Drag-and-Drop) letztlich verwaltet. ---
 
     // Ein Gerät, das im Profil kein Sender ist, darf mit dessen Tastenkürzel keinen Alarm auslösen;
-    // ein Sender ohne Empfänger dagegen schon (Banner "nicht zugestellt").
+    // ein Sender ohne Empfänger dagegen schon (Popup "Kein Empfänger eingestellt!").
     [Fact]
     public void RecipientResolver_IsSender_FalseForDeviceOnlyListedInAnotherSendersRow()
     {

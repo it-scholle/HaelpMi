@@ -35,6 +35,9 @@ public sealed class AlarmFlowCoordinator
     private readonly LicenseLimitGuard _licenseLimitGuard;
     private readonly ReceivedAlarmSessions<AlarmPopupWindow> _receivedSessions = new(AppConstants.AlarmAutoCloseAfterLastSignal);
 
+    /// <summary>Löst den neutralen Wartungshinweis nach einem Alarm ohne erreichbare Empfänger aus.</summary>
+    public MaintenanceHintScheduler MaintenanceHint { get; } = new(AppConstants.NoRecipientsMaintenanceHintDelay);
+
     public AlarmFlowCoordinator(
         Func<LiveIdentity> identityProvider,
         Func<OwnSettings> settingsProvider,
@@ -248,14 +251,20 @@ public sealed class AlarmFlowCoordinator
         var disabledDeviceIds = _licenseLimitGuard.GetDisabledDeviceIds();
         targets = targets.Where(t => !disabledDeviceIds.Contains(t.DeviceId) && !t.Removed).ToList();
 
-        // Auch ohne Empfänger startet eine Sitzung (eine Welle, dann "nicht zugestellt"): Das
-        // Tastenkürzel darf nie wirkungslos bleiben, die Statusanzeige nennt Grund und Lösungsweg.
+        // Auch ohne Empfänger startet eine Sitzung (eine Welle im Audit-Log, keine Wiederholung): Das
+        // Tastenkürzel darf nie wirkungslos bleiben. Das Popup meldet "Kein Empfänger eingestellt!",
+        // später folgt ein neutraler Wartungshinweis, der den stillen Alarm nicht verrät.
         var session = new RepeatingAlarmSession(profile, targets, identity, _sender, _feedbackChannel, DateTimeOffset.UtcNow, CreateWaveDeviceLoader(profile.Id));
         System.Windows.Application.Current.Dispatcher.Invoke(() =>
         {
             var window = new SenderStatusWindow(session, profile.Name);
             window.Show();
         });
+
+        if (targets.Count == 0)
+        {
+            _ = MaintenanceHint.Schedule();
+        }
 
         _ = RunSessionAsync(session);
     }
