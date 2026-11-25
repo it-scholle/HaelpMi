@@ -20,7 +20,7 @@ public partial class GeraetATests
     /// Danach startet B und meldet per Boot-Call die aktuelle Adresse. Spätestens die nächste Welle muss B
     /// erreichen; vorher lief die ganze Session an die beim Auslösen gespeicherte Adresse.
     /// </summary>
-    [Fact, TestPriority(170)]
+    [Fact, TestPriority(158)]
     [Trait("Teil", ZweiGeraete.Teil), Trait("Bereich", "R73")]
     public Task T23_Regression73_EmpfaengerStartetWaehrendAlarm() =>
         Artefakte.SichereAsync(nameof(T23_Regression73_EmpfaengerStartetWaehrendAlarm), async () =>

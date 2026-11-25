@@ -75,14 +75,14 @@ public partial class SenderStatusWindow : Window
 
     // Nutzerwunsch 09.08.2026: das Banner soll nicht wie bisher unbegrenzt stehen bleiben.
     // Bei manuellem Abbrechen sofort weg (der Sender hat gerade selbst aktiv gehandelt,
-    // braucht keine Bestätigungsanzeige mehr) - bei Schwellwert/Zeitablauf noch
+    // braucht keine Bestätigungsanzeige mehr) - bei Schwellwert/Zeitablauf/"nicht zugestellt" noch
     // SenderStatusBannerAutoCloseAfterFinish (3 Min., Issue #100) sichtbar, genug Zeit für
     // einen Blick auf die "Auf dem Weg"-Liste, aber nicht dauerhaft manuell wegzuklicken.
     private void Session_Finished(object? sender, EventArgs e) =>
         Dispatcher.BeginInvoke(() =>
         {
             CancelButton.IsEnabled = false;
-            StatusText.Text = "Alarm beendet";
+            StatusText.Text = SenderStatusTexts.Headline(stillSending: false, _session.Targets.Count);
 
             if (_session.StopReason == AlarmStopReason.Cancelled)
             {
@@ -101,8 +101,11 @@ public partial class SenderStatusWindow : Window
 
     private void ApplyStatus(AlarmSessionStatus status)
     {
-        StatusText.Text = status.StillSending ? "Alarm wird gesendet..." : "Alarm beendet";
+        StatusText.Text = SenderStatusTexts.Headline(status.StillSending, status.TargetCount);
         AckedText.Text = $"Empfangen: {status.AckedCount} von {status.TargetCount}";
+        var noRecipientsHint = SenderStatusTexts.NoRecipientsHint(status.TargetCount);
+        NoRecipientsText.Text = noRecipientsHint ?? string.Empty;
+        NoRecipientsText.Visibility = noRecipientsHint is null ? Visibility.Collapsed : Visibility.Visible;
         CancelButton.IsEnabled = status.StillSending;
 
         OnTheWayList.ItemsSource = status.OnTheWayNames;

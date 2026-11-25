@@ -59,7 +59,7 @@ public class SendingTests
 
         var feedbackChannel = new AlarmFeedbackChannel(() => senderIdentity);
         var profile = new AlarmProfile { Text = "Bitte kommen!", ResponseThreshold = 1 };
-        var session = new RepeatingAlarmSession(profile, Array.Empty<DeviceEntry>(), senderIdentity, new AlarmSender(), feedbackChannel, DateTimeOffset.UtcNow);
+        var session = new RepeatingAlarmSession(profile, new[] { UnreachableTarget() }, senderIdentity, new AlarmSender(), feedbackChannel, DateTimeOffset.UtcNow);
         try
         {
             var finished = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -110,7 +110,7 @@ public class SendingTests
 
         var feedbackChannel = new AlarmFeedbackChannel(() => senderIdentity);
         var profile = new AlarmProfile { Text = "Bitte kommen!", ResponseThreshold = 1 };
-        var session = new RepeatingAlarmSession(profile, Array.Empty<DeviceEntry>(), senderIdentity, new AlarmSender(), feedbackChannel, DateTimeOffset.UtcNow);
+        var session = new RepeatingAlarmSession(profile, new[] { UnreachableTarget() }, senderIdentity, new AlarmSender(), feedbackChannel, DateTimeOffset.UtcNow);
         try
         {
             var finished = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -219,9 +219,13 @@ public class SendingTests
         var senderIdentity = new LiveIdentity(customerGroupId, Guid.NewGuid(), "Sender-PC", "Frau Meier", "Zimmer", "1", Role.User, false, "0.0.0", 0, DateTimeOffset.UtcNow);
         var feedbackChannel = new AlarmFeedbackChannel(() => senderIdentity);
         var profile = new AlarmProfile { Text = "Bitte kommen!", ResponseThreshold = responseThreshold };
-        var session = new RepeatingAlarmSession(profile, Array.Empty<DeviceEntry>(), senderIdentity, new AlarmSender(), feedbackChannel, DateTimeOffset.UtcNow);
+        var session = new RepeatingAlarmSession(profile, new[] { UnreachableTarget() }, senderIdentity, new AlarmSender(), feedbackChannel, DateTimeOffset.UtcNow);
         return (session, feedbackChannel, customerGroupId);
     }
+
+    // Ohne Ziel endet eine Sitzung nach einer Welle; ein Ziel ohne IP hält sie am Laufen,
+    // ohne dass ein Sendeversuch das Netz berührt.
+    private static DeviceEntry UnreachableTarget() => new() { DeviceId = Guid.NewGuid(), IpAddress = string.Empty };
 
     private static AlarmOnMyWayMessage OnMyWay(Guid customerGroupId, RepeatingAlarmSession session, Guid responderDeviceId) =>
         new(customerGroupId, session.Profile.Id, session.AlarmSessionId, responderDeviceId, "Empf-PC", "Herr Novak", "Raum", DateTimeOffset.UtcNow);
@@ -407,6 +411,41 @@ public class SendingTests
     }
 
     [Fact]
+    public async Task RepeatingAlarmSession_WithoutTargets_SendsOneWaveAndStopsAsNotDelivered()
+    {
+        // Ein Alarm ohne Empfänger geht genau einmal raus und endet sofort als "nicht zugestellt",
+        // statt minutenlang ins Leere zu wiederholen.
+        var auditLines = new System.Collections.Concurrent.ConcurrentQueue<string>();
+        var senderIdentity = new LiveIdentity(Guid.NewGuid(), Guid.NewGuid(), "Sender-PC", "Frau Meier", "Zimmer", "1", Role.Admin, false, "0.0.0", 0, DateTimeOffset.UtcNow);
+        var feedbackChannel = new AlarmFeedbackChannel(() => senderIdentity);
+        var profile = new AlarmProfile { Text = "Bitte kommen!", ResponseThreshold = 1 };
+        var session = new RepeatingAlarmSession(profile, Array.Empty<DeviceEntry>(), senderIdentity, new AlarmSender(auditLines.Enqueue), feedbackChannel, DateTimeOffset.UtcNow);
+        try
+        {
+            var finished = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            session.Finished += (_, _) => finished.TrySetResult();
+            var statusUpdates = new System.Collections.Concurrent.ConcurrentQueue<AlarmSessionStatus>();
+            session.StatusChanged += (_, status) => statusUpdates.Enqueue(status);
+            var runTask = session.RunAsync();
+
+            await finished.Task.WaitAsync(TimeSpan.FromSeconds(3));
+            Assert.Equal(AlarmStopReason.NoRecipients, session.StopReason);
+            Assert.Contains(statusUpdates, s => !s.StillSending && s.TargetCount == 0 && s.AckedCount == 0);
+
+            // Ohne Empfänger gibt es auch keine Spätantworten, auf die die Sitzung noch warten müsste.
+            await runTask.WaitAsync(TimeSpan.FromSeconds(3));
+
+            // Länger als ein Wiederholungstakt: Es darf keine zweite Welle folgen.
+            await Task.Delay(AppConstants.AlarmRepeatInterval + TimeSpan.FromSeconds(1));
+            Assert.Single(auditLines, l => l.Contains($"alarm sent alarmProfileId={profile.Id}", StringComparison.Ordinal) && l.EndsWith("targetCount=0", StringComparison.Ordinal));
+        }
+        finally
+        {
+            session.Dispose();
+        }
+    }
+
+    [Fact]
     public async Task RepeatingAlarmSession_TargetAddressChangedAfterTrigger_WaveUsesCurrentAddress()
     {
         // Das Ziel startet gerade und ist unter der beim Auslösen gespeicherten Adresse
@@ -455,6 +494,31 @@ public class SendingTests
             session.Cancel();
             session.Dispose();
         }
+    }
+
+    [Fact]
+    public void SenderStatusTexts_Headline_NotDeliveredWithoutRecipients()
+    {
+        Assert.Equal("Alarm wird gesendet...", SenderStatusTexts.Headline(stillSending: true, targetCount: 0));
+        Assert.Equal("Alarm nicht zugestellt", SenderStatusTexts.Headline(stillSending: false, targetCount: 0));
+        Assert.Equal("Alarm beendet", SenderStatusTexts.Headline(stillSending: false, targetCount: 2));
+    }
+
+    [Fact]
+    public void SenderStatusTexts_NoRecipientsHint_NamesWhereToFixIt()
+    {
+        var hint = SenderStatusTexts.NoRecipientsHint(targetCount: 0);
+
+        Assert.NotNull(hint);
+        Assert.Contains("kein Gerät", hint);
+        Assert.Contains("Dashboard", hint);
+        Assert.Contains("Alarm-Profile", hint);
+    }
+
+    [Fact]
+    public void SenderStatusTexts_NoRecipientsHint_IsNullWithRecipients()
+    {
+        Assert.Null(SenderStatusTexts.NoRecipientsHint(targetCount: 1));
     }
 
     [Fact]

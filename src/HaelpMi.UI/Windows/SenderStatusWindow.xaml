@@ -26,6 +26,8 @@
                     <TextBlock x:Name="StatusText" Foreground="White" FontWeight="Bold" FontSize="14" />
                     <TextBlock x:Name="ProfileText" Foreground="{StaticResource BannerSubtextBrush}" FontSize="11" Margin="0,2,0,0" />
                     <TextBlock x:Name="AckedText" Foreground="{StaticResource BannerSubtextBrush}" FontSize="11" Margin="0,4,0,0" />
+                    <TextBlock x:Name="NoRecipientsText" Foreground="{StaticResource BannerSubtextBrush}" FontSize="11" Margin="0,4,0,0"
+                               TextWrapping="Wrap" Visibility="Collapsed" />
                 </StackPanel>
 
                 <Button Grid.Column="1" x:Name="CloseBannerButton" AutomationProperties.Name="Schließen" Width="20" Height="20"

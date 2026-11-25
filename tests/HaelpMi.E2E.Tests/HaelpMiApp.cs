@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Runtime.InteropServices;
 using FlaUI.Core.AutomationElements;
+using FlaUI.Core.Exceptions;
 using FlaUI.Core.Input;
 using FlaUI.Core.WindowsAPI;
 using FlaUI.UIA3;
@@ -290,8 +291,19 @@ internal sealed class HaelpMiApp : IDisposable
             {
                 banner.Close();
             }
-            catch (COMException)
+            // Ein Banner, das sich gerade selbst schließt (z. B. direkt nach "Abbrechen"), hat sein
+            // Window-Pattern schon verloren; dann über den eigenen Knopf, sonst beim nächsten Durchlauf.
+            catch (Exception ex) when (ex is COMException or MethodNotSupportedException or ElementNotAvailableException)
             {
+                try
+                {
+                    Element(banner, "CloseBannerButton").AsButton().Invoke();
+                }
+                catch (Exception knopfFehler) when (knopfFehler is COMException or InvalidOperationException
+                    or MethodNotSupportedException or ElementNotAvailableException)
+                {
+                    Console.WriteLine($"Sender-Banner schließen: {ex.GetType().Name}, Schließen-Knopf: {knopfFehler.GetType().Name}; neuer Versuch.");
+                }
             }
 
             await Task.Delay(500);
