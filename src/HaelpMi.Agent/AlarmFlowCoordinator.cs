@@ -66,20 +66,30 @@ public sealed class AlarmFlowCoordinator
     public bool IsOwnDeviceRemoved() => _settingsProvider().Removed;
 
     /// <summary>
-    /// Aktuelle Adressen für die nächste Welle einer laufenden Session. Bei einem Lesefehler
-    /// sendet die Session mit den bisherigen Adressen weiter.
+    /// Liefert für eine Session die aktuellen Adressen vor jeder weiteren Welle. Wirft nie: Bei
+    /// einem Lesefehler sendet die Session mit den bisherigen Adressen weiter, protokolliert wird
+    /// nur der erste Fehler je Session (sonst eine Zeile pro Welle).
     /// </summary>
-    private IReadOnlyList<DeviceEntry> LoadCurrentDevicesForWave()
+    private Func<IReadOnlyList<DeviceEntry>> CreateWaveDeviceLoader(Guid alarmProfileId)
     {
-        try
+        var fehlerProtokolliert = false;
+        return () =>
         {
-            return _deviceStore.Load();
-        }
-        catch (Exception ex) when (ex is System.IO.IOException or UnauthorizedAccessException or System.Text.Json.JsonException)
-        {
-            _auditLog.Append($"alarm-Welle: devices.json nicht lesbar, Adressen vom Auslösezeitpunkt bleiben: {ex.GetType().Name}: {ex.Message}");
-            return Array.Empty<DeviceEntry>();
-        }
+            try
+            {
+                return _deviceStore.Load();
+            }
+            catch (Exception ex)
+            {
+                if (!fehlerProtokolliert)
+                {
+                    fehlerProtokolliert = true;
+                    _auditLog.Append($"alarm-Welle: devices.json nicht lesbar, Adressen vom Auslösezeitpunkt bleiben: alarmProfileId={alarmProfileId} {ex.GetType().Name}: {ex.Message}");
+                }
+
+                return Array.Empty<DeviceEntry>();
+            }
+        };
     }
 
     /// <summary>Called from the TCP listener's background thread when an alarm arrives (FR-9/FR-47).</summary>
@@ -230,7 +240,7 @@ public sealed class AlarmFlowCoordinator
             return; // nothing to send, nothing to show (Teil 2, Abschnitt 4: an empty recipient set is a valid, if useless, admin configuration)
         }
 
-        var session = new RepeatingAlarmSession(profile, targets, identity, _sender, _feedbackChannel, DateTimeOffset.UtcNow, LoadCurrentDevicesForWave);
+        var session = new RepeatingAlarmSession(profile, targets, identity, _sender, _feedbackChannel, DateTimeOffset.UtcNow, CreateWaveDeviceLoader(profile.Id));
         System.Windows.Application.Current.Dispatcher.Invoke(() =>
         {
             var window = new SenderStatusWindow(session, profile.Name);

@@ -344,7 +344,7 @@ public class SendingTests
     [Fact]
     public async Task RepeatingAlarmSession_TargetAddressChangedAfterTrigger_WaveUsesCurrentAddress()
     {
-        // #73: Das Ziel startet gerade und ist unter der beim Auslösen gespeicherten Adresse
+        // Das Ziel startet gerade und ist unter der beim Auslösen gespeicherten Adresse
         // nicht erreichbar; sein Boot-Call hat dem Sender inzwischen die aktuelle Adresse
         // mitgeteilt. Die Session muss das Ziel unter der aktuellen Adresse anschreiben,
         // statt bis zum Ende der Session die alte zu verwenden.
@@ -393,10 +393,10 @@ public class SendingTests
     }
 
     [Fact]
-    public async Task RepeatingAlarmSession_TargetMissingFromCurrentDevices_KeepsSnapshotAddress()
+    public async Task RepeatingAlarmSession_NoCurrentAddress_KeepsSnapshotAddress()
     {
-        // Ein Ziel, das inzwischen nicht mehr in devices.json steht (oder ohne Adresse), wird
-        // weiter unter der Adresse aus dem Auslöse-Zeitpunkt angeschrieben.
+        // Ein Ziel ohne Adresse in devices.json wird weiter unter der Adresse aus dem
+        // Auslösezeitpunkt angeschrieben; ebenso ein Ziel, das dort gar nicht mehr steht.
         var customerGroupId = Guid.NewGuid();
         var senderIdentity = new LiveIdentity(customerGroupId, Guid.NewGuid(), "Sender-PC", "Frau Meier", "Zimmer", "1", Role.User, false, "0.0.0", 0, DateTimeOffset.UtcNow);
         var receiverDeviceId = Guid.NewGuid();
@@ -413,22 +413,26 @@ public class SendingTests
         {
             new() { DeviceId = receiverDeviceId, IpAddress = string.Empty, TcpPort = FreeTcpPort() },
         };
+        var missingDeviceId = Guid.NewGuid();
+        var missingTarget = new DeviceEntry { DeviceId = missingDeviceId, IpAddress = "127.0.0.1", TcpPort = port };
         var session = new RepeatingAlarmSession(
-            profile, new[] { snapshotTarget }, senderIdentity, new AlarmSender(), feedbackChannel, DateTimeOffset.UtcNow,
+            profile, new[] { snapshotTarget, missingTarget }, senderIdentity, new AlarmSender(), feedbackChannel, DateTimeOffset.UtcNow,
             currentDevicesProvider: () => storedDevices);
         try
         {
-            var acked = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-            session.StatusChanged += (_, status) =>
+            // Erst ab der zweiten Welle werden die Adressen nachgelesen: zwei Ziele mal zwei Wellen.
+            var deliveries = 0;
+            var secondWaveDelivered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            receiver.AlarmReceived += (_, _) =>
             {
-                if (status.AckedCount > 0)
+                if (Interlocked.Increment(ref deliveries) >= 4)
                 {
-                    acked.TrySetResult();
+                    secondWaveDelivered.TrySetResult();
                 }
             };
 
             _ = session.RunAsync();
-            await acked.Task.WaitAsync(TimeSpan.FromSeconds(15));
+            await secondWaveDelivered.Task.WaitAsync(TimeSpan.FromSeconds(20));
         }
         finally
         {

@@ -41,9 +41,9 @@ public enum AlarmStopReason
 /// a Config-Sync hot-reload arriving mid-session (6., known Version-2 challenge: "darf
 /// laufende Alarme nicht unterbrechen") cannot change an already-running session's
 /// behavior out from under it; it only affects the *next* time this profile's hotkey fires.
-/// Only the recipient set is fixed, though: each wave looks up every target's current
-/// address by device ID (see <c>currentDevicesProvider</c>), because a recipient that is
-/// just starting may announce a different address after the alarm was triggered.
+/// Fest ist dabei nur die Empfängerliste: Ab der zweiten Welle liest die Session die aktuelle
+/// Adresse jedes Ziels per Geräte-ID nach (<c>currentDevicesProvider</c>), weil ein gerade
+/// startender Empfänger nach dem Auslösen eine andere Adresse melden kann.
 ///
 /// Pinging (repeated <see cref="AlarmSender.SendAsync"/>) stops the moment any of the
 /// three conditions above is met, but the session itself stays alive and keeps listening
@@ -105,6 +105,7 @@ public sealed class RepeatingAlarmSession : IDisposable
 
     public async Task RunAsync()
     {
+        var wave = 0;
         try
         {
             while (!_stopCts.IsCancellationRequested)
@@ -114,7 +115,12 @@ public sealed class RepeatingAlarmSession : IDisposable
                     break;
                 }
 
-                _currentTargets = TargetsWithCurrentAddresses();
+                if (wave++ > 0 && _currentDevicesProvider is not null)
+                {
+                    // Abseits des UI-Threads: das Lesen von devices.json kann bei Dateikonflikten kurz blockieren.
+                    _currentTargets = await Task.Run(TargetsWithCurrentAddresses);
+                }
+
                 var result = await _alarmSender.SendAsync(Profile, AlarmSessionId, _ownIdentity, _currentTargets, ct: _stopCts.Token);
                 MarkReceived(result.AckedDeviceIds);
                 await RaiseAndRelayAsync(stillSending: true);

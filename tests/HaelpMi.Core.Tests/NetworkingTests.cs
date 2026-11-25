@@ -315,7 +315,7 @@ public class NetworkingTests
     [Fact]
     public async Task DiscoveryService_GossipAboutKnownDevice_KeepsDirectlyObservedAddress()
     {
-        // #73: Ein Gerät startet neu und meldet sich direkt mit seiner aktuellen Adresse.
+        // Ein Gerät startet neu und meldet sich direkt mit seiner aktuellen Adresse.
         // Ein zweites, gleichzeitig startendes Gerät schickt danach seine Geräteliste mit
         // einer veralteten Adresse für dasselbe Gerät. Die direkt beobachtete Adresse muss
         // bleiben, sonst laufen Alarme an die alte Adresse ins Leere.

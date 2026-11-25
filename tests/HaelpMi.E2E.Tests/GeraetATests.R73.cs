@@ -7,7 +7,7 @@ using static HaelpMi.E2E.Tests.ZweiGeraete;
 
 namespace HaelpMi.E2E.Tests;
 
-// T23 Regressionstest #73, Gegenstück in GeraetBTests.R73.cs.
+// T23, Gegenstück in GeraetBTests.R73.cs.
 public partial class GeraetATests
 {
     // Aus dem Dokumentationsbereich TEST-NET-1 (RFC 5737): im Testnetz nie vergeben, Verbindungen laufen ins Leere.
@@ -58,7 +58,7 @@ public partial class GeraetATests
                     {
                         var adresse = LiesGeraete().SingleOrDefault(d => d.DeviceId == b)?.IpAddress;
                         var wellen = AuditLogZeilen(ausgeloest).Count(z => z.Contains($"alarm sent alarmProfileId={ProfilId}", StringComparison.Ordinal));
-                        return $"Regression #73: B hat {R73EmpfangsFrist.TotalSeconds:0} s nach dem Auslösen nicht quittiert, Banner zeigt " +
+                        return $"T23: B hat {R73EmpfangsFrist.TotalSeconds:0} s nach dem Auslösen nicht quittiert, Banner zeigt " +
                             $"'{NameVon(banner, "AckedText")}'. A kennt B inzwischen unter '{adresse}', {wellen} Welle(n) gesendet.";
                     });
             }
@@ -70,6 +70,7 @@ public partial class GeraetATests
                 }
                 catch (Exception ex) when (ex is System.Runtime.InteropServices.COMException or InvalidOperationException)
                 {
+                    Console.WriteLine($"T23: Abbrechen im Sender-Banner nicht möglich ({ex.GetType().Name}), Banner vermutlich schon zu.");
                 }
 
                 await app.SchliesseSenderBannerAsync();
