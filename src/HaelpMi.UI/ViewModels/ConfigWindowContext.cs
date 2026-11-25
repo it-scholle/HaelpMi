@@ -1,4 +1,5 @@
 using System.Windows;
+using HaelpMi.Core.Ipc;
 using HaelpMi.Core.Models;
 
 namespace HaelpMi.UI.ViewModels;
@@ -40,9 +41,9 @@ public sealed class ConfigWindowContext
     /// <summary>
     /// "Testalarm an mich selbst senden" (FR-27). The Agent performs the full loopback
     /// send/receive itself and shows its own popup + receipt banner - this only reports
-    /// whether the Agent accepted the request, so ConfigWindow doesn't duplicate that UI.
+    /// whether the Agent accepted the request (with its reason if not), so ConfigWindow doesn't duplicate that UI.
     /// </summary>
-    public required Func<Task<bool>> RequestSelfTest { get; init; }
+    public required Func<Task<IpcResponse>> RequestSelfTest { get; init; }
 
     /// <summary>
     /// Opens the Admin-Dashboard (FR-33: nur für Role.Admin relevant). Null on a User-role

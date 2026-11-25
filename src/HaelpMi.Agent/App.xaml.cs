@@ -991,7 +991,7 @@ public partial class App : System.Windows.Application
     {
         if (_coordinator!.IsOwnDeviceRemoved())
         {
-            return new IpcResponse(false, "Dieses Gerät wurde gelöscht und kann keine Alarme mehr senden.");
+            return new IpcResponse(false, SelfTestFeedback.DeviceRemoved);
         }
 
         var blockReason = _coordinator!.GetOwnLicenseBlockReason();
@@ -1004,11 +1004,11 @@ public partial class App : System.Windows.Application
         var profile = config.AlarmProfiles.FirstOrDefault();
         if (profile is null)
         {
-            return new IpcResponse(false, "Kein Alarm-Profil konfiguriert.");
+            return new IpcResponse(false, SelfTestFeedback.NoProfile);
         }
 
         var ok = await _coordinator!.SendSelfTestAsync(profile);
-        return new IpcResponse(ok);
+        return ok ? new IpcResponse(true) : new IpcResponse(false, SelfTestFeedback.NotReceived);
     }
 
     protected override void OnExit(ExitEventArgs e)

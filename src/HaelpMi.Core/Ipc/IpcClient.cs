@@ -12,12 +12,21 @@ namespace HaelpMi.Core.Ipc;
 /// </summary>
 public sealed class IpcClient
 {
+    internal const string RestartHint =
+        "Bitte die HälpMi-Einstellungen schließen und neu öffnen; läuft der Hintergrunddienst nicht, wird er dabei gestartet. " +
+        "Hilft das nicht, Windows neu anmelden.";
+
+    private readonly string? _pipeName;
+
+    /// <param name="pipeName">Nur für Tests; sonst die Pipe des Agents in dieser Windows-Sitzung.</param>
+    public IpcClient(string? pipeName = null) => _pipeName = pipeName;
+
     public async Task<IpcResponse> SendAsync(IpcCommandType command, TimeSpan? timeout = null, CancellationToken ct = default)
     {
         var effectiveTimeout = timeout ?? TimeSpan.FromSeconds(5);
         try
         {
-            var pipeName = IpcPipeNaming.BuildSessionScopedPipeName(Process.GetCurrentProcess().SessionId);
+            var pipeName = _pipeName ?? IpcPipeNaming.BuildSessionScopedPipeName(Process.GetCurrentProcess().SessionId);
             using var client = new NamedPipeClientStream(".", pipeName, PipeDirection.InOut, PipeOptions.Asynchronous);
             using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
             timeoutCts.CancelAfter(effectiveTimeout);
@@ -40,14 +49,14 @@ public sealed class IpcClient
             var line = await reader.ReadLineAsync(timeoutCts.Token).ConfigureAwait(false);
             if (line is null)
             {
-                return new IpcResponse(false, "Keine Antwort vom Hintergrunddienst.");
+                return new IpcResponse(false, $"Der HälpMi-Hintergrunddienst antwortet nicht. {RestartHint}");
             }
 
-            return NetworkSerializer.FromJsonLine<IpcResponse>(line) ?? new IpcResponse(false, "Ungültige Antwort vom Hintergrunddienst.");
+            return NetworkSerializer.FromJsonLine<IpcResponse>(line) ?? new IpcResponse(false, $"Ungültige Antwort vom HälpMi-Hintergrunddienst. {RestartHint}");
         }
         catch (Exception ex)
         {
-            return new IpcResponse(false, $"Hintergrunddienst nicht erreichbar: {ex.Message}");
+            return new IpcResponse(false, $"Der HälpMi-Hintergrunddienst ist nicht erreichbar ({ex.Message}). {RestartHint}");
         }
     }
 }
