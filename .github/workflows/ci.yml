@@ -132,6 +132,14 @@ jobs:
             exit 1
           fi
 
+  # Urteil des E2E-Messlaufs (erwartung=rot): ein Fehler hier könnte eine Gegenprobe fälschlich grün melden.
+  e2e-auswertung:
+    name: E2E-Messlauf-Auswertung (Selbsttest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 -m unittest discover -s ci/e2e/tests -v
+
   secrets:
     name: Secrets (gitleaks)
     runs-on: ubuntu-latest

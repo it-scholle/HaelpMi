@@ -210,10 +210,31 @@ weil `workflow_dispatch` nur Workflows vom Default-Branch startet):
   passen in das Zeitlimit.
 - `vms` / `VMS`: Geräteauswahl, geprüft im Job `plan` (`ci/e2e/geraete.sh`); aus ihr entstehen die
   Matrix der Test-Jobs, die VMIDs für Reset und Stopp und die Argumente des Relays.
+- `erwartung` / `ERWARTUNG`: `gruen` (Standard, leer) oder `rot`. `rot` macht den Lauf zum **Messlauf**
+  für die Gegenprobe auf dem Altstand (Regressionsnachweis, Muster T10) und ist nur zusammen mit
+  `produkt_ref` erlaubt, sonst bricht der Build-Job ab. Die Test-Jobs enden dann bei Testfehlern nicht rot;
+  sie legen den Exit-Code von `dotnet test` als `dotnet-test-exitcode.txt` neben die trx-Datei. Der Job
+  „Messlauf auswerten“ liest beides aus den Artefakten `e2e-<gerät>` (`ci/e2e/erwartung-auswerten.py`) und
+  ist **grün genau dann**, wenn mindestens ein erwarteter Test fehlschlägt und alles andere besteht.
+  Rot sind: kein erwarteter Fehlschlag (Fehler nicht reproduziert), ein Fehlschlag außerhalb von
+  `erwartet_rot`, ein anderes Ergebnis als bestanden/fehlgeschlagen/nicht ausgeführt, ein abgebrochener
+  Testlauf, ein Gerät ohne Artefakt oder Exit-Code, ein Exit-Code ungleich 0 ohne fehlgeschlagenen Test und
+  ein nicht erfolgreicher Test-Job. Die Step Summary nennt erwartete Fehlschläge mit Meldung, unerwartete
+  Ergebnisse und das Urteil „Fehler reproduziert ✔“ bzw. „Fehler nicht reproduziert ✘“. Tests werden dafür
+  nicht abgeschwächt; Fälle wie T10/T18/T19, die mit `produkt_ref` ohnehin nur messen, bleiben grün und
+  ergeben im Messlauf deshalb „nicht reproduziert“.
+- `erwartet_rot` / `ERWARTET_ROT`: nur mit `erwartung=rot`; regulärer Ausdruck (Python `re.search`), der
+  auf den vollen Testnamen aus der trx-Datei passen muss, z. B. `T22_`. Leer = jeder Fehlschlag gilt als
+  erwartet. Fallen auf dem Altstand auch die Gegenseiten auf anderen Geräten (Rendezvous), gehören sie mit
+  ins Muster, z. B. `T23_`, das `GeraetATests` und `GeraetBTests` trifft. Selbsttest der Auswertung:
+  `python3 -m unittest discover -s ci/e2e/tests` (läuft in der CI).
 
 Alle Werte werden per Regex geprüft, sonst bricht der Build-Job ab. Vergleichslauf #136 gegen den
 Stand vor dem Fix: in `ci/e2e/lauf.env` `PRODUKT_REF=v0.46.1` und `FILTER=Bereich=Basis|Bereich=R136`
 (mit `VMS=a,b,c` auch T18) committen, Label `e2e` setzen, danach die Datei wieder leeren.
+Gegenprobe für einen Bugfix als Messlauf, z. B. #41: `PRODUKT_REF=v0.47.32` (Stand vor dem Fix),
+`FILTER=Bereich=Basis|Bereich=R41`, `ERWARTUNG=rot`, `ERWARTET_ROT=T22_`. Grün heißt dann „Fehler auf dem
+Altstand reproduziert“; der Lauf auf dem Ticket-Branch selbst läuft normal (`ERWARTUNG` leer).
 
 Gate-Einordnung: verbindlich ist `AGENTS.md` Teil B, Abschnitt "E2E-Tests" (Patch: betroffene
 Bereiche, sofern E2E-relevant; Minor: volle Suite `a,b`; Major/1.0+: volle Suite inkl.

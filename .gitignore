@@ -97,3 +97,6 @@ appsettings.*.local.json
 **/AppDataLocal/
 **/*.devicelist.json
 **/*.identity.json
+
+# Python-Bytecode (ci/e2e/tests)
+__pycache__/

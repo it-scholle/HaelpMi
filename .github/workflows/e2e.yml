@@ -22,6 +22,15 @@ on:
         description: 'Zyklen für T10 (Regression #136), 1 bis 100'
         type: string
         default: '25'
+      erwartung:
+        description: 'gruen = normaler Lauf; rot = Messlauf (Gegenprobe auf dem Altstand, nur mit produkt_ref): grün, wenn die erwarteten Tests fehlschlagen und alle übrigen bestehen'
+        type: choice
+        options: [gruen, rot]
+        default: gruen
+      erwartet_rot:
+        description: 'Nur mit erwartung=rot: regulärer Ausdruck auf den Testnamen der erwarteten Fehlschläge, z. B. T22_ (leer = jeder Fehlschlag)'
+        type: string
+        default: ''
   pull_request:
     types: [labeled]
 
@@ -110,6 +119,8 @@ jobs:
       produkt_ref: ${{ steps.lauf.outputs.produkt_ref }}
       filter: ${{ steps.lauf.outputs.filter }}
       zyklen: ${{ steps.lauf.outputs.zyklen }}
+      erwartung: ${{ steps.lauf.outputs.erwartung }}
+      erwartet_rot: ${{ steps.lauf.outputs.erwartet_rot }}
     steps:
       - uses: actions/checkout@v4
 
@@ -122,13 +133,15 @@ jobs:
           IN_PRODUKT_REF: ${{ inputs.produkt_ref }}
           IN_FILTER: ${{ inputs.filter }}
           IN_ZYKLEN: ${{ inputs.zyklen }}
+          IN_ERWARTUNG: ${{ inputs.erwartung }}
+          IN_ERWARTET_ROT: ${{ inputs.erwartet_rot }}
         run: |
-          $werte = @{ PRODUKT_REF = "$env:IN_PRODUKT_REF"; FILTER = "$env:IN_FILTER"; ZYKLEN = "$env:IN_ZYKLEN" }
+          $werte = @{ PRODUKT_REF = "$env:IN_PRODUKT_REF"; FILTER = "$env:IN_FILTER"; ZYKLEN = "$env:IN_ZYKLEN"; ERWARTUNG = "$env:IN_ERWARTUNG"; ERWARTET_ROT = "$env:IN_ERWARTET_ROT" }
           if ($env:EREIGNIS -ne 'workflow_dispatch') {
-              $werte = @{ PRODUKT_REF = ''; FILTER = ''; ZYKLEN = '' }
+              $werte = @{ PRODUKT_REF = ''; FILTER = ''; ZYKLEN = ''; ERWARTUNG = ''; ERWARTET_ROT = '' }
               foreach ($zeile in Get-Content -LiteralPath ci/e2e/lauf.env) {
                   if ($zeile -match '^\s*(#|$)') { continue }
-                  if ($zeile -cnotmatch '^(PRODUKT_REF|FILTER|ZYKLEN|VMS)=(.*)$') { throw 'ci/e2e/lauf.env: nur PRODUKT_REF=, FILTER=, ZYKLEN= und VMS= sind erlaubt.' }
+                  if ($zeile -cnotmatch '^(PRODUKT_REF|FILTER|ZYKLEN|VMS|ERWARTUNG|ERWARTET_ROT)=(.*)$') { throw 'ci/e2e/lauf.env: nur PRODUKT_REF=, FILTER=, ZYKLEN=, VMS=, ERWARTUNG= und ERWARTET_ROT= sind erlaubt.' }
                   # VMS wertet der Job plan aus.
                   if ($Matches[1] -ne 'VMS') { $werte[$Matches[1]] = $Matches[2].Trim() }
               }
@@ -137,13 +150,22 @@ jobs:
           if ($werte.FILTER -cnotmatch '^[A-Za-z0-9=!&|()_.~-]*$') { throw 'filter: nur A-Z, a-z, 0-9 und =!&|()_.~- erlaubt.' }
           if (-not $werte.ZYKLEN) { $werte.ZYKLEN = '25' }
           if ($werte.ZYKLEN -cnotmatch '^[0-9]{1,3}$' -or [int]$werte.ZYKLEN -lt 1 -or [int]$werte.ZYKLEN -gt 100) { throw 'zyklen: ganze Zahl von 1 bis 100.' }
+          if (-not $werte.ERWARTUNG) { $werte.ERWARTUNG = 'gruen' }
+          if ($werte.ERWARTUNG -cnotin 'gruen', 'rot') { throw 'erwartung: nur gruen oder rot.' }
+          # Ein Messlauf dreht das Urteil um; auf dem aktuellen Stand würde er echte Fehler als Erfolg melden.
+          if ($werte.ERWARTUNG -eq 'rot' -and -not $werte.PRODUKT_REF) { throw 'erwartung=rot (Messlauf) nur zusammen mit produkt_ref: die Gegenprobe läuft gegen den Stand vor dem Fix. produkt_ref (bzw. PRODUKT_REF= in ci/e2e/lauf.env) setzen oder erwartung=gruen wählen.' }
+          if ($werte.ERWARTET_ROT -and $werte.ERWARTUNG -ne 'rot') { throw 'erwartet_rot wirkt nur mit erwartung=rot: erwartung=rot setzen oder erwartet_rot leeren.' }
+          if ($werte.ERWARTET_ROT -cnotmatch '^[A-Za-z0-9_.|()^$*+?-]*$') { throw 'erwartet_rot: nur A-Z, a-z, 0-9 und _.|()^$*+?- erlaubt.' }
+          try { [void][regex]::new($werte.ERWARTET_ROT) } catch { throw "erwartet_rot ist kein gültiger regulärer Ausdruck: $($_.Exception.Message)" }
           "produkt_ref=$($werte.PRODUKT_REF)" >> $env:GITHUB_OUTPUT
           "filter=$($werte.FILTER)" >> $env:GITHUB_OUTPUT
           "zyklen=$($werte.ZYKLEN)" >> $env:GITHUB_OUTPUT
+          "erwartung=$($werte.ERWARTUNG)" >> $env:GITHUB_OUTPUT
+          "erwartet_rot=$($werte.ERWARTET_ROT)" >> $env:GITHUB_OUTPUT
           $quelle = if ($werte.PRODUKT_REF) { Join-Path $PWD 'produkt' } else { "$PWD" }
           "QUELLE=$quelle" >> $env:GITHUB_ENV
           $produkt = if ($werte.PRODUKT_REF) { $werte.PRODUKT_REF } else { '(dieser Stand)' }
-          "### E2E-Laufparameter`n`n- produkt_ref: $produkt`n- filter: $($werte.FILTER)`n- zyklen: $($werte.ZYKLEN)" >> $env:GITHUB_STEP_SUMMARY
+          "### E2E-Laufparameter`n`n- produkt_ref: $produkt`n- filter: $($werte.FILTER)`n- zyklen: $($werte.ZYKLEN)`n- erwartung: $($werte.ERWARTUNG)`n- erwartet_rot: $($werte.ERWARTET_ROT)" >> $env:GITHUB_STEP_SUMMARY
 
       # Agent, Konfiguration und Installer aus einem anderen Stand (Vergleichslauf, z. B. v0.46.1 für #136).
       - name: Produktstand auschecken
@@ -263,6 +285,7 @@ jobs:
       HAELPMI_E2E_PRODUKT_REF: ${{ needs.build.outputs.produkt_ref }}
       HAELPMI_E2E_ZYKLEN: ${{ needs.build.outputs.zyklen }}
       E2E_FILTER: ${{ needs.build.outputs.filter }}
+      E2E_ERWARTUNG: ${{ needs.build.outputs.erwartung }}
       GERAET: ${{ matrix.name }}
     steps:
       - uses: actions/download-artifact@v4
@@ -274,6 +297,7 @@ jobs:
           name: e2e-tests
           path: C:\haelpmi-e2e\tests
       # Tests mit Trait Teil laufen nur, wenn alle beteiligten Geräte im Lauf sind.
+      # Messlauf (erwartung=rot): Testfehler beenden den Job nicht, das Urteil fällt der Job auswertung aus trx und Exit-Code.
       - name: E2E-Tests
         run: |
           $filter = "Category=E2E&Geraet=$env:GERAET"
@@ -288,7 +312,14 @@ jobs:
           "Filter: $filter"
           dotnet test "$env:HAELPMI_E2E_DIR\tests\HaelpMi.E2E.Tests.dll" --filter $filter `
               --logger "trx;LogFileName=e2e-$env:GERAET.trx" --results-directory "$env:HAELPMI_E2E_DIR\out\trx"
-          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          $code = $LASTEXITCODE
+          New-Item -ItemType Directory -Force -Path "$env:HAELPMI_E2E_DIR\out" | Out-Null
+          Set-Content -LiteralPath "$env:HAELPMI_E2E_DIR\out\dotnet-test-exitcode.txt" -Value $code
+          if ($env:E2E_ERWARTUNG -eq 'rot') {
+              if ($code) { "::notice::Messlauf: dotnet test endete mit $code, Urteil im Job 'Messlauf auswerten'." }
+              exit 0
+          }
+          if ($code) { exit $code }
       # Beendet das Relay auf dem Orchestrator, auch nach einem Fehlschlag.
       - name: Ende melden
         if: always()
@@ -312,6 +343,41 @@ jobs:
           name: e2e-${{ matrix.geraet }}
           path: e2e-out/
           if-no-files-found: warn
+
+  # Nur Messlauf (erwartung=rot): grün genau dann, wenn die erwarteten Tests fehlschlagen und sonst alles besteht.
+  # Läuft auch nach einem fehlgeschlagenen oder abgebrochenen Test-Job, damit das Urteil immer in der Summary steht.
+  auswertung:
+    name: Messlauf auswerten
+    needs: [plan, build, test]
+    if: always() && (github.event_name == 'workflow_dispatch' || (github.event.label.name == 'e2e' && github.event.pull_request.head.repo.full_name == github.repository)) && needs.build.result == 'success' && needs.build.outputs.erwartung == 'rot'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      # Gerätenamen sind einzelne Buchstaben (geraete.sh), e2e-? trifft deshalb nicht das Artefakt e2e-tests.
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: e2e-?
+          path: ergebnisse
+      - name: Urteil
+        env:
+          VMS: ${{ needs.plan.outputs.vms }}
+          ERWARTET_ROT: ${{ needs.build.outputs.erwartet_rot }}
+          TEST_ERGEBNIS: ${{ needs.test.result }}
+        run: |
+          code=0
+          python3 ci/e2e/erwartung-auswerten.py ergebnisse "$VMS" "$ERWARTET_ROT" > bericht.md || code=$?
+          if [[ "$TEST_ERGEBNIS" != success ]]; then
+              printf '\n**Test-Jobs: %s** (nicht durch Testfehler, die zählen im Messlauf nicht als Job-Fehler) – Urteil ungültig.\n' "$TEST_ERGEBNIS" >> bericht.md
+              code=1
+          fi
+          cat bericht.md >> "$GITHUB_STEP_SUMMARY"
+          cat bericht.md
+          if (( code != 0 )); then echo "::error::Messlauf: Fehler nicht reproduziert oder unerwartetes Ergebnis, siehe Summary."; fi
+          exit "$code"
 
   # Spiegelt die Rendezvous-Marken zwischen den Geräten, bis jedes "<gerät>-ende" gemeldet hat.
   # Wartet auch auf build: scheitert der Build, starten keine Tests und das Relay liefe ins Zeitlimit.
