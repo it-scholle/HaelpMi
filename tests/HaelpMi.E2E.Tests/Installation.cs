@@ -101,6 +101,61 @@ internal static class Installation
     }
 
     /// <summary>
+    /// T24: Legt vor einer Reparatur-Installation eine lokale Block-Regel für den Agent an, wie Windows sie nach einer
+    /// abgebrochenen Firewall-Abfrage hinterlässt, und eine Kontrollregel für eine gleichnamige .exe außerhalb des
+    /// Programmordners. Der Installer muss nur die erste entfernen und das im Setup-Log festhalten.
+    /// </summary>
+    public static async Task RepariereMitBlockregelAsync(Role rolle, string geraet)
+    {
+        const string Ziel = "HaelpMi E2E T24 Block Agent";
+        const string Kontrolle = "HaelpMi E2E T24 Block fremd";
+        var agentExe = Path.Combine(E2EUmgebung.ProgrammOrdner, HaelpMiApp.AgentProzess + ".exe");
+        var fremdeExe = Path.Combine(E2EUmgebung.Wurzel, "fremd", HaelpMiApp.AgentProzess + ".exe");
+
+        Assert.True(File.Exists(agentExe), $"{agentExe} fehlt - T24 braucht die Installation aus T1 (Filter z. B. Bereich=Basis|Bereich=R222).");
+
+        try
+        {
+            Prozess.PowerShell(
+                $"New-NetFirewallRule -DisplayName '{Ziel}' -Direction Inbound -Action Block -Profile Any -Program '{agentExe}' | Out-Null; " +
+                $"New-NetFirewallRule -DisplayName '{Kontrolle}' -Direction Inbound -Action Block -Profile Any -Program '{fremdeExe}' | Out-Null; 'ok'");
+            Assert.Contains(Ziel, BlockRegelnFuer(agentExe));
+
+            HaelpMiApp.BeendeAlles();
+            Directory.CreateDirectory(Artefakte.Ordner);
+            var log = Path.Combine(Artefakte.Ordner, $"installer-{geraet}-reparatur.log");
+            var exitCode = await Prozess.UeberShellStartenUndWartenAsync(
+                E2EUmgebung.InstallerPfad, $"/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /LOG=\"{log}\"", InstallerTimeout);
+            Assert.True(exitCode == 0, $"Reparatur-Installation endete mit Exit-Code {exitCode}, Log: {log}");
+
+            PruefeKeineBlockregel(agentExe, HaelpMiApp.KonfigExe);
+            PruefeProgrammregel("HälpMi Agent", agentExe);
+            if (rolle == Role.Admin)
+            {
+                PruefeProgrammregel("HälpMi Konfiguration", HaelpMiApp.KonfigExe);
+            }
+
+            Assert.True(BlockRegelnFuer(fremdeExe).Contains(Kontrolle, StringComparison.Ordinal),
+                $"Der Installer hat die Block-Regel für {fremdeExe} außerhalb des Programmordners entfernt (Filter zu breit), Log: {log}");
+
+            var zeilen = File.ReadAllLines(log);
+            Assert.True(zeilen.Any(z => z.Contains("Block-Regel", StringComparison.Ordinal) && z.Contains("entfernt: " + Ziel, StringComparison.Ordinal)),
+                $"Setup-Log {log} enthält keine Zeile „Block-Regel … entfernt: {Ziel}“.");
+            Assert.DoesNotContain(zeilen, z => z.Contains(Kontrolle, StringComparison.Ordinal));
+        }
+        finally
+        {
+            Prozess.PowerShell(
+                $"Remove-NetFirewallRule -DisplayName '{Ziel}' -ErrorAction SilentlyContinue; " +
+                $"Remove-NetFirewallRule -DisplayName '{Kontrolle}' -ErrorAction SilentlyContinue; 'ok'");
+            // Wie in T1: der vom Installer gestartete Agent läuft mit dessen Token, der Test braucht ihn rechtelos.
+            await Task.Delay(TimeSpan.FromSeconds(3));
+            HaelpMiApp.BeendeAlles();
+            await HaelpMiApp.StarteAgentAsync();
+        }
+    }
+
+    /// <summary>
     /// Startet ein HälpMi-Prozess vor seiner Allow-Regel und lauscht, fragt Windows nach; eine abgebrochene
     /// Abfrage legt Inbound-Block-Regeln an, die die Allow-Regel schlagen (Gerät empfängt keinen Alarm).
     /// </summary>
@@ -127,16 +182,23 @@ internal static class Installation
         }
     }
 
-    private static void PruefeKeineBlockregel(params string[] programme)
+    public static void PruefeKeineBlockregel(params string[] programme)
     {
-        var liste = string.Join(",", programme.Select(p => $"'{p}'"));
-        var ausgabe = Prozess.PowerShell(
-            $"$p = @({liste}); " +
-            "Get-NetFirewallRule -Direction Inbound -Action Block -ErrorAction SilentlyContinue | ForEach-Object { " +
-            "$a = $_ | Get-NetFirewallApplicationFilter; " +
-            "if ($p -contains $a.Program) { '{0}|{1}|{2}' -f $_.DisplayName, $_.Profile, $a.Program } }");
+        var ausgabe = BlockRegelnFuer(programme);
         Assert.True(string.IsNullOrWhiteSpace(ausgabe),
             $"Inbound-Block-Regeln für HälpMi-Programme vorhanden (Windows-Abfrage abgebrochen?):\n{ausgabe}");
+    }
+
+    /// <summary>Inbound-Block-Regeln aller Speicher (auch GPO) mit genau einem der Programme, je Zeile „Name|Profil|Programm“.</summary>
+    public static string BlockRegelnFuer(params string[] programme)
+    {
+        // Ohne -Direction/-Action: Get-NetFirewallRule meldet bei null Treffern einen Fehler, PowerShell endet dann mit 1.
+        var liste = string.Join(",", programme.Select(p => $"'{p}'"));
+        return Prozess.PowerShell(
+            $"$p = @({liste}); " +
+            "Get-NetFirewallRule -PolicyStore ActiveStore | Where-Object { $_.Direction -eq 'Inbound' -and $_.Action -eq 'Block' } | ForEach-Object { " +
+            "$a = $_ | Get-NetFirewallApplicationFilter; " +
+            "if ($p -contains [Environment]::ExpandEnvironmentVariables([string]$a.Program)) { '{0}|{1}|{2}' -f $_.DisplayName, $_.Profile, $a.Program } }");
     }
 
     /// <summary>
@@ -177,7 +239,7 @@ internal static class Installation
         return settings;
     }
 
-    private static void PruefeProgrammregel(string name, string programm)
+    public static void PruefeProgrammregel(string name, string programm)
     {
         var ausgabe = Prozess.PowerShell(
             $"$r = @(Get-NetFirewallRule -DisplayName '{name}' -ErrorAction SilentlyContinue); " +
