@@ -6,7 +6,7 @@ Details stehen in der Git-Historie. Der eingefrorene Stand `legacy/main-0.39.x` 
 
 ## [Unveröffentlicht]
 ### Neu
-- Betriebs-Log je Prozess (`agent.log`, `config.log`) mit Stufen, Tageswechsel, Größengrenzen, Aufbewahrung und Komprimierung; die Stufe lässt sich über `betriebslog.json` ohne Codeänderung einstellen (#227)
+- HälpMi führt ein Betriebsprotokoll zur Fehlersuche (`agent.log` für das Hintergrundprogramm, `config.log` für Einstellungen und Dashboard unter `%ProgramData%\HaelpMi`), ohne Alarmtexte oder andere Inhalte. Die Protokolle bleiben klein: eine Datei pro Tag, ältere werden komprimiert und nach 90 Tagen gelöscht, höchstens 200 MB je Programm. Für die Fehlersuche lässt sich ein ausführlicheres Protokoll ohne Update einschalten (`betriebslog.json`, siehe Betriebsdoku) (#227)
 - E2E: drittes Testgerät C (VM 9103) mit den Testfällen T11 (Discovery mit drei Geräten) und T12 (Alarm an zwei Empfänger mit Schwelle 2); Workflow, Relay und Skripte arbeiten mit beliebig vielen Test-VMs aus `ci/e2e/geraete.json`, die Umgebung läuft auf pve-nzxt (#202)
 - E2E: Regressionstest T18 (Alarmfenster schließen) mit drei Geräten (Alarm an zwei Empfänger mit Schwelle 2) (#136)
 ### Verbessert
