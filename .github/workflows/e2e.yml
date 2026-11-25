@@ -210,6 +210,8 @@ jobs:
               Copy-Item "e2e-installer/$datei" e2e-installer/admin/
               Copy-Item "e2e-installer/$datei" e2e-installer/user/
           }
+          Copy-Item e2e-installer/lizenz-kurz -Destination e2e-installer/admin/ -Recurse
+          Copy-Item e2e-installer/lizenz-kurz -Destination e2e-installer/user/ -Recurse
 
       - name: E2E-Tests bauen
         run: dotnet build tests/HaelpMi.E2E.Tests -c Release

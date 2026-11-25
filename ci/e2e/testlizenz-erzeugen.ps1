@@ -12,7 +12,8 @@
     Ausgabe: lizenz.json unter -Ausgabe, daneben für T9 mit demselben Schlüssel
     lizenz-bald.json (läuft in 10 Tagen ab) und lizenz-abgelaufen.json (vor 60 Tagen ausgestellt,
     seit einem Tag abgelaufen), für T14 lizenz-abgelaufen-neuer.json (nach lizenz.json ausgestellt,
-    seit einem Tag abgelaufen); customer_group_id und license_public_key_hex nach
+    seit einem Tag abgelaufen), für T17 unter lizenz-kurz/ Lizenzen, die gestaffelt alle
+    -KurzAbstandMinuten bis -KurzStunden nach dem Build ablaufen; customer_group_id und license_public_key_hex nach
     $env:GITHUB_OUTPUT für ISCC /DCustomerGroupId=... /DLicensePublicKeyHex=...
 
 .PARAMETER Payload
@@ -20,6 +21,12 @@
 
 .PARAMETER UserLimit
     Kontingent der Testlizenzen; der Admin zählt mit (LicenseLimitGuard).
+
+.PARAMETER KurzAbstandMinuten
+    Abstand der Ablaufzeiten unter lizenz-kurz/ (T17 wartet höchstens so lange plus Vorlauf).
+
+.PARAMETER KurzStunden
+    Wie lange nach dem Build es noch eine passende Lizenz unter lizenz-kurz/ gibt.
 
 .PARAMETER GueltigTage
     Laufzeit von lizenz.json. Muss über LicenseWarningEvaluator.WarningWindowDays (30) liegen,
@@ -29,7 +36,9 @@ param(
     [Parameter(Mandatory)] [string] $Payload,
     [Parameter(Mandatory)] [string] $Ausgabe,
     [int] $UserLimit = 5,
-    [int] $GueltigTage = 365
+    [int] $GueltigTage = 365,
+    [int] $KurzAbstandMinuten = 5,
+    [int] $KurzStunden = 8
 )
 $ErrorActionPreference = 'Stop'
 
@@ -80,6 +89,13 @@ Schreibe-Lizenz (Join-Path $ordner 'lizenz-bald.json') $jetzt $jetzt.AddDays(10)
 Schreibe-Lizenz (Join-Path $ordner 'lizenz-abgelaufen.json') $jetzt.AddDays(-60) $jetzt.AddDays(-1)
 # T14: später ausgestellt als lizenz.json und trotzdem abgelaufen, darf die gültige per Gossip nicht verdrängen.
 Schreibe-Lizenz (Join-Path $ordner 'lizenz-abgelaufen-neuer.json') $jetzt.AddMinutes(1) $jetzt.AddDays(-1)
+# T17: Ablauf im laufenden Betrieb. Der private Schlüssel existiert nur hier, deshalb gestaffelte Lizenzen,
+# aus denen der Test die nächste noch ausreichend ferne wählt; gleiche Ausstellungszeit wie lizenz.json (kein Gossip-Tausch).
+New-Item -ItemType Directory -Force -Path (Join-Path $ordner 'lizenz-kurz') | Out-Null
+for ($minute = $KurzAbstandMinuten; $minute -le $KurzStunden * 60; $minute += $KurzAbstandMinuten) {
+    Schreibe-Lizenz (Join-Path $ordner ('lizenz-kurz/lizenz-kurz-{0:D4}.json' -f $minute)) $jetzt $jetzt.AddMinutes($minute) | Out-Null
+}
+"lizenz-kurz: alle $KurzAbstandMinuten min ablaufend, bis $KurzStunden h nach $($jetzt.ToString('HH:mm')) UTC"
 
 $hex = [Convert]::ToHexString($oeffentlich)
 "Test-Kundengruppe $gruppe, Kontingent $UserLimit"
