@@ -186,7 +186,7 @@ public sealed class BetriebsLogTests : IDisposable
         Assert.Contains("agent.1.log", weiter[0].GetProperty("meldung").GetString());
         var alle = Directory.GetFiles(_ordner, "agent*.log").SelectMany(Zeilen).ToList();
         Assert.Equal(6, alle.Count(z => z.GetProperty("modul").GetString() == "Test"));
-        Assert.All(Directory.GetFiles(_ordner, "agent*.log"), d => Assert.True(new FileInfo(d).Length <= 600 + 300, d));
+        Assert.All(Directory.GetFiles(_ordner, "agent*.log"), d => Assert.True(new FileInfo(d).Length <= 600, d));
     }
 
     [Fact]
@@ -223,7 +223,9 @@ public sealed class BetriebsLogTests : IDisposable
         var fremd = Datei("config-2020-01-01.log");
         File.WriteAllText(fremd, new string('x', 4000));
 
-        NeuesLog(o => o with { MaxGesamtBytes = 1000 }).Schreibe(LogStufe.Info, "Test", "heute");
+        var log = NeuesLog(o => o with { MaxGesamtBytes = 1000 });
+        log.Schreibe(LogStufe.Info, "Test", "heute");
+        log.Aufraeumen.Wait(TimeSpan.FromSeconds(10));
 
         Assert.False(File.Exists(aeltest));
         Assert.True(File.Exists(mittel));
@@ -248,7 +250,9 @@ public sealed class BetriebsLogTests : IDisposable
         File.WriteAllText(komprimierenTeil, "teil\n");
         File.WriteAllText(frisch, "frisch\n");
 
-        NeuesLog().Schreibe(LogStufe.Info, "Test", "heute");
+        var log = NeuesLog();
+        log.Schreibe(LogStufe.Info, "Test", "heute");
+        log.Aufraeumen.Wait(TimeSpan.FromSeconds(10));
 
         Assert.False(File.Exists(zuAlt));
         Assert.True(File.Exists(grenzeAufbewahrung));
@@ -270,11 +274,56 @@ public sealed class BetriebsLogTests : IDisposable
     }
 
     [Fact]
-    public void StatischeMethoden_OhneGestartetesLog_SchreibenNichts()
+    public void FremdeDateiMitRiesigerTeilnummer_WirdIgnoriert()
     {
-        BetriebsLog.Info("Test", "ohne Log");
+        File.WriteAllText(Datei("agent.99999999999.log"), "fremd\n");
 
-        Assert.Empty(Directory.GetFiles(_ordner));
+        NeuesLog().Schreibe(LogStufe.Info, "Test", "trotzdem");
+
+        Assert.Equal("trotzdem", Assert.Single(Zeilen(Datei("agent.log"))).GetProperty("meldung").GetString());
+    }
+
+    [Fact]
+    public void ZweiterAgent_NachTageswechselDesErsten_BenenntDieNeueDateiNichtAufDenVortagUm()
+    {
+        var vortag = HeuteText;
+        var a = NeuesLog();
+        var b = NeuesLog();
+        a.Schreibe(LogStufe.Info, "Test", "a gestern");
+        b.Schreibe(LogStufe.Info, "Test", "b gestern");
+        File.SetLastWriteTime(Datei("agent.log"), _zeit.GetLocalNow().DateTime);
+
+        _zeit.Jetzt = _zeit.Jetzt.AddDays(1);
+        a.Schreibe(LogStufe.Info, "Test", "a heute");
+        File.SetLastWriteTime(Datei("agent.log"), _zeit.GetLocalNow().DateTime);
+        b.Schreibe(LogStufe.Info, "Test", "b heute");
+
+        Assert.Equal(["a gestern", "b gestern"], Zeilen(Datei($"agent-{vortag}.log")).Select(z => z.GetProperty("meldung").GetString()));
+        Assert.Equal(["a heute", "b heute"], Zeilen(Datei("agent.log")).Select(z => z.GetProperty("meldung").GetString()));
+    }
+
+    [Fact]
+    public void ZweiProzesse_DateigrenzeGiltFuerDieGemeinsameDatei()
+    {
+        var a = NeuesLog(o => o with { MaxDateiBytes = 600 });
+        var b = NeuesLog(o => o with { MaxDateiBytes = 600 });
+        for (var i = 0; i < 4; i++)
+        {
+            a.Schreibe(LogStufe.Info, "Test", new string('a', 100));
+            b.Schreibe(LogStufe.Info, "Test", new string('b', 100));
+        }
+
+        Assert.True(new FileInfo(Datei("agent.log")).Length <= 600);
+        Assert.True(File.Exists(Datei("agent.1.log")));
+    }
+
+    [Fact]
+    public void ParallelVonMehrerenThreads_KeineZeileGehtVerloren()
+    {
+        var log = NeuesLog();
+        Parallel.For(0, 200, i => log.Schreibe(LogStufe.Info, "Test", $"Zeile {i}"));
+
+        Assert.Equal(200, Zeilen(Datei("agent.log")).Count);
     }
 
     private sealed class TestZeit(DateTimeOffset start) : TimeProvider

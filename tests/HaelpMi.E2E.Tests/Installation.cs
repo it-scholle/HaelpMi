@@ -104,7 +104,9 @@ internal static class Installation
     /// <summary>Betriebs-Log des Agents (AGENTS.md Teil A): agent.log neben crash.log, eine JSON-Zeile je Eintrag, Start als INFO.</summary>
     private static void PruefeBetriebsLog()
     {
-        var datei = E2EUmgebung.LogOrdner().Select(o => Path.Combine(o, "agent.log")).FirstOrDefault(File.Exists);
+        // Die jüngste Datei: der Agent schreibt nach Z:, wenn erreichbar, sonst lokal; eine ältere Kopie am anderen Ort zählt nicht.
+        var datei = E2EUmgebung.LogOrdner().Select(o => new FileInfo(Path.Combine(o, "agent.log")))
+            .Where(f => f.Exists).OrderByDescending(f => f.LastWriteTimeUtc).FirstOrDefault()?.FullName;
         Assert.True(datei is not null, $"agent.log fehlt in {string.Join(" und ", E2EUmgebung.LogOrdner())}.");
 
         using var strom = new FileStream(datei!, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);

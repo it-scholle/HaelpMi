@@ -30,14 +30,13 @@ public sealed class BetriebsLog
     private bool _vorbereitet;
     private DateOnly _tag;
     private int _teil;
-    private long _groesse;
 
     public BetriebsLog(BetriebsLogOptionen optionen)
     {
         _optionen = optionen;
         var name = Regex.Escape(optionen.Name);
-        _aktuelleDatei = new Regex($@"^{name}(?:\.(?<teil>\d+))?\.log$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
-        _archivDatei = new Regex($@"^{name}-(?<tag>\d{{4}}-\d{{2}}-\d{{2}})(?:\.(?<teil>\d+))?\.log(?<gz>\.gz)?$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        _aktuelleDatei = new Regex($@"^{name}(?:\.(?<teil>[0-9]+))?\.log$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        _archivDatei = new Regex($@"^{name}-(?<tag>[0-9]{{4}}-[0-9]{{2}}-[0-9]{{2}})(?:\.(?<teil>[0-9]+))?\.log(?<gz>\.gz)?$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
     }
 
     /// <summary>Log des laufenden Prozesses; vor <see cref="StarteFuerProzess"/> verwerfen die statischen Methoden alles.</summary>
@@ -134,59 +133,105 @@ public sealed class BetriebsLog
 
         try
         {
+            DateOnly? aufraeumenFuer;
             lock (_sperre)
             {
                 var jetzt = _optionen.Zeit.GetLocalNow();
-                PruefeTag(DateOnly.FromDateTime(jetzt.DateTime));
-                HaengeAn(Formatiere(jetzt, stufe, modul, meldung, objektId, vorgangsId, ausnahme));
+                aufraeumenFuer = PruefeTag(DateOnly.FromDateTime(jetzt.DateTime));
+                if (HaengeAn(Formatiere(jetzt, stufe, modul, meldung, objektId, vorgangsId, ausnahme)))
+                {
+                    aufraeumenFuer = _tag;
+                }
+            }
+
+            if (aufraeumenFuer is { } tag)
+            {
+                StarteAufraeumen(tag);
             }
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        catch (Exception)
         {
             // Das Betriebs-Log ist das Log; einen Ort, an den ein Fehler beim Schreiben selbst gehen könnte, gibt es nicht.
-            // Ein volles oder gesperrtes Laufwerk darf den Alarmweg nie aufhalten.
+            // Ein volles oder gesperrtes Laufwerk oder eine fremde Datei im Ordner darf den Alarmweg nie aufhalten.
         }
     }
 
-    private void PruefeTag(DateOnly heute)
+    /// <summary>Hintergrund-Aufräumen (Komprimieren, Aufbewahrung, Gesamtgrenze); nur für Tests zum Abwarten.</summary>
+    internal Task Aufraeumen { get; private set; } = Task.CompletedTask;
+
+    /// <summary>
+    /// Gleicht beim ersten Eintrag und beim Tageswechsel mit den Dateien ab. Mehrere Agents (eine Sitzung je Nutzer)
+    /// teilen sich die Dateien: Wer zuerst kommt, benennt um; das Datum kommt aus der letzten Änderung der Datei,
+    /// also aus ihren Einträgen. Gibt den Tag zurück, für den aufgeräumt werden soll.
+    /// </summary>
+    private DateOnly? PruefeTag(DateOnly heute)
     {
-        if (!_vorbereitet)
+        if (_vorbereitet && heute == _tag)
         {
-            _vorbereitet = true;
-            _tag = heute;
-            Directory.CreateDirectory(_optionen.Ordner);
-            var teile = AktuelleTeile();
-            if (teile.Count > 0)
+            return null;
+        }
+
+        Directory.CreateDirectory(_optionen.Ordner);
+        var teile = AktuelleTeile();
+        if (teile.Count > 0)
+        {
+            var tagDerDatei = DateOnly.FromDateTime(teile.Max(t => File.GetLastWriteTime(t.Pfad)));
+            if (tagDerDatei < heute)
             {
-                var tagDerDatei = DateOnly.FromDateTime(teile.Max(t => File.GetLastWriteTime(t.Pfad)));
-                if (tagDerDatei < heute)
-                {
-                    VersucheWartung(() => Archiviere(teile, tagDerDatei));
-                }
-                else
-                {
-                    var letzter = teile[^1];
-                    _teil = letzter.Teil;
-                    _groesse = new FileInfo(letzter.Pfad).Length;
-                }
+                VersucheWartung(() => Archiviere(teile, tagDerDatei));
+                teile = AktuelleTeile();
             }
-
-            VersucheWartung(() => RaeumeAuf(heute));
-            return;
         }
 
-        if (heute != _tag)
-        {
-            var gestern = _tag;
-            VersucheWartung(() => Archiviere(AktuelleTeile(), gestern));
-            _tag = heute;
-            _teil = 0;
-            _groesse = 0;
-            VersucheWartung(() => RaeumeAuf(heute));
-        }
+        _teil = teile.Count > 0 ? teile[^1].Teil : 0;
+        _tag = heute;
+        _vorbereitet = true;
+        return heute;
     }
 
-    /// <summary>Umbenennen, Komprimieren und Löschen dürfen den Eintrag selbst nicht verhindern; ein Fehlschlag kommt als WARNUNG ins Log.</summary>
+    /// <summary>Gibt true zurück, wenn eine neue Teil-Datei begonnen wurde.</summary>
+    private bool HaengeAn(string zeile)
+    {
+        var bytes = Utf8OhneBom.GetBytes(zeile + "\n");
+        var neuerTeil = false;
+        if (Groesse(_teil) is var groesse && groesse > 0 && groesse + bytes.Length > _optionen.MaxDateiBytes)
+        {
+            // Ein anderer Agent kann schon weitergeschaltet haben; die Größe kommt deshalb aus der Datei, nicht aus einem Zähler.
+            var hoechster = AktuelleTeile().Select(t => t.Teil).DefaultIfEmpty(0).Max();
+            if (hoechster > _teil && Groesse(hoechster) + bytes.Length <= _optionen.MaxDateiBytes)
+            {
+                _teil = hoechster;
+            }
+            else
+            {
+                var voll = Pfad(Math.Max(hoechster, _teil));
+                _teil = Math.Max(hoechster, _teil) + 1;
+                neuerTeil = true;
+                SchreibeIntern(Utf8OhneBom.GetBytes(Formatiere(_optionen.Zeit.GetLocalNow(), LogStufe.Warnung, nameof(BetriebsLog),
+                    $"{Path.GetFileName(voll)} hat die Grenze von {MegaByte(_optionen.MaxDateiBytes)} erreicht, weiter in {Path.GetFileName(Pfad(_teil))}.",
+                    null, null, null) + "\n"));
+            }
+        }
+
+        SchreibeIntern(bytes);
+        return neuerTeil;
+    }
+
+    private long Groesse(int teil)
+    {
+        var info = new FileInfo(Pfad(teil));
+        return info.Exists ? info.Length : 0;
+    }
+
+    private static string MegaByte(long bytes) => (bytes / (1024.0 * 1024.0)).ToString("0.##", CultureInfo.InvariantCulture) + " MB";
+
+    private void SchreibeIntern(byte[] bytes)
+    {
+        // FileShare.ReadWrite: ein Agent je angemeldeter Sitzung (Terminalserver) schreibt in dieselbe Datei.
+        using var datei = new FileStream(Pfad(_teil), FileMode.Append, FileAccess.Write, FileShare.ReadWrite | FileShare.Delete);
+        datei.Write(bytes);
+    }
+
     private void VersucheWartung(Action wartung)
     {
         try
@@ -195,37 +240,33 @@ public sealed class BetriebsLog
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            SchreibeWarnungIntern("Umbenennen oder Aufräumen der Log-Dateien fehlgeschlagen, wird beim nächsten Tageswechsel oder Start wiederholt.", ex);
+            SchreibeIntern(Utf8OhneBom.GetBytes(Formatiere(_optionen.Zeit.GetLocalNow(), LogStufe.Warnung, nameof(BetriebsLog),
+                "Umbenennen der Log-Dateien fehlgeschlagen, wird beim nächsten Tageswechsel oder Start wiederholt.", null, null, ex) + "\n"));
         }
     }
 
-    private void HaengeAn(string zeile)
+    /// <summary>Komprimieren und Löschen kann bei großen Archiven auf Z: dauern; der Eintrag und der Alarmweg warten nicht darauf.</summary>
+    private void StarteAufraeumen(DateOnly heute)
     {
-        var bytes = Utf8OhneBom.GetBytes(zeile + "\n");
-        if (_groesse > 0 && _groesse + bytes.Length > _optionen.MaxDateiBytes)
+        lock (_sperre)
         {
-            var voll = Pfad(_teil);
-            _teil++;
-            _groesse = 0;
-            SchreibeWarnungIntern($"{Path.GetFileName(voll)} hat die Grenze von {_optionen.MaxDateiBytes / (1024 * 1024)} MB erreicht, weiter in {Path.GetFileName(Pfad(_teil))}.");
-            VersucheWartung(() => RaeumeAuf(_tag));
+            if (!Aufraeumen.IsCompleted)
+            {
+                return;
+            }
+
+            Aufraeumen = Task.Run(() =>
+            {
+                try
+                {
+                    RaeumeAuf(heute);
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException)
+                {
+                    Schreibe(LogStufe.Warnung, nameof(BetriebsLog), "Aufräumen der Log-Dateien fehlgeschlagen, wird beim nächsten Tageswechsel oder Start wiederholt.", ausnahme: ex);
+                }
+            });
         }
-
-        SchreibeIntern(bytes);
-    }
-
-    private void SchreibeWarnungIntern(string meldung, Exception? ausnahme = null) =>
-        SchreibeIntern(Utf8OhneBom.GetBytes(Formatiere(_optionen.Zeit.GetLocalNow(), LogStufe.Warnung, nameof(BetriebsLog), meldung, null, null, ausnahme) + "\n"));
-
-    private void SchreibeIntern(byte[] bytes)
-    {
-        // FileShare.ReadWrite: ein Agent je angemeldeter Sitzung (Terminalserver) schreibt in dieselbe Datei.
-        using (var datei = new FileStream(Pfad(_teil), FileMode.Append, FileAccess.Write, FileShare.ReadWrite | FileShare.Delete))
-        {
-            datei.Write(bytes);
-        }
-
-        _groesse += bytes.Length;
     }
 
     private string Pfad(int teil) => Path.Combine(_optionen.Ordner, teil == 0 ? $"{_optionen.Name}.log" : $"{_optionen.Name}.{teil}.log");
@@ -243,22 +284,31 @@ public sealed class BetriebsLog
         foreach (var pfad in Directory.EnumerateFiles(_optionen.Ordner))
         {
             var name = Path.GetFileName(pfad);
-            if (_aktuelleDatei.Match(name) is { Success: true } aktuell)
+            if (_aktuelleDatei.Match(name) is { Success: true } aktuell && TeilAus(aktuell) is { } teil)
             {
-                ergebnis.Add(new Datei(pfad, TeilAus(aktuell), null, false));
+                ergebnis.Add(new Datei(pfad, teil, null, false));
             }
             else if (_archivDatei.Match(name) is { Success: true } archiv
+                     && TeilAus(archiv) is { } archivTeil
                      && DateOnly.TryParseExact(archiv.Groups["tag"].Value, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var tag))
             {
-                ergebnis.Add(new Datei(pfad, TeilAus(archiv), tag, archiv.Groups["gz"].Success));
+                ergebnis.Add(new Datei(pfad, archivTeil, tag, archiv.Groups["gz"].Success));
             }
         }
 
         return ergebnis;
     }
 
-    private static int TeilAus(Match treffer) =>
-        treffer.Groups["teil"].Success ? int.Parse(treffer.Groups["teil"].Value, CultureInfo.InvariantCulture) : 0;
+    /// <summary>null bei einer Teilnummer außerhalb von int, z. B. eine fremde Datei „agent.99999999999.log“: wird ignoriert.</summary>
+    private static int? TeilAus(Match treffer)
+    {
+        if (!treffer.Groups["teil"].Success)
+        {
+            return 0;
+        }
+
+        return int.TryParse(treffer.Groups["teil"].Value, NumberStyles.None, CultureInfo.InvariantCulture, out var teil) ? teil : null;
+    }
 
     private void Archiviere(List<Datei> teile, DateOnly tag)
     {
@@ -269,7 +319,8 @@ public sealed class BetriebsLog
             {
                 if (File.Exists(ziel))
                 {
-                    // Nur nach einem Neustart am selben Tag über Mitternacht hinweg möglich: anhängen statt eine zweite Datei.
+                    // Neustart nach Mitternacht, bevor die Datei des Vortags umbenannt war, oder zwei Agents gleichzeitig:
+                    // anhängen statt eine zweite Datei für denselben Tag.
                     File.AppendAllText(ziel, File.ReadAllText(teil.Pfad, Utf8OhneBom), Utf8OhneBom);
                     File.Delete(teil.Pfad);
                 }
@@ -303,9 +354,15 @@ public sealed class BetriebsLog
             }
         }
 
+        int aktiverTeil;
+        lock (_sperre)
+        {
+            aktiverTeil = _teil;
+        }
+
         var gesamt = dateien.Sum(d => new FileInfo(d.Pfad).Length);
         var loeschbar = dateien
-            .Where(d => !(d.Tag is null && d.Teil == _teil))
+            .Where(d => !(d.Tag is null && d.Teil >= aktiverTeil))
             .OrderBy(d => d.Tag is null ? 1 : 0)
             .ThenBy(d => d.Tag)
             .ThenBy(d => d.Teil)
@@ -317,10 +374,10 @@ public sealed class BetriebsLog
                 break;
             }
 
-            var laenge = new FileInfo(datei.Pfad).Length;
+            gesamt -= new FileInfo(datei.Pfad).Length;
             File.Delete(datei.Pfad);
-            gesamt -= laenge;
-            SchreibeWarnungIntern($"Logs von „{_optionen.Name}“ über {_optionen.MaxGesamtBytes / (1024 * 1024)} MB, älteste Datei gelöscht: {Path.GetFileName(datei.Pfad)}.");
+            Schreibe(LogStufe.Warnung, nameof(BetriebsLog),
+                $"Logs von „{_optionen.Name}“ über {MegaByte(_optionen.MaxGesamtBytes)}, älteste Datei gelöscht: {Path.GetFileName(datei.Pfad)}.");
         }
     }
 
