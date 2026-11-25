@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using FlaUI.Core.AutomationElements;
 using HaelpMi.Core.Licensing;
 using HaelpMi.Installer.Tests;
@@ -11,6 +12,7 @@ namespace HaelpMi.E2E.Tests;
 public partial class GeraetBTests
 {
     private const string LimitToast = "LicenseLimitToastWindow";
+    private const string ErinnerungsToast = "LicenseReminderToastWindow";
 
     [Fact, TestPriority(90)]
     [Trait("Teil", ZweiGeraete.Teil), Trait("Bereich", "Haupt")]
@@ -116,9 +118,7 @@ public partial class GeraetBTests
                 befunde.Add("Produktbefund L4: B ist mit abgelaufener Lizenz gesperrt (Sperr-Toast), erwartet ist Soft-Expiry.");
             }
 
-            // Erwartung offen: ob ein User-Gerät auf den Ablauf hinweisen soll, ist nicht festgelegt; nur festhalten.
-            var hinweis = app.FindeToast(LimitToast) ?? app.FindeToast("LicenseReminderToastWindow");
-            _ausgabe.WriteLine($"L4: Hinweis auf B bei abgelaufener Lizenz: '{(hinweis is null ? "keiner" : NameVon(hinweis, "MessageText"))}'");
+            await PruefeBefundAsync(befunde, () => ErwarteAblaufHinweisAsync(app, "L4", "nach dem Agent-Start"));
             Rendezvous.Signal("t9-l4-b-bereit");
             await AlarmVonAAsync(app, "l4");
 
@@ -141,5 +141,18 @@ public partial class GeraetBTests
         await Rendezvous.WaitForAsync($"t9-{stufe}-p1-aus", SchrittTimeout);
         await app.QuittiereUndSchliesseAsync(app.ErwartePopup($"{stufe.ToUpperInvariant()}: P1 von A"), "B");
         Rendezvous.Signal($"t9-{stufe}-b-quittiert");
+    }
+
+    /// <summary>Hinweis-Toast auf dem User-Gerät bei abgelaufener Lizenz (Soft-Expiry: Alarme laufen weiter), danach schließen.</summary>
+    private async Task ErwarteAblaufHinweisAsync(HaelpMiApp app, string stufe, string wann, TimeSpan? timeout = null)
+    {
+        Window? toast = null;
+        var text = string.Empty;
+        await WarteBisAsync(() => (toast = app.FindeToast(ErinnerungsToast)) is not null && (text = NameVon(toast, "MessageText")).Length > 0,
+            timeout ?? NegativDauer, $"Produktbefund {stufe}: kein Hinweis ({ErinnerungsToast}) auf B bei abgelaufener Lizenz {wann}.");
+        _ausgabe.WriteLine($"{stufe}: Hinweis auf B '{text}'");
+        var passt = Regex.IsMatch(text, @"seit \d+ Tag\(en\) abgelaufen") && text.Contains("Alarme weiter", StringComparison.Ordinal);
+        Element(toast!, "CloseButton").AsButton().Invoke();
+        Assert.True(passt, $"Produktbefund {stufe}: Hinweis auf B zeigt '{text}', erwartet 'Die Lizenz ist seit … abgelaufen … Alarme weiter …'.");
     }
 }

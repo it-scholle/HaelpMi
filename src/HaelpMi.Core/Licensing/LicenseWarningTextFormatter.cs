@@ -33,4 +33,15 @@ public static class LicenseWarningTextFormatter
             ? message
             : $"{message}{Environment.NewLine}Kontakt: {ProviderContact.DisplayText}";
     }
+
+    /// <summary>
+    /// Text für Geräte, deren Sitzung das Dashboard nicht öffnen darf (siehe <see cref="LicenseReminderTrigger"/>):
+    /// nennt den Admin statt des Dashboards und keinen Anbieterkontakt.
+    /// </summary>
+    public static string FormatForUserDevice(LicenseWarning warning) => warning.Level switch
+    {
+        LicenseWarningLevel.Expired =>
+            $"Die Lizenz ist seit {-warning.DaysRemaining} Tag(en) abgelaufen. Dieses Gerät sendet und empfängt Alarme weiter. Bitte einen Admin informieren, damit er im Dashboard eine neue Lizenz einspielt.",
+        _ => Format(warning),
+    };
 }
