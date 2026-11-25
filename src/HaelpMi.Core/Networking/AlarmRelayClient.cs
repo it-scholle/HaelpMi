@@ -24,7 +24,9 @@ public sealed class AlarmRelayClient : IAsyncDisposable
 
     private readonly SemaphoreSlim _writeLock = new(1, 1);
     private NamedPipeClientStream? _pipe;
-    private bool _canReply;
+
+    /// <summary>false, wenn die Verbindung nur lesend steht; die Primary zählt Alarme dann ungeprüft als angezeigt.</summary>
+    public bool CanReply { get; private set; }
     private CancellationTokenSource? _cts;
     private Task? _readLoop;
 
@@ -32,7 +34,7 @@ public sealed class AlarmRelayClient : IAsyncDisposable
     public async Task<bool> TryConnectAsync(TimeSpan timeout, CancellationToken ct)
     {
         var (pipe, accessDenied) = await TryOpenAsync(PipeDirection.InOut, timeout, ct);
-        _canReply = pipe is not null;
+        CanReply = pipe is not null;
         if (accessDenied)
         {
             (pipe, _) = await TryOpenAsync(PipeDirection.In, timeout, ct);
@@ -45,7 +47,7 @@ public sealed class AlarmRelayClient : IAsyncDisposable
 
         _pipe = pipe;
         _cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        if (_canReply)
+        if (CanReply)
         {
             await WriteReplyAsync(new AlarmRelayReply(Guid.Empty, false), _cts.Token);
         }
@@ -144,7 +146,7 @@ public sealed class AlarmRelayClient : IAsyncDisposable
                 var senderAddress = IPAddress.TryParse(relayed.SenderAddress, out var parsed) ? parsed : IPAddress.None;
                 var args = new AlarmReceivedEventArgs { Request = relayed.Request, SenderAddress = senderAddress };
                 AlarmReceived?.Invoke(this, args);
-                if (_canReply && relayed.RelayId != Guid.Empty)
+                if (CanReply && relayed.RelayId != Guid.Empty)
                 {
                     _ = ReplyAsync(args, relayed.RelayId, ct);
                 }

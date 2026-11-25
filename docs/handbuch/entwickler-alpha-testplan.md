@@ -429,9 +429,10 @@ Windows-Standard-Accounts (A und B), HälpMi darauf installiert.
       wechseln“ → B anmelden. Solange B sich noch anmeldet (noch kein Tray-Icon), darf das
       Sender-Fenster das Testgerät **nicht** als empfangen zählen (`Empfangen: 0 von 1`, im
       `audit.log` des Testgeräts `alarm nicht quittiert (nicht angezeigt)`). Sobald B's Agent läuft
-      und das Popup in B erscheint, springt der Zähler mit der nächsten Welle auf 1. Gegenprobe:
-      Erscheint das Popup in B, ohne dass der Zähler nachzieht, kann B's Agent nicht über die
-      Relay-Pipe zurückmelden (Schreibrechte aus der fremden Sitzung) - dann bitte melden.
+      und das Popup in B erscheint, springt der Zähler mit der nächsten Welle auf 1. Außerdem im
+      `audit.log` von B prüfen: Steht dort „… kann die Anzeige aber nicht zurückmelden (Pipe nur
+      lesend)“, fehlen B die Schreibrechte auf die Relay-Pipe der Sitzung A. Dann gilt für B das
+      alte Verhalten (Quittung ohne Prüfung) - bitte melden.
 
 **Wenn das fehlschlägt:** welcher Punkt genau, ob das Tray-Icon für die zweite Sitzung
 überhaupt erscheint (Autostart-Problem) oder nur der Alarm ausbleibt (Relay-Problem), plus

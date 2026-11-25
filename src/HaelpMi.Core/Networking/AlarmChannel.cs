@@ -84,7 +84,9 @@ public sealed class AlarmChannel : IAsyncDisposable
             if (connected)
             {
                 _relayClient = client;
-                _audit?.Invoke("Alarm-Satellite-Instanz verbunden, empfängt Alarme über lokalen Relay-Kanal.");
+                _audit?.Invoke(client.CanReply
+                    ? "Alarm-Satellite-Instanz verbunden, empfängt Alarme über lokalen Relay-Kanal und meldet die Anzeige zurück."
+                    : "Alarm-Satellite-Instanz verbunden, empfängt Alarme über lokalen Relay-Kanal, kann die Anzeige aber nicht zurückmelden (Pipe nur lesend).");
 
                 using var reg = ct.Register(() => disconnected.TrySetCanceled());
                 try
