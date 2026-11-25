@@ -7,4 +7,12 @@ namespace HaelpMi.Core.Networking.Protocol;
 /// String statt <see cref="System.Net.IPAddress"/>, weil <c>NetworkSerializer</c> dafür
 /// keinen eigenen Konverter hat - reiner lokaler Pipe-Transport, keine Notwendigkeit dafür.
 /// </summary>
-public sealed record AlarmRelayMessage(AlarmRequestMessage Request, string SenderAddress);
+/// <param name="RelayId">Ordnet die <see cref="AlarmRelayReply"/> der Satellites dieser Weiterleitung zu; leer bei älteren Primaries.</param>
+public sealed record AlarmRelayMessage(AlarmRequestMessage Request, string SenderAddress, Guid RelayId = default);
+
+/// <summary>
+/// Antwort einer Satellite-Instanz an die Primary: Hat diese Sitzung den weitergereichten Alarm angezeigt?
+/// Die Primary quittiert dem Sender erst, wenn irgendeine Sitzung der Maschine ihn anzeigt.
+/// <see cref="RelayId"/> leer ist die Anmeldung direkt nach dem Verbinden: Dieser Satellite antwortet.
+/// </summary>
+public sealed record AlarmRelayReply(Guid RelayId, bool Displayed);

@@ -53,20 +53,21 @@ public sealed class AlarmChannel : IAsyncDisposable
     private void PromoteToPrimary()
     {
         IsPrimary = true;
-        _relayServer = new AlarmRelayServer();
+        _relayServer = new AlarmRelayServer(_audit);
         _relayServer.Start();
         _audit?.Invoke("Alarm-Primary-Instanz aktiv (hält den TCP-Port, reicht an Satellites weiter).");
     }
 
     private void OnPrimaryAlarmReceived(object? sender, AlarmReceivedEventArgs e)
     {
-        AlarmReceived?.Invoke(this, e);
-
-        if (_relayServer is not null)
+        // Satellites zuerst: ihre Anzeige läuft parallel zur eigenen, beides muss in die Quittungsfrist des Senders passen.
+        if (_relayServer is { HasClients: true })
         {
-            var relayMessage = new AlarmRelayMessage(e.Request, e.SenderAddress.ToString());
-            _ = _relayServer.BroadcastAsync(relayMessage, CancellationToken.None);
+            var relayMessage = new AlarmRelayMessage(e.Request, e.SenderAddress.ToString(), Guid.NewGuid());
+            e.ReportDisplayed(_relayServer.BroadcastAndAwaitDisplayAsync(relayMessage, AppConstants.AlarmRelayDisplayReplyTimeout, CancellationToken.None));
         }
+
+        AlarmReceived?.Invoke(this, e);
     }
 
     private async Task RunAsSatelliteAsync(int port, CancellationToken ct)
@@ -83,7 +84,9 @@ public sealed class AlarmChannel : IAsyncDisposable
             if (connected)
             {
                 _relayClient = client;
-                _audit?.Invoke("Alarm-Satellite-Instanz verbunden, empfängt Alarme über lokalen Relay-Kanal.");
+                _audit?.Invoke(client.CanReply
+                    ? "Alarm-Satellite-Instanz verbunden, empfängt Alarme über lokalen Relay-Kanal und meldet die Anzeige zurück."
+                    : "Alarm-Satellite-Instanz verbunden, empfängt Alarme über lokalen Relay-Kanal, kann die Anzeige aber nicht zurückmelden (Pipe nur lesend).");
 
                 using var reg = ct.Register(() => disconnected.TrySetCanceled());
                 try

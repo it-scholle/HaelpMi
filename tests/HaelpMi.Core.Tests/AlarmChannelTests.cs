@@ -88,6 +88,71 @@ public class AlarmChannelTests
         Assert.True(promoted, "Satellite hat den freigewordenen TCP-Port nach Wegfall der Primary nicht übernommen.");
     }
 
+    [Fact]
+    public async Task Primary_PopupSuppressed_WithoutSatellite_SendsNoAck()
+    {
+        // Nutzerwechsel: die eigene Sitzung ist weggeschaltet, die neue hat noch keinen Agent - niemand sieht das Popup.
+        var customerGroupId = Guid.NewGuid();
+        var receiverDeviceId = Guid.NewGuid();
+        var identity = MakeIdentity(customerGroupId, receiverDeviceId);
+        var port = GetFreeTcpPort();
+
+        await using var primary = new AlarmChannel(() => identity);
+        primary.AlarmReceived += (_, args) => args.ReportDisplayed(false);
+        primary.Start(port);
+
+        var result = await SendOneAsync(customerGroupId, receiverDeviceId, port);
+
+        Assert.Equal(0, result.AckedCount);
+    }
+
+    [Theory]
+    [InlineData(true, 1)]
+    [InlineData(false, 0)]
+    public async Task Primary_PopupSuppressed_AcksOnlyIfSatelliteDisplays(bool satelliteDisplays, int expectedAcks)
+    {
+        var customerGroupId = Guid.NewGuid();
+        var receiverDeviceId = Guid.NewGuid();
+        var identity = MakeIdentity(customerGroupId, receiverDeviceId);
+        var port = GetFreeTcpPort();
+
+        await using var primary = new AlarmChannel(() => identity);
+        await using var satellite = new AlarmChannel(() => identity);
+        primary.AlarmReceived += (_, args) => args.ReportDisplayed(false);
+        var satelliteReceived = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        satellite.AlarmReceived += (_, args) =>
+        {
+            args.ReportDisplayed(satelliteDisplays);
+            satelliteReceived.TrySetResult();
+        };
+
+        primary.Start(port);
+        satellite.Start(port);
+        Assert.False(satellite.IsPrimary);
+
+        // Der Satellite verbindet sich asynchron; erst messen, wenn er relayte Alarme sicher bekommt.
+        using var connectTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        while (!satelliteReceived.Task.IsCompleted && !connectTimeout.IsCancellationRequested)
+        {
+            await SendOneAsync(customerGroupId, receiverDeviceId, port);
+            await Task.WhenAny(satelliteReceived.Task, Task.Delay(TimeSpan.FromMilliseconds(300)));
+        }
+        Assert.True(satelliteReceived.Task.IsCompleted, "Satellite hat den über die Primary relayten Alarm nicht empfangen.");
+        // Die Anmeldung als antwortfähig liest die Primary asynchron; erst danach zählt die Antwort.
+        await Task.Delay(TimeSpan.FromMilliseconds(300));
+
+        var result = await SendOneAsync(customerGroupId, receiverDeviceId, port);
+
+        Assert.Equal(expectedAcks, result.AckedCount);
+    }
+
+    private static Task<AlarmSendResult> SendOneAsync(Guid customerGroupId, Guid receiverDeviceId, int port)
+    {
+        var senderIdentity = MakeIdentity(customerGroupId, Guid.NewGuid());
+        var target = new DeviceEntry { DeviceId = receiverDeviceId, IpAddress = "127.0.0.1", TcpPort = port };
+        return new AlarmSender().SendAsync(new AlarmProfile { Text = "Testalarm", ResponseThreshold = 1 }, Guid.NewGuid(), senderIdentity, new[] { target });
+    }
+
     private static int GetFreeTcpPort()
     {
         var listener = new TcpListener(IPAddress.Loopback, 0);
