@@ -75,7 +75,7 @@ public sealed class AlarmFlowCoordinator
         {
             return _deviceStore.Load();
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Text.Json.JsonException)
+        catch (Exception ex) when (ex is System.IO.IOException or UnauthorizedAccessException or System.Text.Json.JsonException)
         {
             _auditLog.Append($"alarm-Welle: devices.json nicht lesbar, Adressen vom Auslösezeitpunkt bleiben: {ex.GetType().Name}: {ex.Message}");
             return Array.Empty<DeviceEntry>();
