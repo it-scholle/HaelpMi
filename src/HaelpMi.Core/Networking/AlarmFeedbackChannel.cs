@@ -268,7 +268,7 @@ public sealed class AlarmFeedbackChannel : IAsyncDisposable
         {
             case AlarmFeedbackMessageType.OnMyWay:
                 if (TryDeserialize<AlarmOnMyWayMessage>(envelope.PayloadJson) is { } onMyWay
-                    && CustomerGroupFilter.Matches(onMyWay.CustomerGroupId, identity.CustomerGroupId))
+                    && CustomerGroupFilter.Matches(onMyWay.CustomerGroupId, identity.CustomerGroupId, "Auf-dem-Weg", onMyWay.ResponderDeviceId))
                 {
                     _audit?.Invoke($"onmyway received from deviceId={onMyWay.ResponderDeviceId}");
                     OnMyWayReceived?.Invoke(this, onMyWay);
@@ -277,7 +277,7 @@ public sealed class AlarmFeedbackChannel : IAsyncDisposable
 
             case AlarmFeedbackMessageType.StatusRelay:
                 if (TryDeserialize<AlarmStatusRelayMessage>(envelope.PayloadJson) is { } relay
-                    && CustomerGroupFilter.Matches(relay.CustomerGroupId, identity.CustomerGroupId))
+                    && CustomerGroupFilter.Matches(relay.CustomerGroupId, identity.CustomerGroupId, "Alarm-Status", null))
                 {
                     StatusRelayReceived?.Invoke(this, relay);
                 }
