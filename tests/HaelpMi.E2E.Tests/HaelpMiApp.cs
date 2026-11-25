@@ -131,7 +131,8 @@ internal sealed class HaelpMiApp : IDisposable
     public Window WarteAufSenderBanner(TimeSpan timeout) => WarteAuf(FindeSenderBanner, "Sender-Banner", timeout);
 
     /// <summary>Wie <see cref="WarteAufAlarmfenster"/>, aber ein Ausbleiben ist ein Testfehler mit <paramref name="fall"/> in der Meldung.</summary>
-    public Window ErwartePopup(string fall) => Erwarte(FindeAlarmfenster, $"{fall}: kein Alarmfenster", TimeSpan.FromSeconds(15));
+    public Window ErwartePopup(string fall, TimeSpan? timeout = null) =>
+        Erwarte(FindeAlarmfenster, $"{fall}: kein Alarmfenster", timeout ?? TimeSpan.FromSeconds(15));
 
     public Window ErwarteBanner(string fall) =>
         Erwarte(FindeSenderBanner, $"{fall}: kein Sender-Banner nach dem Hotkey (Hotkey nicht registriert oder kein gültiger Empfänger)", TimeSpan.FromSeconds(10));

@@ -90,6 +90,7 @@ public sealed class RepeatingAlarmSession : IDisposable
         AlarmSender alarmSender,
         AlarmFeedbackChannel feedbackChannel,
         DateTimeOffset startedAtUtc,
+        // Liefert die aktuelle Geräteliste (devices.json); darf nicht werfen, sonst endet die Session ohne Finished.
         Func<IReadOnlyList<DeviceEntry>>? currentDevicesProvider = null)
     {
         Profile = profile;
@@ -119,6 +120,10 @@ public sealed class RepeatingAlarmSession : IDisposable
                 {
                     // Abseits des UI-Threads: das Lesen von devices.json kann bei Dateikonflikten kurz blockieren.
                     _currentTargets = await Task.Run(TargetsWithCurrentAddresses);
+                    if (_stopCts.IsCancellationRequested)
+                    {
+                        break;
+                    }
                 }
 
                 var result = await _alarmSender.SendAsync(Profile, AlarmSessionId, _ownIdentity, _currentTargets, ct: _stopCts.Token);

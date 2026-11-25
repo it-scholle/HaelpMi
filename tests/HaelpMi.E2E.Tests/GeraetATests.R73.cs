@@ -13,7 +13,7 @@ public partial class GeraetATests
     // Aus dem Dokumentationsbereich TEST-NET-1 (RFC 5737): im Testnetz nie vergeben, Verbindungen laufen ins Leere.
     private const string R73VeralteteAdresse = "192.0.2.73";
 
-    private static readonly TimeSpan R73EmpfangsFrist = TimeSpan.FromSeconds(60);
+    private static readonly TimeSpan R73EmpfangsFrist = TimeSpan.FromSeconds(90);
 
     /// <summary>
     /// A kennt B nur unter einer veralteten Adresse und löst aus, während der Agent auf B noch nicht läuft.

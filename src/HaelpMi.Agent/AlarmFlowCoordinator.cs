@@ -67,8 +67,8 @@ public sealed class AlarmFlowCoordinator
 
     /// <summary>
     /// Liefert für eine Session die aktuellen Adressen vor jeder weiteren Welle. Wirft nie: Bei
-    /// einem Lesefehler sendet die Session mit den bisherigen Adressen weiter, protokolliert wird
-    /// nur der erste Fehler je Session (sonst eine Zeile pro Welle).
+    /// einem Lesefehler sendet die Session mit den bisherigen Adressen weiter. Erwartete Dateifehler
+    /// werden nur beim ersten Mal je Session protokolliert (sonst eine Zeile pro Welle), andere immer.
     /// </summary>
     private Func<IReadOnlyList<DeviceEntry>> CreateWaveDeviceLoader(Guid alarmProfileId)
     {
@@ -81,9 +81,10 @@ public sealed class AlarmFlowCoordinator
             }
             catch (Exception ex)
             {
-                if (!fehlerProtokolliert)
+                var erwartet = ex is System.IO.IOException or UnauthorizedAccessException or System.Text.Json.JsonException;
+                if (!erwartet || !fehlerProtokolliert)
                 {
-                    fehlerProtokolliert = true;
+                    fehlerProtokolliert |= erwartet;
                     _auditLog.Append($"alarm-Welle: devices.json nicht lesbar, Adressen vom Auslösezeitpunkt bleiben: alarmProfileId={alarmProfileId} {ex.GetType().Name}: {ex.Message}");
                 }
 

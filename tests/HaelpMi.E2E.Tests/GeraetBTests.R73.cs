@@ -28,7 +28,8 @@ public partial class GeraetBTests
             {
                 await Rendezvous.WaitForAsync("t23-aus", GegenseiteTimeout);
                 await StarteAgentAsync();
-                app.ErwartePopup("T23");
+                // Eine Welle an die veraltete Adresse dauert auf A mit Zeitlimits bis etwa 15 s, erst die nächste liest nach.
+                app.ErwartePopup("T23", TimeSpan.FromSeconds(45));
             }
             finally
             {
