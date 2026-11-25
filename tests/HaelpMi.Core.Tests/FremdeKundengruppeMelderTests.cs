@@ -223,6 +223,10 @@ public sealed class FremdeKundengruppeMelderTests : IDisposable
         public DateTimeOffset Jetzt { get; set; } = start;
 
         public override DateTimeOffset GetUtcNow() => Jetzt;
+
+        public override long TimestampFrequency => TimeSpan.TicksPerSecond;
+
+        public override long GetTimestamp() => Jetzt.UtcTicks;
     }
 }
 

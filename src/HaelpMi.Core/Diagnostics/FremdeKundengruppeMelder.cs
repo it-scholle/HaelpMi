@@ -23,7 +23,7 @@ public sealed class FremdeKundengruppeMelder
     private readonly int _maxKombinationen;
     private readonly TimeProvider _zeit;
     private readonly Action<string, string?> _schreibeWarnung;
-    private DateTimeOffset? _letzteUeberlaufMeldung;
+    private long? _letzteUeberlaufMeldung;
     private long _ueberlaufSeitMeldung;
 
     /// <param name="schreibeWarnung">Meldung und Objekt-ID (Absender-Geräte-ID); Standard: <see cref="BetriebsLog.Warnung"/>.</param>
@@ -49,7 +49,7 @@ public sealed class FremdeKundengruppeMelder
         string? meldung;
         lock (_sperre)
         {
-            meldung = Zaehle(nachrichtenart, fremdeKundengruppe, _zeit.GetUtcNow());
+            meldung = Zaehle(nachrichtenart, fremdeKundengruppe, _zeit.GetTimestamp());
         }
 
         if (meldung is not null)
@@ -58,7 +58,8 @@ public sealed class FremdeKundengruppeMelder
         }
     }
 
-    private string? Zaehle(string art, Guid gruppe, DateTimeOffset jetzt)
+    // Monotone Zeitstempel: Eine zurückgestellte Systemuhr darf die Meldungen nicht verstummen lassen.
+    private string? Zaehle(string art, Guid gruppe, long jetzt)
     {
         var schluessel = (art, gruppe);
         if (!_kombinationen.TryGetValue(schluessel, out var zaehler))
@@ -78,7 +79,7 @@ public sealed class FremdeKundengruppeMelder
         }
 
         zaehler.SeitMeldung++;
-        if (jetzt - zaehler.LetzteMeldung < _intervall)
+        if (_zeit.GetElapsedTime(zaehler.LetzteMeldung, jetzt) < _intervall)
         {
             return null;
         }
@@ -89,19 +90,19 @@ public sealed class FremdeKundengruppeMelder
         return Text(art, gruppe, anzahl);
     }
 
-    private void EntferneAbgelaufene(DateTimeOffset jetzt)
+    private void EntferneAbgelaufene(long jetzt)
     {
         // Abgelaufene Kombinationen mit ungemeldeten Nachrichten gehen dabei verloren; sie tauchen wieder auf, sobald die Gruppe erneut sendet.
-        foreach (var schluessel in _kombinationen.Where(k => jetzt - k.Value.LetzteMeldung >= _intervall).Select(k => k.Key).ToList())
+        foreach (var schluessel in _kombinationen.Where(k => _zeit.GetElapsedTime(k.Value.LetzteMeldung, jetzt) >= _intervall).Select(k => k.Key).ToList())
         {
             _kombinationen.Remove(schluessel);
         }
     }
 
-    private string? ZaehleUeberlauf(DateTimeOffset jetzt)
+    private string? ZaehleUeberlauf(long jetzt)
     {
         _ueberlaufSeitMeldung++;
-        if (_letzteUeberlaufMeldung is { } letzte && jetzt - letzte < _intervall)
+        if (_letzteUeberlaufMeldung is { } letzte && _zeit.GetElapsedTime(letzte, jetzt) < _intervall)
         {
             return null;
         }
@@ -147,7 +148,7 @@ public sealed class FremdeKundengruppeMelder
                 return TimeSpan.FromMinutes(minuten);
             }
 
-            hinweis = $"{pfad}: \"{EinstellungDrosselMinuten}\" muss eine ganze Zahl ab 1 sein, es gilt {StandardIntervall.TotalMinutes:0}.";
+            hinweis = $"{pfad}: \"{EinstellungDrosselMinuten}\" muss eine ganze Zahl ab 1 sein, es gilt {StandardIntervall.TotalMinutes:0} Minuten.";
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
         {
@@ -159,7 +160,7 @@ public sealed class FremdeKundengruppeMelder
 
     private sealed class Zaehler
     {
-        public DateTimeOffset LetzteMeldung { get; set; }
+        public long LetzteMeldung { get; set; }
 
         public long SeitMeldung { get; set; }
     }

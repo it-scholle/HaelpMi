@@ -60,8 +60,9 @@ Betriebs-Log (`src/HaelpMi.Core/Diagnostics/BetriebsLog.cs`):
   Installer) verwirft der Agent weiterhin ohne Antwort, meldet sie aber als WARNUNG (Modul `Kundengruppe`)
   mit Nachrichtenart, den ersten 8 Zeichen der fremden Kundengruppen-ID, der Absender-Geräte-ID (`objekt`,
   falls vorhanden) und der Anzahl seit der letzten Meldung. Gedrosselt auf eine Meldung je Nachrichtenart und
-  fremder Gruppe pro Stunde; einstellbar in `betriebslog.json` mit `"FremdeKundengruppeDrosselMinuten": 15`
-  (ganze Zahl ab 1, Agent neu starten). Nie im Audit-Log.
+  fremder Gruppe pro Stunde; einstellbar in `betriebslog.json`, z. B.
+  `{"Stufe": "INFO", "FremdeKundengruppeDrosselMinuten": 15}` (ganze Zahl ab 1, Agent neu starten; `Stufe`
+  mit angeben, sonst warnt das Log über die fehlende Stufe). Nie im Audit-Log.
 - Tageswechsel: Beim ersten Eintrag eines neuen Tages oder beim Start, wenn die Datei von einem früheren Tag
   ist, wird sie in `agent-JJJJ-MM-TT.log` umbenannt (Datum der Einträge).
 - Notbremse (Teil B): ab 20 MB je Datei WARNUNG und weiter in `agent.1.log`, `agent.2.log` …; über 200 MB

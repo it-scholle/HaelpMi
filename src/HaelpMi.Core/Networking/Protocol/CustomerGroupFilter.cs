@@ -12,7 +12,7 @@ namespace HaelpMi.Core.Networking.Protocol;
 /// </summary>
 public static class CustomerGroupFilter
 {
-    public static bool Matches(Guid messageCustomerGroupId, Guid ownCustomerGroupId) =>
+    private static bool Matches(Guid messageCustomerGroupId, Guid ownCustomerGroupId) =>
         messageCustomerGroupId == ownCustomerGroupId;
 
     /// <param name="nachrichtenart">Feste Bezeichnung für das Betriebs-Log, z. B. „Alarm“.</param>
