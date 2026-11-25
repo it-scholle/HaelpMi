@@ -207,8 +207,9 @@ im Code schon als seltene Startrace eingeplant habe, aber nicht selbst timen kon
       zwei verschiedenen Geräten → Sender-Wiederholung stoppt danach automatisch
 - [ ] "Abbrechen" auf dem Sender-Status-Fenster beendet die Wiederholung sofort
 - [ ] Tastenkürzel eines Alarm-Profils drücken, in dem für dieses Gerät keine Empfänger
-      eingerichtet sind → Status-Fenster erscheint trotzdem mit "Empfangen: 0 von 0" und dem
-      Hinweis, wo ein Admin die Empfänger zuordnet; "Abbrechen" schließt es
+      eingerichtet sind → Status-Fenster erscheint trotzdem, sofort mit "Alarm nicht zugestellt",
+      "Empfangen: 0 von 0" und dem Hinweis, wo ein Admin die Empfänger zuordnet; keine
+      Wiederholung (eine Zeile im `audit.log`), "Schließen" (X) schließt es
 
 **Melde zurück:** Vor allem der erzwungene Vordergrund (bei Vollbild-Anwendungen/Spielen)
 und der Signalton bei Stummschaltung sind die Punkte, die ich am wenigsten selbst prüfen

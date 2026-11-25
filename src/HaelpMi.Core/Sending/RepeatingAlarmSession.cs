@@ -23,6 +23,8 @@ public enum AlarmStopReason
     MaxDuration,
     ThresholdReached,
     Cancelled,
+    /// <summary>Keine Empfänger: genau eine Welle, dann Ende als "nicht zugestellt".</summary>
+    NoRecipients,
 }
 
 /// <summary>
@@ -110,6 +112,11 @@ public sealed class RepeatingAlarmSession : IDisposable
                 MarkReceived(result.AckedDeviceIds);
                 await RaiseAndRelayAsync(stillSending: true);
 
+                if (Targets.Count == 0)
+                {
+                    break;
+                }
+
                 try
                 {
                     await Task.Delay(AppConstants.AlarmRepeatInterval, _stopCts.Token);
@@ -142,12 +149,19 @@ public sealed class RepeatingAlarmSession : IDisposable
         // setzt das Flag also nicht - beide Fälle bleiben damit unterscheidbar.
         StopReason = _cancelledByUser
             ? AlarmStopReason.Cancelled
-            : _onTheWayResponderIds.Count >= Profile.ResponseThreshold
+            : Targets.Count == 0
+                ? AlarmStopReason.NoRecipients
+                : _onTheWayResponderIds.Count >= Profile.ResponseThreshold
                 ? AlarmStopReason.ThresholdReached
                 : AlarmStopReason.MaxDuration;
 
         var finalRelay = await RaiseAndRelayAsync(stillSending: false);
         Finished?.Invoke(this, EventArgs.Empty);
+
+        if (Targets.Count == 0)
+        {
+            return; // niemand, an den ein Relay ginge oder von dem eine Spätantwort käme
+        }
 
         // Issue #136 Fixvorschlag 5: zusätzliche Exemplare dieses letzten "fertig"-Relays,
         // fire-and-forget - siehe AppConstants.AlarmFinalRelayBurstCount. Bewusst NICHT
