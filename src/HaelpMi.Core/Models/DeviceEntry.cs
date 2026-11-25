@@ -32,7 +32,10 @@ public sealed class DeviceEntry
     /// </summary>
     public bool IsRemoteSession { get; set; }
 
-    /// <summary>Last known IP:port, refreshed on every broadcast/response (5.4). Used to actually send alarms.</summary>
+    /// <summary>
+    /// Last known IP:port, refreshed whenever the device itself announces or replies (5.4).
+    /// Gossip from third parties only fills it in while it is still empty. Used to actually send alarms.
+    /// </summary>
     public string IpAddress { get; set; } = string.Empty;
     public int TcpPort { get; set; } = AppConstants.AlarmTcpPort;
 
@@ -122,4 +125,13 @@ public sealed class DeviceEntry
 
     /// <summary>Zeitpunkt der letzten Removed-Änderung (auf ODER ab) - null, solange nie gesetzt. Siehe <see cref="Removed"/>.</summary>
     public DateTimeOffset? RemovedSetAtUtc { get; set; }
+
+    /// <summary>Copy with a different address, e.g. for the current wave of a running alarm session.</summary>
+    public DeviceEntry WithAddress(string ipAddress, int tcpPort)
+    {
+        var copy = (DeviceEntry)MemberwiseClone();
+        copy.IpAddress = ipAddress;
+        copy.TcpPort = tcpPort;
+        return copy;
+    }
 }

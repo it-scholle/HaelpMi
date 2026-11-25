@@ -746,6 +746,16 @@ public partial class App : System.Windows.Application
 
         _coordinator = new AlarmFlowCoordinator(BuildIdentity, () => _settings, _sharedConfigStore.LoadOrCreate, () => _license, _feedbackChannel);
 
+        // Issue #9 (Fast User Switching ohne Logout/Reboot): AlarmChannel entscheidet
+        // selbst, ob diese Sitzung den echten TCP-Port hält (Primary) oder als Satellite
+        // über den lokalen Relay-Kanal einer anderen Sitzung mitläuft - für den
+        // Aufrufer hier kein Unterschied, AlarmReceived feuert in beiden Rollen gleich.
+        // Vor dem Boot-Call gestartet: Wer dieses Gerät per Boot-Call kennenlernt, soll es
+        // sofort per Alarm erreichen können.
+        _listener = new AlarmChannel(BuildIdentity, _auditLog.Append, () => _coordinator!.IsOwnDeviceLicenseDisabled() || _coordinator!.IsOwnDeviceRemoved());
+        _listener.AlarmReceived += (_, args) => _coordinator.HandleIncomingAlarmRequest(args);
+        _listener.Start();
+
         _discovery = new DiscoveryService(BuildIdentity, _auditLog.Append,
             ownLicenseKeyTextProvider: () => _license.License is null ? null : LicenseKeyText.Encode(_license.License),
             ownPendingLicenseKeyTextProvider: () =>
@@ -780,14 +790,6 @@ public partial class App : System.Windows.Application
 
         // Issue #61-Nachtrag "Löschen deaktiviert nicht wirklich".
         _discovery.OwnDeviceRemovedObserved += OnOwnDeviceRemoved;
-
-        // Issue #9 (Fast User Switching ohne Logout/Reboot): AlarmChannel entscheidet
-        // selbst, ob diese Sitzung den echten TCP-Port hält (Primary) oder als Satellite
-        // über den lokalen Relay-Kanal einer anderen Sitzung mitläuft - für den
-        // Aufrufer hier kein Unterschied, AlarmReceived feuert in beiden Rollen gleich.
-        _listener = new AlarmChannel(BuildIdentity, _auditLog.Append, () => _coordinator!.IsOwnDeviceLicenseDisabled() || _coordinator!.IsOwnDeviceRemoved());
-        _listener.AlarmReceived += (_, args) => _coordinator.HandleIncomingAlarmRequest(args);
-        _listener.Start();
 
         _configSync = new ConfigSyncService(BuildIdentity, _deviceStore.Load, _auditLog.Append);
         _configSync.ConfigApplied += (_, _) =>
