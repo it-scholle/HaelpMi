@@ -7,6 +7,7 @@ Details stehen in der Git-Historie. Der eingefrorene Stand `legacy/main-0.39.x` 
 ## [Unveröffentlicht]
 ### Neu
 - E2E: drittes Testgerät C (VM 9103) mit den Testfällen T11 (Discovery mit drei Geräten) und T12 (Alarm an zwei Empfänger mit Schwelle 2); Workflow, Relay und Skripte arbeiten mit beliebig vielen Test-VMs aus `ci/e2e/geraete.json`, die Umgebung läuft auf pve-nzxt (#202)
+- E2E: Regressionstest T18 (Alarmfenster schließen) mit drei Geräten (Alarm an zwei Empfänger mit Schwelle 2) (#136)
 ### Verbessert
 - Branch-Modell auf `develop`/`main` mit Stabilisierungs-Branch `release-X.Y` umgestellt, Conventional Commits, Hook `pre-push` (#194)
 - Struktur an die MasterAgents-Vorlage angeglichen: Doku-Struktur (`docs/`), Arbeitsregeln in `AGENTS.md`, Entscheidungen als ADR, Design-System-Verzeichnis `design/` (#151)
@@ -19,6 +20,7 @@ Details stehen in der Git-Historie. Der eingefrorene Stand `legacy/main-0.39.x` 
 - Der Hinweis „Alarm nicht gesendet“ auf einem gesperrten Gerät erscheint als eigenes Fenster im Vordergrund statt verdeckt unter dem Sperr-Toast (#179)
 - Wieder-Aktivieren eines Geräts im Reiter „Geräte / Lizenz“ hebt nur die Deaktivierung auf; das Gerät umgeht das Lizenzkontingent nicht mehr dauerhaft (#180)
 - Ein ohne Kundengruppe gebauter Test-Installer bekommt eine zufällige Test-Gruppe statt der Null-GUID und empfängt dadurch Alarme und Boot-Calls; ein Kunden-Installer ohne Kundengruppe lässt sich nicht mehr bauen (#175)
+- Alarmfenster ließ sich in seltenen Fällen nicht schließen oder öffnete sich direkt nach dem Schließen noch einmal (#136)
 
 ## [0.47.3] – 2026-11-18
 - Einrichtungs-Skript für die E2E-Vorlagen-VM (#165)

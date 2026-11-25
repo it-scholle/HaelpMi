@@ -6,7 +6,7 @@ using static HaelpMi.E2E.Tests.ZweiGeraete;
 
 namespace HaelpMi.E2E.Tests;
 
-// T11/T12 mit drei Geräten, Gegenstücke in GeraetATests.DreiGeraete.cs und GeraetCTests.cs.
+// T11/T12 mit drei Geräten, Gegenstücke in GeraetATests.DreiGeraete.cs und GeraetCTests.cs; T18 in GeraetBTests.R136.cs.
 public partial class GeraetBTests
 {
     [Fact, TestPriority(53), Trait("Bereich", "Basis")]
@@ -31,7 +31,7 @@ public partial class GeraetBTests
         catch
         {
             // Erst nach SichereAsync, damit der Screenshot eines Fehlschlags das Alarmfenster noch zeigt.
-            await RaeumeT12AlarmfensterAufAsync();
+            await RaeumeAlarmfensterAufAsync("T12");
             throw;
         }
     }
@@ -72,7 +72,7 @@ public partial class GeraetBTests
 
     // Ein offenes Alarmfenster stört T6. A bricht seinen Alarm beim eigenen Fehlschlag ab, das Fenster kann also
     // noch von selbst zugehen; sonst bleibt Schließen bei Schwelle 2 gesperrt und nur ein Agent-Neustart hilft.
-    private async Task RaeumeT12AlarmfensterAufAsync()
+    private async Task RaeumeAlarmfensterAufAsync(string fall)
     {
         try
         {
@@ -85,14 +85,14 @@ public partial class GeraetBTests
 
             if (app.AlarmfensterOffen())
             {
-                _ausgabe.WriteLine("T12: Alarmfenster auf B nach dem Fehlschlag noch offen, Agent wird neu gestartet.");
+                _ausgabe.WriteLine($"{fall}: Alarmfenster auf B nach dem Fehlschlag noch offen, Agent wird neu gestartet.");
                 await AgentNeustartMitAnlaufAsync();
             }
         }
         catch (Exception ex)
         {
             // Das Aufräumen darf den eigentlichen Testfehler nicht überdecken.
-            _ausgabe.WriteLine($"T12: Aufräumen auf B fehlgeschlagen: {ex.Message}");
+            _ausgabe.WriteLine($"{fall}: Aufräumen auf B fehlgeschlagen: {ex.Message}");
         }
     }
 }
