@@ -174,15 +174,16 @@ Läuft auf bis zu drei Wegwerf-VMs auf pve-nzxt (A = Admin-Gerät, B und C = Use
 | T16 | Regression #180: A deaktiviert B im Reiter "Geräte / Lizenz", wartet, bis B `ForceDisabled` übernommen hat, und aktiviert es wieder. Rot, wenn B danach in `devices.json` von A nicht auf `LicenseOverride` None steht (vor dem Fix: ForceEnabled, B umgeht dann das Kontingent). B prüft, dass es None per Gossip in `settings.json` übernimmt | A, B | – |
 | T17 | Regression #181: A und B bekommen aus `lizenz-kurz/` die Lizenz, die als nächste, aber frühestens 3 min später abläuft (gleiche Ausstellungszeit wie `lizenz.json`). A schließt den Start-Toast „läuft in 0 Tag(en) ab“. Rot, wenn ohne Agent-Neustart bis 60 s nach dem Ablauf auf A kein Toast „Lizenz seit … abgelaufen“ bzw. auf B kein Hinweis „… abgelaufen … Alarme weiter …“ erscheint. Danach beide wieder `lizenz.json` | A, B | – |
 | T18 | Regression #136 mit drei Geräten, `zyklen` Durchläufe: A alarmiert B und C mit Schwelle 2 (eigenes Profil, Config-Version 1200). B und C klicken "Bin unterwegs" wie in T10 Variante N mit demselben Versatz von -400 bis +400 ms zur nächsten Repeat-Welle (je eigene Wellenphase), schließen sofort, sobald frei, und achten 8 s auf ein zweites Fenster; keine Nachwelle. Läuft nach einem Neustart eines Empfängers der Alarm noch, bricht A ihn ab. Ergebnis je Empfänger in `out\r136-drei-<b\|c>-<Agent-Version>.csv` und `r136-drei-<b\|c>-zusammenfassung.json`. Rot ohne `produkt_ref`, wenn ein zweites Fenster erscheint, Schließen nicht frei wird oder das Fenster offen bleibt; mit `produkt_ref` nur Messung. Danach beendet C seinen Agent wieder | A, B, C | FR-47, FR-50, FR-51 |
+| T19 | Regression #136 "Mehrfach-Nachwelle", `zyklen` Durchläufe, Trait `Teil=MehrfachNachwelle` (zusätzlich zu `Teil=DreiGeraete`): A alarmiert B und C mit Schwelle 2 (eigenes Profil, Config-Version 1300). B und C klicken sofort "Bin unterwegs" und "Schließen", sobald frei. Danach schickt A per `AlarmSender` 3 bis 5 weitere Wellen derselben Session an beide, jeweils nach 0,5 bis 2 s (zufällig, pro Zyklus reproduzierbar). B klickt jedes wieder erscheinende Fenster sofort erneut weg ("Bin unterwegs", "Schließen", wie beim Kunden), C zählt nur. Gezählt wird je Zyklus und Empfänger die Zahl der verschiedenen Alarmfenster (Fenster-Handles, erwartet 1) und, ob "Bin unterwegs" wieder aktiv war (Rücksetzung); beobachtet wird bis 3 s nach der letzten Nachwelle. Ergebnis in `out\r136-mehrfach-<b\|c>-<Agent-Version>.csv` und `r136-mehrfach-<b\|c>-zusammenfassung.json`. Rot ohne `produkt_ref` bei mehr als einem Fenster, einer Rücksetzung, nie freiem Schließen, offen gebliebenem Fenster oder wenn in einem Zyklus keine Nachwelle ankam (`alarm received` im `audit.log`); mit `produkt_ref` nur Messung. Danach beendet C seinen Agent wieder | A, B, C | FR-50, FR-51 |
 
-T4 bis T10 und T13 bis T17 (Trait `Teil=ZweiGeraete`) laufen nur, wenn A und B beteiligt sind, T11, T12 und T18
+T4 bis T10 und T13 bis T17 (Trait `Teil=ZweiGeraete`) laufen nur, wenn A und B beteiligt sind, T11, T12, T18 und T19
 (`Teil=DreiGeraete`) nur mit A, B und C. Die Geräte stimmen sich über Markendateien ab, die
-`ci/e2e/rendezvous-relay.sh` zwischen allen beteiligten VMs spiegelt. T11/T12/T18 laufen zwischen T5 und T6
-(Priorität 53/56/57). Ein Lauf mit `a,b` ist dadurch unverändert. C beendet nach T12 und nach T18 seinen
-Agent, damit es ab T6 nicht mehr mitspielt (T18 startet ihn über die Profilvorbereitung neu): sonst verteilte es in T9 seine gültige Lizenz per Gossip an A und B
+`ci/e2e/rendezvous-relay.sh` zwischen allen beteiligten VMs spiegelt. T11/T12/T18/T19 laufen zwischen T5 und T6
+(Priorität 53/56/57/58). Ein Lauf mit `a,b` ist dadurch unverändert. C beendet nach T12, T18 und T19 seinen
+Agent, damit es ab T6 nicht mehr mitspielt (T18 und T19 starten ihn über die Profilvorbereitung neu): sonst verteilte es in T9 seine gültige Lizenz per Gossip an A und B
 (`TryAdoptFromPeer`). Trait `Bereich`:
 `Haupt` (T6 bis T9) setzt Installation, Discovery und Alarm voraus (`Basis`: T1, T4, T5, T11, T12), ein
-Teillauf filtert deshalb z. B. auf `Bereich=Basis|Bereich=Haupt`. `R136` (T10, T18), `R182` (T13), `R183` (T14), `R133` (T15), `R180` (T16) und `R181` (T17) brauchen nur `Basis`.
+Teillauf filtert deshalb z. B. auf `Bereich=Basis|Bereich=Haupt`. `R136` (T10, T18, T19), `R182` (T13), `R183` (T14), `R133` (T15), `R180` (T16) und `R181` (T17) brauchen nur `Basis`.
 
 Auslöser: Label `e2e` an einem PR aus diesem Repo (nicht aus Forks) oder `workflow_dispatch`
 (Input `vms`: Geräte aus `ci/e2e/geraete.json`, z. B. `a,b` oder `a,b,c`; Default `a,b,c`). Beim
@@ -196,10 +197,12 @@ weil `workflow_dispatch` nur Workflows vom Default-Branch startet):
   Installer gebaut werden (zweiter Checkout nach `produkt/`). Die Tests und die Testlizenz-Erzeugung
   kommen immer vom PR-Stand. Leer = PR-Stand.
 - `filter` / `FILTER`: wird als `&(…)` an den `dotnet test`-Filter gehängt.
-- `zyklen` / `ZYKLEN`: Durchläufe für T10 und T18, 1 bis 100, Default 25 (T10 etwa 50 s je Zyklus,
-  T18 ohne Nachwelle weniger). T10 und T18 mit je 100 Zyklen passen nicht zusammen in das Zeitlimit eines
+- `zyklen` / `ZYKLEN`: Durchläufe für T10, T18 und T19, 1 bis 100, Default 25 (T10 etwa 50 s je Zyklus,
+  T18 ohne Nachwelle weniger, T19 etwa 20 s, mit Agent-Neustart nach einem Treffer etwa 40 s). T10 und T18 mit je 100 Zyklen passen nicht zusammen in das Zeitlimit eines
   Test-Jobs (120 min); dafür zwei Läufe: T10 mit `VMS=a,b` (T18 entfällt ohne C), T18 mit `VMS=a,b,c` und
-  `FILTER=Bereich=Basis|(Bereich=R136&Teil=DreiGeraete)`.
+  `FILTER=Bereich=Basis|(Bereich=R136&Teil=DreiGeraete&Teil!=MehrfachNachwelle)` (ohne den letzten Teil läuft
+  T19 mit). T19 allein: `VMS=a,b,c`, `FILTER=Bereich=Basis|(Bereich=R136&Teil=MehrfachNachwelle)`; 100 Zyklen
+  passen in das Zeitlimit.
 - `vms` / `VMS`: Geräteauswahl, geprüft im Job `plan` (`ci/e2e/geraete.sh`); aus ihr entstehen die
   Matrix der Test-Jobs, die VMIDs für Reset und Stopp und die Argumente des Relays.
 
