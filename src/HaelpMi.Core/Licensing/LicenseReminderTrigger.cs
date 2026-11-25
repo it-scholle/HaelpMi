@@ -11,7 +11,6 @@ public static class LicenseReminderTrigger
     /// <param name="snoozed">"Später erinnern" ist aktiv; gilt nur beim Start, eine neue Stufe im Betrieb zeigt der Hinweis trotzdem.</param>
     public static bool ShouldShow(LicenseWarningLevel? previous, LicenseWarningLevel current, bool isUserDevice, bool snoozed)
     {
-        // ANNAHME: User-Geräte bekommen keinen Hinweis bei "läuft bald ab", nur beim Ablauf (Auftraggeber noch nicht gefragt).
         var relevant = isUserDevice ? current == LicenseWarningLevel.Expired : current != LicenseWarningLevel.None;
         if (!relevant)
         {
