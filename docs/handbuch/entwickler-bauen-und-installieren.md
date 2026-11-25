@@ -232,9 +232,13 @@ absichtlich nirgends, auch nicht im Log).
 & "HälpMi\installer\inno-compiler\ISCC.exe" HälpMi\installer\HaelpMi.iss
 ```
 
-Ohne `/DCustomerGroupId=...`/`/DIsTestInstaller=...` fällt das auf eine Nullen-ID und
-`IsTestInstaller=true` zurück - taugt nur zum lokalen Testen, nie für eine echte
-Kunden-Auslieferung (siehe Kommentare in `HälpMi\installer\HaelpMiCommon.iss.inc`).
+Ohne `/DCustomerGroupId=...` entsteht ein Test-Installer (`IsTestInstaller=true`) mit einer
+zufälligen Test-Kundengruppe. Sie wird beim ersten Build in `HälpMi\installer\test-kundengruppe.txt`
+angelegt (nicht im Repo) und danach wiederverwendet, damit Admin- und User-Installer aus
+derselben Arbeitskopie zusammenpassen; ISCC zeigt sie als „Test-Kundengruppe …“ im Protokoll.
+Eine neue Gruppe gibt es durch Löschen der Datei. Mit `/DIsTestInstaller=false` ohne
+`/DCustomerGroupId` bricht ISCC ab: Kunden-Installer baut nur der Install-Creator (siehe
+`HälpMi\installer\HaelpMiKundengruppe.iss.inc`).
 
 Die Versionsnummer liest ISCC selbst aus `HälpMi\Directory.Build.props` (über
 `installer\HaelpMiVersion.iss.inc`). Dafür muss der Ordner `installer` wie im Repo direkt

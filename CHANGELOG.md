@@ -14,6 +14,7 @@ Details stehen in der Git-Historie. Der eingefrorene Stand `legacy/main-0.39.x` 
 - Farben und Logo liegen nur noch einmal zentral vor (#151)
 - Versionsnummer steht nur noch in `Directory.Build.props`; der Installer liest sie beim Bauen von dort (#168)
 ### Behoben
+- Ein ohne Kundengruppe gebauter Test-Installer bekommt eine zufällige Test-Gruppe statt der Null-GUID und empfängt dadurch Alarme und Boot-Calls; ein Kunden-Installer ohne Kundengruppe lässt sich nicht mehr bauen (#175)
 - Eine gültige Lizenz wird nicht mehr durch eine später ausgestellte, aber abgelaufene Lizenz eines anderen Geräts ersetzt (#183)
 
 ## [0.47.3] – 2026-11-18

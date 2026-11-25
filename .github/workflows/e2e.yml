@@ -188,7 +188,7 @@ jobs:
         run: ci/e2e/testlizenz-erzeugen.ps1 -Payload "$env:QUELLE/installer/payload" -Ausgabe e2e-installer/lizenz.json
 
       # User vor Admin: der Admin-Installer bettet installer/UserInstallerPayload/HaelpMi-User-Setup.exe ein.
-      # Ohne /DCustomerGroupId gilt im Installer die Null-GUID, deren Nachrichten MessageValidation.IsPlausible verwirft.
+      # Gruppe aus der Testlizenz: ohne /DCustomerGroupId bekäme der Installer eine eigene Zufallsgruppe, zu der die Lizenz nicht passt.
       - name: Installer kompilieren
         env:
           GRUPPE: ${{ steps.lizenz.outputs.customer_group_id }}
