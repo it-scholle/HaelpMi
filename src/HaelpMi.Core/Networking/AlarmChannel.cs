@@ -60,13 +60,14 @@ public sealed class AlarmChannel : IAsyncDisposable
 
     private void OnPrimaryAlarmReceived(object? sender, AlarmReceivedEventArgs e)
     {
-        AlarmReceived?.Invoke(this, e);
-
-        if (_relayServer is not null)
+        // Satellites zuerst: ihre Anzeige läuft parallel zur eigenen, beides muss in die Quittungsfrist des Senders passen.
+        if (_relayServer is { HasClients: true })
         {
-            var relayMessage = new AlarmRelayMessage(e.Request, e.SenderAddress.ToString());
-            _ = _relayServer.BroadcastAsync(relayMessage, CancellationToken.None);
+            var relayMessage = new AlarmRelayMessage(e.Request, e.SenderAddress.ToString(), Guid.NewGuid());
+            e.ReportDisplayed(_relayServer.BroadcastAndAwaitDisplayAsync(relayMessage, AppConstants.AlarmRelayDisplayReplyTimeout, CancellationToken.None));
         }
+
+        AlarmReceived?.Invoke(this, e);
     }
 
     private async Task RunAsSatelliteAsync(int port, CancellationToken ct)

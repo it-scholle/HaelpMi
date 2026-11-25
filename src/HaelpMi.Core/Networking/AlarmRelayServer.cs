@@ -18,14 +18,22 @@ namespace HaelpMi.Core.Networking;
 /// Standard-DACL erlaubt nur dem erzeugenden Konto den Zugriff - eine Satellite-Instanz
 /// läuft aber als ANDERER Windows-Nutzer in einer anderen Sitzung. Deshalb hier explizit
 /// BUILTIN\Users freigegeben, gleiche wohlbekannte SID wie in AutostartRegistrar.
+///
+/// Rückweg: Ein Satellite meldet per <see cref="AlarmRelayReply"/>, ob seine Sitzung den Alarm
+/// angezeigt hat, damit die Primary erst dann quittiert. Satellites, die sich nicht als
+/// antwortfähig angemeldet haben (Verbindung nur lesend), zählen wie vor dieser Rückmeldung
+/// als „angezeigt“ - lieber die alte Ungenauigkeit als eine fehlende Quittung.
 /// </summary>
 public sealed class AlarmRelayServer : IAsyncDisposable
 {
     private const string BuiltInUsersGroupSid = "S-1-5-32-545";
 
-    private readonly ConcurrentDictionary<Guid, NamedPipeServerStream> _clients = new();
+    private readonly ConcurrentDictionary<Guid, RelayClient> _clients = new();
+    private readonly ConcurrentDictionary<Guid, DisplayWaiter> _waiters = new();
     private CancellationTokenSource? _cts;
     private Task? _acceptLoop;
+
+    public bool HasClients => !_clients.IsEmpty;
 
     public void Start()
     {
@@ -58,7 +66,10 @@ public sealed class AlarmRelayServer : IAsyncDisposable
                 continue;
             }
 
-            _clients[Guid.NewGuid()] = server;
+            var id = Guid.NewGuid();
+            var client = new RelayClient(server);
+            _clients[id] = client;
+            _ = ReadRepliesAsync(id, client, ct);
         }
     }
 
@@ -69,30 +80,123 @@ public sealed class AlarmRelayServer : IAsyncDisposable
             new SecurityIdentifier(BuiltInUsersGroupSid), PipeAccessRights.ReadWrite, AccessControlType.Allow));
 
         return NamedPipeServerStreamAcl.Create(
-            AppConstants.AlarmRelayPipeName, PipeDirection.Out, maxNumberOfServerInstances: 20,
+            AppConstants.AlarmRelayPipeName, PipeDirection.InOut, maxNumberOfServerInstances: 20,
             PipeTransmissionMode.Byte, PipeOptions.Asynchronous, inBufferSize: 0, outBufferSize: 0, pipeSecurity);
     }
 
     /// <summary>
-    /// Best-effort: ein einzelner tot gegangener Satellite (Sitzung inzwischen abgemeldet)
-    /// darf die anderen nicht blockieren, deshalb pro Client eigenes try/catch statt eines
-    /// einzigen für die ganze Schleife.
+    /// Liest die Rückmeldungen eines Satellites. Die Daten kommen aus einer fremden Windows-Sitzung:
+    /// begrenzte Zeilen, unlesbare Zeilen werden übersprungen. Endet die Verbindung, fällt der Client weg.
     /// </summary>
-    public async Task BroadcastAsync(AlarmRelayMessage message, CancellationToken ct)
+    private async Task ReadRepliesAsync(Guid id, RelayClient client, CancellationToken ct)
     {
-        var line = NetworkSerializer.Encoding.GetBytes(NetworkSerializer.ToJsonLine(message));
-        foreach (var (id, server) in _clients)
+        try
         {
+            while (!ct.IsCancellationRequested)
+            {
+                var line = await BoundedLineReader.ReadLineAsync(client.Pipe, ct);
+                if (line is null)
+                {
+                    break;
+                }
+
+                AlarmRelayReply? reply;
+                try
+                {
+                    reply = NetworkSerializer.FromJsonLine<AlarmRelayReply>(line);
+                }
+                catch (Exception)
+                {
+                    continue;
+                }
+
+                if (reply is null)
+                {
+                    continue;
+                }
+
+                if (reply.RelayId == Guid.Empty)
+                {
+                    client.CanReply = true;
+                }
+                else if (_waiters.TryGetValue(reply.RelayId, out var waiter))
+                {
+                    waiter.Reply(reply.Displayed);
+                }
+            }
+        }
+        catch (Exception)
+        {
+            // Verbindung abgerissen (Sitzung abgemeldet) - wie ein reguläres Ende behandeln
+        }
+
+        if (!ct.IsCancellationRequested)
+        {
+            RemoveClient(id);
+        }
+    }
+
+    /// <summary>
+    /// Reicht den Alarm an alle Satellites weiter und wartet höchstens <paramref name="timeout"/>, ob einer ihn anzeigt.
+    /// Best-effort: ein einzelner tot gegangener Satellite (Sitzung inzwischen abgemeldet) darf die anderen nicht
+    /// blockieren, deshalb pro Client eigenes try/catch.
+    /// </summary>
+    /// <returns>true, sobald ein Satellite die Anzeige meldet oder ein nicht antwortfähiger erreicht wurde; sonst false.</returns>
+    public async Task<bool> BroadcastAndAwaitDisplayAsync(AlarmRelayMessage message, TimeSpan timeout, CancellationToken ct)
+    {
+        var waiter = new DisplayWaiter();
+        _waiters[message.RelayId] = waiter;
+        try
+        {
+            var line = NetworkSerializer.Encoding.GetBytes(NetworkSerializer.ToJsonLine(message));
+            var reached = 0;
+            var reachedWithoutReply = false;
+            foreach (var (id, client) in _clients)
+            {
+                try
+                {
+                    await client.Pipe.WriteAsync(line, ct);
+                    await client.Pipe.FlushAsync(ct);
+                    reached++;
+                    reachedWithoutReply |= !client.CanReply;
+                }
+                catch (Exception)
+                {
+                    RemoveClient(id);
+                }
+            }
+
+            if (reachedWithoutReply)
+            {
+                return true;
+            }
+
+            if (reached == 0)
+            {
+                return false;
+            }
+
+            waiter.ExpectReplies(reached);
             try
             {
-                await server.WriteAsync(line, ct);
-                await server.FlushAsync(ct);
+                return await waiter.Task.WaitAsync(timeout, ct);
             }
-            catch (Exception)
+            catch (TimeoutException)
             {
-                _clients.TryRemove(id, out _);
-                server.Dispose();
+                return false;
             }
+        }
+        finally
+        {
+            _waiters.TryRemove(message.RelayId, out _);
+        }
+    }
+
+    private void RemoveClient(Guid id)
+    {
+        if (_clients.TryRemove(id, out var client))
+        {
+            client.Pipe.Dispose();
         }
     }
 
@@ -105,10 +209,56 @@ public sealed class AlarmRelayServer : IAsyncDisposable
         }
         _cts?.Dispose();
 
-        foreach (var server in _clients.Values)
+        foreach (var client in _clients.Values)
         {
-            server.Dispose();
+            client.Pipe.Dispose();
         }
         _clients.Clear();
+    }
+
+    private sealed class RelayClient(NamedPipeServerStream pipe)
+    {
+        public NamedPipeServerStream Pipe { get; } = pipe;
+
+        public volatile bool CanReply;
+    }
+
+    /// <summary>Sammelt die Antworten einer Weiterleitung: fertig beim ersten „angezeigt“ oder wenn alle „nein“ gesagt haben.</summary>
+    private sealed class DisplayWaiter
+    {
+        private readonly object _gate = new();
+        private readonly TaskCompletionSource<bool> _result = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private int _expected = -1;
+        private int _replies;
+
+        public Task<bool> Task => _result.Task;
+
+        public void Reply(bool displayed)
+        {
+            lock (_gate)
+            {
+                _replies++;
+                if (displayed)
+                {
+                    _result.TrySetResult(true);
+                }
+                else if (_expected >= 0 && _replies >= _expected)
+                {
+                    _result.TrySetResult(false);
+                }
+            }
+        }
+
+        public void ExpectReplies(int expected)
+        {
+            lock (_gate)
+            {
+                _expected = expected;
+                if (_replies >= expected)
+                {
+                    _result.TrySetResult(false);
+                }
+            }
+        }
     }
 }

@@ -424,6 +424,14 @@ Windows-Standard-Accounts (A und B), HälpMi darauf installiert.
       es in B's unsichtbarer Sitzung hätte wegklicken können (`ActiveSessionDetector`). A
       bekommt Popup+Ton wie gewohnt. Danach zu B zurückwechseln und prüfen, dass B ganz normal
       auf den NÄCHSTEN Alarm reagiert (Suppression ist pro Signal, keine dauerhafte Sperre).
+- [ ] **„Empfangen“ erst nach der Anzeige:** Auf dem Testgerät ist nur A angemeldet. Auf einem
+      Peer-Gerät einen Alarm an das Testgerät auslösen und sofort auf dem Testgerät „Benutzer
+      wechseln“ → B anmelden. Solange B sich noch anmeldet (noch kein Tray-Icon), darf das
+      Sender-Fenster das Testgerät **nicht** als empfangen zählen (`Empfangen: 0 von 1`, im
+      `audit.log` des Testgeräts `alarm nicht quittiert (nicht angezeigt)`). Sobald B's Agent läuft
+      und das Popup in B erscheint, springt der Zähler mit der nächsten Welle auf 1. Gegenprobe:
+      Erscheint das Popup in B, ohne dass der Zähler nachzieht, kann B's Agent nicht über die
+      Relay-Pipe zurückmelden (Schreibrechte aus der fremden Sitzung) - dann bitte melden.
 
 **Wenn das fehlschlägt:** welcher Punkt genau, ob das Tray-Icon für die zweite Sitzung
 überhaupt erscheint (Autostart-Problem) oder nur der Alarm ausbleibt (Relay-Problem), plus

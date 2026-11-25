@@ -90,6 +90,13 @@ public static class AppConstants
     /// </summary>
     public static readonly TimeSpan AlarmDispatcherReadyTimeout = TimeSpan.FromSeconds(2);
 
+    /// <summary>
+    /// Wie lange die Primary-Instanz auf die Anzeige-Rückmeldung ihrer Satellites wartet, bevor sie
+    /// „nicht angezeigt“ annimmt. Größer als <see cref="AlarmDispatcherReadyTimeout"/> (so lange darf
+    /// ein Satellite selbst brauchen), kleiner als <see cref="AlarmAckTimeout"/> (der Sender wartet nicht länger).
+    /// </summary>
+    public static readonly TimeSpan AlarmRelayDisplayReplyTimeout = TimeSpan.FromSeconds(3);
+
     /// <summary>Hotkey-triggered alarm repeat interval (Teil 2, Abschnitt 7: "wiederholtes Senden im 5-Sekunden-Takt").</summary>
     public static readonly TimeSpan AlarmRepeatInterval = TimeSpan.FromSeconds(5);
 

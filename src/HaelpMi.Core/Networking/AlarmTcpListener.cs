@@ -7,15 +7,62 @@ namespace HaelpMi.Core.Networking;
 
 public sealed class AlarmReceivedEventArgs : EventArgs
 {
+    private readonly List<Task<bool>> _displayReports = new();
+
     public required AlarmRequestMessage Request { get; init; }
     public required IPAddress SenderAddress { get; init; }
+
+    /// <summary>Meldet, ob die Meldung angezeigt wurde. Mehrere Melder (eigene Sitzung, andere Sitzungen) sind erlaubt.</summary>
+    public void ReportDisplayed(bool displayed) => ReportDisplayed(Task.FromResult(displayed));
+
+    /// <param name="displayed">Eine Rückmeldung, die erst später feststeht; ein Fehler zählt als „nicht angezeigt“.</param>
+    public void ReportDisplayed(Task<bool> displayed)
+    {
+        lock (_displayReports)
+        {
+            _displayReports.Add(displayed);
+        }
+    }
+
+    /// <summary>
+    /// true, sobald eine Rückmeldung „angezeigt“ ist; false, wenn alle „nicht angezeigt“ sind. Ohne jede
+    /// Rückmeldung true: Wer die Anzeige nicht prüft, bekommt die Quittung wie bisher.
+    /// </summary>
+    public async Task<bool> WasDisplayedAsync()
+    {
+        List<Task<bool>> pending;
+        lock (_displayReports)
+        {
+            pending = _displayReports.ToList();
+        }
+
+        if (pending.Count == 0)
+        {
+            return true;
+        }
+
+        while (pending.Count > 0)
+        {
+            var done = await Task.WhenAny(pending);
+            pending.Remove(done);
+            if (done.IsCompletedSuccessfully && done.Result)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
 }
 
 /// <summary>
 /// TCP server side of the alarm channel (5.1/5.2, FR-9/FR-13): accepts a connection,
 /// reads one <see cref="AlarmRequestMessage"/>, raises <see cref="AlarmReceived"/> so the
-/// caller can show the forced popup, then immediately writes back an
-/// <see cref="AlarmAckMessage"/> and closes.
+/// caller can show the forced popup, then writes back an <see cref="AlarmAckMessage"/> and
+/// closes - but only if a subscriber reported the popup as displayed
+/// (<see cref="AlarmReceivedEventArgs.ReportDisplayed(bool)"/>). Ist die Anzeige unterdrückt
+/// (Sitzung weggeschaltet, z. B. mitten im Nutzerwechsel), bleibt die Quittung aus und der
+/// Sender zählt das Gerät nicht als „empfangen“; die nächste Welle versucht es erneut.
 ///
 /// Important: subscribers of <see cref="AlarmReceived"/> must only *start* showing the
 /// popup (e.g. Window.Show(), which returns immediately) and must not block until the
@@ -171,7 +218,13 @@ public sealed class AlarmTcpListener : IAsyncDisposable
             }
 
             _audit?.Invoke($"alarm received from deviceId={request.SenderDeviceId}");
-            AlarmReceived?.Invoke(this, new AlarmReceivedEventArgs { Request = request, SenderAddress = senderAddress });
+            var args = new AlarmReceivedEventArgs { Request = request, SenderAddress = senderAddress };
+            AlarmReceived?.Invoke(this, args);
+            if (!await args.WasDisplayedAsync())
+            {
+                _audit?.Invoke($"alarm nicht quittiert (nicht angezeigt): alarmSessionId={request.AlarmSessionId}");
+                return;
+            }
 
             var ack = new AlarmAckMessage(request.CustomerGroupId, request.AlarmProfileId, request.AlarmSessionId, identity.DeviceId, DateTimeOffset.UtcNow);
             var ackLine = NetworkSerializer.ToJsonLine(ack);
