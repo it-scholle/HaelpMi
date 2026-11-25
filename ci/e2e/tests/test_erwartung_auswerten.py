@@ -159,6 +159,7 @@ class NegativtestTests(unittest.TestCase):
         self.lauf.geraet("b", "1", trx([("GeraetBTests.T10_R", "Failed", "[T10W] Regression #136: 3 von 25")], lauf="Failed"))
         code, text = self.lauf.auswerten("a,b", "T10W")
         self.assertEqual(code, 1, text)
+        self.assertIn("passt zu keinem Kürzel", text)
 
     def test_zusaetzlicher_unerwarteter_fehlschlag_ist_rot(self) -> None:
         self.lauf.geraet("a", "1", trx([

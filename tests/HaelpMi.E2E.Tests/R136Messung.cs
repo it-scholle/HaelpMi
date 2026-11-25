@@ -121,6 +121,7 @@ internal static class R136Messung
             ausgabe.WriteLine($"Zyklus {n}: {zeile.Kurz()}");
         }
 
+        Rendezvous.Abschliessen("t18");
         var zusammenfassung = Zusammenfassung(version, zyklen, zeilen);
         File.WriteAllText(Path.Combine(Artefakte.Ordner, $"r136-drei-{geraet}-zusammenfassung.json"), zusammenfassung, Encoding.UTF8);
         ausgabe.WriteLine(zusammenfassung);

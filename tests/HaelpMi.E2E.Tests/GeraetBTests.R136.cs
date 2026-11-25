@@ -76,6 +76,7 @@ public partial class GeraetBTests
                 Rendezvous.Signal($"t10-{n}-fertig");
             }
 
+            Rendezvous.Abschliessen("t10");
             var zusammenfassung = Zusammenfassung(version, zyklen, zeilen);
             File.WriteAllText(Path.Combine(Artefakte.Ordner, "r136-zusammenfassung.json"), zusammenfassung, Encoding.UTF8);
             _ausgabe.WriteLine(zusammenfassung);

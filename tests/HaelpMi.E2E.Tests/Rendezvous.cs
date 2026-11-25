@@ -24,8 +24,33 @@ internal static partial class Rendezvous
         File.Move(temp, ziel, overwrite: true);
     }
 
+    private static readonly HashSet<string> Abgeschlossen = [];
+
     /// <summary>Meldet der Gegenseite, dass der Test mit diesem Markenpräfix hier gescheitert ist; deren Warten auf "&lt;praefix&gt;-…" endet sofort.</summary>
-    public static void Abbrechen(string praefix) => Signal(AbbruchMarke(praefix));
+    public static void Abbrechen(string praefix)
+    {
+        lock (Abgeschlossen)
+        {
+            if (Abgeschlossen.Contains(praefix))
+            {
+                return;
+            }
+        }
+
+        Signal(AbbruchMarke(praefix));
+    }
+
+    /// <summary>
+    /// Alle Marken dieses Tests von hier sind gesetzt. Ein späterer Fehlschlag (Abschluss-Assert) bricht die Gegenseite nicht
+    /// mehr ab; sonst scheiterte ein drittes Gerät, das noch auf die letzte Marke des anderen Empfängers wartet, nur als Folgefehler.
+    /// </summary>
+    public static void Abschliessen(string praefix)
+    {
+        lock (Abgeschlossen)
+        {
+            Abgeschlossen.Add(praefix);
+        }
+    }
 
     /// <returns>Inhalt der Marke.</returns>
     public static async Task<string> WaitForAsync(string marke, TimeSpan timeout)

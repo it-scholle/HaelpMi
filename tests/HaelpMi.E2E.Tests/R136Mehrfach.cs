@@ -76,6 +76,7 @@ internal static class R136Mehrfach
             Rendezvous.Signal($"t19-{n}-{geraet}-fertig");
         }
 
+        Rendezvous.Abschliessen("t19");
         ausgabe.WriteLine(File.ReadAllText(zusammenfassungPfad));
 
         var auswertbar = zeilen.Where(z => !z.Uebersprungen).ToList();

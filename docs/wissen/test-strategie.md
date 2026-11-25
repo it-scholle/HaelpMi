@@ -245,9 +245,10 @@ weil `workflow_dispatch` nur Workflows vom Default-Branch startet):
 - Ein Negativtest prüft nie den Stand des Branches und zählt nicht als E2E-Gate; dafür braucht der PR
   zusätzlich einen positiven Lauf. `ci/e2e/lauf.env` vor dem Merge wieder leeren.
 - Folgefehler („Test tN ist auf der Gegenseite gescheitert“, aus `Rendezvous.WaitForAsync`) zählen nie als
-  Nachweis, nur als erlaubter Begleiter eines eigentlichen Fehlschlags mit demselben Kürzel. Hat die Gegenseite
-  ihre Marke schon gesetzt und scheitert erst danach (Abschluss-Assert), gilt die Marke noch; das Warten
-  meldet dann keinen Folgefehler.
+  Nachweis, nur als erlaubter Begleiter eines eigentlichen Fehlschlags mit demselben Kürzel. Damit ein Fehler
+  im Abschluss-Assert keine Folgefehler auslöst, melden die Empfänger von T10, T18 und T19 nach ihrer letzten
+  Marke `Rendezvous.Abschliessen` (danach kein Abbruch mehr an die Gegenseite), und eine schon gespiegelte
+  Marke gilt beim Warten vor einer Abbruch-Marke.
 - Ob ein erwarteter Test aus dem richtigen Grund fehlschlug, sichern nur Fehlerbild-Marken ab; ohne Marke
   zählt jeder eigene Fehlschlag des Tests. Die Meldungen unter „Erwartete Fehlschläge“ in der Summary deshalb lesen.
 

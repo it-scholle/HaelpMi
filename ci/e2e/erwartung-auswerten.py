@@ -13,8 +13,8 @@ Aufruf: erwartung-auswerten.py <ergebnis-verzeichnis> <geraete> <erwartet-rot> [
 
 Urteil "Negativtest bestanden" (Exit 0) genau dann, wenn jedes Kürzel mindestens einen passenden
 Fehlschlag hat und nichts Unerwartetes vorliegt. Ein Folgefehler ("Test tN ist auf der Gegenseite
-gescheitert") zählt nie als Nachweis, nur als erlaubter Begleiter eines eigentlichen Fehlschlags desselben Kürzels. Unerwartet ist: ein Fehlschlag, der zu keinem Kürzel
-passt, jedes andere Ergebnis als Passed/Failed/NotExecuted, ein abgebrochener Testlauf, ein Gerät ohne
+gescheitert") zählt nie als Nachweis, nur als erlaubter Begleiter eines eigentlichen Fehlschlags
+desselben Kürzels. Unerwartet ist: ein Fehlschlag, der zu keinem Kürzel passt, jedes andere Ergebnis als Passed/Failed/NotExecuted, ein abgebrochener Testlauf, ein Gerät ohne
 Artefakt oder Exit-Code, ein Exit-Code ungleich 0 ohne fehlgeschlagenen Test. Sonst Exit 1.
 Exit 2 = Aufruf ungültig. Den Bericht (Markdown) schreibt das Skript auf stdout.
 """
