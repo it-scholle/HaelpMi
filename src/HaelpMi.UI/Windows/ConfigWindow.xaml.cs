@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using HaelpMi.Core.Ipc;
 using HaelpMi.Core.Models;
 using HaelpMi.Core.Networking;
 using HaelpMi.Core.Runtime;
@@ -211,7 +212,9 @@ public partial class ConfigWindow : Window
         Keyboard.Focus(this);
     }
 
-    private async void OpenAdminDashboardButton_Click(object sender, RoutedEventArgs e)
+    private async void OpenAdminDashboardButton_Click(object sender, RoutedEventArgs e) => await OpenAdminDashboardAsync();
+
+    private async Task OpenAdminDashboardAsync()
     {
         if (_context.OpenAdminDashboard is null)
         {
@@ -257,9 +260,12 @@ public partial class ConfigWindow : Window
         SelfTestButton.IsEnabled = false;
         try
         {
-            // The Agent performs the actual loopback send/receive and shows its own
-            // popup + receipt banner (FR-27) - nothing further to display here.
-            await _context.RequestSelfTest();
+            // Bei Erfolg zeigt der Agent selbst Alarmfenster und Sender-Banner (FR-27), hier nur die Ablehnung.
+            var response = await _context.RequestSelfTest();
+            if (SelfTestFeedback.Evaluate(response, _context.OpenAdminDashboard is not null) is { } failure)
+            {
+                await ShowSelfTestFailureAsync(failure);
+            }
         }
         catch (Exception ex)
         {
@@ -268,6 +274,22 @@ public partial class ConfigWindow : Window
         finally
         {
             SelfTestButton.IsEnabled = true;
+        }
+    }
+
+    private async Task ShowSelfTestFailureAsync(SelfTestFailure failure)
+    {
+        if (!failure.OfferDashboard)
+        {
+            MessageBox.Show(this, failure.Message, "HälpMi - Selbsttest", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        var answer = MessageBox.Show(this, $"{failure.Message}{Environment.NewLine}{Environment.NewLine}{SelfTestFeedback.OfferDashboardQuestion}",
+            "HälpMi - Selbsttest", MessageBoxButton.YesNo, MessageBoxImage.Warning);
+        if (answer == MessageBoxResult.Yes)
+        {
+            await OpenAdminDashboardAsync();
         }
     }
 }

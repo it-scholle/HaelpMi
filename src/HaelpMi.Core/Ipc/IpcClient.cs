@@ -12,6 +12,9 @@ namespace HaelpMi.Core.Ipc;
 /// </summary>
 public sealed class IpcClient
 {
+    private const string RestartHint =
+        "Bitte die HälpMi-Einstellungen schließen und neu öffnen, dabei startet der Hintergrunddienst neu. Hilft das nicht, Windows neu anmelden.";
+
     public async Task<IpcResponse> SendAsync(IpcCommandType command, TimeSpan? timeout = null, CancellationToken ct = default)
     {
         var effectiveTimeout = timeout ?? TimeSpan.FromSeconds(5);
@@ -40,14 +43,14 @@ public sealed class IpcClient
             var line = await reader.ReadLineAsync(timeoutCts.Token).ConfigureAwait(false);
             if (line is null)
             {
-                return new IpcResponse(false, "Keine Antwort vom Hintergrunddienst.");
+                return new IpcResponse(false, $"Der HälpMi-Hintergrunddienst antwortet nicht. {RestartHint}");
             }
 
-            return NetworkSerializer.FromJsonLine<IpcResponse>(line) ?? new IpcResponse(false, "Ungültige Antwort vom Hintergrunddienst.");
+            return NetworkSerializer.FromJsonLine<IpcResponse>(line) ?? new IpcResponse(false, $"Ungültige Antwort vom HälpMi-Hintergrunddienst. {RestartHint}");
         }
         catch (Exception ex)
         {
-            return new IpcResponse(false, $"Hintergrunddienst nicht erreichbar: {ex.Message}");
+            return new IpcResponse(false, $"Der HälpMi-Hintergrunddienst ist nicht erreichbar ({ex.Message}). {RestartHint}");
         }
     }
 }
