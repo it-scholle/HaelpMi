@@ -123,7 +123,11 @@ Name: "{group}\{cm:UninstallProgram,HälpMi}"; Filename: "{uninstallexe}"
 ; statt neu anzulegen. Best-effort: schlägt auch das fehl (z. B. echte GPO-Sperre), bleibt
 ; die bestehende Selbstheilung im Agent-Start plus Tray-Meldung an den Admin als
 ; Rückfallebene - deshalb kein Abbruch der Installation bei einem Fehlschlag hier.
-Filename: "{app}\{#MyAgentExeName}"; Parameters: "--register-autostart"; Flags: runhidden waituntilterminated
+;
+; BeforeInstall: Inno führt [Run] vor CurStepChanged(ssPostInstall) aus. Die Firewall-Regeln
+; müssen vor dem ersten HälpMi-Start stehen, sonst fragt Windows beim ersten Lauschen nach,
+; und eine abgebrochene Abfrage hinterlässt Block-Regeln, die die Allow-Regel schlagen.
+Filename: "{app}\{#MyAgentExeName}"; Parameters: "--register-autostart"; Flags: runhidden waituntilterminated; BeforeInstall: EnsureFirewallRules
 
 ; Startet den Agent automatisch im Hintergrund - kein Postinstall-Haken, weil der Agent
 ; kein eigenes Fenster hat (ein anhakbarer "jetzt starten"-Punkt ohne sichtbaren Effekt
@@ -608,8 +612,6 @@ begin
     // Compile-time-konstant für diesen Installer-Build - anders als settings.json bei
     // JEDEM Lauf neu geschrieben (siehe Kommentar bei WriteDeploymentJson).
     WriteDeploymentJson();
-
-    EnsureFirewallRules();
   end;
 end;
 
