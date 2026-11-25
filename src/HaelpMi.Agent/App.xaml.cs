@@ -101,6 +101,8 @@ public partial class App : System.Windows.Application
         base.OnStartup(e);
 
         CrashLogger.InstallProcessWideHooks(nameof(HaelpMi.Agent));
+        BetriebsLog.StarteFuerProzess("agent");
+        BetriebsLog.Info("Start", $"Agent {typeof(App).Assembly.GetName().Version?.ToString(3)} gestartet, Parameter: [{string.Join(' ', e.Args)}]");
         DispatcherUnhandledException += (_, args) =>
         {
             CrashLogger.Log(nameof(HaelpMi.Agent), "DispatcherUnhandledException", args.Exception);
@@ -160,6 +162,7 @@ public partial class App : System.Windows.Application
         {
             // Schon eine Produktivinstanz in dieser Sitzung aktiv (siehe Feldkommentar oben) -
             // beenden statt um TCP-Ports und den Autostart-Task-Eintrag zu konkurrieren.
+            BetriebsLog.Info("Start", "In dieser Sitzung läuft schon ein Agent, diese Instanz beendet sich.");
             Shutdown();
             return;
         }
@@ -179,6 +182,7 @@ public partial class App : System.Windows.Application
             // DispatcherUnhandledException-Handler durch, der zwar loggt und den Prozess am
             // Leben hält, aber OnStartup an dieser Stelle abbricht - ohne Meldung, ohne
             // Fenster, für den Nutzer nicht von einem echten Absturz zu unterscheiden.
+            BetriebsLog.Fehler("Start", "settings.json, deployment.json oder Lizenzschlüssel fehlt oder ist ungültig, Agent beendet sich.", ex);
             System.Windows.MessageBox.Show(
                 $"Die Konfigurationsdatei ist beschädigt oder unvollständig:{Environment.NewLine}{ex.Message}{Environment.NewLine}{Environment.NewLine}Bitte HälpMi neu installieren/reparieren.",
                 "HälpMi - Installation unvollständig", MessageBoxButton.OK, MessageBoxImage.Error);
@@ -1040,6 +1044,7 @@ public partial class App : System.Windows.Application
         }
         _singleInstanceMutex?.Dispose();
 
+        BetriebsLog.Info("Ende", $"Agent beendet, Exit-Code {e.ApplicationExitCode}.");
         base.OnExit(e);
     }
 }

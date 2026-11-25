@@ -36,6 +36,7 @@ public static class CrashLogger
 
     public static void Log(string processName, string source, Exception ex)
     {
+        BetriebsLog.Fehler(source, $"Ausnahme in {processName} (auch in crash.log).", ex);
         try
         {
             var dir = ResolveLogDirectory();

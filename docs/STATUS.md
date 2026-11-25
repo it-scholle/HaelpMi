@@ -33,8 +33,8 @@ Stand: 2026-11-25
 Nicht als Ausnahme freigegeben, Umsetzung steht noch aus:
 
 - Audit-Log ohne Hash-Kette, Aufbewahrung und Schutz (`src/HaelpMi.Core/Storage/AuditLog.cs`).
-- Betriebs-Log ohne Stufen, Tagesdateien, Rotation und Aufbewahrung
-  (`src/HaelpMi.Core/Diagnostics/CrashLogger.cs`).
+- Betriebs-Log (`BetriebsLog.cs`, #227) bisher nur mit Start, Ende, Startfehlern und unbehandelten
+  Ausnahmen; die übrigen Module schreiben noch nicht hinein (erstes Modul: #214).
 - Feste Werte im Code (z. B. Log-Laufwerk `Z:` in `SharedLogPaths.cs`, Ports in
   `AppConstants.cs`, dort bewusst fest).
 - Kein Linter/Formatierer konfiguriert.

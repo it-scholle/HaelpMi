@@ -30,6 +30,9 @@ public static class AppPaths
 
     public static string SettingsFilePath => Path.Combine(RootFolder, "settings.json");
 
+    /// <summary>Stufe des Betriebs-Logs, siehe <see cref="Diagnostics.BetriebsLog.LeseStufe"/>; von Hand angelegt, fehlt normalerweise.</summary>
+    public static string BetriebsLogEinstellungenPath => Path.Combine(RootFolder, "betriebslog.json");
+
     public static string DevicesFilePath => Path.Combine(RootFolder, "devices.json");
 
     /// <summary>Siehe <see cref="RemovedDeviceStore"/> (Issue #61-Nachtrag "Löschen deaktiviert nicht wirklich").</summary>

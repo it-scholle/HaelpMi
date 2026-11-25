@@ -6,6 +6,7 @@ Details stehen in der Git-Historie. Der eingefrorene Stand `legacy/main-0.39.x` 
 
 ## [Unveröffentlicht]
 ### Neu
+- Betriebs-Log je Prozess (`agent.log`, `config.log`) mit Stufen, Tageswechsel, Größengrenzen, Aufbewahrung und Komprimierung; die Stufe lässt sich über `betriebslog.json` ohne Codeänderung einstellen (#227)
 - E2E: drittes Testgerät C (VM 9103) mit den Testfällen T11 (Discovery mit drei Geräten) und T12 (Alarm an zwei Empfänger mit Schwelle 2); Workflow, Relay und Skripte arbeiten mit beliebig vielen Test-VMs aus `ci/e2e/geraete.json`, die Umgebung läuft auf pve-nzxt (#202)
 - E2E: Regressionstest T18 (Alarmfenster schließen) mit drei Geräten (Alarm an zwei Empfänger mit Schwelle 2) (#136)
 ### Verbessert

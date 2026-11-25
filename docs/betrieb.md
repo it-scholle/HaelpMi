@@ -35,9 +35,28 @@
 
 | Log | Ablageort | Inhalt |
 |---|---|---|
+| Betriebs-Log `agent.log`, `config.log` | wie `crash.log` | Betriebsereignisse je Prozess, siehe unten |
 | `crash.log` (Agent, Config, UI) | `Z:\HaelpMi-Logs\<Rechnername>\`, sonst `%ProgramData%\HaelpMi\` | unbehandelte Ausnahmen (Typ, Meldung, Stacktrace), nie Alarmtext |
 | `audit.log` | wie `crash.log` | Ereignis-Metadaten (wer hat was wann ausgelöst/empfangen), nie Alarmtext |
 | `crash.log` (Install-Creator) | `%LocalAppData%\HaelpMi-InstallCreator\` | unbehandelte Ausnahmen des Entwickler-Tools |
+
+Betriebs-Log (`src/HaelpMi.Core/Diagnostics/BetriebsLog.cs`):
+
+- Eine Datei je Prozess mit festem Namen: `agent.log` (Agent, auch die kurzen Sondermodi des Installers),
+  `config.log` (Konfiguration und Dashboard). Mehrere Agents auf einem Terminalserver schreiben in dieselbe
+  `agent.log`, die Zeilen tragen die Prozess-ID.
+- Je Eintrag eine JSON-Zeile: `zeit` (Ortszeit mit Zone), `stufe` (FEHLER, WARNUNG, INFO, DEBUG), `prozess`,
+  `pid`, `modul`, `meldung`, optional `objekt` (Objekt-ID), `vorgang` (Vorgangs-ID), `ausnahme` (mit Stacktrace).
+  Nie Alarmtexte, Secrets oder andere Nutzerinhalte.
+- Stufe ohne Codeänderung: `%ProgramData%\HaelpMietriebslog.json` mit `{"Stufe": "DEBUG"}` anlegen und
+  den Prozess neu starten. Ohne Datei gilt INFO (DEBUG aus); ein ungültiger Wert ergibt INFO und eine WARNUNG
+  im Log.
+- Tageswechsel: Beim ersten Eintrag eines neuen Tages oder beim Start, wenn die Datei von einem früheren Tag
+  ist, wird sie in `agent-JJJJ-MM-TT.log` umbenannt (Datum der Einträge).
+- Notbremse (Teil B): ab 20 MB je Datei WARNUNG und weiter in `agent.1.log`, `agent.2.log` …; über 200 MB
+  für alle Dateien eines Prozesses werden die ältesten gelöscht, jede mit einer WARNUNG.
+- Aufbewahrung 90 Tage (keine personenbezogenen Daten), Archive ab 7 Tagen als `.log.gz` komprimiert.
+- Unbehandelte Ausnahmen stehen zusätzlich zu `crash.log` als FEHLER im Betriebs-Log.
 
 Das Laufwerk `Z:` ist ein Zwischenschritt für die Alpha-Testphase (zentrale Ferndiagnose). Eine
 Aufbewahrungsfrist, Rotation und eine Hash-Kette für das Audit-Log gibt es im aktuellen Stand nicht

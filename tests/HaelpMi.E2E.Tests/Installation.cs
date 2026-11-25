@@ -98,6 +98,33 @@ internal static class Installation
 
         PruefeRegelnVorErstemStart(log, regelProgramme);
         PruefeKeineBlockregel(agentExe, HaelpMiApp.KonfigExe);
+        PruefeBetriebsLog();
+    }
+
+    /// <summary>Betriebs-Log des Agents (AGENTS.md Teil A): agent.log neben crash.log, eine JSON-Zeile je Eintrag, Start als INFO.</summary>
+    private static void PruefeBetriebsLog()
+    {
+        var datei = E2EUmgebung.LogOrdner().Select(o => Path.Combine(o, "agent.log")).FirstOrDefault(File.Exists);
+        Assert.True(datei is not null, $"agent.log fehlt in {string.Join(" und ", E2EUmgebung.LogOrdner())}.");
+
+        using var strom = new FileStream(datei!, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+        using var leser = new StreamReader(strom);
+        var zeilen = leser.ReadToEnd().Split('\n', StringSplitOptions.RemoveEmptyEntries);
+        Assert.NotEmpty(zeilen);
+        var stufen = new[] { "FEHLER", "WARNUNG", "INFO", "DEBUG" };
+        foreach (var zeile in zeilen)
+        {
+            using var json = System.Text.Json.JsonDocument.Parse(zeile);
+            var wurzel = json.RootElement;
+            Assert.Matches(@"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}[+-]\d{2}:\d{2}$", wurzel.GetProperty("zeit").GetString());
+            Assert.Contains(wurzel.GetProperty("stufe").GetString(), stufen);
+            Assert.Equal("agent", wurzel.GetProperty("prozess").GetString());
+            Assert.False(string.IsNullOrEmpty(wurzel.GetProperty("modul").GetString()), $"Eintrag ohne Modul: {zeile}");
+            Assert.False(string.IsNullOrEmpty(wurzel.GetProperty("meldung").GetString()), $"Eintrag ohne Meldung: {zeile}");
+        }
+
+        Assert.Contains(zeilen, z => z.Contains("\"stufe\":\"INFO\"", StringComparison.Ordinal) && z.Contains("gestartet", StringComparison.Ordinal));
+        Assert.DoesNotContain(zeilen, z => z.Contains("\"stufe\":\"DEBUG\"", StringComparison.Ordinal));
     }
 
     /// <summary>
