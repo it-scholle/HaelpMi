@@ -34,6 +34,9 @@ public partial class GeraetATests
             schalter.Click();
             await WarteBisAsync(() => UeberschreibungVon(b) == LicenseOverride.ForceDisabled, TimeSpan.FromSeconds(10),
                 () => $"devices.json: B hat nach dem Deaktivieren LicenseOverride={UeberschreibungVon(b)} statt ForceDisabled.");
+            // Erst weiter, wenn B die Deaktivierung übernommen hat: sonst stünde B auch ohne jeden Gossip schon auf None.
+            Rendezvous.Signal("t16-a-aus");
+            await Rendezvous.WaitForAsync("t16-b-aus", SchrittTimeout);
 
             seite.Fenster.SetForeground();
             (await GeraeteSchalterAsync(seite, b)).Click();

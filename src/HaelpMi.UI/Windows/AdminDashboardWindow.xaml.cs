@@ -454,8 +454,7 @@ public partial class AdminDashboardWindow : Window
 
         // Issue #61-Nacharbeit (Nutzerbericht 08.09.2026, "ich kann auf 3/2 Lizenzen gehen"):
         // ein Klick durfte ein Gerät bisher auch dann aktivieren, wenn das Kontingent schon
-        // ausgeschöpft war (LicenseOverride.ForceEnabled hebelt das Kontingent in
-        // LicenseLimitEvaluator bewusst aus - "immer aktiv", siehe dortiger Kommentar). Vorab
+        // ausgeschöpft war. Vorab
         // berechnet, damit alle Zeilen denselben Kontingent-Stand sehen, unabhängig von der
         // Reihenfolge, in der sie unten aufgebaut werden - Entscheidung selbst in
         // DeviceActivationGate (testbar ohne WPF).
@@ -565,6 +564,8 @@ public partial class AdminDashboardWindow : Window
         // IsChecked spiegelt bereits den neuen (vom Nutzer gewünschten) Zustand wider, bevor
         // Click feuert (Standardverhalten von ToggleButton) - RefreshDevicesTab() unten baut
         // die Liste ohnehin komplett aus dem tatsächlich gespeicherten Stand neu auf.
+        // Nie ForceEnabled, auch nicht für das eigene Admin-Gerät (Missbrauchsschutz, siehe
+        // DiscoveryService.AnnounceSelfLicenseOverrideAsync).
         var newOverride = DeviceActivationGate.OverrideAfterToggle(activate: toggle.IsChecked == true);
         if (deviceId == _context.LoadOwnDevice().DeviceId)
         {
