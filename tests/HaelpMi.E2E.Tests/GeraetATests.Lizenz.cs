@@ -30,11 +30,7 @@ public partial class GeraetATests
             await app.SchliesseSenderBannerAsync();
 
             // L1: ohne Lizenz. Admin-Geräte bleiben immer aktiv (LicenseLimitGuard), B hat Kontingent 0.
-            await Lizenz.WechselnAsync("l1", "a", () =>
-            {
-                Lizenz.Entfernen();
-                Lizenz.UeberschreibungZuruecksetzen(b);
-            }, GegenseiteTimeout);
+            await Lizenz.WechselnAsync("l1", "a", Lizenz.Entfernen, GegenseiteTimeout);
             await ErwarteErinnerungAsync(app, befunde, "L1", t => t.StartsWith("Keine Lizenz", StringComparison.Ordinal), "'Keine Lizenz gefunden …'");
             var (banner, bearbeitbar) = await DashboardLizenzstandAsync(app, "L1");
             if (!banner.Contains("Keine Lizenz", StringComparison.Ordinal))
