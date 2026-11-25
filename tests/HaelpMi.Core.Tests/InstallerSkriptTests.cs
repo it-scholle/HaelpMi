@@ -30,9 +30,50 @@ public class InstallerSkriptTests
             "Vor dem ersten Agent-/Config-Start steht ein weiterer HälpMi-Eintrag ohne Firewall-Regel:\n" +
             string.Join("\n", vorher.Select(e => $"{e.Datei}:{e.Nummer}: {e.Zeile}")));
 
-        Assert.True(erster.Zeile.Contains("BeforeInstall: EnsureFirewallRules", StringComparison.Ordinal),
+        var vorbereitung = BeforeInstallVon(erster);
+        Assert.True(vorbereitung == "EnsureFirewallRules" || Prozedur(InnoCode(), vorbereitung).Contains("EnsureFirewallRules();", StringComparison.Ordinal),
             $"{erster.Datei}:{erster.Nummer} startet einen HälpMi-Prozess, bevor die Firewall-Regeln angelegt sind " +
-            $"(BeforeInstall: EnsureFirewallRules fehlt): {erster.Zeile}");
+            $"(BeforeInstall ruft EnsureFirewallRules nicht auf): {erster.Zeile}");
+    }
+
+    /// <summary>
+    /// Ohne deployment.json bricht der Agent beim Start mit „Installation unvollständig“ ab. Die Dateien entstanden
+    /// früher erst in CurStepChanged(ssPostInstall), also nach dem ersten Agent-Start aus [Run].
+    /// </summary>
+    [Theory]
+    [InlineData("WriteDeploymentJson")]
+    [InlineData("WriteSettingsJson")]
+    [InlineData("WriteInstalledByJson")]
+    public void ErsterRunEintragMitHaelpMiProgramm_SchreibtVorherDieInstallationsdateien(string schreiber)
+    {
+        var erster = RunEintraege().First(e => HaelpMiProgramme.Any(p => FilenameVon(e.Zeile).Contains(p, StringComparison.Ordinal)));
+        var vorbereitung = Prozedur(InnoCode(), BeforeInstallVon(erster));
+
+        Assert.True(vorbereitung.Contains(schreiber + "()", StringComparison.Ordinal) || AufgerufeneProzeduren(vorbereitung).Any(p => Prozedur(InnoCode(), p).Contains(schreiber + "()", StringComparison.Ordinal)),
+            $"{erster.Datei}:{erster.Nummer} startet einen HälpMi-Prozess, bevor {schreiber} gelaufen ist: {erster.Zeile}");
+    }
+
+    [Theory]
+    [InlineData("WriteDeploymentJson")]
+    [InlineData("WriteSettingsJson")]
+    [InlineData("WriteInstalledByJson")]
+    public void Installationsdateien_WerdenNichtErstNachDenRunEintraegenGeschrieben(string schreiber)
+    {
+        Assert.DoesNotContain(schreiber, Prozedur(InnoCode(), "CurStepChanged"));
+    }
+
+    [Fact]
+    public void Installationsdateien_SettingsUndInstalledByNurEinmal_DeploymentBeiJedemLauf()
+    {
+        var code = InnoCode();
+        var schreiben = AufgerufeneProzeduren(Prozedur(code, BeforeInstallVon(RunEintraege().First(e =>
+                HaelpMiProgramme.Any(p => FilenameVon(e.Zeile).Contains(p, StringComparison.Ordinal))))))
+            .Select(p => Prozedur(code, p))
+            .Single(p => p.Contains("WriteDeploymentJson()", StringComparison.Ordinal));
+
+        Assert.Matches(@"if not FileExists\(ExpandConstant\('\{commonappdata\}\\HaelpMi\\settings\.json'\)\) then\s+begin\s+WriteSettingsJson\(\);", schreiben);
+        Assert.Matches(@"if not FileExists\(ExpandConstant\('\{app\}\\installed-by\.json'\)\) then\s+begin\s+WriteInstalledByJson\(\);", schreiben);
+        Assert.DoesNotMatch(@"if [^\n]*\n\s*(begin\s+)?WriteDeploymentJson\(\);", schreiben);
     }
 
     [Fact]
@@ -138,6 +179,23 @@ public class InstallerSkriptTests
         var ende = code.IndexOf("\nend;", start, StringComparison.Ordinal);
         Assert.True(ende > start, $"Ende von {name} (Zeile \"end;\") nicht gefunden.");
         return code[start..ende];
+    }
+
+    private static string BeforeInstallVon(RunEintrag eintrag)
+    {
+        var treffer = Regex.Match(eintrag.Zeile, @"BeforeInstall:\s*(\w+)");
+        Assert.True(treffer.Success, $"{eintrag.Datei}:{eintrag.Nummer} hat kein BeforeInstall: {eintrag.Zeile}");
+        return treffer.Groups[1].Value;
+    }
+
+    /// <summary>Namen der parameterlosen Prozeduraufrufe „Name();“ im Rumpf, die im Skript als procedure definiert sind.</summary>
+    private static IEnumerable<string> AufgerufeneProzeduren(string rumpf)
+    {
+        var code = InnoCode();
+        return Regex.Matches(rumpf, @"\b(\w+)\(\);")
+            .Select(m => m.Groups[1].Value)
+            .Distinct(StringComparer.Ordinal)
+            .Where(name => code.Contains($"procedure {name}(", StringComparison.Ordinal));
     }
 
     private readonly record struct RunEintrag(string Datei, int Nummer, string Zeile);

@@ -163,11 +163,7 @@ internal static class Installation
     private static void PruefeRegelnVorErstemStart(string setupLog, IReadOnlyList<string> programme)
     {
         var zeilen = File.ReadAllLines(setupLog);
-        var ersterStart = Array.FindIndex(zeilen, z =>
-            z.Contains("Filename:", StringComparison.Ordinal)
-            && (z.Contains(HaelpMiApp.AgentProzess + ".exe", StringComparison.OrdinalIgnoreCase)
-                || z.Contains(HaelpMiApp.KonfigProzess + ".exe", StringComparison.OrdinalIgnoreCase)));
-        Assert.True(ersterStart >= 0, $"Setup-Log {setupLog} enthält keinen [Run]-Start von Agent oder Konfiguration.");
+        var ersterStart = ErsterHaelpMiStart(setupLog, zeilen);
 
         foreach (var programm in programme)
         {
@@ -180,6 +176,44 @@ internal static class Installation
                 $"Firewall-Regel für {programm} entstand erst in Zeile {regel + 1}, der erste HälpMi-Start steht schon in " +
                 $"Zeile {ersterStart + 1}: {zeilen[ersterStart].Trim()}");
         }
+    }
+
+    /// <summary>
+    /// T25: Ohne deployment.json bricht der Agent beim Start mit „Installation unvollständig“ ab. Prüft im Setup-Log
+    /// der Erstinstallation aus T1, dass alle drei Installationsdateien vor dem ersten HälpMi-Start aus [Run] geschrieben
+    /// bzw. (settings.json aus der Vorgabe) vorgefunden wurden und dass alle Dateien danach im Programm- bzw. Datenordner liegen.
+    /// </summary>
+    public static void PruefeDateienVorErstemStart(string geraet)
+    {
+        var setupLog = Path.Combine(Artefakte.Ordner, $"installer-{geraet}.log");
+        Assert.True(File.Exists(setupLog), $"{setupLog} fehlt - T25 braucht die Erstinstallation aus T1 (Filter z. B. Bereich=Basis|Bereich=R229).");
+
+        var zeilen = File.ReadAllLines(setupLog);
+        var ersterStart = ErsterHaelpMiStart(setupLog, zeilen);
+        foreach (var (datei, pfad) in new[]
+                 {
+                     ("settings.json", AppPaths.SettingsFilePath),
+                     ("installed-by.json", Path.Combine(E2EUmgebung.ProgrammOrdner, "installed-by.json")),
+                     ("deployment.json", Path.Combine(E2EUmgebung.ProgrammOrdner, "deployment.json")),
+                 })
+        {
+            var zeile = Array.FindIndex(zeilen, z =>
+                z.Contains("Installationsdatei ", StringComparison.Ordinal) && z.EndsWith(": " + datei, StringComparison.Ordinal));
+            Assert.True(zeile >= 0, $"Setup-Log {setupLog} enthält keine Zeile „Installationsdatei …: {datei}“.");
+            Assert.True(zeile < ersterStart,
+                $"{datei} entstand erst in Zeile {zeile + 1}, der erste HälpMi-Start steht schon in Zeile {ersterStart + 1}: {zeilen[ersterStart].Trim()}");
+            Assert.True(File.Exists(pfad), $"{pfad} fehlt nach der Installation.");
+        }
+    }
+
+    private static int ErsterHaelpMiStart(string setupLog, string[] zeilen)
+    {
+        var ersterStart = Array.FindIndex(zeilen, z =>
+            z.Contains("Filename:", StringComparison.Ordinal)
+            && (z.Contains(HaelpMiApp.AgentProzess + ".exe", StringComparison.OrdinalIgnoreCase)
+                || z.Contains(HaelpMiApp.KonfigProzess + ".exe", StringComparison.OrdinalIgnoreCase)));
+        Assert.True(ersterStart >= 0, $"Setup-Log {setupLog} enthält keinen [Run]-Start von Agent oder Konfiguration.");
+        return ersterStart;
     }
 
     public static void PruefeKeineBlockregel(params string[] programme)
