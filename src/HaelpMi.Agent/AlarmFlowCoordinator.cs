@@ -68,6 +68,8 @@ public sealed class AlarmFlowCoordinator
     /// <summary>Issue #59/#60: true, solange dieses Gerät wegen Lizenzüberschreitung deaktiviert ist.</summary>
     public bool IsOwnDeviceLicenseDisabled() => _licenseLimitGuard.IsOwnDeviceDisabled();
 
+    public LicenseBlockReason GetOwnLicenseBlockReason() => _licenseLimitGuard.GetOwnBlockReason();
+
     /// <summary>
     /// Issue #61-Nachtrag ("Löschen deaktiviert nicht wirklich"): true, sobald ein Admin
     /// dieses Gerät im Geräte-Tab gelöscht hat (siehe OwnSettings.Removed) - anders als
@@ -202,15 +204,12 @@ public sealed class AlarmFlowCoordinator
     /// <summary>Hotkey-triggered send for one <see cref="AlarmProfile"/> (FR-50): resolves this sender's asymmetric recipient set and starts a repeating session.</summary>
     public void TriggerAlarmProfile(AlarmProfile profile)
     {
-        if (IsOwnDeviceRemoved())
+        var removed = IsOwnDeviceRemoved();
+        var blockReason = _licenseLimitGuard.GetOwnBlockReason();
+        if (SendBlockNotice.For(removed, blockReason) is { } notice)
         {
-            ShowDeviceRemovedBlockedMessage();
-            return;
-        }
-
-        if (_licenseLimitGuard.IsOwnDeviceDisabled())
-        {
-            ShowLicenseLimitBlockedMessage();
+            _auditLog.Append($"alarm not sent alarmProfileId={profile.Id} removed={removed} blockReason={blockReason}");
+            BlockedHintDialog.Show(notice);
             return;
         }
 
@@ -246,19 +245,6 @@ public sealed class AlarmFlowCoordinator
 
         _ = RunSessionAsync(session);
     }
-
-    private static void ShowLicenseLimitBlockedMessage() =>
-        System.Windows.MessageBox.Show(
-            "Die Lizenz ist ausgeschöpft (mehr Geräte angemeldet als das Lizenzkontingent erlaubt). " +
-            "Dieses Gerät ist deaktiviert und kann keine Alarme senden, bis ein Admin es im Dashboard " +
-            "aktiviert oder eine neue Lizenz eingespielt wird.",
-            "HälpMi - Lizenz ausgeschöpft", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Warning);
-
-    private static void ShowDeviceRemovedBlockedMessage() =>
-        System.Windows.MessageBox.Show(
-            "Dieses Gerät wurde von einem Admin im Dashboard gelöscht und kann keine Alarme mehr senden. " +
-            "HälpMi kann deinstalliert werden - siehe den separaten Hinweis dazu.",
-            "HälpMi - Gerät entfernt", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Warning);
 
     private static async Task RunSessionAsync(RepeatingAlarmSession session)
     {

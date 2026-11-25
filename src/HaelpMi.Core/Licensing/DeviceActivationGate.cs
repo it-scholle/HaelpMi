@@ -1,3 +1,5 @@
+using HaelpMi.Core.Models;
+
 namespace HaelpMi.Core.Licensing;
 
 /// <summary>
@@ -16,4 +18,12 @@ public static class DeviceActivationGate
     /// </summary>
     public static bool CanToggle(bool isActive, int activeCount, int? seatLimit) =>
         isActive || seatLimit is null || activeCount < seatLimit.Value;
+
+    /// <summary>
+    /// Override nach einem Klick auf den Aktivieren/Deaktivieren-Schalter. Aktivieren hebt nur die
+    /// manuelle Deaktivierung auf (<see cref="LicenseOverride.None"/>), danach entscheidet wieder das
+    /// Kontingent; <see cref="LicenseOverride.ForceEnabled"/> würde es dauerhaft umgehen.
+    /// </summary>
+    public static LicenseOverride OverrideAfterToggle(bool activate) =>
+        activate ? LicenseOverride.None : LicenseOverride.ForceDisabled;
 }

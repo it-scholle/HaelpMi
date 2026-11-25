@@ -21,12 +21,8 @@ public partial class GeraetBTests
             using var app = new HaelpMiApp();
             await app.SchliesseSenderBannerAsync();
 
-            // L1: ohne Lizenz, auch ohne Override aus T8.
-            await Lizenz.WechselnAsync("l1", "b", () =>
-            {
-                Lizenz.Entfernen();
-                Lizenz.EigeneUeberschreibungZuruecksetzen();
-            }, GegenseiteTimeout);
+            // L1: ohne Lizenz.
+            await Lizenz.WechselnAsync("l1", "b", Lizenz.Entfernen, GegenseiteTimeout);
             await PruefeBefundAsync(befunde, () => WarteBisAsync(() => app.FindeToast(LimitToast) is not null, NegativDauer,
                 $"Produktbefund L1: kein Hinweis-Toast ({LimitToast}) auf B ohne Lizenz."));
             _ausgabe.WriteLine($"L1: Toast auf B '{(app.FindeToast(LimitToast) is { } toast ? NameVon(toast, "MessageText") : "-")}'");
@@ -53,6 +49,12 @@ public partial class GeraetBTests
             if (dialog is not null)
             {
                 _ausgabe.WriteLine($"L1: Hinweis-Dialog auf B '{dialog.Name}'");
+                var erwartet = $"HälpMi - {LicenseBlockTexts.Title(LicenseBlockReason.NoLicense)}";
+                if (dialog.Name != erwartet)
+                {
+                    befunde.Add($"Produktbefund L1: Der Hinweis-Dialog auf B heißt '{dialog.Name}', erwartet '{erwartet}' (Grund: keine Lizenz).");
+                }
+
                 BestaetigeDialog(dialog);
             }
 

@@ -424,13 +424,18 @@ public partial class AdminDashboardWindow : Window
     // RefreshDeviceDerivedViews/_deviceFileWatcher), nicht nur beim Öffnen.
     private void RefreshLicenseLimitBanner()
     {
-        var disabledDeviceIds = _context.GetDisabledDeviceIds();
-        var rows = _context.LoadDevices()
-            .Where(d => disabledDeviceIds.Contains(d.DeviceId) && !d.LicenseLimitWarningAcknowledged)
+        var reasons = _context.GetBlockReasons();
+        var blocked = _context.LoadDevices()
+            .Where(d => !d.Removed && !d.LicenseLimitWarningAcknowledged
+                && reasons.TryGetValue(d.DeviceId, out var reason) && reason != LicenseBlockReason.ManuallyDisabled)
+            .ToList();
+        var rows = blocked
             .Select(d => new LicenseLimitDeviceRow(d.DeviceId, BuildDeviceDisplayName(d, isOwnDevice: false)))
             .OrderBy(r => r.DisplayName, StringComparer.CurrentCultureIgnoreCase)
             .ToList();
 
+        LicenseLimitBannerTitle.Text = LicenseBlockTexts.DashboardBannerTitle(
+            blocked.Any(d => reasons[d.DeviceId] == LicenseBlockReason.NoLicense) ? LicenseBlockReason.NoLicense : LicenseBlockReason.LimitExceeded);
         LicenseLimitDevicesList.ItemsSource = rows;
         LicenseLimitBanner.Visibility = rows.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
     }
@@ -454,8 +459,7 @@ public partial class AdminDashboardWindow : Window
 
         // Issue #61-Nacharbeit (Nutzerbericht 08.09.2026, "ich kann auf 3/2 Lizenzen gehen"):
         // ein Klick durfte ein Gerät bisher auch dann aktivieren, wenn das Kontingent schon
-        // ausgeschöpft war (LicenseOverride.ForceEnabled hebelt das Kontingent in
-        // LicenseLimitEvaluator bewusst aus - "immer aktiv", siehe dortiger Kommentar). Vorab
+        // ausgeschöpft war. Vorab
         // berechnet, damit alle Zeilen denselben Kontingent-Stand sehen, unabhängig von der
         // Reihenfolge, in der sie unten aufgebaut werden - Entscheidung selbst in
         // DeviceActivationGate (testbar ohne WPF).
@@ -565,17 +569,15 @@ public partial class AdminDashboardWindow : Window
         // IsChecked spiegelt bereits den neuen (vom Nutzer gewünschten) Zustand wider, bevor
         // Click feuert (Standardverhalten von ToggleButton) - RefreshDevicesTab() unten baut
         // die Liste ohnehin komplett aus dem tatsächlich gespeicherten Stand neu auf.
+        // Nie ForceEnabled, auch nicht für das eigene Admin-Gerät (Missbrauchsschutz, siehe
+        // DiscoveryService.AnnounceSelfLicenseOverrideAsync).
+        var newOverride = DeviceActivationGate.OverrideAfterToggle(activate: toggle.IsChecked == true);
         if (deviceId == _context.LoadOwnDevice().DeviceId)
         {
-            // Issue #113: für das eigene Admin-Gerät nie ForceEnabled selbst behaupten
-            // (Missbrauchsschutz, siehe DiscoveryService.AnnounceSelfLicenseOverrideAsync) -
-            // None reicht, weil ein Admin-Gerät ohne Override ohnehin als aktiv gilt
-            // (LicenseLimitGuard.EffectiveOverride).
-            _context.SetOwnLicenseOverride(toggle.IsChecked == true ? LicenseOverride.None : LicenseOverride.ForceDisabled);
+            _context.SetOwnLicenseOverride(newOverride);
         }
         else
         {
-            var newOverride = toggle.IsChecked == true ? LicenseOverride.ForceEnabled : LicenseOverride.ForceDisabled;
             _context.SetDeviceLicenseOverride(deviceId, newOverride);
         }
 
