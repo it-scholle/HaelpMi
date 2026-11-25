@@ -213,9 +213,9 @@ Bekannte Umgehungen in der Testvorbereitung (keine Produktkorrektur):
   Alarmfenster verdeckt. Das ist ein Produktbefund: Der Admin-Installer legt nur Regeln für
   51500/51501 an, nicht für 51502–51506, der User-Installer gar keine. Die Regel lebt nur bis
   zum nächsten Reset.
-- **Eigene Kundengruppe und Testlizenz pro Lauf** (`ci/e2e/testlizenz-erzeugen.ps1`): Ohne
-  `/DCustomerGroupId` gilt im Installer die Null-GUID, deren Nachrichten
-  `MessageValidation.IsPlausible` verwirft; ohne gültige Lizenz hat ein User-Gerät Kontingent 0.
+- **Eigene Kundengruppe und Testlizenz pro Lauf** (`ci/e2e/testlizenz-erzeugen.ps1`): Die
+  Lizenz ist an die Kundengruppe gebunden (ohne `/DCustomerGroupId` bekäme der Installer eine
+  eigene Zufallsgruppe, siehe `installer/HaelpMiKundengruppe.iss.inc`); ohne gültige Lizenz hat ein User-Gerät Kontingent 0.
   Der Workflow erzeugt deshalb pro Lauf Gruppe, Schlüsselpaar und signierte Lizenz wie der
   Install-Creator für einen Test-Installer. Der private Schlüssel existiert nur im Speicher des
   Build-Jobs. Mit demselben Schlüssel entstehen für T9 `lizenz-bald.json` (läuft in 10 Tagen ab),

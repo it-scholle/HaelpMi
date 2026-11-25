@@ -18,6 +18,7 @@ Details stehen in der Git-Historie. Der eingefrorene Stand `legacy/main-0.39.x` 
 - Ein im Dashboard deaktiviertes Gerät löst kein Banner „Lizenzkontingent überschritten“ mehr aus; der Sperrhinweis auf dem Gerät nennt den tatsächlichen Grund (#133)
 - Der Hinweis „Alarm nicht gesendet“ auf einem gesperrten Gerät erscheint als eigenes Fenster im Vordergrund statt verdeckt unter dem Sperr-Toast (#179)
 - Wieder-Aktivieren eines Geräts im Reiter „Geräte / Lizenz“ hebt nur die Deaktivierung auf; das Gerät umgeht das Lizenzkontingent nicht mehr dauerhaft (#180)
+- Ein ohne Kundengruppe gebauter Test-Installer bekommt eine zufällige Test-Gruppe statt der Null-GUID und empfängt dadurch Alarme und Boot-Calls; ein Kunden-Installer ohne Kundengruppe lässt sich nicht mehr bauen (#175)
 
 ## [0.47.3] – 2026-11-18
 - Einrichtungs-Skript für die E2E-Vorlagen-VM (#165)
