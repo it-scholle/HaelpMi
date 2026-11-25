@@ -14,8 +14,11 @@
   `HaelpMi.Config.exe` (das Dashboard öffnet eigene Sockets). Die Deinstallation entfernt sie.
   Die Regeln entstehen vor dem ersten Start eines HälpMi-Programms, auch bei Reparatur und
   Update. Hat jemand eine frühere Windows-Abfrage „Zugriff zulassen?“ abgebrochen, legt Windows
-  Inbound-Block-Regeln „HaelpMi.Agent“ bzw. „HaelpMi.Config“ an, die die Allow-Regel schlagen;
-  der Installer entfernt sie derzeit nicht (Prüfung: `Get-NetFirewallRule -Action Block`).
+  Inbound-Block-Regeln „HaelpMi.Agent“ bzw. „HaelpMi.Config“ an, die die Allow-Regel schlagen.
+  Installation und Reparatur entfernen lokale Inbound-Block-Regeln, deren Programm genau
+  `HaelpMi.Agent.exe` oder `HaelpMi.Config.exe` im Programmordner ist, und schreiben jede
+  entfernte Regel als „Block-Regel entfernt: …“ ins Setup-Log. Per GPO verteilte Regeln bleiben
+  unberührt (Prüfung: `Get-NetFirewallRule -Action Block`).
   Wer die Firewall per GPO verwaltet und lokale Regeln nicht zulässt, gibt die beiden Programme
   oder die Ports aus `docs/architektur.md` dort frei.
 

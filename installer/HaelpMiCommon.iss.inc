@@ -550,11 +550,12 @@ begin
     Log(Format('netsh %s -> nicht gestartet: %s', [Params, SysErrorMessage(ResultCode)]));
 end;
 
-#ifdef BlockRegelnEntfernen
-// Abgeschaltet, bis der Repo-Owner das Entfernen freigibt; einschalten mit ISCC /DBlockRegelnEntfernen.
 // Entfernt nur lokale (PersistentStore) Inbound-Block-Regeln, deren Programm genau eine HälpMi-.exe
 // in {app} ist, wie Windows sie nach einer abgebrochenen Firewall-Abfrage anlegt. GPO-Regeln
 // liegen in einem anderen Speicher und bleiben unberührt. Jede entfernte Regel steht im Setup-Log.
+// Gefiltert wird per Where-Object statt -Direction/-Action: Get-NetFirewallRule meldet bei null
+// Treffern einen Fehler, PowerShell endet dann mit 1. Regeln dürfen den Pfad mit Umgebungsvariablen
+// speichern (%ProgramFiles%\...), daher ExpandEnvironmentVariables; -contains ignoriert Groß-/Kleinschreibung.
 procedure EntferneBlockRegeln();
 var
   Ausgabe, Skript: String;
@@ -563,9 +564,9 @@ var
 begin
   Ausgabe := ExpandConstant('{tmp}\block-regeln.txt');
   Skript := '& { $p = @(''' + ExpandConstant('{app}\{#MyAgentExeName}') + ''', ''' + ExpandConstant('{app}\{#MyConfigExeName}') + '''); ' +
-    'Get-NetFirewallRule -PolicyStore PersistentStore -Direction Inbound -Action Block -ErrorAction SilentlyContinue | ForEach-Object { ' +
+    'Get-NetFirewallRule -PolicyStore PersistentStore | Where-Object { $_.Direction -eq ''Inbound'' -and $_.Action -eq ''Block'' } | ForEach-Object { ' +
     '$a = $_ | Get-NetFirewallApplicationFilter; ' +
-    'if ($p -contains $a.Program) { ''entfernt: '' + $_.DisplayName + '' | '' + $_.Profile + '' | '' + $a.Program; $_ | Remove-NetFirewallRule } } } *>&1 ' +
+    'if ($p -contains [Environment]::ExpandEnvironmentVariables([string]$a.Program)) { ''entfernt: '' + $_.DisplayName + '' | '' + $_.Profile + '' | '' + $a.Program; $_ | Remove-NetFirewallRule } } } *>&1 ' +
     '| Out-File -LiteralPath ''' + Ausgabe + ''' -Encoding utf8';
   if Exec('powershell.exe', '-NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "' + Skript + '"', '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
     Log(Format('Block-Regeln mit HälpMi-Programmpfad prüfen -> Rückgabecode %d', [ResultCode]))
@@ -576,7 +577,6 @@ begin
       Log('Block-Regel ' + Zeilen[I]);
 end;
 
-#endif
 // Only reachable with admin rights (PrivilegesRequired=admin in both variants) - this is
 // the one piece of installer behavior that genuinely needs elevation; the app itself never
 // does (Pflichtenheft: kein Admin). Delete-then-add rather than a "does it exist" check
@@ -587,9 +587,7 @@ end;
 // "HälpMi Discovery"/"HälpMi Alarm" sind die Portregeln älterer Versionen.
 procedure EnsureFirewallRules();
 begin
-#ifdef BlockRegelnEntfernen
   EntferneBlockRegeln();
-#endif
   RunNetsh('advfirewall firewall delete rule name="HälpMi Discovery"');
   RunNetsh('advfirewall firewall delete rule name="HälpMi Alarm"');
 
