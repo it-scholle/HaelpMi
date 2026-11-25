@@ -293,6 +293,61 @@ public class SendingTests
         }
     }
 
+    [Theory]
+    [InlineData(2000)] // Empfänger quittiert spät, z. B. weil sein UI-Thread beim ersten Alarm noch beschäftigt ist
+    [InlineData(6000)] // Empfänger quittiert gar nicht mehr (Agent beendet, PC aus): jede Welle läuft in den Ack-Timeout
+    public async Task RepeatingAlarmSession_SlowAck_KeepsRepeatInterval(int ackDelayMs)
+    {
+        // Ein langsamer Empfänger darf den Takt der Wiederholung für alle nicht verlängern.
+        var ackDelay = TimeSpan.FromMilliseconds(ackDelayMs);
+        var tolerance = TimeSpan.FromSeconds(1);
+        var customerGroupId = Guid.NewGuid();
+        var senderIdentity = new LiveIdentity(customerGroupId, Guid.NewGuid(), "Sender-PC", "Frau Meier", "Zimmer", "1", Role.User, false, "0.0.0", 0, DateTimeOffset.UtcNow);
+        var receiverDeviceId = Guid.NewGuid();
+
+        var tcp = new TcpListener(IPAddress.Loopback, 0);
+        tcp.Start();
+        var port = ((IPEndPoint)tcp.LocalEndpoint).Port;
+        using var serverCts = new CancellationTokenSource();
+        var waveArrivals = new System.Collections.Concurrent.ConcurrentQueue<DateTimeOffset>();
+        var serverTask = RunDelayingAckServerAsync(tcp, customerGroupId, receiverDeviceId, _ =>
+        {
+            waveArrivals.Enqueue(DateTimeOffset.UtcNow);
+            return ackDelay;
+        }, serverCts.Token);
+
+        var feedbackChannel = new AlarmFeedbackChannel(() => senderIdentity);
+        var profile = new AlarmProfile { Text = "Bitte kommen!", ResponseThreshold = 1 };
+        var target = new DeviceEntry { DeviceId = receiverDeviceId, IpAddress = "127.0.0.1", TcpPort = port };
+        var session = new RepeatingAlarmSession(profile, new[] { target }, senderIdentity, new AlarmSender(), feedbackChannel, DateTimeOffset.UtcNow);
+        try
+        {
+            _ = session.RunAsync();
+            var deadline = DateTimeOffset.UtcNow + TimeSpan.FromSeconds(30);
+            while (waveArrivals.Count < 3 && DateTimeOffset.UtcNow < deadline)
+            {
+                await Task.Delay(100);
+            }
+
+            var arrivals = waveArrivals.ToArray();
+            Assert.True(arrivals.Length >= 3, $"Nur {arrivals.Length} Wellen in 30 s angekommen.");
+            for (var i = 1; i < 3; i++)
+            {
+                var gap = arrivals[i] - arrivals[i - 1];
+                Assert.True(gap <= AppConstants.AlarmRepeatInterval + tolerance,
+                    $"Abstand Welle {i} -> {i + 1}: {gap.TotalSeconds:F2} s, erwartet höchstens {(AppConstants.AlarmRepeatInterval + tolerance).TotalSeconds:F1} s.");
+            }
+        }
+        finally
+        {
+            session.Cancel();
+            session.Dispose();
+            serverCts.Cancel();
+            tcp.Stop();
+            await Task.WhenAny(serverTask, Task.Delay(TimeSpan.FromSeconds(2)));
+        }
+    }
+
     [Fact]
     public async Task RepeatingAlarmSession_OnMyWayWithoutAck_CountsAsReceived()
     {
@@ -341,7 +396,11 @@ public class SendingTests
         }
     }
 
-    private static async Task RunDelayingAckServerAsync(TcpListener tcp, Guid customerGroupId, Guid receiverDeviceId, CancellationToken ct)
+    private static Task RunDelayingAckServerAsync(TcpListener tcp, Guid customerGroupId, Guid receiverDeviceId, CancellationToken ct) =>
+        RunDelayingAckServerAsync(tcp, customerGroupId, receiverDeviceId,
+            round => round == 1 ? TimeSpan.Zero : AppConstants.AlarmAckTimeout + TimeSpan.FromSeconds(1), ct);
+
+    private static async Task RunDelayingAckServerAsync(TcpListener tcp, Guid customerGroupId, Guid receiverDeviceId, Func<int, TimeSpan> ackDelayForRound, CancellationToken ct)
     {
         var round = 0;
         try
@@ -350,7 +409,7 @@ public class SendingTests
             {
                 var client = await tcp.AcceptTcpClientAsync(ct);
                 round++;
-                var delay = round == 1 ? TimeSpan.Zero : AppConstants.AlarmAckTimeout + TimeSpan.FromSeconds(1);
+                var delay = ackDelayForRound(round);
                 _ = Task.Run(async () =>
                 {
                     using (client)
