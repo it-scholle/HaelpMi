@@ -210,6 +210,8 @@ jobs:
               Copy-Item "e2e-installer/$datei" e2e-installer/admin/
               Copy-Item "e2e-installer/$datei" e2e-installer/user/
           }
+          Copy-Item e2e-installer/lizenz-kurz -Destination e2e-installer/admin/ -Recurse
+          Copy-Item e2e-installer/lizenz-kurz -Destination e2e-installer/user/ -Recurse
 
       - name: E2E-Tests bauen
         run: dotnet build tests/HaelpMi.E2E.Tests -c Release
@@ -271,24 +273,6 @@ jobs:
         with:
           name: e2e-tests
           path: C:\haelpmi-e2e\tests
-      # Testvorbereitung, Umgehung eines Produktbefunds: beim ersten Agent-Start fragt die Windows-Firewall
-      # nach einer Freigabe für HaelpMi.Agent.exe: der Admin-Installer legt nur Portregeln für 51500/51501 an,
-      # nicht für 51502–51506, der User-Installer gar keine. Der Dialog verdeckt das Alarmfenster. Die Programmregel
-      # ersetzt keine Produktkorrektur; sie lebt nur bis zum nächsten Reset auf clean-base.
-      - name: Testvorbereitung – Firewall-Freigabe für den Agent (Umgehung)
-        run: |
-          $name = 'HaelpMi E2E Agent (Testvorbereitung)'
-          Get-NetFirewallRule -DisplayName $name -ErrorAction SilentlyContinue | Remove-NetFirewallRule
-          New-NetFirewallRule -DisplayName $name -Direction Inbound -Action Allow -Profile Any `
-              -Program 'C:\Program Files\HaelpMi\HaelpMi.Agent.exe' | Out-Null
-      # Ebenfalls Umgehung eines Produktbefunds: das Konfigurationsprogramm (Admin-Dashboard) öffnet selbst Sockets
-      # für Config-Sync und Edit-Lock (UDP 51502), ohne dass ein Installer dafür eine Regel anlegt.
-      - name: Testvorbereitung – Firewall-Freigabe für das Konfigurationsprogramm (Umgehung)
-        run: |
-          $name = 'HaelpMi E2E Config (Testvorbereitung)'
-          Get-NetFirewallRule -DisplayName $name -ErrorAction SilentlyContinue | Remove-NetFirewallRule
-          New-NetFirewallRule -DisplayName $name -Direction Inbound -Action Allow -Profile Any `
-              -Program 'C:\Program Files\HaelpMi\HaelpMi.Config.exe' | Out-Null
       # Tests mit Trait Teil laufen nur, wenn alle beteiligten Geräte im Lauf sind.
       - name: E2E-Tests
         run: |

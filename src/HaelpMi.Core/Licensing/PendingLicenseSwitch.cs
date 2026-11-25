@@ -10,10 +10,10 @@ namespace HaelpMi.Core.Licensing;
 /// dieselbe Sofort-Regel wie beim Einspielen selbst, siehe LicenseImporter) oder ihr
 /// eigenes <see cref="License.ExpiryDateUtc"/> ist erreicht.
 ///
-/// Kein eigener Timer (CLAUDE.md "kein Heartbeat, kein Polling im Leerlauf"): wird
-/// stattdessen von <see cref="LicenseRuntime.LoadCurrent"/> vor jedem ohnehin
-/// stattfindenden Lesen des Lizenzstands aufgerufen (App-Start, jeder Boot-Call-Refresh,
-/// jedes Öffnen des Admin-Dashboards) - rein lokale Datei-I/O, kein Netzwerkverkehr.
+/// Kein eigener Timer: wird von <see cref="LicenseRuntime.LoadCurrent"/> vor jedem Lesen des
+/// Lizenzstands aufgerufen (App-Start, Lizenz-Import, Peer-Übernahme, Öffnen des Dashboards und
+/// die geplanten Prüfungen des Agents aus <see cref="LicenseRecheckSchedule"/>, u. a. kurz nach
+/// dem Ablauf) - rein lokale Datei-I/O, kein Netzwerkverkehr.
 /// </summary>
 public static class PendingLicenseSwitch
 {

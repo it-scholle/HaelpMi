@@ -23,7 +23,7 @@ Stand: 2026-11-25
 ## Offene Annahmen
 <!-- Jede mit Fundstelle (Datei oder Ticket). Sonst „keine“. -->
 
-- keine `ANNAHME:`-Marker im Code.
+keine
 
 ## Bekannte Abweichungen von `AGENTS.md` Teil A
 

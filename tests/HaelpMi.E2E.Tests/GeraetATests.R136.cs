@@ -10,7 +10,7 @@ using static HaelpMi.E2E.Tests.ZweiGeraete;
 
 namespace HaelpMi.E2E.Tests;
 
-// T10 und T18 (Alarmfenster öffnet nach dem Schließen erneut), Gegenstücke und Auswertung in GeraetBTests.R136.cs und GeraetCTests.cs.
+// T10, T18 und T19 (Alarmfenster öffnet nach dem Schließen erneut), Gegenstücke und Auswertung in GeraetBTests.R136.cs und GeraetCTests.cs.
 public partial class GeraetATests
 {
     /// <summary>
@@ -141,6 +141,114 @@ public partial class GeraetATests
             await Rendezvous.WaitForAsync(DreiGeraete.CGestopptT18, SchrittTimeout);
         }, "t18");
 
+    /// <summary>
+    /// T19, Sender-Seite: Alarm A an B und C (Schwelle 2, Config-Version <see cref="DreiGeraete.ConfigVersionMehrfach"/>).
+    /// Nachdem beide "Bin unterwegs" gemeldet und geschlossen haben, schickt A <see cref="R136Mehrfach.MinWellen"/> bis
+    /// <see cref="R136Mehrfach.MaxWellen"/> weitere Wellen derselben Session an beide, jeweils nach 0,5 bis 2 s.
+    /// </summary>
+    [Fact, TestPriority(58)]
+    [Trait("Teil", DreiGeraete.Teil), Trait("Teil", R136Mehrfach.Teil), Trait("Bereich", "R136")]
+    public async Task T19_Regression136_MehrfachNachwelle_SendetWellen()
+    {
+        try
+        {
+            await T19_Rumpf();
+        }
+        catch
+        {
+            try
+            {
+                await Rendezvous.WaitForAsync(DreiGeraete.CGestopptT19, SchrittTimeout);
+            }
+            catch (TimeoutException ex)
+            {
+                _ausgabe.WriteLine($"T19: {ex.Message}");
+            }
+
+            throw;
+        }
+    }
+
+    private Task T19_Rumpf() =>
+        Artefakte.SichereAsync(nameof(T19_Regression136_MehrfachNachwelle_SendetWellen), async () =>
+        {
+            var (_, b, c) = await DreiGeraete.BereiteAlarmprofilVorAsync(DreiGeraete.ConfigVersionMehrfach);
+            await Rendezvous.WaitForAsync("t19-b-bereit", GegenseiteTimeout);
+            await Rendezvous.WaitForAsync("t19-c-bereit", GegenseiteTimeout);
+            await WarteAufGeraetAsync(b, DiscoveryTimeout);
+            await WarteAufGeraetAsync(c, DiscoveryTimeout);
+
+            using var app = new HaelpMiApp();
+            await app.SchliesseSenderBannerAsync();
+            var zyklen = E2EUmgebung.Zyklen;
+            for (var n = 1; n <= zyklen; n++)
+            {
+                var seit = DateTimeOffset.UtcNow;
+                DrueckeHotkey(AlarmHotkey);
+                Rendezvous.Signal($"t19-{n}-aus", $"{DateTimeOffset.UtcNow:O}");
+                var banner = app.ErwarteBanner($"T19 Zyklus {n}");
+                string zuB, zuC;
+                try
+                {
+                    zuB = (await Rendezvous.WaitForAsync($"t19-{n}-b-zu", SchrittTimeout)).Trim();
+                    zuC = (await Rendezvous.WaitForAsync($"t19-{n}-c-zu", SchrittTimeout)).Trim();
+                }
+                catch
+                {
+                    BrichAlarmAb(banner);
+                    await app.SchliesseSenderBannerAsync();
+                    throw;
+                }
+
+                var sitzung = SitzungAusAudit(seit)
+                    ?? throw new InvalidOperationException($"Zyklus {n}: audit.log auf A enthält keine Zeile 'alarm sent alarmProfileId={ProfilId} sessionId=…'.");
+
+                // Nach einem Neustart kennt der Empfänger die Session nicht mehr, Nachwellen sagten nichts aus.
+                // Erst abbrechen, dann melden: sonst öffnete eine Repeat-Welle nach der Aufräumprüfung
+                // des Empfängers ein Fenster, das in den nächsten Zyklus hineinreicht.
+                var uebersprungen = zuB == "neustart" || zuC == "neustart";
+                if (uebersprungen)
+                {
+                    if (BrichAlarmAb(banner))
+                    {
+                        _ausgabe.WriteLine($"Zyklus {n}: Alarm lief nach einem Neustart noch, abgebrochen.");
+                    }
+
+                    await app.SchliesseSenderBannerAsync();
+                    Rendezvous.Signal($"t19-{n}-wellen", $"übersprungen\n{sitzung}");
+                }
+                else
+                {
+                    var (anzahl, abstaende) = R136Mehrfach.Wellenplan(n);
+                    var acks = new List<string>();
+                    foreach (var abstand in abstaende)
+                    {
+                        await Task.Delay(abstand);
+                        var ergebnis = await SendeNachwelleAsync(new[] { b, c }, sitzung);
+                        acks.Add($"{ergebnis.AckedCount}/{ergebnis.TargetCount}");
+                    }
+
+                    Rendezvous.Signal($"t19-{n}-wellen", $"{sitzung}\n{anzahl}\n{string.Join(',', acks)}\n{string.Join(',', abstaende)}");
+                    _ausgabe.WriteLine($"Zyklus {n}: {anzahl} Nachwellen ({string.Join(',', acks)}) nach {string.Join(',', abstaende)} ms.");
+                    if (BrichAlarmAb(banner))
+                    {
+                        _ausgabe.WriteLine($"Zyklus {n}: Alarm lief nach beiden Rückmeldungen noch, abgebrochen.");
+                        await app.SchliesseSenderBannerAsync();
+                    }
+                    else
+                    {
+                        await app.SchliesseBannerAsync(banner);
+                    }
+                }
+
+                await Rendezvous.WaitForAsync($"t19-{n}-b-fertig", SchrittTimeout);
+                await Rendezvous.WaitForAsync($"t19-{n}-c-fertig", SchrittTimeout);
+            }
+
+            // C beendet danach seinen Agent; ab T6 soll C nicht mehr mitspielen (siehe GeraetCTests).
+            await Rendezvous.WaitForAsync(DreiGeraete.CGestopptT19, SchrittTimeout);
+        }, "t19");
+
     /// <returns>true, wenn der Alarm noch lief und abgebrochen wurde; das Banner schließt sich dann selbst.</returns>
     private static bool BrichAlarmAb(Window banner)
     {
@@ -170,14 +278,18 @@ public partial class GeraetATests
     }
 
     /// <summary>Gleiche Session, gleiches Profil, gleiche Identität wie der Agent (LiveIdentityFactory), also für B nicht von einer Repeat-Welle zu unterscheiden.</summary>
-    private static async Task<AlarmSendResult> SendeNachwelleAsync(Guid empfaenger, Guid sitzung)
+    private static Task<AlarmSendResult> SendeNachwelleAsync(Guid empfaenger, Guid sitzung) =>
+        SendeNachwelleAsync(new[] { empfaenger }, sitzung);
+
+    private static async Task<AlarmSendResult> SendeNachwelleAsync(IReadOnlyList<Guid> empfaenger, Guid sitzung)
     {
         var settings = LiesEinstellungen() ?? throw new InvalidOperationException("settings.json nicht lesbar.");
         var profil = LiesConfig()?.AlarmProfiles.FirstOrDefault(p => p.Id == ProfilId)
             ?? throw new InvalidOperationException($"Profil {ProfilId} fehlt in shared-config.json.");
-        var ziel = LiesGeraete().FirstOrDefault(d => d.DeviceId == empfaenger)
-            ?? throw new InvalidOperationException($"Gerät {empfaenger} fehlt in devices.json.");
+        var geraete = LiesGeraete();
+        var ziele = empfaenger.Select(id => geraete.FirstOrDefault(d => d.DeviceId == id)
+            ?? throw new InvalidOperationException($"Gerät {id} fehlt in devices.json.")).ToList();
 
-        return await new AlarmSender().SendAsync(profil, sitzung, LiveIdentityFactory.Create(settings, Lizenz.Deployment()), new[] { ziel });
+        return await new AlarmSender().SendAsync(profil, sitzung, LiveIdentityFactory.Create(settings, Lizenz.Deployment()), ziele);
     }
 }

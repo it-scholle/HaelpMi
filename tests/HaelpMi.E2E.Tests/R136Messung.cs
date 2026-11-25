@@ -5,6 +5,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using FlaUI.Core.AutomationElements;
+using FlaUI.Core.Exceptions;
 using Xunit;
 using Xunit.Abstractions;
 using static HaelpMi.E2E.Tests.HaelpMiApp;
@@ -201,7 +202,7 @@ internal static class R136Messung
                     return true;
                 }
             }
-            catch (Exception ex) when (ex is COMException or InvalidOperationException)
+            catch (Exception ex) when (ex is COMException or InvalidOperationException or FlaUIException)
             {
             }
 

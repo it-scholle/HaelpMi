@@ -9,8 +9,11 @@
 - Nach der Installation startet `HaelpMi.Agent` bei jeder Anmeldung über eine geplante Aufgabe
   (`schtasks`, `/SC ONLOGON /RL LIMITED`). Der Update-Dienst wird auf `release-1.0-MVP` nicht
   installiert; neue Versionen kommen per neuem Installer.
-- Firewall-Freigaben setzt nur der Admin-Installer; in verwalteten Netzen ggf. per GPO ausrollen
-  (Ports siehe `docs/architektur.md`).
+- Beide Installer legen eingehende Firewall-Programmregeln an: „HälpMi Agent“ für
+  `HaelpMi.Agent.exe`, der Admin-Installer zusätzlich „HälpMi Konfiguration“ für
+  `HaelpMi.Config.exe` (das Dashboard öffnet eigene Sockets). Die Deinstallation entfernt sie.
+  Wer die Firewall per GPO verwaltet und lokale Regeln nicht zulässt, gibt die beiden Programme
+  oder die Ports aus `docs/architektur.md` dort frei.
 
 ## Konfiguration
 

@@ -73,7 +73,7 @@ der Verarbeitung auf die `CustomerGroupId` geprüft. Kein Heartbeat, kein Pollin
 | `SetThreadExecutionState` + `SendInput` | Bildschirmschoner während der Alarmanzeige unterdrücken |
 | `schtasks.exe` | Autostart (`/SC ONLOGON /RL LIMITED`) |
 | Dienst `HaelpMiUpdateService` | per `sc.exe create` im Installer registriert |
-| `netsh advfirewall` | nur Admin-Installer: Firewall-Freigaben |
+| `netsh advfirewall` | Installer: eingehende Programmregeln „HälpMi Agent“ (beide Installer) und „HälpMi Konfiguration“ (nur Admin-Installer) |
 
 ## Datenflüsse
 

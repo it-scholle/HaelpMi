@@ -1,7 +1,6 @@
 ; HälpMi installer (Inno Setup) - User-Installer (FR-35): schreibt Role=User in
-; deployment.json (siehe HaelpMiCommon.iss.inc/GetRoleValue), bringt keine Firewall-Regeln
-; mit (dafür HaelpMi-Admin.iss - der Admin-Rechner dient laut FR-35 zugleich als Testgerät,
-; braucht die Regeln also eher). Beide Varianten teilen sich dieselbe App-Payload/Binary;
+; deployment.json (siehe HaelpMiCommon.iss.inc/GetRoleValue) und legt wie der Admin-Installer
+; die eingehende Firewall-Programmregel für den Agent an (EnsureFirewallRules). Beide Varianten teilen sich dieselbe App-Payload/Binary;
 ; einzeln aktivierbare/deaktivierbare Funktionen aus FR-35 ("jede Funktion einzeln
 ; aktivierbar") sind NICHT umgesetzt - dafür fehlt im C#-Code noch ein Feature-Flag-
 ; Mechanismus, das ist eine eigene Design-Entscheidung, keine reine Installer-Frage.
