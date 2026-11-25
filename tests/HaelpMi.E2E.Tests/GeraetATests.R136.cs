@@ -204,8 +204,17 @@ public partial class GeraetATests
                     ?? throw new InvalidOperationException($"Zyklus {n}: audit.log auf A enthält keine Zeile 'alarm sent alarmProfileId={ProfilId} sessionId=…'.");
 
                 // Nach einem Neustart kennt der Empfänger die Session nicht mehr, Nachwellen sagten nichts aus.
-                if (zuB == "neustart" || zuC == "neustart")
+                // Erst abbrechen, dann melden: sonst öffnete eine Repeat-Welle nach der Aufräumprüfung
+                // des Empfängers ein Fenster, das in den nächsten Zyklus hineinreicht.
+                var uebersprungen = zuB == "neustart" || zuC == "neustart";
+                if (uebersprungen)
                 {
+                    if (BrichAlarmAb(banner))
+                    {
+                        _ausgabe.WriteLine($"Zyklus {n}: Alarm lief nach einem Neustart noch, abgebrochen.");
+                    }
+
+                    await app.SchliesseSenderBannerAsync();
                     Rendezvous.Signal($"t19-{n}-wellen", $"übersprungen\n{sitzung}");
                 }
                 else
@@ -221,16 +230,15 @@ public partial class GeraetATests
 
                     Rendezvous.Signal($"t19-{n}-wellen", $"{sitzung}\n{anzahl}\n{string.Join(',', acks)}\n{string.Join(',', abstaende)}");
                     _ausgabe.WriteLine($"Zyklus {n}: {anzahl} Nachwellen ({string.Join(',', acks)}) nach {string.Join(',', abstaende)} ms.");
-                }
-
-                if (BrichAlarmAb(banner))
-                {
-                    _ausgabe.WriteLine($"Zyklus {n}: Alarm lief nach beiden Rückmeldungen noch, abgebrochen.");
-                    await app.SchliesseSenderBannerAsync();
-                }
-                else
-                {
-                    await app.SchliesseBannerAsync(banner);
+                    if (BrichAlarmAb(banner))
+                    {
+                        _ausgabe.WriteLine($"Zyklus {n}: Alarm lief nach beiden Rückmeldungen noch, abgebrochen.");
+                        await app.SchliesseSenderBannerAsync();
+                    }
+                    else
+                    {
+                        await app.SchliesseBannerAsync(banner);
+                    }
                 }
 
                 await Rendezvous.WaitForAsync($"t19-{n}-b-fertig", SchrittTimeout);

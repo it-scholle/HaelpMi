@@ -2,6 +2,7 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
 using FlaUI.Core.AutomationElements;
+using FlaUI.Core.Exceptions;
 using Xunit;
 using Xunit.Abstractions;
 using static HaelpMi.E2E.Tests.HaelpMiApp;
@@ -59,6 +60,7 @@ internal static class R136Mehrfach
         var csv = Path.Combine(Artefakte.Ordner, $"r136-mehrfach-{geraet}-{version}.csv");
         Directory.CreateDirectory(Artefakte.Ordner);
         File.WriteAllText(csv, MehrfachZeile.Kopf + Environment.NewLine, Encoding.UTF8);
+        var zusammenfassungPfad = Path.Combine(Artefakte.Ordner, $"r136-mehrfach-{geraet}-zusammenfassung.json");
 
         var zeilen = new List<MehrfachZeile>();
         for (var n = 1; n <= zyklen; n++)
@@ -68,12 +70,13 @@ internal static class R136Mehrfach
             zeilen.Add(zeile);
             File.AppendAllText(csv, zeile.Csv() + Environment.NewLine, Encoding.UTF8);
             ausgabe.WriteLine($"Zyklus {n}: {zeile.Kurz()}");
+
+            // Nach jedem Zyklus, damit sie auch bei einem Abbruch im Artefakt liegt.
+            File.WriteAllText(zusammenfassungPfad, Zusammenfassung(version, zyklen, geraet, klickmuster, zeilen), Encoding.UTF8);
             Rendezvous.Signal($"t19-{n}-{geraet}-fertig");
         }
 
-        var zusammenfassung = Zusammenfassung(version, zyklen, geraet, klickmuster, zeilen);
-        File.WriteAllText(Path.Combine(Artefakte.Ordner, $"r136-mehrfach-{geraet}-zusammenfassung.json"), zusammenfassung, Encoding.UTF8);
-        ausgabe.WriteLine(zusammenfassung);
+        ausgabe.WriteLine(File.ReadAllText(zusammenfassungPfad));
 
         var auswertbar = zeilen.Where(z => !z.Uebersprungen).ToList();
         var treffer = auswertbar.Count(z => z.Treffer);
@@ -160,7 +163,7 @@ internal static class R136Mehrfach
         }
 
         zeile.Uebernimm(zaehler);
-        zeile.OffenAmEnde = app.AlleAlarmfenster().Count;
+        zeile.OffenAmEnde = zaehler.Erfasse(klicken: false).Count;
         if (zeile.OffenAmEnde > 0)
         {
             // Ein liegengebliebenes Fenster verfälschte den nächsten Zyklus.
@@ -194,6 +197,7 @@ internal static class R136Mehrfach
             fensterSumme = auswertbar.Sum(z => z.Fenster),
             nachklicks = auswertbar.Sum(z => z.Nachklicks),
             ohneNachwelle = auswertbar.Count(z => z.WellenEmpfangen == 0),
+            wenigerEmpfangenAlsGesendet = auswertbar.Count(z => z.WellenEmpfangen < z.WellenGesendet),
             ignoriertZeilen = auswertbar.Sum(z => z.Ignoriert),
             uebersprungen = zeilen.Count(z => z.Uebersprungen),
         }, new JsonSerializerOptions { WriteIndented = true });
@@ -208,6 +212,7 @@ internal static class R136Mehrfach
         private readonly DateTimeOffset _start = DateTimeOffset.UtcNow;
         private readonly HashSet<IntPtr> _gesehen = new();
         private readonly HashSet<IntPtr> _onMyWayWarAus = new();
+        private List<Window> _letzte = new();
 
         public IntPtr Original { get; set; }
         public int Anzahl => _gesehen.Count;
@@ -219,22 +224,32 @@ internal static class R136Mehrfach
         /// <returns>Die gerade offenen Alarmfenster.</returns>
         public List<Window> Erfasse(bool klicken)
         {
-            var fenster = app.AlleAlarmfenster();
+            List<Window> fenster;
+            try
+            {
+                fenster = app.AlleAlarmfenster();
+            }
+            catch (Exception ex) when (ex is COMException or InvalidOperationException or FlaUIException)
+            {
+                // UIA-Aussetzer: lieber den letzten Stand als "kein Fenster", sonst gälte das Original als geschlossen.
+                return _letzte;
+            }
+
             foreach (var f in fenster)
             {
-                var h = Handle(f);
-                if (h == IntPtr.Zero)
-                {
-                    continue;
-                }
-
-                if (_gesehen.Add(h) && _gesehen.Count == 2)
-                {
-                    ZweitesNachMs = Ms(DateTimeOffset.UtcNow - _start);
-                }
-
                 try
                 {
+                    var h = Handle(f);
+                    if (h == IntPtr.Zero)
+                    {
+                        continue;
+                    }
+
+                    if (_gesehen.Add(h) && _gesehen.Count == 2)
+                    {
+                        ZweitesNachMs = Ms(DateTimeOffset.UtcNow - _start);
+                    }
+
                     var onMyWay = Element(f, "OnMyWayButton").AsButton();
                     var aktiv = onMyWay.IsEnabled;
                     if (!aktiv)
@@ -263,12 +278,13 @@ internal static class R136Mehrfach
                         schliessen.Invoke();
                     }
                 }
-                catch (Exception ex) when (ex is COMException or InvalidOperationException)
+                catch (Exception ex) when (ex is COMException or InvalidOperationException or FlaUIException)
                 {
                     // Fenster wurde zwischen Aufzählen und Abfragen geschlossen.
                 }
             }
 
+            _letzte = fenster;
             return fenster;
         }
     }
