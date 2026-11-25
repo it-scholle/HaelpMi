@@ -118,8 +118,10 @@ registrieren und den Snapshot `clean-base` neu setzen.
 
 Auf der Vorlage und den Test-VMs ist das .NET-SDK 10.0.404 x64 neben dem .NET-8-SDK installiert.
 Das 10er-SDK bringt die Windows Desktop Runtime 10 mit; die Test-Jobs brauchen es, weil sie
-`dotnet test` mit der `net10.0-windows`-Test-DLL auf der VM ausführen. Das .NET-8-SDK bleibt für
-Vergleichsläufe mit `produkt_ref` auf älteren Ständen. Das Skript `vorlage-einrichten.ps1`
+`dotnet test` mit der `net10.0-windows`-Test-DLL auf der VM ausführen. Das .NET-8-SDK ist nur
+noch nötig, wenn `e2e.yml` von einem alten Branch gestartet wird (`--ref`); bei `produkt_ref`
+kommen die Tests weiter vom aktuellen Stand, nur das Produkt wird self-contained aus dem alten
+Stand gebaut. Das Skript `vorlage-einrichten.ps1`
 installiert kein SDK; bei einer neuen Vorlage von Hand als Admin:
 `winget install --id Microsoft.DotNet.SDK.10 --exact --silent --accept-package-agreements --accept-source-agreements`.
 Prüfen: `dotnet --list-sdks` zeigt `10.0.404` (oder neuer), `dotnet --list-runtimes` zeigt
