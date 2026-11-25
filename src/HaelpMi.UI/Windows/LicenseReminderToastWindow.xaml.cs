@@ -15,9 +15,10 @@ namespace HaelpMi.UI.Windows;
 /// </summary>
 public partial class LicenseReminderToastWindow : Window
 {
-    private readonly Action _openDashboard;
+    private readonly Action? _openDashboard;
 
-    public LicenseReminderToastWindow(LicenseWarning warning, Action openDashboard)
+    /// <param name="openDashboard"><c>null</c>, wenn diese Sitzung das Dashboard nicht öffnen darf: Text für User-Geräte, ohne "Dashboard öffnen".</param>
+    public LicenseReminderToastWindow(LicenseWarning warning, Action? openDashboard)
     {
         InitializeComponent();
         _openDashboard = openDashboard;
@@ -25,7 +26,10 @@ public partial class LicenseReminderToastWindow : Window
         RootBorder.Background = warning.Level == LicenseWarningLevel.ExpiringSoon
             ? (Brush)FindResource("WarningBrush")
             : (Brush)FindResource("DangerBrush");
-        MessageText.Text = LicenseWarningTextFormatter.Format(warning);
+        MessageText.Text = openDashboard is null
+            ? LicenseWarningTextFormatter.FormatForUserDevice(warning)
+            : LicenseWarningTextFormatter.Format(warning);
+        OpenButton.Visibility = openDashboard is null ? Visibility.Collapsed : Visibility.Visible;
 
         Loaded += (_, _) => AnimateIn();
     }
@@ -56,7 +60,7 @@ public partial class LicenseReminderToastWindow : Window
 
     private void OpenButton_Click(object sender, RoutedEventArgs e)
     {
-        _openDashboard();
+        _openDashboard?.Invoke();
         AnimateOutAndClose();
     }
 

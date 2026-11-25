@@ -4,7 +4,7 @@ using HaelpMi.Core.Storage;
 
 namespace HaelpMi.E2E.Tests;
 
-/// <summary>Lizenzdateien und -zustand für T9 und T14. Die Varianten erzeugt ci/e2e/testlizenz-erzeugen.ps1 neben lizenz.json.</summary>
+/// <summary>Lizenzdateien und -zustand für T9, T14 und T17. Die Varianten erzeugt ci/e2e/testlizenz-erzeugen.ps1 neben lizenz.json.</summary>
 internal static class Lizenz
 {
     public const string Gueltig = "lizenz.json";
@@ -13,6 +13,24 @@ internal static class Lizenz
 
     /// <summary>Später ausgestellt als <see cref="Gueltig"/>, aber schon abgelaufen (T14).</summary>
     public const string AbgelaufenNeuer = "lizenz-abgelaufen-neuer.json";
+
+    /// <summary>
+    /// T17: unter lizenz-kurz/ die Lizenz, die als nächste, aber frühestens nach <paramref name="vorlauf"/> abläuft
+    /// (ci/e2e/testlizenz-erzeugen.ps1 legt sie gestaffelt an). Rückgabe relativ zum Ordner von <see cref="Gueltig"/>.
+    /// </summary>
+    public static (string Datei, DateTime AblaufUtc) KurzWaehlen(TimeSpan vorlauf)
+    {
+        var ordner = Path.Combine(Path.GetDirectoryName(Quelle(Gueltig))!, "lizenz-kurz");
+        var frueheste = DateTime.UtcNow + vorlauf;
+        var auswahl = Directory.EnumerateFiles(ordner, "lizenz-kurz-*.json")
+            .Select(pfad => (Datei: Path.Combine("lizenz-kurz", Path.GetFileName(pfad)), Lizenz: JsonFileStore.Load<License>(pfad)))
+            .Where(l => l.Lizenz is not null && l.Lizenz.ExpiryDateUtc >= frueheste)
+            .OrderBy(l => l.Lizenz!.ExpiryDateUtc)
+            .FirstOrDefault();
+        return auswahl.Lizenz is null
+            ? throw new InvalidOperationException($"Keine Lizenz unter {ordner} läuft frühestens {frueheste:O} ab; der Build liegt zu lange zurück (testlizenz-erzeugen.ps1 -KurzStunden).")
+            : (auswahl.Datei, auswahl.Lizenz.ExpiryDateUtc);
+    }
 
     public static string Quelle(string datei)
     {
