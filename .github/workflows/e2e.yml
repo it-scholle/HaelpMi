@@ -183,13 +183,17 @@ jobs:
 
       # Installer vor #150 (v0.47.26) legen keine Firewall-Programmregeln an. Ohne Freigabe blockiert die
       # Windows-Abfrage Discovery und Alarm, jeder Lauf gegen so einen Altstand wäre rot (T4, T5, T10 …).
-      # Erkannt am Installer-Quelltext, nicht an der Version: entscheidend ist, ob der Altstand die Regel selbst anlegt.
+      # Erkannt am Installer-Quelltext und zusätzlich an der Version: Die Umgehung greift nur, wenn beides auf einen
+      # Stand vor #150 zeigt. So verdeckt sie keinen Produktfehler, falls der Installer die Regeln später anders anlegt.
       - name: Firewall-Programmregeln im Produktstand erkennen
         id: firewall
         if: steps.lauf.outputs.produkt_ref != ''
         run: |
           $eigene = Select-String -Path 'produkt/installer/*.iss', 'produkt/installer/*.inc' -Pattern 'advfirewall firewall add rule.*program=' -Quiet
-          if ($eigene) {
+          $props = Get-Content -Raw -LiteralPath 'produkt/Directory.Build.props'
+          if ($props -notmatch '<Version>(\d+)\.(\d+)\.(\d+)') { throw 'produkt/Directory.Build.props: <Version> nicht lesbar, Firewall-Umgehung nicht entscheidbar.' }
+          $alt = [version]"$($Matches[1]).$($Matches[2]).$($Matches[3])" -lt [version]'0.47.26'
+          if ($eigene -or -not $alt) {
               'umgehung=nein' >> $env:GITHUB_OUTPUT
           } else {
               'umgehung=ja' >> $env:GITHUB_OUTPUT
@@ -329,7 +333,7 @@ jobs:
               $name = "HaelpMi E2E $p (Testvorbereitung)"
               Get-NetFirewallRule -DisplayName $name -ErrorAction SilentlyContinue | Remove-NetFirewallRule
               New-NetFirewallRule -DisplayName $name -Direction Inbound -Action Allow -Profile Any `
-                  -Program "C:\Program Files\HaelpMi\HaelpMi.$p.exe" | Out-Null
+                  -Program (Join-Path $env:ProgramFiles "HaelpMi\HaelpMi.$p.exe") | Out-Null
           }
           "### Testvorbereitung`n`n- Firewall-Freigabe (Umgehung für Altstände) für Agent und Konfiguration angelegt" >> $env:GITHUB_STEP_SUMMARY
       # Tests mit Trait Teil laufen nur, wenn alle beteiligten Geräte im Lauf sind.

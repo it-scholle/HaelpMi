@@ -258,11 +258,17 @@ weil `workflow_dispatch` nur Workflows vom Default-Branch startet):
     (#222), `agent.log` ab v0.47.35 (#227). Sonst steht die Prüfung als „übersprungen: … Feature erst ab vX“ in
     `out\uebersprungen.txt`, in der Step Summary des Test-Jobs und im Bericht „Negativtest auswerten“
     (ändert das Urteil nicht). Ist die Version nicht lesbar, wird geprüft.
-  - Steht der Test selbst in `erwartet_rot` (z. B. `T1` für einen Negativtest zu #222), wird nichts übersprungen.
+    Grundlage ist die Versionsnummer: ein `produkt_ref` auf einen nicht gemergten Branch trägt noch die alte
+    Nummer, dort entfallen die Prüfungen auch, wenn das Feature schon drin ist (steht im Protokoll).
+  - Jede dieser Teilprüfungen trägt eine Fehlerbild-Marke: `[T1P]` Programmregeln, `[T1R]` Regeln vor dem
+    ersten Start/Block-Regel, `[T1L]` `agent.log`. Negativtest zu #222 also mit `ERWARTET_ROT=T1R` (z. B. gegen
+    v0.47.27): Dann läuft genau diese Prüfung, die übrigen werden nach Version übersprungen, und nur ein
+    Fehlschlag mit `[T1R]` zählt als Nachweis. Steht `T1` ohne Buchstaben in `erwartet_rot`, wird nichts
+    übersprungen und jeder Fehlschlag von T1 zählt.
   - Alle übrigen Tests, vor allem die Regressionstests (T10, T13 bis T25), werden nie übersprungen: Sie sind der Nachweis und sollen auf
     dem Altstand rot werden.
   - Legt der Installer des Produktstands keine Firewall-Programmregeln an (Stand vor #150, erkannt am
-    Installer-Quelltext), legt der Test-Job vor den Tests die frühere Testvorbereitung „Firewall-Freigabe
+    Installer-Quelltext und an `<Version>` unter 0.47.26), legt der Test-Job vor den Tests die frühere Testvorbereitung „Firewall-Freigabe
     (Umgehung für Altstände)“ an: Inbound-Allow-Regeln „HaelpMi E2E Agent/Config (Testvorbereitung)“ für
     `HaelpMi.Agent.exe` und `HaelpMi.Config.exe`. Sonst verdeckt die Windows-Firewall-Abfrage das Alarmfenster und
     Discovery/Alarm kommen nicht an (T4, T5, T10 …). Die Summary vermerkt die Umgehung.

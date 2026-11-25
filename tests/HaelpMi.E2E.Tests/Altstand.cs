@@ -1,5 +1,4 @@
 using System.Diagnostics;
-using System.Text.RegularExpressions;
 
 namespace HaelpMi.E2E.Tests;
 
@@ -11,28 +10,30 @@ namespace HaelpMi.E2E.Tests;
 internal static class Altstand
 {
     /// <summary>Firewall-Programmregeln „HälpMi Agent“/„HälpMi Konfiguration“ aus dem Installer (#150).</summary>
-    public static readonly Merkmal Programmregeln = new("Firewall-Programmregeln des Installers", new Version(0, 47, 26));
+    public static readonly Merkmal Programmregeln = new("Firewall-Programmregeln des Installers", new Version(0, 47, 26), "T1P");
 
     /// <summary>Regeln vor dem ersten Agent-Start, keine Block-Regel nach einer Windows-Abfrage (#222).</summary>
-    public static readonly Merkmal RegelnVorErstemStart = new("Firewall-Regeln vor dem ersten Start, keine Block-Regel", new Version(0, 47, 28));
+    public static readonly Merkmal RegelnVorErstemStart = new("Firewall-Regeln vor dem ersten Start, keine Block-Regel", new Version(0, 47, 28), "T1R");
 
     /// <summary>Betriebs-Log agent.log (#227).</summary>
-    public static readonly Merkmal BetriebsLog = new("Betriebs-Log agent.log", new Version(0, 47, 35));
+    public static readonly Merkmal BetriebsLog = new("Betriebs-Log agent.log", new Version(0, 47, 35), "T1L");
 
-    public sealed record Merkmal(string Name, Version Ab);
+    /// <param name="Marke">Fehlerbild-Kürzel, das die Prüfung als „[Marke]“ in ihre Assert-Meldung setzt, z. B. „T1R“.</param>
+    public sealed record Merkmal(string Name, Version Ab, string Marke);
 
     /// <summary>Datei im Artefakt des Geräts, je übersprungener Prüfung eine Zeile; der Workflow zeigt sie in der Summary.</summary>
     public static string ProtokollDatei => Path.Combine(Artefakte.Ordner, "uebersprungen.txt");
 
     /// <summary>
     /// true, wenn <paramref name="test"/> die Prüfung für <paramref name="merkmal"/> ausführen muss. Übersprungen wird nur
-    /// mit <c>produkt_ref</c>, bei lesbarer Agent-Version unter <see cref="Merkmal.Ab"/> und wenn der Test nicht selbst in
-    /// <c>erwartet_rot</c> steht (dort zählt jede Prüfung, sonst wäre ein Negativtest für genau dieses Merkmal unmöglich).
+    /// mit <c>produkt_ref</c>, bei lesbarer Agent-Version unter <see cref="Merkmal.Ab"/> und wenn weder der Test noch die
+    /// Marke des Merkmals in <c>erwartet_rot</c> steht (sonst wäre ein Negativtest für genau dieses Merkmal unmöglich).
     /// </summary>
     /// <param name="test">T-Kürzel ohne Fehlerbild-Buchstaben, z. B. „T1“.</param>
     public static bool Pruefen(string test, Merkmal merkmal)
     {
-        if (E2EUmgebung.ProduktRef is null || ErwartetRot().Contains(test))
+        var erwartetRot = ErwartetRot();
+        if (E2EUmgebung.ProduktRef is null || erwartetRot.Contains(test) || erwartetRot.Contains(merkmal.Marke))
         {
             return true;
         }
@@ -68,8 +69,6 @@ internal static class Altstand
     private static HashSet<string> ErwartetRot()
     {
         var wert = Environment.GetEnvironmentVariable("HAELPMI_E2E_ERWARTET_ROT") ?? "";
-        return wert.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .Select(k => Regex.Replace(k, "[A-Z]$", ""))
-            .ToHashSet(StringComparer.Ordinal);
+        return wert.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToHashSet(StringComparer.Ordinal);
     }
 }

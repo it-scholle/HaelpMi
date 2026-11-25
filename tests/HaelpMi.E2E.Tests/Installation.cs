@@ -103,11 +103,14 @@ internal static class Installation
         var agentExe = Path.Combine(E2EUmgebung.ProgrammOrdner, HaelpMiApp.AgentProzess + ".exe");
         if (Altstand.Pruefen("T1", Altstand.Programmregeln))
         {
-            PruefeProgrammregel("HälpMi Agent", agentExe);
-            if (rolle == Role.Admin)
+            MitMarke(Altstand.Programmregeln, () =>
             {
-                PruefeProgrammregel("HälpMi Konfiguration", HaelpMiApp.KonfigExe);
-            }
+                PruefeProgrammregel("HälpMi Agent", agentExe);
+                if (rolle == Role.Admin)
+                {
+                    PruefeProgrammregel("HälpMi Konfiguration", HaelpMiApp.KonfigExe);
+                }
+            });
         }
 
         if (Altstand.Pruefen("T1", Altstand.RegelnVorErstemStart))
@@ -118,13 +121,29 @@ internal static class Installation
                 regelProgramme.Add(HaelpMiApp.KonfigProzess + ".exe");
             }
 
-            PruefeRegelnVorErstemStart(log, regelProgramme);
-            PruefeKeineBlockregel(agentExe, HaelpMiApp.KonfigExe);
+            MitMarke(Altstand.RegelnVorErstemStart, () =>
+            {
+                PruefeRegelnVorErstemStart(log, regelProgramme);
+                PruefeKeineBlockregel(agentExe, HaelpMiApp.KonfigExe);
+            });
         }
 
         if (Altstand.Pruefen("T1", Altstand.BetriebsLog))
         {
-            PruefeBetriebsLog();
+            MitMarke(Altstand.BetriebsLog, PruefeBetriebsLog);
+        }
+    }
+
+    /// <summary>Setzt die Fehlerbild-Marke des Merkmals vor jede Assert-Meldung, damit ein Negativtest z. B. mit T1R nur diesen Grund zählt.</summary>
+    private static void MitMarke(Altstand.Merkmal merkmal, Action pruefung)
+    {
+        try
+        {
+            pruefung();
+        }
+        catch (Xunit.Sdk.XunitException e)
+        {
+            throw new Xunit.Sdk.XunitException($"[{merkmal.Marke}] {e.Message}", e);
         }
     }
 
