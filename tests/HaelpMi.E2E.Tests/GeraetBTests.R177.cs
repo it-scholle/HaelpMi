@@ -27,6 +27,7 @@ public partial class GeraetBTests
             var seit = DateTimeOffset.UtcNow;
             Rendezvous.Signal("t20-b-bereit");
             TimeSpan uia;
+            string uiaText;
             List<DateTimeOffset> wellen;
             using (var app = new HaelpMiApp())
             {
@@ -35,7 +36,7 @@ public partial class GeraetBTests
                 {
                     var popup = app.ErwartePopup("T20");
                     var messung = Stopwatch.StartNew();
-                    _ = NameVon(popup, "ThresholdStatusText");
+                    uiaText = NameVon(popup, "ThresholdStatusText");
                     uia = messung.Elapsed;
                     wellen = await R136Messung.WarteAufWellenAsync(a, seit, 3);
                 }
@@ -46,15 +47,23 @@ public partial class GeraetBTests
                 }
             }
 
-            await Rendezvous.WaitForAsync("t20-fertig", SchrittTimeout);
-            await StarteAgentAsync();
-            await Task.Delay(AgentAnlaufzeit);
+            try
+            {
+                await Rendezvous.WaitForAsync("t20-fertig", SchrittTimeout);
+            }
+            finally
+            {
+                // Auch wenn A scheitert: ohne Agent auf B liefen T14 bis T17 ins Leere.
+                await StarteAgentAsync();
+                await Task.Delay(AgentAnlaufzeit);
+            }
 
             var abstaende = R177Takt.Abstaende(wellen.Take(3).ToList());
             R177Takt.Sichere("t20-takt-b.txt",
                 $"Wellenabstände ab dem ersten Empfang: {R177Takt.Text(abstaende)}; UIA-Abfrage am Alarmfenster: {uia.TotalMilliseconds:0} ms");
             Assert.True(abstaende.All(x => x <= R177Takt.MaxAbstand),
                 $"Regression #177: Wellenabstände nach dem ersten Empfang {R177Takt.Text(abstaende)}, erwartet höchstens {R177Takt.MaxAbstand.TotalSeconds:0} s.");
+            Assert.False(string.IsNullOrEmpty(uiaText), "T20: Die UIA-Abfrage am Alarmfenster lieferte keinen Text, die Messung ist ungültig.");
             Assert.True(uia <= R177Takt.MaxUiaAntwort,
                 $"Regression #177: UI-Automation-Abfrage am frisch geöffneten Alarmfenster dauerte {uia.TotalMilliseconds:0} ms.");
         }, "t20");

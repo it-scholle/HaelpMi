@@ -184,7 +184,7 @@ T4 bis T10, T13 bis T17 und T20 (Trait `Teil=ZweiGeraete`) laufen nur, wenn A un
 Agent, damit es ab T6 nicht mehr mitspielt (T18 und T19 starten ihn über die Profilvorbereitung neu): sonst verteilte es in T9 seine gültige Lizenz per Gossip an A und B
 (`TryAdoptFromPeer`). Trait `Bereich`:
 `Haupt` (T6 bis T9) setzt Installation, Discovery und Alarm voraus (`Basis`: T1, T4, T5, T11, T12), ein
-Teillauf filtert deshalb z. B. auf `Bereich=Basis|Bereich=Haupt`. `R136` (T10, T18, T19), `R182` (T13), `R183` (T14), `R133` (T15), `R180` (T16) und `R181` (T17) brauchen nur `Basis`.
+Teillauf filtert deshalb z. B. auf `Bereich=Basis|Bereich=Haupt`. `R136` (T10, T18, T19), `R182` (T13), `R177` (T20), `R183` (T14), `R133` (T15), `R180` (T16) und `R181` (T17) brauchen nur `Basis`.
 
 Auslöser: Label `e2e` an einem PR aus diesem Repo (nicht aus Forks) oder `workflow_dispatch`
 (Input `vms`: Geräte aus `ci/e2e/geraete.json`, z. B. `a,b` oder `a,b,c`; Default `a,b,c`). Beim
