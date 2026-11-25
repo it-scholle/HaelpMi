@@ -341,6 +341,111 @@ public class SendingTests
         }
     }
 
+    [Fact]
+    public async Task RepeatingAlarmSession_TargetAddressChangedAfterTrigger_WaveUsesCurrentAddress()
+    {
+        // #73: Das Ziel startet gerade und ist unter der beim Auslösen gespeicherten Adresse
+        // nicht erreichbar; sein Boot-Call hat dem Sender inzwischen die aktuelle Adresse
+        // mitgeteilt. Die Session muss das Ziel unter der aktuellen Adresse anschreiben,
+        // statt bis zum Ende der Session die alte zu verwenden.
+        var customerGroupId = Guid.NewGuid();
+        var senderIdentity = new LiveIdentity(customerGroupId, Guid.NewGuid(), "Sender-PC", "Frau Meier", "Zimmer", "1", Role.User, false, "0.0.0", 0, DateTimeOffset.UtcNow);
+        var receiverDeviceId = Guid.NewGuid();
+        var receiverIdentity = new LiveIdentity(customerGroupId, receiverDeviceId, "Empf-PC", "Herr Novak", "Raum", "2", Role.Admin, false, "0.0.0", 0, DateTimeOffset.UtcNow);
+
+        var stalePort = FreeTcpPort();
+        var currentPort = FreeTcpPort();
+        await using var receiver = new AlarmTcpListener(() => receiverIdentity);
+        Assert.True(receiver.Start(currentPort));
+
+        var feedbackChannel = new AlarmFeedbackChannel(() => senderIdentity);
+        var profile = new AlarmProfile { Text = "Bitte kommen!", ResponseThreshold = 1 };
+        var snapshotTarget = new DeviceEntry { DeviceId = receiverDeviceId, IpAddress = "127.0.0.1", TcpPort = stalePort };
+        var storedDevices = new List<DeviceEntry>
+        {
+            new() { DeviceId = receiverDeviceId, IpAddress = "127.0.0.1", TcpPort = currentPort },
+        };
+        var session = new RepeatingAlarmSession(
+            profile, new[] { snapshotTarget }, senderIdentity, new AlarmSender(), feedbackChannel, DateTimeOffset.UtcNow,
+            currentDevicesProvider: () => storedDevices);
+        try
+        {
+            var acked = new TaskCompletionSource<AlarmSessionStatus>(TaskCreationOptions.RunContinuationsAsynchronously);
+            session.StatusChanged += (_, status) =>
+            {
+                if (status.StillSending && status.AckedCount > 0)
+                {
+                    acked.TrySetResult(status);
+                }
+            };
+
+            _ = session.RunAsync();
+            var status = await acked.Task.WaitAsync(TimeSpan.FromSeconds(15));
+
+            Assert.Equal(1, status.TargetCount);
+            Assert.Equal(1, status.AckedCount);
+        }
+        finally
+        {
+            session.Cancel();
+            session.Dispose();
+        }
+    }
+
+    [Fact]
+    public async Task RepeatingAlarmSession_TargetMissingFromCurrentDevices_KeepsSnapshotAddress()
+    {
+        // Ein Ziel, das inzwischen nicht mehr in devices.json steht (oder ohne Adresse), wird
+        // weiter unter der Adresse aus dem Auslöse-Zeitpunkt angeschrieben.
+        var customerGroupId = Guid.NewGuid();
+        var senderIdentity = new LiveIdentity(customerGroupId, Guid.NewGuid(), "Sender-PC", "Frau Meier", "Zimmer", "1", Role.User, false, "0.0.0", 0, DateTimeOffset.UtcNow);
+        var receiverDeviceId = Guid.NewGuid();
+        var receiverIdentity = new LiveIdentity(customerGroupId, receiverDeviceId, "Empf-PC", "Herr Novak", "Raum", "2", Role.User, false, "0.0.0", 0, DateTimeOffset.UtcNow);
+
+        var port = FreeTcpPort();
+        await using var receiver = new AlarmTcpListener(() => receiverIdentity);
+        Assert.True(receiver.Start(port));
+
+        var feedbackChannel = new AlarmFeedbackChannel(() => senderIdentity);
+        var profile = new AlarmProfile { Text = "Bitte kommen!", ResponseThreshold = 1 };
+        var snapshotTarget = new DeviceEntry { DeviceId = receiverDeviceId, IpAddress = "127.0.0.1", TcpPort = port };
+        var storedDevices = new List<DeviceEntry>
+        {
+            new() { DeviceId = receiverDeviceId, IpAddress = string.Empty, TcpPort = FreeTcpPort() },
+        };
+        var session = new RepeatingAlarmSession(
+            profile, new[] { snapshotTarget }, senderIdentity, new AlarmSender(), feedbackChannel, DateTimeOffset.UtcNow,
+            currentDevicesProvider: () => storedDevices);
+        try
+        {
+            var acked = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            session.StatusChanged += (_, status) =>
+            {
+                if (status.AckedCount > 0)
+                {
+                    acked.TrySetResult();
+                }
+            };
+
+            _ = session.RunAsync();
+            await acked.Task.WaitAsync(TimeSpan.FromSeconds(15));
+        }
+        finally
+        {
+            session.Cancel();
+            session.Dispose();
+        }
+    }
+
+    private static int FreeTcpPort()
+    {
+        var probe = new TcpListener(IPAddress.Loopback, 0);
+        probe.Start();
+        var port = ((IPEndPoint)probe.LocalEndpoint).Port;
+        probe.Stop();
+        return port;
+    }
+
     private static async Task RunDelayingAckServerAsync(TcpListener tcp, Guid customerGroupId, Guid receiverDeviceId, CancellationToken ct)
     {
         var round = 0;
