@@ -153,24 +153,24 @@ public sealed class AlarmRelayServer : IAsyncDisposable
     {
         var waiter = new DisplayWaiter();
         _waiters[message.RelayId] = waiter;
-        // Nicht per using: hängende Schreibvorgänge brauchen das Token über das Ende dieser Methode hinaus.
-        var deadline = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        deadline.CancelAfter(timeout);
+        // Eigene Frist nur für die Schreibvorgänge; sie wird erst freigegeben, wenn alle beendet sind.
+        var writeDeadline = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        writeDeadline.CancelAfter(timeout);
         try
         {
             var line = NetworkSerializer.Encoding.GetBytes(NetworkSerializer.ToJsonLine(message));
             var clients = _clients.ToArray();
             waiter.ExpectReplies(clients.Length);
-            var writes = clients.Select(c => WriteAsync(c.Key, c.Value, line, waiter, deadline.Token)).ToArray();
-            _ = Task.WhenAll(writes).ContinueWith(_ => deadline.Dispose(), TaskScheduler.Default);
+            var writes = clients.Select(c => WriteAsync(c.Key, c.Value, line, waiter, writeDeadline.Token)).ToArray();
+            _ = Task.WhenAll(writes).ContinueWith(_ => writeDeadline.Dispose(), TaskScheduler.Default);
             if (clients.Length == 0)
             {
                 return false;
             }
 
-            return await waiter.Task.WaitAsync(deadline.Token);
+            return await waiter.Task.WaitAsync(timeout, ct);
         }
-        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        catch (TimeoutException)
         {
             return false;
         }
@@ -190,6 +190,12 @@ public sealed class AlarmRelayServer : IAsyncDisposable
             {
                 await client.Pipe.WriteAsync(line, ct);
                 await client.Pipe.FlushAsync(ct);
+            }
+            catch (OperationCanceledException)
+            {
+                // Abbruch mitten in der Zeile: der Datenstrom ist nicht mehr sauber, der Satellite verbindet sich neu.
+                RemoveClient(id);
+                throw;
             }
             finally
             {
