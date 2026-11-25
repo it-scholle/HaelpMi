@@ -87,11 +87,56 @@ internal static class Installation
         // Nach dem Signal, damit eine fehlende Regel nur T1 rot macht und die Gegenseite nicht ins Zeitlimit läuft.
         // Ohne eigene Programmregel zeigt Windows beim ersten Lauschen den Firewall-Dialog, der das Alarmfenster verdeckt;
         // das Dashboard (HaelpMi.Config.exe) öffnet nur in der Admin-Rolle Sockets.
-        PruefeProgrammregel("HälpMi Agent", Path.Combine(E2EUmgebung.ProgrammOrdner, HaelpMiApp.AgentProzess + ".exe"));
+        var agentExe = Path.Combine(E2EUmgebung.ProgrammOrdner, HaelpMiApp.AgentProzess + ".exe");
+        PruefeProgrammregel("HälpMi Agent", agentExe);
+        var regelProgramme = new List<string> { HaelpMiApp.AgentProzess + ".exe" };
         if (rolle == Role.Admin)
         {
             PruefeProgrammregel("HälpMi Konfiguration", HaelpMiApp.KonfigExe);
+            regelProgramme.Add(HaelpMiApp.KonfigProzess + ".exe");
         }
+
+        PruefeRegelnVorErstemStart(log, regelProgramme);
+        PruefeKeineBlockregel(agentExe, HaelpMiApp.KonfigExe);
+    }
+
+    /// <summary>
+    /// Startet ein HälpMi-Prozess vor seiner Allow-Regel und lauscht, fragt Windows nach; eine abgebrochene
+    /// Abfrage legt Inbound-Block-Regeln an, die die Allow-Regel schlagen (Gerät empfängt keinen Alarm).
+    /// </summary>
+    /// <param name="programme">Dateinamen der Programme, deren netsh-„add rule“ vor dem ersten [Run]-Start stehen muss.</param>
+    private static void PruefeRegelnVorErstemStart(string setupLog, IReadOnlyList<string> programme)
+    {
+        var zeilen = File.ReadAllLines(setupLog);
+        var ersterStart = Array.FindIndex(zeilen, z =>
+            z.Contains("Filename:", StringComparison.Ordinal)
+            && (z.Contains(HaelpMiApp.AgentProzess + ".exe", StringComparison.OrdinalIgnoreCase)
+                || z.Contains(HaelpMiApp.KonfigProzess + ".exe", StringComparison.OrdinalIgnoreCase)));
+        Assert.True(ersterStart >= 0, $"Setup-Log {setupLog} enthält keinen [Run]-Start von Agent oder Konfiguration.");
+
+        foreach (var programm in programme)
+        {
+            var regel = Array.FindIndex(zeilen, z =>
+                z.Contains("netsh advfirewall firewall add rule", StringComparison.Ordinal)
+                && z.Contains("\\" + programm + "\"", StringComparison.OrdinalIgnoreCase)
+                && z.Contains("Rückgabecode 0", StringComparison.Ordinal));
+            Assert.True(regel >= 0, $"Setup-Log {setupLog} enthält kein erfolgreiches netsh „add rule“ für {programm}.");
+            Assert.True(regel < ersterStart,
+                $"Firewall-Regel für {programm} entstand erst in Zeile {regel + 1}, der erste HälpMi-Start steht schon in " +
+                $"Zeile {ersterStart + 1}: {zeilen[ersterStart].Trim()}");
+        }
+    }
+
+    private static void PruefeKeineBlockregel(params string[] programme)
+    {
+        var liste = string.Join(",", programme.Select(p => $"'{p}'"));
+        var ausgabe = Prozess.PowerShell(
+            $"$p = @({liste}); " +
+            "Get-NetFirewallRule -Direction Inbound -Action Block -ErrorAction SilentlyContinue | ForEach-Object { " +
+            "$a = $_ | Get-NetFirewallApplicationFilter; " +
+            "if ($p -contains $a.Program) { '{0}|{1}|{2}' -f $_.DisplayName, $_.Profile, $a.Program } }");
+        Assert.True(string.IsNullOrWhiteSpace(ausgabe),
+            $"Inbound-Block-Regeln für HälpMi-Programme vorhanden (Windows-Abfrage abgebrochen?):\n{ausgabe}");
     }
 
     /// <summary>
