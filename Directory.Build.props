@@ -3,7 +3,7 @@
     <!-- Einzige Quelle der Versionsnummer: MSBuild setzt sie für alle Assemblies, der
          Installer liest sie per ISPP (installer/HaelpMiVersion.iss.inc, sucht die erste
          Zeile mit dem öffnenden Version-Tag - deshalb Element auf einer Zeile lassen). -->
-    <Version>0.47.23</Version>
+    <Version>0.47.25</Version>
 
     <!-- Nutzerwunsch 20.08.2026 ("alles außer de kann weg, ich brauche keine anderen
          Sprachen bisher") - ohne dieses Property bündelt jede self-contained-Publish-

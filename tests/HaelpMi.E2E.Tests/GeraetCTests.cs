@@ -9,7 +9,7 @@ using static HaelpMi.E2E.Tests.ZweiGeraete;
 namespace HaelpMi.E2E.Tests;
 
 /// <summary>
-/// Testteil für VM C, ein zweites User-Gerät neben B. Nach T12 und nach T18 beendet C seinen Agent: sonst verteilte C in T9
+/// Testteil für VM C, ein zweites User-Gerät neben B. Nach T12, T18 und T19 beendet C seinen Agent: sonst verteilte C in T9
 /// seine Lizenz per Gossip an A und B (TryAdoptFromPeer) und wäre in T6 bis T10 ein unbeteiligter, aber
 /// antwortender Peer.
 /// </summary>
@@ -106,6 +106,24 @@ public class GeraetCTests
         {
             BeendeAlles();
             Rendezvous.Signal(DreiGeraete.CGestopptT18);
+        }
+    }
+
+    // Gegenstücke: GeraetATests.T19_Regression136_MehrfachNachwelle_SendetWellen, GeraetBTests.T19_Regression136_MehrfachNachwelle_EinFenster.
+    // C zählt nur und klickt nicht nach; startet den Agent wie T18 über die Profilvorbereitung und beendet ihn danach.
+    [Fact, TestPriority(58)]
+    [Trait("Teil", DreiGeraete.Teil), Trait("Teil", R136Mehrfach.Teil), Trait("Bereich", "R136")]
+    public async Task T19_Regression136_MehrfachNachwelle_EinFenster()
+    {
+        try
+        {
+            await Artefakte.SichereAsync(nameof(T19_Regression136_MehrfachNachwelle_EinFenster),
+                () => R136Mehrfach.EmpfaengerAsync("c", klickmuster: false, _ausgabe), "t19");
+        }
+        finally
+        {
+            BeendeAlles();
+            Rendezvous.Signal(DreiGeraete.CGestopptT19);
         }
     }
 }

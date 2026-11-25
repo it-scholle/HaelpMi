@@ -15,10 +15,12 @@ Details stehen in der Git-Historie. Der eingefrorene Stand `legacy/main-0.39.x` 
 - Farben und Logo liegen nur noch einmal zentral vor (#151)
 - Versionsnummer steht nur noch in `Directory.Build.props`; der Installer liest sie beim Bauen von dort (#168)
 ### Behoben
+- Lizenzablauf und „läuft bald ab“ werden auch im laufenden Betrieb erkannt (zum jeweiligen Zeitpunkt, sonst einmal täglich), nicht erst nach einem Neustart; User-Geräte zeigen bei abgelaufener Lizenz einen Hinweis, Alarme laufen weiter (#181)
 - Eine gültige Lizenz wird nicht mehr durch eine später ausgestellte, aber abgelaufene Lizenz eines anderen Geräts ersetzt (#183)
 - Ein im Dashboard deaktiviertes Gerät löst kein Banner „Lizenzkontingent überschritten“ mehr aus; der Sperrhinweis auf dem Gerät nennt den tatsächlichen Grund (#133)
 - Der Hinweis „Alarm nicht gesendet“ auf einem gesperrten Gerät erscheint als eigenes Fenster im Vordergrund statt verdeckt unter dem Sperr-Toast (#179)
 - Wieder-Aktivieren eines Geräts im Reiter „Geräte / Lizenz“ hebt nur die Deaktivierung auf; das Gerät umgeht das Lizenzkontingent nicht mehr dauerhaft (#180)
+  - Hinweis für bestehende Installationen: Geräte, die vor diesem Stand wieder aktiviert wurden, behalten ihren Eintrag „ForceEnabled“ (Kontingent umgangen). Es gibt keine automatische Umstellung; ein Admin schaltet solche Geräte im Reiter „Geräte / Lizenz“ einmal aus und wieder ein.
 - Ein ohne Kundengruppe gebauter Test-Installer bekommt eine zufällige Test-Gruppe statt der Null-GUID und empfängt dadurch Alarme und Boot-Calls; ein Kunden-Installer ohne Kundengruppe lässt sich nicht mehr bauen (#175)
 - Alarmfenster ließ sich in seltenen Fällen nicht schließen oder öffnete sich direkt nach dem Schließen noch einmal (#136)
 

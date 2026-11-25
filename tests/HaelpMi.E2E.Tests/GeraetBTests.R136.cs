@@ -7,7 +7,7 @@ using static HaelpMi.E2E.Tests.ZweiGeraete;
 
 namespace HaelpMi.E2E.Tests;
 
-// T10 und T18 (Alarmfenster öffnet nach dem Schließen erneut), Gegenstücke in GeraetATests.R136.cs und GeraetCTests.cs, Messung in R136Messung.cs.
+// T10, T18 und T19 (Alarmfenster öffnet nach dem Schließen erneut), Gegenstücke in GeraetATests.R136.cs und GeraetCTests.cs, Messung in R136Messung.cs.
 public partial class GeraetBTests
 {
     /// <summary>
@@ -106,6 +106,24 @@ public partial class GeraetBTests
         {
             // Erst nach SichereAsync, damit der Screenshot eines Fehlschlags das Alarmfenster noch zeigt.
             await RaeumeAlarmfensterAufAsync("T18");
+            throw;
+        }
+    }
+
+    // Gegenstücke: GeraetATests.T19_Regression136_MehrfachNachwelle_SendetWellen, GeraetCTests.T19_Regression136_MehrfachNachwelle_EinFenster.
+    // B klickt jedes wieder auftauchende Fenster sofort weg, wie beim Kunden beobachtet; C zählt nur.
+    [Fact, TestPriority(58)]
+    [Trait("Teil", DreiGeraete.Teil), Trait("Teil", R136Mehrfach.Teil), Trait("Bereich", "R136")]
+    public async Task T19_Regression136_MehrfachNachwelle_EinFenster()
+    {
+        try
+        {
+            await Artefakte.SichereAsync(nameof(T19_Regression136_MehrfachNachwelle_EinFenster),
+                () => R136Mehrfach.EmpfaengerAsync("b", klickmuster: true, _ausgabe), "t19");
+        }
+        catch
+        {
+            await RaeumeAlarmfensterAufAsync("T19");
             throw;
         }
     }
