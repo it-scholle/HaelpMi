@@ -309,8 +309,9 @@ public partial class App : System.Windows.Application
     /// <summary>
     /// Issue #59/#60-Nachtrag "Lizenz sofort verteilen": ein Peer hat in seinem Boot-Call
     /// eine Lizenz mitgeteilt - eigenständig nachprüfen (Signatur + Kundengruppe, siehe
-    /// LicenseImporter.TryAdoptFromPeer) und nur bei echtem Zugewinn (keine eigene Lizenz
-    /// oder die mitgeteilte ist neuer) übernehmen. Betrifft typischerweise ein Gerät, das
+    /// LicenseImporter.TryAdoptFromPeer) und nur bei echtem Zugewinn übernehmen: keine eigene
+    /// Lizenz, oder die mitgeteilte ist gültig und die eigene abgelaufen, oder bei gleichem
+    /// Status ist die mitgeteilte neuer. Betrifft typischerweise ein Gerät, das
     /// bisher als lizenzlos/lizenzüberschritten galt und jetzt durch die frisch importierte
     /// Lizenz des Admins wieder ins Kontingent passt.
     /// </summary>
@@ -442,7 +443,7 @@ public partial class App : System.Windows.Application
     /// </summary>
     private void RefreshLicenseLimitState()
     {
-        var disabled = _coordinator!.IsOwnDeviceLicenseDisabled();
+        var reason = _coordinator!.GetOwnLicenseBlockReason();
 
         // Bugfix 07.09.2026: BeginInvoke statt Invoke - dieser Aufruf kann von
         // DiscoveryService's Empfangs-Thread aus kommen (DeviceUpdated/PeerLicenseObserved),
@@ -467,15 +468,19 @@ public partial class App : System.Windows.Application
                 return;
             }
 
-            if (disabled && _licenseLimitToast is null)
+            if (reason == LicenseBlockReason.None)
             {
-                _licenseLimitToast = new LicenseLimitToastWindow(null);
+                _licenseLimitToast?.Close();
+            }
+            else if (_licenseLimitToast is null)
+            {
+                _licenseLimitToast = new LicenseLimitToastWindow(reason, null);
                 _licenseLimitToast.Closed += (_, _) => _licenseLimitToast = null;
                 _licenseLimitToast.Show();
             }
-            else if (!disabled)
+            else
             {
-                _licenseLimitToast?.Close();
+                _licenseLimitToast.ShowReason(reason);
             }
         });
     }
@@ -931,9 +936,10 @@ public partial class App : System.Windows.Application
             return new IpcResponse(false, "Dieses Gerät wurde gelöscht und kann keine Alarme mehr senden.");
         }
 
-        if (_coordinator!.IsOwnDeviceLicenseDisabled())
+        var blockReason = _coordinator!.GetOwnLicenseBlockReason();
+        if (blockReason != LicenseBlockReason.None)
         {
-            return new IpcResponse(false, "Lizenz ausgeschöpft - dieses Gerät ist deaktiviert und kann keine Alarme senden.");
+            return new IpcResponse(false, LicenseBlockTexts.Message(blockReason));
         }
 
         var config = _sharedConfigStore.LoadOrCreate();

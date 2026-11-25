@@ -90,13 +90,13 @@ public static class LicenseImporter
     /// <summary>
     /// P2P-Übernahme einer per Boot-Call von einem Peer mitgeteilten Lizenz (Issue #59/#60-
     /// Nachtrag "Lizenz sofort verteilen"): anders als <see cref="ImportFromKeyText"/>
-    /// (manueller Admin-Import) wird eine bereits abgelaufene Lizenz hier NICHT abgelehnt
-    /// (Soft-Expiry gilt auch hier, wie beim Datei-Import oben) - ein Peer, der zufällig als
-    /// Erster antwortet, könnte sonst eine eigentlich gültige, nur zufällig zuerst gesehene
-    /// abgelaufene Momentaufnahme systematisch blockieren. Übernimmt nur, wenn Signatur und
-    /// Kundengruppe passen UND die mitgeteilte Lizenz laut IssuedAtUtc echt neuer ist als die
-    /// eigene (oder noch gar keine eigene vorliegt) - vermeidet Downgrade-Flapping durch eine
-    /// ältere, aus dem Cache eines langsameren Peers stammende Kopie.
+    /// (manueller Admin-Import) wird eine bereits abgelaufene Lizenz hier nicht grundsätzlich
+    /// abgelehnt (Soft-Expiry, wie beim Datei-Import oben). Übernimmt nur, wenn Signatur und
+    /// Kundengruppe passen und die mitgeteilte Lizenz besser ist als die eigene (oder noch gar
+    /// keine eigene vorliegt): gültig schlägt abgelaufen, bei gleichem Status gewinnt das echt
+    /// neuere IssuedAtUtc. Eine gültige eigene Lizenz wird so nie durch eine abgelaufene
+    /// ersetzt, und eine ältere Kopie aus dem Cache eines langsameren Peers verursacht kein
+    /// Downgrade-Flapping.
     /// </summary>
     public static bool TryAdoptFromPeer(string keyText, Guid ownCustomerGroupId, byte[] publicKeyBytes, License? currentLicense) =>
         TryAdoptFromPeer(keyText, ownCustomerGroupId, AppPaths.LicenseFilePath, publicKeyBytes, currentLicense);
@@ -109,20 +109,33 @@ public static class LicenseImporter
             return false; // nicht lesbar, Signatur ungültig, oder falsche Kundengruppe
         }
 
-        if (currentLicense is not null && checkResult.License.IssuedAtUtc <= currentLicense.IssuedAtUtc)
+        if (currentLicense is not null && !IsBetterThan(checkResult.License, currentLicense, DateTime.UtcNow))
         {
-            return false; // eigene Lizenz ist schon mindestens genauso aktuell
+            return false;
         }
 
         JsonFileStore.Save(destinationFilePath, checkResult.License);
         return true;
     }
 
+    private static bool IsBetterThan(License candidate, License current, DateTime nowUtc)
+    {
+        // Abgelaufen wie in LicenseReader.Classify: ExpiryDateUtc < jetzt.
+        var candidateValid = candidate.ExpiryDateUtc >= nowUtc;
+        var currentValid = current.ExpiryDateUtc >= nowUtc;
+        if (candidateValid != currentValid)
+        {
+            return candidateValid;
+        }
+
+        return candidate.IssuedAtUtc > current.IssuedAtUtc;
+    }
+
     /// <summary>
     /// Issue #94-Nachtrag "Vorgemerkte Downgrade-Lizenz gruppenweit verteilen": P2P-Übernahme
-    /// einer per Boot-Call von einem Peer mitgeteilten VORGEMERKTEN Lizenz - dasselbe
-    /// "neuer gewinnt"-Prinzip wie <see cref="TryAdoptFromPeer"/> (IssuedAtUtc-Vergleich
-    /// gegen die eigene Vormerkung, falls schon eine vorliegt), plus eine zusätzliche
+    /// einer per Boot-Call von einem Peer mitgeteilten VORGEMERKTEN Lizenz - dieselbe
+    /// Rangfolge wie <see cref="TryAdoptFromPeer"/> (gültig vor abgelaufen, dann neuer vor
+    /// älter, gegen die eigene Vormerkung, falls schon eine vorliegt), plus eine zusätzliche
     /// Prüfung: nur übernehmen, wenn es aus Sicht der EIGENEN aktiven Lizenz überhaupt noch
     /// ein Downgrade ist - sonst hätte die eigene aktive Lizenz (die genauso per Gossip
     /// synchron gehalten wird) längst nachgezogen und die Vormerkung wäre nur noch eine
@@ -139,9 +152,9 @@ public static class LicenseImporter
             return false; // nicht lesbar, Signatur ungültig, oder falsche Kundengruppe
         }
 
-        if (ownPendingLicense is not null && checkResult.License.IssuedAtUtc <= ownPendingLicense.IssuedAtUtc)
+        if (ownPendingLicense is not null && !IsBetterThan(checkResult.License, ownPendingLicense, DateTime.UtcNow))
         {
-            return false; // eigene Vormerkung ist schon mindestens genauso aktuell
+            return false;
         }
 
         if (ownActiveLicense is not null && !LicensePackageComparer.IsDowngrade(checkResult.License, ownActiveLicense))

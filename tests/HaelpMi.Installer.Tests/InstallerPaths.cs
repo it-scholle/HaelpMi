@@ -3,7 +3,7 @@ namespace HaelpMi.Installer.Tests;
 /// <summary>
 /// Findet die tatsächlich installierten Programm-/Datenverzeichnisse und die zuletzt
 /// gebauten Installer-Dateien (versionsunabhängig - die Dateinamen tragen die
-/// {#MyAppVersion}, die sich bei jedem Release ändert). Diese Tests bauen die Installer
+/// Version aus Directory.Build.props, die sich bei jedem Release ändert). Diese Tests bauen die Installer
 /// NICHT selbst (das ist ein separater, langsamer ISCC-Schritt, siehe README.md) -
 /// sie erwarten fertige Dateien in installer\Output\, genau wie eine echte
 /// Build-Pipeline: erst `dotnet publish` + ISCC, dann dieser Testlauf.

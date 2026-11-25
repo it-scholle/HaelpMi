@@ -191,8 +191,11 @@ public partial class GeraetATests
             (await GeraeteSchalterAsync(seite, b)).Click();
             await WarteBisAsync(() => UeberschreibungVon(b) is { } wert && wert != LicenseOverride.ForceDisabled, TimeSpan.FromSeconds(10),
                 () => $"devices.json: B hat nach dem Aktivieren LicenseOverride={UeberschreibungVon(b)}.");
-            // Erwartet wäre None (Kontingent entscheidet wieder), der Code setzt ForceEnabled: nur festhalten.
             _ausgabe.WriteLine($"LicenseOverride von B nach dem Aktivieren: {UeberschreibungVon(b)}");
+            if (UeberschreibungVon(b) != LicenseOverride.None)
+            {
+                befunde.Add($"Produktbefund: Aktivieren setzt LicenseOverride={UeberschreibungVon(b)} statt None (#180).");
+            }
             BeendeKonfiguration();
             Rendezvous.Signal("t8-an");
 

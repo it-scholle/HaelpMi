@@ -100,6 +100,9 @@ public sealed class AdminDashboardContext
     /// </summary>
     public required Func<IReadOnlySet<Guid>> GetDisabledDeviceIds { get; init; }
 
+    /// <summary>Sperrgrund je gesperrtem Gerät - das Banner zeigt nur Sperren durch die Lizenz, keine manuellen Deaktivierungen.</summary>
+    public required Func<IReadOnlyDictionary<Guid, LicenseBlockReason>> GetBlockReasons { get; init; }
+
     /// <summary>Issue #61 (Geräte-Tab "x/y lizenziert"): das "y" - null bei unbegrenzter Lizenz (XL).</summary>
     public required Func<int?> GetLicenseSeatLimit { get; init; }
 

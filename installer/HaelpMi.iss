@@ -6,10 +6,9 @@
 ; aktivierbar") sind NICHT umgesetzt - dafür fehlt im C#-Code noch ein Feature-Flag-
 ; Mechanismus, das ist eine eigene Design-Entscheidung, keine reine Installer-Frage.
 ;
-; Kunden-/Gruppen-ID (FR-49) kommt per ISCC-Kommandozeile vom (noch nicht existierenden)
-; Install-Creator: siehe #define CustomerGroupId/IsTestInstaller in HaelpMiCommon.iss.inc.
-; Ohne diese Angabe kompiliert das Skript trotzdem (Nullen-ID, IsTestInstaller=true) - für
-; lokales Testen ausreichend, für eine echte Kunden-Auslieferung nicht.
+; Kunden-/Gruppen-ID (FR-49) kommt per ISCC-Kommandozeile vom Install-Creator, siehe
+; HaelpMiKundengruppe.iss.inc. Ohne diese Angabe entsteht ein Test-Installer mit zufälliger
+; Test-Gruppe pro Arbeitskopie - für lokales Testen, nie für eine Kunden-Auslieferung.
 ;
 ; Machine-Scope (FR-34): braucht Adminrechte, weil lokaler Zustand seit Teil 2 unter dem
 ; maschinenweiten %ProgramData%\HaelpMi liegt (siehe [Dirs]/Permissions unten im .inc).

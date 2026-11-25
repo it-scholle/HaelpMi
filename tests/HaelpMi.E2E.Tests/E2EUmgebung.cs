@@ -8,7 +8,7 @@ internal static class E2EUmgebung
     /// <summary>Arbeitsordner des Laufs; enthält rv\ (Rendezvous) und out\ (Artefakte). Übersteuerbar per HAELPMI_E2E_DIR.</summary>
     public static string Wurzel => Env("HAELPMI_E2E_DIR") ?? @"C:\haelpmi-e2e";
 
-    /// <summary>Vollständiger Pfad zur Installer-exe für dieses Gerät (A: Admin-Installer, B: User-Installer).</summary>
+    /// <summary>Vollständiger Pfad zur Installer-exe für dieses Gerät (A: Admin-Installer, B und C: User-Installer).</summary>
     public static string InstallerPfad => Env("HAELPMI_E2E_INSTALLER")
         ?? throw new InvalidOperationException("HAELPMI_E2E_INSTALLER ist nicht gesetzt (Pfad zur Installer-exe für dieses Gerät).");
 

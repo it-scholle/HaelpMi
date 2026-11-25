@@ -5,7 +5,7 @@ Alarm aus, die zugeordneten Arbeitsplätze erhalten sofort ein erzwungenes Popup
 sprechen direkt miteinander (P2P, kein zentraler Server); ein App-interner Admin pflegt Gruppen und
 Alarm-Profile über ein Dashboard, Änderungen verteilen sich automatisch an alle Geräte.
 
-Status: `release-1.0-MVP`, „stable+buggy“ (siehe [`docs/STATUS.md`](docs/STATUS.md)).
+Status: Entwicklungsstand v0.47.x auf `develop`, Version 1.0 ist geplant (Milestone `v1.0`), „stable+buggy“ (siehe [`docs/STATUS.md`](docs/STATUS.md)).
 
 ## Einstieg
 1. Repo klonen.
@@ -30,8 +30,8 @@ src/
   HaelpMi.Agent/           Hintergrundprozess (Listener, Sender, Hotkey, Tray), autostartend
   HaelpMi.Config/          Konfigurationsprogramm / Admin-Dashboard, separater Prozess
   HaelpMi.InstallCreator/  Entwickler-Tool: baut pro Kunde den Admin-Installer
-  HaelpMi.UpdateService/   Update-Dienst (auf release-1.0-MVP inaktiv)
-  HaelpMi.UpdateSigner/    Update-Signatur-Tool (auf release-1.0-MVP inaktiv)
+  HaelpMi.UpdateService/   Update-Dienst (derzeit inaktiv)
+  HaelpMi.UpdateSigner/    Update-Signatur-Tool (derzeit inaktiv)
 tests/
   HaelpMi.Core.Tests/          schnell, ohne Nebenwirkungen
   HaelpMi.InstallCreator.Tests/ schnell, ohne Nebenwirkungen
