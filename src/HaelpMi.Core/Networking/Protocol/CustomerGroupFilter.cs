@@ -24,6 +24,7 @@ public static class CustomerGroupFilter
             return true;
         }
 
+        FremdeKundengruppeMelder.Prozess.Verworfen(nachrichtenart, messageCustomerGroupId, absenderGeraetId);
         return false;
     }
 }
