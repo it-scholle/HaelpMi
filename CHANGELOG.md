@@ -14,6 +14,7 @@ Details stehen in der Git-Historie. Der eingefrorene Stand `legacy/main-0.39.x` 
 - Farben und Logo liegen nur noch einmal zentral vor (#151)
 - Versionsnummer steht nur noch in `Directory.Build.props`; der Installer liest sie beim Bauen von dort (#168)
 ### Behoben
+- Lizenzablauf und „läuft bald ab“ werden auch im laufenden Betrieb erkannt (zum jeweiligen Zeitpunkt, sonst einmal täglich), nicht erst nach einem Neustart; User-Geräte zeigen bei abgelaufener Lizenz einen Hinweis, Alarme laufen weiter (#181)
 - Eine gültige Lizenz wird nicht mehr durch eine später ausgestellte, aber abgelaufene Lizenz eines anderen Geräts ersetzt (#183)
 
 ## [0.47.3] – 2026-11-18

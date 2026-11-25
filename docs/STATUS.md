@@ -21,7 +21,7 @@ Stand: 2026-11-24
 ## Offene Annahmen
 <!-- Jede mit Fundstelle (Datei oder Ticket). Sonst „keine“. -->
 
-- keine `ANNAHME:`-Marker im Code.
+- Hinweistext für User-Geräte bei abgelaufener Lizenz ist noch nicht freigegeben (`src/HaelpMi.Core/Licensing/LicenseWarningTextFormatter.cs`, `FormatForUserDevice`; #181). Ebenso offen: User-Geräte bekommen keinen Hinweis bei „läuft bald ab“, nur bei Ablauf.
 
 ## Bekannte Abweichungen von `AGENTS.md` Teil A
 

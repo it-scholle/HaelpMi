@@ -65,14 +65,19 @@ public partial class App : System.Windows.Application
     private DeploymentInfo _deployment = null!;
 
     /// <summary>
-    /// Einmal beim Start gelesen (Lizenzdatei ändert sich nie im laufenden Betrieb, anders
-    /// als die Config) - Soft-Expiry/Invalid/Missing blockieren den Start nicht (CLAUDE.md),
-    /// stehen aber für die Ablaufwarnung aus Issue #20 zur Verfügung.
+    /// Beim Start gelesen und neu geladen bei Lizenz-Import, Peer-Übernahme und zu den Zeitpunkten
+    /// aus <see cref="LicenseRecheckSchedule"/> (Ablauf im laufenden Betrieb). Soft-Expiry/Invalid/Missing
+    /// blockieren den Start nicht.
     /// </summary>
     private LicenseCheckResult _license = null!;
 
     /// <summary>Nur gesetzt, während das Systemstart-Erinnerungs-Popup offen ist - siehe HandleLicenseRenewedRequestAsync.</summary>
     private LicenseReminderToastWindow? _licenseReminderToast;
+
+    /// <summary>Zuletzt ausgewertete Warnstufe, nur auf dem UI-Thread; <c>null</c> bis zur ersten Auswertung beim Start.</summary>
+    private LicenseWarningLevel? _lastLicenseWarningLevel;
+
+    private System.Threading.Timer? _licenseRecheckTimer;
 
     /// <summary>Issue #59/#60: nur gesetzt, während dieses Gerät als lizenzüberschritten gilt - siehe RefreshLicenseLimitState.</summary>
     private LicenseLimitToastWindow? _licenseLimitToast;
@@ -209,6 +214,8 @@ public partial class App : System.Windows.Application
 
         StartBackgroundServices();
         ShowLicenseReminderToastIfNeeded(isPostInstallStart);
+        _licenseRecheckTimer = new System.Threading.Timer(_ => Dispatcher.BeginInvoke(ReloadLicense));
+        ScheduleLicenseRecheck();
         // Issue #61-Nachtrag: bewusst unconditional (kein isPostInstallStart-Filter wie
         // oben) - eine frische Installation hat nie Removed=true (neue DeviceId, siehe
         // OwnSettings.DeviceId), ein reparierter/aktualisierter Bestand hat die Markierung
@@ -244,22 +251,51 @@ public partial class App : System.Windows.Application
     // Dieser eine installer-getriggerte Start wird deshalb übersprungen; jeder spätere
     // (echte) Agent-Start - ob per Autostart-Task beim nächsten Neustart/Login oder manuell -
     // prüft wie gehabt.
+    //
+    // Im laufenden Betrieb (ReloadLicense) erscheint der Hinweis nur bei einer neuen Warnstufe,
+    // dann auch trotz "Später erinnern". Sitzungen ohne Dashboard-Recht (User-Geräte) bekommen
+    // nur bei abgelaufener Lizenz einen eigenen Text ohne "Dashboard öffnen".
     private void ShowLicenseReminderToastIfNeeded(bool isPostInstallStart)
     {
-        if (isPostInstallStart || !DashboardAccessGuard.CurrentUserMayOpenDashboard(_deployment.Role) || LicenseReminderStateStore.IsSnoozed(DateTime.UtcNow))
-        {
-            return;
-        }
-
         var warning = LicenseWarningEvaluator.Evaluate(_license, DateTime.UtcNow);
-        if (warning.Level == LicenseWarningLevel.None)
+        var previous = _lastLicenseWarningLevel;
+        _lastLicenseWarningLevel = warning.Level;
+        if (isPostInstallStart)
         {
             return;
         }
 
-        _licenseReminderToast = new LicenseReminderToastWindow(warning, OpenDashboardDirectly);
+        var mayOpenDashboard = DashboardAccessGuard.CurrentUserMayOpenDashboard(_deployment.Role);
+        if (!LicenseReminderTrigger.ShouldShow(previous, warning.Level, isUserDevice: !mayOpenDashboard, LicenseReminderStateStore.IsSnoozed(DateTime.UtcNow)))
+        {
+            if (previous is not null && previous != warning.Level)
+            {
+                _licenseReminderToast?.Close();
+            }
+
+            return;
+        }
+
+        _licenseReminderToast?.Close();
+        _licenseReminderToast = new LicenseReminderToastWindow(warning, mayOpenDashboard ? OpenDashboardDirectly : null);
         _licenseReminderToast.Closed += (_, _) => _licenseReminderToast = null;
         _licenseReminderToast.Show();
+    }
+
+    /// <summary>Lizenz neu lesen und wie beim Start bewerten (Sperre, Hinweis); nur auf dem UI-Thread.</summary>
+    private void ReloadLicense()
+    {
+        _license = LicenseRuntime.LoadCurrent(_deployment.CustomerGroupId, Convert.FromHexString(_deployment.LicensePublicKeyHex));
+        RefreshLicenseLimitState();
+        ShowLicenseReminderToastIfNeeded(isPostInstallStart: false);
+        ScheduleLicenseRecheck();
+    }
+
+    private void ScheduleLicenseRecheck()
+    {
+        var now = DateTime.UtcNow;
+        var due = LicenseRecheckSchedule.NextCheckUtc(_license, now) - now;
+        _licenseRecheckTimer?.Change(due < TimeSpan.Zero ? TimeSpan.Zero : due, Timeout.InfiniteTimeSpan);
     }
 
     // Nutzerbericht 03.09.2026: nach erfolgreichem "Lizenz einspielen" im Admin-Dashboard
@@ -268,13 +304,16 @@ public partial class App : System.Windows.Application
     // Meldungen automatisch verschwinden". Config schickt dafür IpcCommandType.LicenseRenewed.
     private Task<IpcResponse> HandleLicenseRenewedRequestAsync()
     {
-        _licenseReminderToast?.Close();
-
         // Issue #59/#60: ohne Neuladen bliebe eine gerade erst hochgesetzte UserLimit-Grenze
         // bis zum nächsten Programmneustart wirkungslos - "Aktivierung ... durch neue
         // Lizenz" (Issue #59) braucht den frischen Stand sofort, nicht erst danach.
+        // Sofort lesen, damit der Announce unten schon die neue Lizenz trägt; Hinweis und Timer auf dem UI-Thread.
         _license = LicenseRuntime.LoadCurrent(_deployment.CustomerGroupId, Convert.FromHexString(_deployment.LicensePublicKeyHex));
-        RefreshLicenseLimitState();
+        Dispatcher.BeginInvoke(() =>
+        {
+            _licenseReminderToast?.Close();
+            ReloadLicense();
+        });
 
         // Nutzerwunsch 07.09.2026 ("Update soll sofort an alle Geräte verteilt werden"): der
         // nächste Announce führt die frisch importierte Lizenz jetzt schon mit (siehe
@@ -324,8 +363,9 @@ public partial class App : System.Windows.Application
             return;
         }
 
+        // Lesen gleich hier für die Audit-Zeile; Hinweis und Timer auf dem UI-Thread (wir sind im Discovery-Empfang).
         _license = LicenseRuntime.LoadCurrent(_deployment.CustomerGroupId, Convert.FromHexString(_deployment.LicensePublicKeyHex));
-        RefreshLicenseLimitState();
+        Dispatcher.BeginInvoke(ReloadLicense);
         _auditLog.Append($"Lizenz von Peer deviceId={info.DeviceId} übernommen (IssuedAtUtc={_license.License?.IssuedAtUtc:O})");
 
         // Weiterverbreiten (Gossip-Welle, wie Config-Sync): Peers, die diesen direkten
@@ -960,6 +1000,7 @@ public partial class App : System.Windows.Application
         }
 
         _hotkey?.Dispose();
+        _licenseRecheckTimer?.Dispose();
         _ = _listener?.DisposeAsync();
         _ = _feedbackChannel?.DisposeAsync();
         _ = _configSync?.DisposeAsync();
