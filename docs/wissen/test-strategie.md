@@ -235,7 +235,7 @@ weil `workflow_dispatch` nur Workflows vom Default-Branch startet):
   Fehlermeldung von `T10_…` die Marke `[T10W]` trägt. So wird ein T10, der an einem Rendezvous-Timeout statt an
   der Nachwelle scheitert, als unerwartet gewertet statt als Nachweis. Marken setzen die Tests selbst in ihre
   Assert-Meldung; vorhanden sind `[T10W]` (Nachwelle öffnet ein zweites Fenster), `[T18F]` und `[T19F]`
-  (Fenster-Fehlerbild von #136). Kürzel statt regulärer Ausdrücke, weil eine Liste genau sagt, welche Tests rot
+  (Fenster-Fehlerbild von #136) sowie `[T1P]`, `[T1R]` und `[T1L]` (Teilprüfungen von T1, siehe „Altstände“). Kürzel statt regulärer Ausdrücke, weil eine Liste genau sagt, welche Tests rot
   sein müssen („genau die erwarteten“), `T2` nicht versehentlich T20 bis T29 trifft und die Eingabe sich
   einfach gegen Einschleusen prüfen lässt. Selbsttest der Auswertung:
   `python3 -m unittest discover -s ci/e2e/tests` (läuft in der CI).
@@ -261,10 +261,13 @@ weil `workflow_dispatch` nur Workflows vom Default-Branch startet):
     Grundlage ist die Versionsnummer: ein `produkt_ref` auf einen nicht gemergten Branch trägt noch die alte
     Nummer, dort entfallen die Prüfungen auch, wenn das Feature schon drin ist (steht im Protokoll).
   - Jede dieser Teilprüfungen trägt eine Fehlerbild-Marke: `[T1P]` Programmregeln, `[T1R]` Regeln vor dem
-    ersten Start/Block-Regel, `[T1L]` `agent.log`. Negativtest zu #222 also mit `ERWARTET_ROT=T1R` (z. B. gegen
-    v0.47.27): Dann läuft genau diese Prüfung, die übrigen werden nach Version übersprungen, und nur ein
-    Fehlschlag mit `[T1R]` zählt als Nachweis. Steht `T1` ohne Buchstaben in `erwartet_rot`, wird nichts
-    übersprungen und jeder Fehlschlag von T1 zählt.
+    ersten Start/Block-Regel, `[T1L]` `agent.log`. Negativtest zu #222 also mit `ERWARTET_ROT=T1R` gegen
+    v0.47.27: Die Prüfung mit dieser Marke läuft immer, die übrigen nach Version (dort läuft T1P mit, T1L
+    entfällt), und nur ein Fehlschlag mit `[T1R]` zählt als Nachweis. `T1R` setzt die Programmregeln voraus;
+    gegen einen Stand davor (unter v0.47.26) scheitert T1 ohne Marke, der Negativtest ist dann rot statt aus dem
+    falschen Grund grün. Fehler, die keine Assert-Fehler sind (z. B. eine nicht lesbare JSON-Zeile), tragen keine
+    Marke und zählen nie als Nachweis. Steht `T1` ohne Buchstaben in `erwartet_rot`, wird nichts übersprungen und
+    jeder Fehlschlag von T1 zählt.
   - Alle übrigen Tests, vor allem die Regressionstests (T10, T13 bis T25), werden nie übersprungen: Sie sind der Nachweis und sollen auf
     dem Altstand rot werden.
   - Legt der Installer des Produktstands keine Firewall-Programmregeln an (Stand vor #150, erkannt am

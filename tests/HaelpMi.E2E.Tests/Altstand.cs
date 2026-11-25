@@ -13,13 +13,14 @@ internal static class Altstand
     public static readonly Merkmal Programmregeln = new("Firewall-Programmregeln des Installers", new Version(0, 47, 26), "T1P");
 
     /// <summary>Regeln vor dem ersten Agent-Start, keine Block-Regel nach einer Windows-Abfrage (#222).</summary>
-    public static readonly Merkmal RegelnVorErstemStart = new("Firewall-Regeln vor dem ersten Start, keine Block-Regel", new Version(0, 47, 28), "T1R");
+    public static readonly Merkmal RegelnVorErstemStart = new("Firewall-Regeln vor dem ersten Start, keine Block-Regel", new Version(0, 47, 28), "T1R", Programmregeln);
 
     /// <summary>Betriebs-Log agent.log (#227).</summary>
     public static readonly Merkmal BetriebsLog = new("Betriebs-Log agent.log", new Version(0, 47, 35), "T1L");
 
     /// <param name="Marke">Fehlerbild-Kürzel, das die Prüfung als „[Marke]“ in ihre Assert-Meldung setzt, z. B. „T1R“.</param>
-    public sealed record Merkmal(string Name, Version Ab, string Marke);
+    /// <param name="Voraussetzung">Merkmal, ohne das die Prüfung auch aus einem anderen Grund scheitert (T1R braucht Programmregeln).</param>
+    public sealed record Merkmal(string Name, Version Ab, string Marke, Merkmal? Voraussetzung = null);
 
     /// <summary>Datei im Artefakt des Geräts, je übersprungener Prüfung eine Zeile; der Workflow zeigt sie in der Summary.</summary>
     public static string ProtokollDatei => Path.Combine(Artefakte.Ordner, "uebersprungen.txt");
@@ -33,12 +34,24 @@ internal static class Altstand
     public static bool Pruefen(string test, Merkmal merkmal)
     {
         var erwartetRot = ErwartetRot();
-        if (E2EUmgebung.ProduktRef is null || erwartetRot.Contains(test) || erwartetRot.Contains(merkmal.Marke))
+        if (E2EUmgebung.ProduktRef is null || erwartetRot.Contains(test))
         {
             return true;
         }
 
         var version = AgentVersion();
+        if (erwartetRot.Contains(merkmal.Marke))
+        {
+            // Ohne Marke in der Meldung, damit der Negativtest rot wird statt aus dem falschen Grund grün.
+            if (version is not null && merkmal.Voraussetzung is { } vor && version < vor.Ab)
+            {
+                Xunit.Assert.Fail($"{merkmal.Marke} ist auf Agent v{version} nicht nachweisbar: die Prüfung „{merkmal.Name}“ " +
+                    $"setzt „{vor.Name}“ voraus (ab v{vor.Ab}). produkt_ref auf einen Stand ab v{vor.Ab} setzen.");
+            }
+
+            return true;
+        }
+
         if (version is null || version >= merkmal.Ab)
         {
             return true;
