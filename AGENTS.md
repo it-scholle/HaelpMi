@@ -212,7 +212,7 @@ Teil A gilt projektübergreifend und kommt aus der MasterAgents-Blueprint. Teil 
 - Anforderungsquellen (historisch, nicht rückwirkend ändern): `docs/wissen/anforderungen/` (Pflichtenheft, Umsetzungs-Prompts Teil 1 und 2). Bei Widerspruch gilt diese Datei.
 
 ## Tech-Stack
-- Sprache und Runtime: C#, .NET 8 (`net8.0-windows`), Plattform x64 (ARM64 vorgesehen)
+- Sprache und Runtime: C#, .NET 10 (`net10.0-windows`), Plattform x64 (ARM64 vorgesehen)
 - Frameworks: WPF; `System.Windows.Forms` nur punktuell (Tray-Icon, Zwischenablage); `System.Net.Sockets` für P2P; NAudio (Mehrgeräte-Audio); Win32-API direkt (`RegisterHotKey`, Forced-Foreground, `GetSystemMetrics(SM_REMOTESESSION)`); BouncyCastle (Ed25519)
 - Datenbank und Speicher: JSON-Dateien (`System.Text.Json`) unter `%ProgramData%\HaelpMi`; Install-Creator unter `%LocalAppData%\HaelpMi-InstallCreator`
 - Installer: Inno Setup (`installer/`), gebaut über das Entwickler-Tool Install-Creator

@@ -116,8 +116,11 @@ Pflege der Vorlage: Die Test-VMs sind Klone einer Vorlage (eingerichtet mit
 `ci/e2e/vorlage-einrichten.ps1`). Eine neue Vorlage heißt: alle Klone neu anlegen, Runner neu
 registrieren und den Snapshot `clean-base` neu setzen.
 
-Die Vorlage braucht ein .NET-10-SDK x64 (bringt die Windows Desktop Runtime 10 mit), weil die
-Test-Jobs `dotnet test` mit der `net10.0-windows`-Test-DLL auf der VM ausführen. Das Skript
-`vorlage-einrichten.ps1` installiert es nicht; von Hand als Admin:
+Auf der Vorlage und den Test-VMs ist das .NET-SDK 10.0.404 x64 neben dem .NET-8-SDK installiert.
+Das 10er-SDK bringt die Windows Desktop Runtime 10 mit; die Test-Jobs brauchen es, weil sie
+`dotnet test` mit der `net10.0-windows`-Test-DLL auf der VM ausführen. Das .NET-8-SDK bleibt für
+Vergleichsläufe mit `produkt_ref` auf älteren Ständen. Das Skript `vorlage-einrichten.ps1`
+installiert kein SDK; bei einer neuen Vorlage von Hand als Admin:
 `winget install --id Microsoft.DotNet.SDK.10 --exact --silent --accept-package-agreements --accept-source-agreements`.
-Prüfen: `dotnet --list-runtimes` zeigt `Microsoft.WindowsDesktop.App 10.0.x`.
+Prüfen: `dotnet --list-sdks` zeigt `10.0.404` (oder neuer), `dotnet --list-runtimes` zeigt
+`Microsoft.WindowsDesktop.App 10.0.x`.
