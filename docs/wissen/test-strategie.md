@@ -220,9 +220,6 @@ Bekannte Umgehungen in der Testvorbereitung (keine Produktkorrektur):
   Build-Jobs. Mit demselben Schlüssel entstehen für T9 `lizenz-bald.json` (läuft in 10 Tagen ab),
   `lizenz-abgelaufen.json` und für T14 `lizenz-abgelaufen-neuer.json`; `lizenz.json` gilt 365 Tage, weil ab 30 Tagen Restlaufzeit schon der
   Erinnerungs-Toast erscheint.
-- **Override von B vor T9:** Das Wieder-Aktivieren in T8 setzt `ForceEnabled` statt `None`, B wäre
-  damit auch ohne Lizenz aktiv. T9 setzt den Override bei gestoppten Agents auf beiden Geräten auf
-  `None` zurück.
 
 ## G. Datenschutz/Sicherheit (Randnotiz, kein eigener Testlauf nötig)
 
