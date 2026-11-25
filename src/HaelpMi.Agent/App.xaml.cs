@@ -443,7 +443,7 @@ public partial class App : System.Windows.Application
     /// </summary>
     private void RefreshLicenseLimitState()
     {
-        var disabled = _coordinator!.IsOwnDeviceLicenseDisabled();
+        var reason = _coordinator!.GetOwnLicenseBlockReason();
 
         // Bugfix 07.09.2026: BeginInvoke statt Invoke - dieser Aufruf kann von
         // DiscoveryService's Empfangs-Thread aus kommen (DeviceUpdated/PeerLicenseObserved),
@@ -468,15 +468,19 @@ public partial class App : System.Windows.Application
                 return;
             }
 
-            if (disabled && _licenseLimitToast is null)
+            if (reason == LicenseBlockReason.None)
             {
-                _licenseLimitToast = new LicenseLimitToastWindow(null);
+                _licenseLimitToast?.Close();
+            }
+            else if (_licenseLimitToast is null)
+            {
+                _licenseLimitToast = new LicenseLimitToastWindow(reason, null);
                 _licenseLimitToast.Closed += (_, _) => _licenseLimitToast = null;
                 _licenseLimitToast.Show();
             }
-            else if (!disabled)
+            else
             {
-                _licenseLimitToast?.Close();
+                _licenseLimitToast.ShowReason(reason);
             }
         });
     }
@@ -932,9 +936,10 @@ public partial class App : System.Windows.Application
             return new IpcResponse(false, "Dieses Gerät wurde gelöscht und kann keine Alarme mehr senden.");
         }
 
-        if (_coordinator!.IsOwnDeviceLicenseDisabled())
+        var blockReason = _coordinator!.GetOwnLicenseBlockReason();
+        if (blockReason != LicenseBlockReason.None)
         {
-            return new IpcResponse(false, "Lizenz ausgeschöpft - dieses Gerät ist deaktiviert und kann keine Alarme senden.");
+            return new IpcResponse(false, LicenseBlockTexts.Message(blockReason));
         }
 
         var config = _sharedConfigStore.LoadOrCreate();

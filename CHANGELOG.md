@@ -15,6 +15,7 @@ Details stehen in der Git-Historie. Der eingefrorene Stand `legacy/main-0.39.x` 
 - Versionsnummer steht nur noch in `Directory.Build.props`; der Installer liest sie beim Bauen von dort (#168)
 ### Behoben
 - Eine gültige Lizenz wird nicht mehr durch eine später ausgestellte, aber abgelaufene Lizenz eines anderen Geräts ersetzt (#183)
+- Ein im Dashboard deaktiviertes Gerät löst kein Banner „Lizenzkontingent überschritten“ mehr aus; der Sperrhinweis auf dem Gerät nennt den tatsächlichen Grund (#133)
 
 ## [0.47.3] – 2026-11-18
 - Einrichtungs-Skript für die E2E-Vorlagen-VM (#165)
