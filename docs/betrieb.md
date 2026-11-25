@@ -27,7 +27,11 @@
 - Gerätezustand und synchronisierte Konfiguration: `%ProgramData%\HaelpMi` (Dateien siehe
   `docs/architektur.md`, Abschnitt "Datenhaltung").
 - Installer-fixe Werte (`CustomerGroupId`, Rolle, Test-Installer): `deployment.json` im
-  Programmverzeichnis. Wird vom laufenden Programm nie neu geschrieben.
+  Programmverzeichnis. Wird vom laufenden Programm nie neu geschrieben. Der Installer schreibt
+  `settings.json` (nur bei der Erstinstallation), `installed-by.json` (nur beim ersten Mal) und
+  `deployment.json` (bei jedem Lauf) vor dem ersten Start eines HälpMi-Programms; das Setup-Log
+  (`/LOG=…`) enthält dazu je eine Zeile „Installationsdatei geschrieben: …“ bzw. „Installationsdatei
+  vorhanden, unverändert: …“.
 - Konfigurationsänderungen erfolgen im Admin-Dashboard und werden per Hot-Reload an alle Geräte
   im Kreis verteilt.
 
