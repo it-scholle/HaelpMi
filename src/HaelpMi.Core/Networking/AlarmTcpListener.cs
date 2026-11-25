@@ -60,9 +60,11 @@ public sealed class AlarmReceivedEventArgs : EventArgs
 /// reads one <see cref="AlarmRequestMessage"/>, raises <see cref="AlarmReceived"/> so the
 /// caller can show the forced popup, then writes back an <see cref="AlarmAckMessage"/> and
 /// closes - but only if a subscriber reported the popup as displayed
-/// (<see cref="AlarmReceivedEventArgs.ReportDisplayed(bool)"/>). Ist die Anzeige unterdrückt
-/// (Sitzung weggeschaltet, z. B. mitten im Nutzerwechsel), bleibt die Quittung aus und der
-/// Sender zählt das Gerät nicht als „empfangen“; die nächste Welle versucht es erneut.
+/// (<see cref="AlarmReceivedEventArgs.ReportDisplayed(bool)"/>).
+///
+/// Ist die Anzeige unterdrückt (Sitzung weggeschaltet, z. B. mitten im Nutzerwechsel) oder kommt
+/// die Rückmeldung nicht innerhalb von <see cref="Models.AppConstants.AlarmAckTimeout"/>, bleibt die
+/// Quittung aus: Der Sender zählt das Gerät nicht als „empfangen“, die nächste Welle versucht es erneut.
 ///
 /// Important: subscribers of <see cref="AlarmReceived"/> must only *start* showing the
 /// popup (e.g. Window.Show(), which returns immediately) and must not block until the
@@ -220,7 +222,7 @@ public sealed class AlarmTcpListener : IAsyncDisposable
             _audit?.Invoke($"alarm received from deviceId={request.SenderDeviceId}");
             var args = new AlarmReceivedEventArgs { Request = request, SenderAddress = senderAddress };
             AlarmReceived?.Invoke(this, args);
-            if (!await args.WasDisplayedAsync())
+            if (!await WasDisplayedInTimeAsync(args, ct))
             {
                 _audit?.Invoke($"alarm nicht quittiert (nicht angezeigt): alarmSessionId={request.AlarmSessionId}");
                 return;
@@ -236,6 +238,19 @@ public sealed class AlarmTcpListener : IAsyncDisposable
         {
             // Best-effort delivery: a dropped/slow connection just means the sender
             // counts this target as not-yet-acked (FR-14) - it does not crash the listener.
+        }
+    }
+
+    /// <summary>Begrenzt die Wartezeit, damit ein hängender Melder weder Handler noch Socket festhält.</summary>
+    private static async Task<bool> WasDisplayedInTimeAsync(AlarmReceivedEventArgs args, CancellationToken ct)
+    {
+        try
+        {
+            return await args.WasDisplayedAsync().WaitAsync(Models.AppConstants.AlarmAckTimeout, ct);
+        }
+        catch (TimeoutException)
+        {
+            return false;
         }
     }
 

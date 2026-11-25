@@ -138,6 +138,8 @@ public class AlarmChannelTests
             await Task.WhenAny(satelliteReceived.Task, Task.Delay(TimeSpan.FromMilliseconds(300)));
         }
         Assert.True(satelliteReceived.Task.IsCompleted, "Satellite hat den über die Primary relayten Alarm nicht empfangen.");
+        // Die Anmeldung als antwortfähig liest die Primary asynchron; erst danach zählt die Antwort.
+        await Task.Delay(TimeSpan.FromMilliseconds(300));
 
         var result = await SendOneAsync(customerGroupId, receiverDeviceId, port);
 

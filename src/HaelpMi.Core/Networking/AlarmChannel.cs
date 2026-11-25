@@ -53,7 +53,7 @@ public sealed class AlarmChannel : IAsyncDisposable
     private void PromoteToPrimary()
     {
         IsPrimary = true;
-        _relayServer = new AlarmRelayServer();
+        _relayServer = new AlarmRelayServer(_audit);
         _relayServer.Start();
         _audit?.Invoke("Alarm-Primary-Instanz aktiv (hält den TCP-Port, reicht an Satellites weiter).");
     }

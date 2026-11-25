@@ -14,19 +14,20 @@ namespace HaelpMi.Core.Networking;
 /// <see cref="AlarmChannel"/>.
 ///
 /// Nach jedem Alarm meldet der Client per <see cref="AlarmRelayReply"/> zurück, ob seine Sitzung
-/// ihn angezeigt hat. Lässt die Pipe nur lesenden Zugriff zu, verbindet er sich wie vorher nur
-/// lesend; die Primary behandelt ihn dann als „angezeigt“.
+/// ihn angezeigt hat. Lässt die Pipe nur lesenden Zugriff zu, verbindet er sich nur lesend;
+/// die Primary behandelt ihn dann als „angezeigt“.
 /// </summary>
 public sealed class AlarmRelayClient : IAsyncDisposable
 {
     public event EventHandler<AlarmReceivedEventArgs>? AlarmReceived;
     public event EventHandler? Disconnected;
 
+    /// <summary>false, wenn die Verbindung nur lesend steht; die Primary zählt Alarme dann ungeprüft als angezeigt.</summary>
+    public bool CanReply { get; private set; }
+
     private readonly SemaphoreSlim _writeLock = new(1, 1);
     private NamedPipeClientStream? _pipe;
 
-    /// <summary>false, wenn die Verbindung nur lesend steht; die Primary zählt Alarme dann ungeprüft als angezeigt.</summary>
-    public bool CanReply { get; private set; }
     private CancellationTokenSource? _cts;
     private Task? _readLoop;
 

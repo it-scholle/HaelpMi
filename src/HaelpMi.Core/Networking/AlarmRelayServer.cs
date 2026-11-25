@@ -21,17 +21,23 @@ namespace HaelpMi.Core.Networking;
 ///
 /// Rückweg: Ein Satellite meldet per <see cref="AlarmRelayReply"/>, ob seine Sitzung den Alarm
 /// angezeigt hat, damit die Primary erst dann quittiert. Satellites, die sich nicht als
-/// antwortfähig angemeldet haben (Verbindung nur lesend), zählen wie vor dieser Rückmeldung
-/// als „angezeigt“ - lieber die alte Ungenauigkeit als eine fehlende Quittung.
+/// antwortfähig angemeldet haben (Verbindung nur lesend), zählen als „angezeigt“ - lieber eine
+/// ungeprüfte Quittung als eine fehlende.
 /// </summary>
 public sealed class AlarmRelayServer : IAsyncDisposable
 {
     private const string BuiltInUsersGroupSid = "S-1-5-32-545";
 
+    private readonly Action<string>? _audit;
     private readonly ConcurrentDictionary<Guid, RelayClient> _clients = new();
     private readonly ConcurrentDictionary<Guid, DisplayWaiter> _waiters = new();
     private CancellationTokenSource? _cts;
     private Task? _acceptLoop;
+
+    public AlarmRelayServer(Action<string>? audit = null)
+    {
+        _audit = audit;
+    }
 
     public bool HasClients => !_clients.IsEmpty;
 
@@ -107,6 +113,7 @@ public sealed class AlarmRelayServer : IAsyncDisposable
                 }
                 catch (Exception)
                 {
+                    _audit?.Invoke("Alarm-Relay: unlesbare Antwort eines Satellites verworfen.");
                     continue;
                 }
 
@@ -121,7 +128,7 @@ public sealed class AlarmRelayServer : IAsyncDisposable
                 }
                 else if (_waiters.TryGetValue(reply.RelayId, out var waiter))
                 {
-                    waiter.Reply(reply.Displayed);
+                    waiter.Reply(id, reply.Displayed);
                 }
             }
         }
@@ -137,58 +144,71 @@ public sealed class AlarmRelayServer : IAsyncDisposable
     }
 
     /// <summary>
-    /// Reicht den Alarm an alle Satellites weiter und wartet höchstens <paramref name="timeout"/>, ob einer ihn anzeigt.
-    /// Best-effort: ein einzelner tot gegangener Satellite (Sitzung inzwischen abgemeldet) darf die anderen nicht
-    /// blockieren, deshalb pro Client eigenes try/catch.
+    /// Reicht den Alarm an alle Satellites weiter und wartet insgesamt höchstens <paramref name="timeout"/>, ob einer
+    /// ihn anzeigt. Die Frist umfasst auch das Schreiben: Ein Satellite, der gerade nicht liest, darf weder die anderen
+    /// noch die Quittung an den Sender aufhalten, deshalb parallel und pro Client eigenes try/catch.
     /// </summary>
     /// <returns>true, sobald ein Satellite die Anzeige meldet oder ein nicht antwortfähiger erreicht wurde; sonst false.</returns>
     public async Task<bool> BroadcastAndAwaitDisplayAsync(AlarmRelayMessage message, TimeSpan timeout, CancellationToken ct)
     {
         var waiter = new DisplayWaiter();
         _waiters[message.RelayId] = waiter;
+        // Nicht per using: hängende Schreibvorgänge brauchen das Token über das Ende dieser Methode hinaus.
+        var deadline = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        deadline.CancelAfter(timeout);
         try
         {
             var line = NetworkSerializer.Encoding.GetBytes(NetworkSerializer.ToJsonLine(message));
-            var reached = 0;
-            var reachedWithoutReply = false;
-            foreach (var (id, client) in _clients)
-            {
-                try
-                {
-                    await client.Pipe.WriteAsync(line, ct);
-                    await client.Pipe.FlushAsync(ct);
-                    reached++;
-                    reachedWithoutReply |= !client.CanReply;
-                }
-                catch (Exception)
-                {
-                    RemoveClient(id);
-                }
-            }
-
-            if (reachedWithoutReply)
-            {
-                return true;
-            }
-
-            if (reached == 0)
+            var clients = _clients.ToArray();
+            waiter.ExpectReplies(clients.Length);
+            var writes = clients.Select(c => WriteAsync(c.Key, c.Value, line, waiter, deadline.Token)).ToArray();
+            _ = Task.WhenAll(writes).ContinueWith(_ => deadline.Dispose(), TaskScheduler.Default);
+            if (clients.Length == 0)
             {
                 return false;
             }
 
-            waiter.ExpectReplies(reached);
-            try
-            {
-                return await waiter.Task.WaitAsync(timeout, ct);
-            }
-            catch (TimeoutException)
-            {
-                return false;
-            }
+            return await waiter.Task.WaitAsync(deadline.Token);
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            return false;
         }
         finally
         {
             _waiters.TryRemove(message.RelayId, out _);
+        }
+    }
+
+    private async Task WriteAsync(Guid id, RelayClient client, byte[] line, DisplayWaiter waiter, CancellationToken ct)
+    {
+        try
+        {
+            // Gleichzeitige Weiterleitungen dürfen ihre Zeilen auf derselben Pipe nicht verschränken.
+            await client.WriteLock.WaitAsync(ct);
+            try
+            {
+                await client.Pipe.WriteAsync(line, ct);
+                await client.Pipe.FlushAsync(ct);
+            }
+            finally
+            {
+                client.WriteLock.Release();
+            }
+
+            if (!client.CanReply)
+            {
+                waiter.Reply(id, true);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // Frist abgelaufen: zählt als „nicht angezeigt“, die Verbindung bleibt bestehen
+        }
+        catch (Exception)
+        {
+            RemoveClient(id);
+            waiter.Reply(id, false);
         }
     }
 
@@ -197,6 +217,7 @@ public sealed class AlarmRelayServer : IAsyncDisposable
         if (_clients.TryRemove(id, out var client))
         {
             client.Pipe.Dispose();
+            _audit?.Invoke("Alarm-Relay: Verbindung zu einem Satellite beendet.");
         }
     }
 
@@ -220,29 +241,36 @@ public sealed class AlarmRelayServer : IAsyncDisposable
     {
         public NamedPipeServerStream Pipe { get; } = pipe;
 
+        public SemaphoreSlim WriteLock { get; } = new(1, 1);
+
         public volatile bool CanReply;
     }
 
-    /// <summary>Sammelt die Antworten einer Weiterleitung: fertig beim ersten „angezeigt“ oder wenn alle „nein“ gesagt haben.</summary>
+    /// <summary>Sammelt die Antworten einer Weiterleitung: fertig beim ersten „angezeigt“ oder wenn jeder Satellite „nein“ gesagt hat.</summary>
     private sealed class DisplayWaiter
     {
         private readonly object _gate = new();
         private readonly TaskCompletionSource<bool> _result = new(TaskCreationOptions.RunContinuationsAsynchronously);
-        private int _expected = -1;
-        private int _replies;
+        private readonly HashSet<Guid> _answered = new();
+        private int _expected = int.MaxValue;
 
         public Task<bool> Task => _result.Task;
 
-        public void Reply(bool displayed)
+        /// <summary>Nur die erste Antwort je Satellite zählt.</summary>
+        public void Reply(Guid clientId, bool displayed)
         {
             lock (_gate)
             {
-                _replies++;
+                if (!_answered.Add(clientId))
+                {
+                    return;
+                }
+
                 if (displayed)
                 {
                     _result.TrySetResult(true);
                 }
-                else if (_expected >= 0 && _replies >= _expected)
+                else if (_answered.Count >= _expected)
                 {
                     _result.TrySetResult(false);
                 }
@@ -254,10 +282,6 @@ public sealed class AlarmRelayServer : IAsyncDisposable
             lock (_gate)
             {
                 _expected = expected;
-                if (_replies >= expected)
-                {
-                    _result.TrySetResult(false);
-                }
             }
         }
     }
