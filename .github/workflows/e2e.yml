@@ -124,6 +124,7 @@ jobs:
       zyklen: ${{ steps.lauf.outputs.zyklen }}
       erwartung: ${{ steps.lauf.outputs.erwartung }}
       erwartet_rot: ${{ steps.lauf.outputs.erwartet_rot }}
+      firewall_umgehung: ${{ steps.firewall.outputs.umgehung }}
     steps:
       - uses: actions/checkout@v4
 
@@ -179,6 +180,22 @@ jobs:
         with:
           ref: ${{ steps.lauf.outputs.produkt_ref }}
           path: produkt
+
+      # Installer vor #150 (v0.47.26) legen keine Firewall-Programmregeln an. Ohne Freigabe blockiert die
+      # Windows-Abfrage Discovery und Alarm, jeder Lauf gegen so einen Altstand wäre rot (T4, T5, T10 …).
+      # Erkannt am Installer-Quelltext, nicht an der Version: entscheidend ist, ob der Altstand die Regel selbst anlegt.
+      - name: Firewall-Programmregeln im Produktstand erkennen
+        id: firewall
+        if: steps.lauf.outputs.produkt_ref != ''
+        run: |
+          $eigene = Select-String -Path 'produkt/installer/*.iss', 'produkt/installer/*.inc' -Pattern 'advfirewall firewall add rule.*program=' -Quiet
+          if ($eigene) {
+              'umgehung=nein' >> $env:GITHUB_OUTPUT
+          } else {
+              'umgehung=ja' >> $env:GITHUB_OUTPUT
+              "::notice::Produktstand ohne eigene Firewall-Programmregeln: die Test-VMs bekommen die Testvorbereitung 'Firewall-Freigabe (Umgehung für Altstände)'."
+              "`n- Firewall-Freigabe (Umgehung für Altstände): ja, der Installer dieses Produktstands legt keine Programmregeln an" >> $env:GITHUB_STEP_SUMMARY
+          }
 
       - uses: actions/setup-dotnet@v4
         with:
@@ -291,6 +308,7 @@ jobs:
       HAELPMI_E2E_ZYKLEN: ${{ needs.build.outputs.zyklen }}
       E2E_FILTER: ${{ needs.build.outputs.filter }}
       E2E_ERWARTUNG: ${{ needs.build.outputs.erwartung }}
+      HAELPMI_E2E_ERWARTET_ROT: ${{ needs.build.outputs.erwartet_rot }}
       GERAET: ${{ matrix.name }}
     steps:
       - uses: actions/download-artifact@v4
@@ -301,6 +319,19 @@ jobs:
         with:
           name: e2e-tests
           path: C:\haelpmi-e2e\tests
+      # Nur bei produkt_ref auf einem Stand vor #150: Umgehung wie vor #150, damit die Windows-Firewall-Abfrage
+      # das Alarmfenster nicht verdeckt und Discovery/Alarm ankommen. Eigene Regelnamen, die T1 nicht als
+      # Produktregel zählt; die Regeln leben nur bis zum nächsten Reset auf clean-base.
+      - name: Testvorbereitung – Firewall-Freigabe (Umgehung für Altstände)
+        if: needs.build.outputs.firewall_umgehung == 'ja'
+        run: |
+          foreach ($p in 'Agent', 'Config') {
+              $name = "HaelpMi E2E $p (Testvorbereitung)"
+              Get-NetFirewallRule -DisplayName $name -ErrorAction SilentlyContinue | Remove-NetFirewallRule
+              New-NetFirewallRule -DisplayName $name -Direction Inbound -Action Allow -Profile Any `
+                  -Program "C:\Program Files\HaelpMi\HaelpMi.$p.exe" | Out-Null
+          }
+          "### Testvorbereitung`n`n- Firewall-Freigabe (Umgehung für Altstände) für Agent und Konfiguration angelegt" >> $env:GITHUB_STEP_SUMMARY
       # Tests mit Trait Teil laufen nur, wenn alle beteiligten Geräte im Lauf sind.
       # Negativtest: Testfehler beenden den Job nicht, das Urteil fällt der Job auswertung aus trx und Exit-Code.
       - name: E2E-Tests
@@ -341,6 +372,14 @@ jobs:
           $ziel = Join-Path $env:GITHUB_WORKSPACE 'e2e-out'
           New-Item -ItemType Directory -Force -Path (Join-Path $ziel 'programdata') | Out-Null
           if (Test-Path "$env:HAELPMI_E2E_DIR\out") { Copy-Item "$env:HAELPMI_E2E_DIR\out\*" $ziel -Recurse -Force }
+          # Teilprüfungen, die auf dem Altstand mangels Feature übersprungen wurden (tests/HaelpMi.E2E.Tests/Altstand.cs).
+          $uebersprungen = Join-Path $ziel 'uebersprungen.txt'
+          if (Test-Path $uebersprungen) {
+              $zeilen = @(Get-Content -LiteralPath $uebersprungen | Where-Object { $_.Trim() })
+              "### Übersprungene Prüfungen auf VM $env:GERAET (Feature fehlt im Altstand)`n" >> $env:GITHUB_STEP_SUMMARY
+              foreach ($z in $zeilen) { "- $z" >> $env:GITHUB_STEP_SUMMARY }
+              "::notice::VM $env:GERAET`: $($zeilen.Count) Prüfung(en) übersprungen, Feature fehlt im Altstand (Summary)."
+          }
           Copy-Item "$env:ProgramData\HaelpMi\*.log" (Join-Path $ziel 'programdata') -ErrorAction SilentlyContinue
       - uses: actions/upload-artifact@v4
         if: always()

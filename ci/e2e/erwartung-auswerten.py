@@ -14,7 +14,8 @@ Aufruf: erwartung-auswerten.py <ergebnis-verzeichnis> <geraete> <erwartet-rot> [
 Urteil "Negativtest bestanden" (Exit 0) genau dann, wenn jedes Kürzel mindestens einen passenden
 Fehlschlag hat und nichts Unerwartetes vorliegt. Ein Folgefehler ("Test tN ist auf der Gegenseite
 gescheitert") zählt nie als Nachweis, nur als erlaubter Begleiter eines eigentlichen Fehlschlags
-desselben Kürzels. Unerwartet ist: ein Fehlschlag, der zu keinem Kürzel passt, jedes andere Ergebnis als Passed/Failed/NotExecuted, ein abgebrochener Testlauf, ein Gerät ohne
+desselben Kürzels. Zeilen aus uebersprungen.txt (Teilprüfungen für Features, die der Altstand noch nicht
+hat) stehen im Bericht und ändern das Urteil nicht. Unerwartet ist: ein Fehlschlag, der zu keinem Kürzel passt, jedes andere Ergebnis als Passed/Failed/NotExecuted, ein abgebrochener Testlauf, ein Gerät ohne
 Artefakt oder Exit-Code, ein Exit-Code ungleich 0 ohne fehlgeschlagenen Test. Sonst Exit 1.
 Exit 2 = Aufruf ungültig. Den Bericht (Markdown) schreibt das Skript auf stdout.
 """
@@ -53,6 +54,7 @@ class Auswertung:
     erwartet: list[str] = field(default_factory=list)
     unerwartet: list[str] = field(default_factory=list)
     hinweise: list[str] = field(default_factory=list)
+    uebersprungen: list[str] = field(default_factory=list)
     bestanden: int = 0
     getroffen: set[str] = field(default_factory=set)
     folgefehler: list[tuple[list[str], str]] = field(default_factory=list)
@@ -156,6 +158,13 @@ def geraet_auswerten(verzeichnis: Path, geraet: str, a: Auswertung) -> None:
     else:
         exitcode = int(exitcode_text)
 
+    # Teilprüfungen für Features, die der Altstand noch nicht hat (Altstand.cs); ändern das Urteil nicht.
+    protokoll = artefakt / "uebersprungen.txt"
+    if protokoll.is_file():
+        for zeile in protokoll.read_text(encoding="utf-8-sig").splitlines():
+            if zeile.strip():
+                a.uebersprungen.append(f"{geraet}: {kurz(zeile)}")
+
     trx_dateien = sorted((artefakt / "trx").rglob("*.trx")) if (artefakt / "trx").is_dir() else []
     fehlgeschlagen = sum(trx_auswerten(d, geraet, a) for d in trx_dateien)
 
@@ -194,6 +203,7 @@ def bericht(a: Auswertung, geraete: list[str], produkt_ref: str) -> str:
     for titel, eintraege in (
         ("Erwartete Fehlschläge", a.erwartet),
         ("Unerwartete Ergebnisse", a.unerwartet),
+        ("Übersprungene Prüfungen (Feature fehlt im Altstand)", a.uebersprungen),
         ("Hinweise", a.hinweise),
     ):
         zeilen.append(f"#### {titel}")

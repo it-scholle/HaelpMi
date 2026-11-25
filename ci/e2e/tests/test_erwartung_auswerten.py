@@ -85,6 +85,27 @@ class NegativtestTests(unittest.TestCase):
         self.assertIn("Negativtest bestanden", text)
         self.assertIn("Kein Banner erschienen", text)
 
+    def test_uebersprungene_pruefungen_stehen_im_bericht_und_aendern_nichts(self) -> None:
+        self.lauf.geraet("a", "1", trx([
+            ("GeraetATests.T1_Installation", "Passed", ""),
+            ("GeraetATests.T22_Regression41_Banner", "Failed", "Kein Banner erschienen"),
+        ], lauf="Failed"))
+        (self.lauf.pfad / "e2e-a" / "uebersprungen.txt").write_text(
+            "T1: übersprungen: Betriebs-Log agent.log – Feature erst ab v0.47.35\r\n", encoding="utf-8-sig")
+        self.lauf.geraet("b", "0", GRUEN_B)
+        code, text = self.lauf.auswerten("a,b", "T22")
+        self.assertEqual(code, 0, text)
+        self.assertIn("#### Übersprungene Prüfungen", text)
+        self.assertIn("a: T1: übersprungen: Betriebs-Log agent.log – Feature erst ab v0.47.35", text)
+
+    def test_uebersprungene_pruefung_ersetzt_keinen_fehlschlag(self) -> None:
+        self.lauf.geraet("a", "0", GRUEN_A)
+        (self.lauf.pfad / "e2e-a" / "uebersprungen.txt").write_text("T22: übersprungen: X\n", encoding="utf-8")
+        self.lauf.geraet("b", "0", GRUEN_B)
+        code, text = self.lauf.auswerten("a,b", "T22")
+        self.assertEqual(code, 1, text)
+        self.assertIn("Kein Fehlschlag für T22", text)
+
     def test_alles_gruen_ist_rot(self) -> None:
         self.lauf.geraet("a", "0", GRUEN_A)
         self.lauf.geraet("b", "0", GRUEN_B)

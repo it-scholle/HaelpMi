@@ -101,17 +101,31 @@ internal static class Installation
         // Ohne eigene Programmregel zeigt Windows beim ersten Lauschen den Firewall-Dialog, der das Alarmfenster verdeckt;
         // das Dashboard (HaelpMi.Config.exe) öffnet nur in der Admin-Rolle Sockets.
         var agentExe = Path.Combine(E2EUmgebung.ProgrammOrdner, HaelpMiApp.AgentProzess + ".exe");
-        PruefeProgrammregel("HälpMi Agent", agentExe);
-        var regelProgramme = new List<string> { HaelpMiApp.AgentProzess + ".exe" };
-        if (rolle == Role.Admin)
+        if (Altstand.Pruefen("T1", Altstand.Programmregeln))
         {
-            PruefeProgrammregel("HälpMi Konfiguration", HaelpMiApp.KonfigExe);
-            regelProgramme.Add(HaelpMiApp.KonfigProzess + ".exe");
+            PruefeProgrammregel("HälpMi Agent", agentExe);
+            if (rolle == Role.Admin)
+            {
+                PruefeProgrammregel("HälpMi Konfiguration", HaelpMiApp.KonfigExe);
+            }
         }
 
-        PruefeRegelnVorErstemStart(log, regelProgramme);
-        PruefeKeineBlockregel(agentExe, HaelpMiApp.KonfigExe);
-        PruefeBetriebsLog();
+        if (Altstand.Pruefen("T1", Altstand.RegelnVorErstemStart))
+        {
+            var regelProgramme = new List<string> { HaelpMiApp.AgentProzess + ".exe" };
+            if (rolle == Role.Admin)
+            {
+                regelProgramme.Add(HaelpMiApp.KonfigProzess + ".exe");
+            }
+
+            PruefeRegelnVorErstemStart(log, regelProgramme);
+            PruefeKeineBlockregel(agentExe, HaelpMiApp.KonfigExe);
+        }
+
+        if (Altstand.Pruefen("T1", Altstand.BetriebsLog))
+        {
+            PruefeBetriebsLog();
+        }
     }
 
     /// <summary>Betriebs-Log des Agents (AGENTS.md Teil A): agent.log neben crash.log, eine JSON-Zeile je Eintrag, Start als INFO.</summary>

@@ -156,7 +156,7 @@ Läuft auf bis zu drei Wegwerf-VMs auf pve-nzxt (A = Admin-Gerät, B und C = Use
 
 | # | Test | Gerät | FR-Bezug |
 |---|---|---|---|
-| T1 | Stille Installation (Admin- bzw. User-Installer): Programmordner, ProgramData, Rolle in `deployment.json`, unveränderte DeviceId/Raum in `settings.json`, Startmenü-Verknüpfung, geplante Aufgabe, Agent läuft; eingehende Firewall-Programmregel „HälpMi Agent“, nur A zusätzlich „HälpMi Konfiguration“, beide laut Setup-Log vor dem ersten HälpMi-Start angelegt; keine Inbound-Block-Regel mit HälpMi-Programmpfad (#222); `agent.log` liegt neben `crash.log`, jede Zeile ist JSON mit Zeit (mit Zone), Stufe, Prozess, Modul und Meldung, der Start steht als INFO darin, DEBUG ist aus (#227) | A, B, C | FR-3, FR-4, FR-34, FR-35, FR-37, NFR-2 |
+| T1 | Stille Installation (Admin- bzw. User-Installer): Programmordner, ProgramData, Rolle in `deployment.json`, unveränderte DeviceId/Raum in `settings.json`, Startmenü-Verknüpfung, geplante Aufgabe, Agent läuft; eingehende Firewall-Programmregel „HälpMi Agent“, nur A zusätzlich „HälpMi Konfiguration“, beide laut Setup-Log vor dem ersten HälpMi-Start angelegt; keine Inbound-Block-Regel mit HälpMi-Programmpfad (#222); `agent.log` liegt neben `crash.log`, jede Zeile ist JSON mit Zeit (mit Zone), Stufe, Prozess, Modul und Meldung, der Start steht als INFO darin, DEBUG ist aus (#227). Mit `produkt_ref` laufen die Firewall- und Log-Prüfungen nur ab ihrer Einführungsversion (siehe „Altstände“) | A, B, C | FR-3, FR-4, FR-34, FR-35, FR-37, NFR-2 |
 | T2 | Verknüpfung "HälpMi Dashboard" öffnet das Admin-Dashboard ohne neuen `crash.log`-Eintrag | A | FR-4 |
 | T3 | Selbsttest: Alarmfenster im Vordergrund mit "Raum (Nummer)", "Bin unterwegs", Schließen erst danach aktiv | A | FR-27, FR-40, FR-51 |
 | T4 | Discovery: die Gegenseite steht nach spätestens 60 s mit Adresse in `devices.json` | A, B | – |
@@ -251,6 +251,21 @@ weil `workflow_dispatch` nur Workflows vom Default-Branch startet):
   Marke gilt beim Warten vor einer Abbruch-Marke.
 - Ob ein erwarteter Test aus dem richtigen Grund fehlschlug, sichern nur Fehlerbild-Marken ab; ohne Marke
   zählt jeder eigene Fehlschlag des Tests. Die Meldungen unter „Erwartete Fehlschläge“ in der Summary deshalb lesen.
+- **Altstände** (gilt nur mit `produkt_ref`, positiv wie negativ). Ohne `produkt_ref` wird immer alles geprüft.
+  - Teilprüfungen in T1 für Features, die erst später kamen, laufen nur, wenn die installierte Agent-Version
+    (Dateiversion von `HaelpMi.Agent.exe`) mindestens die Einführungsversion ist (`tests/HaelpMi.E2E.Tests/Altstand.cs`):
+    Firewall-Programmregeln ab v0.47.26 (#150), Regeln vor dem ersten Start und keine Block-Regel ab v0.47.28
+    (#222), `agent.log` ab v0.47.35 (#227). Sonst steht die Prüfung als „übersprungen: … Feature erst ab vX“ in
+    `out\uebersprungen.txt`, in der Step Summary des Test-Jobs und im Bericht „Negativtest auswerten“
+    (ändert das Urteil nicht). Ist die Version nicht lesbar, wird geprüft.
+  - Steht der Test selbst in `erwartet_rot` (z. B. `T1` für einen Negativtest zu #222), wird nichts übersprungen.
+  - Alle übrigen Tests, vor allem die Regressionstests (T10, T13 bis T25), werden nie übersprungen: Sie sind der Nachweis und sollen auf
+    dem Altstand rot werden.
+  - Legt der Installer des Produktstands keine Firewall-Programmregeln an (Stand vor #150, erkannt am
+    Installer-Quelltext), legt der Test-Job vor den Tests die frühere Testvorbereitung „Firewall-Freigabe
+    (Umgehung für Altstände)“ an: Inbound-Allow-Regeln „HaelpMi E2E Agent/Config (Testvorbereitung)“ für
+    `HaelpMi.Agent.exe` und `HaelpMi.Config.exe`. Sonst verdeckt die Windows-Firewall-Abfrage das Alarmfenster und
+    Discovery/Alarm kommen nicht an (T4, T5, T10 …). Die Summary vermerkt die Umgehung.
 
 Alle Werte werden per Regex geprüft, sonst bricht der Build-Job ab. Negativtest #136 gegen den
 Stand vor dem Fix: in `ci/e2e/lauf.env` `PRODUKT_REF=v0.46.1`, `FILTER=Bereich=Basis|Bereich=R136`,
