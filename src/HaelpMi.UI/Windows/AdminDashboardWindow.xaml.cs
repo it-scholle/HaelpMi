@@ -565,17 +565,13 @@ public partial class AdminDashboardWindow : Window
         // IsChecked spiegelt bereits den neuen (vom Nutzer gewünschten) Zustand wider, bevor
         // Click feuert (Standardverhalten von ToggleButton) - RefreshDevicesTab() unten baut
         // die Liste ohnehin komplett aus dem tatsächlich gespeicherten Stand neu auf.
+        var newOverride = DeviceActivationGate.OverrideAfterToggle(activate: toggle.IsChecked == true);
         if (deviceId == _context.LoadOwnDevice().DeviceId)
         {
-            // Issue #113: für das eigene Admin-Gerät nie ForceEnabled selbst behaupten
-            // (Missbrauchsschutz, siehe DiscoveryService.AnnounceSelfLicenseOverrideAsync) -
-            // None reicht, weil ein Admin-Gerät ohne Override ohnehin als aktiv gilt
-            // (LicenseLimitGuard.EffectiveOverride).
-            _context.SetOwnLicenseOverride(toggle.IsChecked == true ? LicenseOverride.None : LicenseOverride.ForceDisabled);
+            _context.SetOwnLicenseOverride(newOverride);
         }
         else
         {
-            var newOverride = toggle.IsChecked == true ? LicenseOverride.ForceEnabled : LicenseOverride.ForceDisabled;
             _context.SetDeviceLicenseOverride(deviceId, newOverride);
         }
 

@@ -163,22 +163,23 @@ Läuft auf bis zu drei Wegwerf-VMs auf pve-nzxt (A = Admin-Gerät, B und C = Use
 | T5 | Alarm per Hotkey von A an B: Banner auf A, Popup auf B mit Raum von A (Latenz wird gemessen), Rückmeldung von B, "Empfangen: 1 von 1" auf A | A, B | FR-40, FR-50, FR-51, FR-53 |
 | T6 | Zwei Alarm-Profile über das Dashboard (UI-Automation): P1 A an B, Schwelle 1; P2 B an Gruppe mit A, Schwelle 2. Jeder Hotkey erreicht nur die eigenen Empfänger, Schwelle 2 hält Schließen gesperrt, bis B abbricht | A, B | FR-50, FR-51 |
 | T7 | Config-Sync: A ändert Name, Schwelle und Hotkey von P2, B übernimmt ohne Neustart (Version, Audit-Zeile, "Meine Alarme"; Latenz wird gemessen), altes Kürzel wirkungslos, neues wirkt | A, B | – |
-| T8 | Gerät B im Dashboard deaktivieren: B empfängt nicht (auch nicht bei Direktversand am Filter von A vorbei) und sendet nicht, Toast und Hinweis auf B; nach dem Aktivieren beide Richtungen wieder | A, B | – |
+| T8 | Gerät B im Dashboard deaktivieren: B empfängt nicht (auch nicht bei Direktversand am Filter von A vorbei) und sendet nicht, Toast und Hinweis auf B; nach dem Aktivieren steht B in `devices.json` von A auf `LicenseOverride` None (#180) und beide Richtungen gehen wieder | A, B | – |
 | T9 | Lizenz in fünf Stufen, Dateiwechsel jeweils mit gestoppten Agents auf beiden Geräten (sonst Übernahme per Gossip). L1 ohne Lizenz: A Erinnerungs-Toast, Banner, Bearbeitung gesperrt, Selbsttest geht; B Sperr-Toast, Hotkey nur mit Hinweis, Direktversand unbestätigt. L2 Import im Dashboard ohne Neustart: Toast weg, Bearbeitung frei, B übernimmt per Gossip (Latenz wird gemessen), Alarm A an B. L3 läuft in 10 Tagen ab: Warnung ohne Sperre, Alarm geht, "Später erinnern" hält über einen Neustart. L4 abgelaufen: Alarme in beide Richtungen (Soft-Expiry), A Toast und Sperre, Hinweis auf B nur protokolliert. L5 gültige Lizenz zurück | A, B | – |
 | T10 | Regression #136, `zyklen` Durchläufe (Default 25) mit eigenem Profil A an B (Schwelle 1, Config-Version 5000). Variante N: "Bin unterwegs" mit Versatz von -400 bis +400 ms zur nächsten Repeat-Welle (Phase aus den ms-Zeitstempeln "alarm received" in `audit.log` von B), sofort schließen, 8 s auf ein zweites Fenster achten. Variante W: A schickt nach dem Schließen dieselbe Session per `AlarmSender` noch einmal (Nachwelle), B beobachtet 8 s. Ergebnis je Zyklus in `out\r136-<Agent-Version>.csv`, Quoten in `r136-zusammenfassung.json`. Rot, wenn W ohne `produkt_ref` ein zweites Fenster zeigt; mit `produkt_ref` nur Messung | A, B | – |
 | T11 | Discovery mit drei Geräten: A und B kennen C, C kennt A und B (je nach spätestens 60 s mit Adresse in `devices.json`) | A, B, C | – |
 | T12 | Alarm per Hotkey von A an B und C mit Schwelle 2 (eigenes Profil, Config-Version 1100): Popup auf B und C mit Raum von A. B meldet "Bin unterwegs", Schließen bleibt auf B 5 s gesperrt, C zeigt "noch 1". Nach der Meldung von C wird Schließen auf beiden frei; A zeigt beide Räume unter "Auf dem Weg" und "Empfangen: 2 von 2". Danach beendet C seinen Agent | A, B, C | FR-47, FR-50, FR-51, FR-53 |
 | T13 | Regression #182: eigenes Profil A an B (Schwelle 1, Config-Version 6000), kein "Bin unterwegs". Nach "Empfangen: 1 von 1" auf A beendet B seinen Agent, A beobachtet das Banner 15 s lang. Rot, wenn trotz mindestens einer weiteren, unquittierten Welle (`audit.log` von A) ein anderer Text als "Empfangen: 1 von 1" erscheint; danach startet B den Agent wieder | A, B | FR-14, FR-53 |
 | T14 | Regression #183: A mit `lizenz.json`, B mit `lizenz-abgelaufen-neuer.json` (später ausgestellt, abgelaufen); B startet nach A neu, damit Boot-Call und Antwort die Lizenzen austauschen. A behält die gültige Lizenz (kein "Lizenz von Peer" im `audit.log`), B übernimmt sie binnen 60 s. Danach beide wieder `lizenz.json` | A, B | – |
+| T16 | Regression #180: A deaktiviert B im Reiter "Geräte / Lizenz" und aktiviert es wieder. Rot, wenn B danach in `devices.json` von A nicht auf `LicenseOverride` None steht (vor dem Fix: ForceEnabled, B umgeht dann das Kontingent). B prüft, dass es None per Gossip in `settings.json` übernimmt | A, B | – |
 
-T4 bis T10, T13 und T14 (Trait `Teil=ZweiGeraete`) laufen nur, wenn A und B beteiligt sind, T11 und T12
+T4 bis T10, T13, T14 und T16 (Trait `Teil=ZweiGeraete`) laufen nur, wenn A und B beteiligt sind, T11 und T12
 (`Teil=DreiGeraete`) nur mit A, B und C. Die Geräte stimmen sich über Markendateien ab, die
 `ci/e2e/rendezvous-relay.sh` zwischen allen beteiligten VMs spiegelt. T11/T12 laufen zwischen T5 und T6
 (Priorität 53/56). Ein Lauf mit `a,b` ist dadurch unverändert. C beendet nach T12 seinen Agent, damit es
 ab T6 nicht mehr mitspielt: sonst verteilte es in T9 seine gültige Lizenz per Gossip an A und B
 (`TryAdoptFromPeer`). Trait `Bereich`:
 `Haupt` (T6 bis T9) setzt Installation, Discovery und Alarm voraus (`Basis`: T1, T4, T5, T11, T12), ein
-Teillauf filtert deshalb z. B. auf `Bereich=Basis|Bereich=Haupt`. `R136` (T10), `R182` (T13) und `R183` (T14) brauchen nur `Basis`.
+Teillauf filtert deshalb z. B. auf `Bereich=Basis|Bereich=Haupt`. `R136` (T10), `R182` (T13), `R183` (T14) und `R180` (T16) brauchen nur `Basis`.
 
 Auslöser: Label `e2e` an einem PR aus diesem Repo (nicht aus Forks) oder `workflow_dispatch`
 (Input `vms`: Geräte aus `ci/e2e/geraete.json`, z. B. `a,b` oder `a,b,c`; Default `a,b,c`). Beim
