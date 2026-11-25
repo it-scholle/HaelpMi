@@ -80,6 +80,8 @@ internal static class Installation
         // Die postinstall-Einträge starten Agent und Konfiguration mit dem Token des Installers, je nach Aufrufer
         // erhöht oder in einer fremden Sitzung. Der Test braucht den Agent rechtelos in der eigenen Sitzung, wie nach einer Anmeldung.
         await Task.Delay(TimeSpan.FromSeconds(3));
+        _abbruchNachInstallation = AbbruchfensterDesAgents();
+        _erstinstallationGeprueft = true;
         HaelpMiApp.BeendeAlles();
         await HaelpMiApp.StarteAgentAsync();
         Rendezvous.Signal($"{geraet.ToLowerInvariant()}-installiert", settings.DeviceId.ToString());
@@ -185,6 +187,10 @@ internal static class Installation
     /// </summary>
     public static void PruefeDateienVorErstemStart(string geraet)
     {
+        Assert.True(_erstinstallationGeprueft, "T25 braucht T1 im selben Lauf (Filter z. B. Bereich=Basis|Bereich=R229).");
+        Assert.True(_abbruchNachInstallation is null,
+            $"Der vom Installer gestartete Agent zeigte nach der Erstinstallation „{_abbruchNachInstallation}“ (deployment.json fehlte beim Start).");
+
         var setupLog = Path.Combine(Artefakte.Ordner, $"installer-{geraet}.log");
         Assert.True(File.Exists(setupLog), $"{setupLog} fehlt - T25 braucht die Erstinstallation aus T1 (Filter z. B. Bereich=Basis|Bereich=R229).");
 
@@ -204,6 +210,26 @@ internal static class Installation
                 $"{datei} entstand erst in Zeile {zeile + 1}, der erste HälpMi-Start steht schon in Zeile {ersterStart + 1}: {zeilen[ersterStart].Trim()}");
             Assert.True(File.Exists(pfad), $"{pfad} fehlt nach der Installation.");
         }
+    }
+
+    private static string? _abbruchNachInstallation;
+    private static bool _erstinstallationGeprueft;
+
+    /// <summary>Titel der Meldung, mit der der Agent ohne settings.json/deployment.json abbricht (App.xaml.cs), sonst null.</summary>
+    private static string? AbbruchfensterDesAgents()
+    {
+        foreach (var prozess in System.Diagnostics.Process.GetProcessesByName(HaelpMiApp.AgentProzess))
+        {
+            using (prozess)
+            {
+                if (prozess.MainWindowTitle.Contains("Installation unvollständig", StringComparison.Ordinal))
+                {
+                    return prozess.MainWindowTitle;
+                }
+            }
+        }
+
+        return null;
     }
 
     private static int ErsterHaelpMiStart(string setupLog, string[] zeilen)

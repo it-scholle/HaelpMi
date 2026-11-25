@@ -62,6 +62,16 @@ public class InstallerSkriptTests
         Assert.DoesNotContain(schreiber, Prozedur(InnoCode(), "CurStepChanged"));
     }
 
+    /// <summary>Läuft [Run] nicht (z. B. bei nötigem Neustart), holt ssPostInstall das Schreiben nach, aber nicht doppelt.</summary>
+    [Fact]
+    public void Installationsdateien_RueckfallInPostInstall_NurWennNochNichtGeschrieben()
+    {
+        var code = InnoCode();
+        Assert.Contains("InstallationsdateienGeschrieben := True;", Prozedur(code, "SchreibeInstallationsdateien"));
+        Assert.Matches(@"if \(CurStep = ssPostInstall\) and not InstallationsdateienGeschrieben then\s+begin[^\n]*\n(\s*Log\([^\n]*\n)?\s*SchreibeInstallationsdateien\(\);",
+            Prozedur(code, "CurStepChanged"));
+    }
+
     [Fact]
     public void Installationsdateien_SettingsUndInstalledByNurEinmal_DeploymentBeiJedemLauf()
     {

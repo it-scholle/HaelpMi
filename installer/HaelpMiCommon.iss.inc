@@ -617,6 +617,9 @@ begin
 #endif
 end;
 
+var
+  InstallationsdateienGeschrieben: Boolean;
+
 // Schreibt bei jedem Lauf eine Setup-Log-Zeile je Datei, damit die Reihenfolge zum ersten [Run]-Start nachprüfbar ist.
 // settings.json und installed-by.json nur beim ersten Mal (siehe WriteSettingsJson, WriteInstalledByJson),
 // deployment.json bei jedem Lauf (siehe WriteDeploymentJson).
@@ -640,6 +643,7 @@ begin
 
   WriteDeploymentJson();
   Log('Installationsdatei geschrieben: deployment.json');
+  InstallationsdateienGeschrieben := True;
 end;
 
 // BeforeInstall des ersten [Run]-Eintrags, siehe Kommentar dort.
@@ -674,6 +678,14 @@ begin
     Exec('taskkill.exe', '/IM {#MyAgentExeName} /F', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
     Exec('taskkill.exe', '/IM {#MyConfigExeName} /F', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
     Sleep(500);
+  end;
+
+  // Rückfallebene, falls Inno die [Run]-Einträge nicht ausgeführt hat (z. B. bei nötigem Neustart): ohne die
+  // Dateien bräche der Agent beim nächsten Start mit „Installation unvollständig“ ab.
+  if (CurStep = ssPostInstall) and not InstallationsdateienGeschrieben then
+  begin
+    Log('Installationsdateien nicht vor einem [Run]-Start geschrieben, jetzt nachgeholt');
+    SchreibeInstallationsdateien();
   end;
 end;
 
