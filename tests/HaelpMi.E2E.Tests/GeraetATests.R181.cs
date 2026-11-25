@@ -22,10 +22,17 @@ public partial class GeraetATests
     public Task T17_Regression181_AblaufOhneNeustartErkannt() =>
         Artefakte.SichereAsync(nameof(T17_Regression181_AblaufOhneNeustartErkannt), async () =>
         {
+            // Erst wählen, wenn B bereit ist: sonst könnte die Lizenz schon vor dem gemeinsamen Agent-Start ablaufen.
+            await Rendezvous.WaitForAsync("t17-b-bereit", GegenseiteTimeout);
             var (datei, ablauf) = Lizenz.KurzWaehlen(T17Vorlauf);
             _ausgabe.WriteLine($"T17: {datei}, Ablauf {ablauf:O}");
             Rendezvous.Signal("t17-datei", datei);
             await Lizenz.WechselnAsync("kurz", "a", () => Lizenz.Einspielen(datei), GegenseiteTimeout, "t17");
+
+            if (Lizenz.Status().Status != HaelpMi.Core.Licensing.LicenseStatus.Valid)
+            {
+                throw new InvalidOperationException($"Testvorbereitung: {datei} ist beim Agent-Start schon abgelaufen ({ablauf:O}); kein Nachweis ohne Neustart möglich.");
+            }
 
             var befunde = new List<string>();
             using (var app = new HaelpMiApp())

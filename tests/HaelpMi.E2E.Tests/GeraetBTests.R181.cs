@@ -14,9 +14,15 @@ public partial class GeraetBTests
     public Task T17_Regression181_HinweisOhneNeustart() =>
         Artefakte.SichereAsync(nameof(T17_Regression181_HinweisOhneNeustart), async () =>
         {
+            Rendezvous.Signal("t17-b-bereit");
             var datei = (await Rendezvous.WaitForAsync("t17-datei", GegenseiteTimeout)).Trim();
             await Lizenz.WechselnAsync("kurz", "b", () => Lizenz.Einspielen(datei), GegenseiteTimeout, "t17");
-            var ablauf = Lizenz.Status().License?.ExpiryDateUtc ?? throw new InvalidOperationException($"{datei} ist auf B nicht lesbar.");
+            var status = Lizenz.Status();
+            var ablauf = status.License?.ExpiryDateUtc ?? throw new InvalidOperationException($"{datei} ist auf B nicht lesbar.");
+            if (status.Status != HaelpMi.Core.Licensing.LicenseStatus.Valid)
+            {
+                throw new InvalidOperationException($"Testvorbereitung: {datei} ist beim Agent-Start schon abgelaufen ({ablauf:O}); kein Nachweis ohne Neustart möglich.");
+            }
 
             var befunde = new List<string>();
             using (var app = new HaelpMiApp())

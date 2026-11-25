@@ -20,7 +20,8 @@ public static class LicenseRecheckSchedule
             return next;
         }
 
-        var warningAt = license.ExpiryDateUtc.AddDays(-LicenseWarningEvaluator.WarningWindowDays);
+        // LicenseWarningEvaluator rundet die Resttage ab: "bald ab" gilt schon ab weniger als WarningWindowDays + 1 Tagen.
+        var warningAt = license.ExpiryDateUtc.AddDays(-(LicenseWarningEvaluator.WarningWindowDays + 1));
         var expiredAt = license.ExpiryDateUtc + AfterExpiryMargin;
         foreach (var candidate in new[] { warningAt, expiredAt })
         {

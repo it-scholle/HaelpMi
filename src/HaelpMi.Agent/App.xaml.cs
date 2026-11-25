@@ -71,7 +71,7 @@ public partial class App : System.Windows.Application
     /// </summary>
     private LicenseCheckResult _license = null!;
 
-    /// <summary>Nur gesetzt, während das Systemstart-Erinnerungs-Popup offen ist - siehe HandleLicenseRenewedRequestAsync.</summary>
+    /// <summary>Nur gesetzt, während der Lizenz-Hinweis (Start oder ReloadLicense) offen ist.</summary>
     private LicenseReminderToastWindow? _licenseReminderToast;
 
     /// <summary>Zuletzt ausgewertete Warnstufe, nur auf dem UI-Thread; <c>null</c> bis zur ersten Auswertung beim Start.</summary>
@@ -278,17 +278,35 @@ public partial class App : System.Windows.Application
 
         _licenseReminderToast?.Close();
         _licenseReminderToast = new LicenseReminderToastWindow(warning, mayOpenDashboard ? OpenDashboardDirectly : null);
-        _licenseReminderToast.Closed += (_, _) => _licenseReminderToast = null;
+        // Ein älterer, gerade ausblendender Toast darf beim Schließen nicht den Verweis auf diesen löschen.
+        _licenseReminderToast.Closed += (sender, _) =>
+        {
+            if (ReferenceEquals(_licenseReminderToast, sender))
+            {
+                _licenseReminderToast = null;
+            }
+        };
         _licenseReminderToast.Show();
     }
 
     /// <summary>Lizenz neu lesen und wie beim Start bewerten (Sperre, Hinweis); nur auf dem UI-Thread.</summary>
     private void ReloadLicense()
     {
-        _license = LicenseRuntime.LoadCurrent(_deployment.CustomerGroupId, Convert.FromHexString(_deployment.LicensePublicKeyHex));
-        RefreshLicenseLimitState();
-        ShowLicenseReminderToastIfNeeded(isPostInstallStart: false);
-        ScheduleLicenseRecheck();
+        try
+        {
+            _license = LicenseRuntime.LoadCurrent(_deployment.CustomerGroupId, Convert.FromHexString(_deployment.LicensePublicKeyHex));
+            RefreshLicenseLimitState();
+            ShowLicenseReminderToastIfNeeded(isPostInstallStart: false);
+        }
+        catch (Exception ex)
+        {
+            CrashLogger.Log(nameof(HaelpMi.Agent), "Lizenz neu prüfen", ex);
+        }
+        finally
+        {
+            // Auch nach einem Fehler weiter planen, sonst prüft der Agent bis zum nächsten Import nie wieder.
+            ScheduleLicenseRecheck();
+        }
     }
 
     private void ScheduleLicenseRecheck()

@@ -23,9 +23,12 @@ public class LicenseRecheckTests
     [Fact]
     public void NextCheck_WarningThresholdWithinOneDay_IsAtWarningThreshold()
     {
-        var expiry = Now.AddDays(LicenseWarningEvaluator.WarningWindowDays).AddHours(3);
+        var expiry = Now.AddDays(LicenseWarningEvaluator.WarningWindowDays + 1).AddHours(3);
+        var next = LicenseRecheckSchedule.NextCheckUtc(Valid(expiry), Now);
 
-        Assert.Equal(expiry.AddDays(-LicenseWarningEvaluator.WarningWindowDays), LicenseRecheckSchedule.NextCheckUtc(Valid(expiry), Now));
+        Assert.Equal(Now.AddHours(3), next);
+        Assert.Equal(LicenseWarningLevel.None, LicenseWarningEvaluator.Evaluate(Valid(expiry), Now).Level);
+        Assert.Equal(LicenseWarningLevel.ExpiringSoon, LicenseWarningEvaluator.Evaluate(Valid(expiry), next).Level);
     }
 
     [Fact]
