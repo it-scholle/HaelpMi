@@ -12,6 +12,10 @@
 - Beide Installer legen eingehende Firewall-Programmregeln an: „HälpMi Agent“ für
   `HaelpMi.Agent.exe`, der Admin-Installer zusätzlich „HälpMi Konfiguration“ für
   `HaelpMi.Config.exe` (das Dashboard öffnet eigene Sockets). Die Deinstallation entfernt sie.
+  Die Regeln entstehen vor dem ersten Start eines HälpMi-Programms, auch bei Reparatur und
+  Update. Hat jemand eine frühere Windows-Abfrage „Zugriff zulassen?“ abgebrochen, legt Windows
+  Inbound-Block-Regeln „HaelpMi.Agent“ bzw. „HaelpMi.Config“ an, die die Allow-Regel schlagen;
+  der Installer entfernt sie derzeit nicht (Prüfung: `Get-NetFirewallRule -Action Block`).
   Wer die Firewall per GPO verwaltet und lokale Regeln nicht zulässt, gibt die beiden Programme
   oder die Ports aus `docs/architektur.md` dort frei.
 
