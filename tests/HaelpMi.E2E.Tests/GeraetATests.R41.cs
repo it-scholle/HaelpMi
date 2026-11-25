@@ -6,7 +6,7 @@ using static HaelpMi.E2E.Tests.ZweiGeraete;
 
 namespace HaelpMi.E2E.Tests;
 
-// T22 Regressionstest #41.
+// T22: Senden ohne Empfänger.
 public partial class GeraetATests
 {
     /// <summary>
@@ -20,6 +20,7 @@ public partial class GeraetATests
         Artefakte.SichereAsync(nameof(T22_Regression41_SendenOhneEmpfaenger), async () =>
         {
             var a = EigeneDeviceId();
+            // Version unter T10/T13 ist unkritisch: B hat denselben Stand, A zieht nichts nach.
             await BereiteAlarmprofilVorAsync(a, Array.Empty<Guid>(), 1400, 1, "E2E-Alarm ohne Empfänger");
 
             using var app = new HaelpMiApp();
@@ -32,7 +33,7 @@ public partial class GeraetATests
                 Assert.Equal("Empfangen: 0 von 0", NameVon(banner, "AckedText"));
                 var hinweis = NameVon(banner, "NoRecipientsText");
                 _ausgabe.WriteLine($"T22: Hinweis '{hinweis}'");
-                Assert.Contains("keine Empfänger", hinweis);
+                Assert.Contains("kein Gerät", hinweis);
                 Assert.Contains("Dashboard", hinweis);
                 Assert.Contains(AuditLogZeilen(seit), z => z.Contains($"alarm sent alarmProfileId={ProfilId}", StringComparison.Ordinal));
 

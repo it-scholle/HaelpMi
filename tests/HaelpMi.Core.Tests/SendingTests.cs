@@ -344,7 +344,7 @@ public class SendingTests
     [Fact]
     public async Task RepeatingAlarmSession_WithoutTargets_KeepsSendingUntilCancelled()
     {
-        // #41: Ein Alarm ohne eingerichtete Empfänger muss trotzdem als laufende Sitzung sichtbar sein
+        // Ein Alarm ohne erreichbare Empfänger muss trotzdem als laufende Sitzung sichtbar sein
         // (Statusanzeige mit "0 von 0" und Abbrechen), statt dass das Tastenkürzel wirkungslos bleibt.
         var auditLines = new System.Collections.Concurrent.ConcurrentQueue<string>();
         var senderIdentity = new LiveIdentity(Guid.NewGuid(), Guid.NewGuid(), "Sender-PC", "Frau Meier", "Zimmer", "1", Role.Admin, false, "0.0.0", 0, DateTimeOffset.UtcNow);
@@ -380,7 +380,7 @@ public class SendingTests
         var hint = SenderStatusTexts.NoRecipientsHint(targetCount: 0);
 
         Assert.NotNull(hint);
-        Assert.Contains("keine Empfänger", hint);
+        Assert.Contains("kein Gerät", hint);
         Assert.Contains("Dashboard", hint);
         Assert.Contains("Alarm-Profile", hint);
     }
