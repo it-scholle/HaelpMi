@@ -293,6 +293,71 @@ public class SendingTests
         }
     }
 
+    [Theory]
+    [InlineData(0, 5000)]
+    [InlineData(2000, 3000)]
+    [InlineData(5000, 0)]
+    [InlineData(9000, 0)]
+    public void TimeUntilNextWave_CountsFromWaveStart(int waveDurationMs, int expectedMs)
+    {
+        Assert.Equal(TimeSpan.FromMilliseconds(expectedMs), RepeatingAlarmSession.TimeUntilNextWave(TimeSpan.FromMilliseconds(waveDurationMs)));
+    }
+
+    [Theory]
+    [InlineData(2000)] // Empfänger quittiert spät, z. B. weil sein UI-Thread beim ersten Alarm noch beschäftigt ist
+    [InlineData(6000)] // Empfänger quittiert gar nicht mehr (Agent beendet, PC aus): jede Welle läuft in den Ack-Timeout
+    public async Task RepeatingAlarmSession_SlowAck_KeepsRepeatInterval(int ackDelayMs)
+    {
+        // Ein langsamer Empfänger darf den Takt der Wiederholung für alle nicht verlängern.
+        var ackDelay = TimeSpan.FromMilliseconds(ackDelayMs);
+        var tolerance = TimeSpan.FromSeconds(1);
+        var customerGroupId = Guid.NewGuid();
+        var senderIdentity = new LiveIdentity(customerGroupId, Guid.NewGuid(), "Sender-PC", "Frau Meier", "Zimmer", "1", Role.User, false, "0.0.0", 0, DateTimeOffset.UtcNow);
+        var receiverDeviceId = Guid.NewGuid();
+
+        var tcp = new TcpListener(IPAddress.Loopback, 0);
+        tcp.Start();
+        var port = ((IPEndPoint)tcp.LocalEndpoint).Port;
+        using var serverCts = new CancellationTokenSource();
+        var waveArrivals = new System.Collections.Concurrent.ConcurrentQueue<DateTimeOffset>();
+        var serverTask = RunDelayingAckServerAsync(tcp, customerGroupId, receiverDeviceId, _ =>
+        {
+            waveArrivals.Enqueue(DateTimeOffset.UtcNow);
+            return ackDelay;
+        }, serverCts.Token);
+
+        var feedbackChannel = new AlarmFeedbackChannel(() => senderIdentity);
+        var profile = new AlarmProfile { Text = "Bitte kommen!", ResponseThreshold = 1 };
+        var target = new DeviceEntry { DeviceId = receiverDeviceId, IpAddress = "127.0.0.1", TcpPort = port };
+        var session = new RepeatingAlarmSession(profile, new[] { target }, senderIdentity, new AlarmSender(), feedbackChannel, DateTimeOffset.UtcNow);
+        try
+        {
+            _ = session.RunAsync();
+            var deadline = DateTimeOffset.UtcNow + TimeSpan.FromSeconds(30);
+            while (waveArrivals.Count < 3 && DateTimeOffset.UtcNow < deadline)
+            {
+                await Task.Delay(100);
+            }
+
+            var arrivals = waveArrivals.ToArray();
+            Assert.True(arrivals.Length >= 3, $"Nur {arrivals.Length} Wellen in 30 s angekommen.");
+            for (var i = 1; i < 3; i++)
+            {
+                var gap = arrivals[i] - arrivals[i - 1];
+                Assert.True(gap <= AppConstants.AlarmRepeatInterval + tolerance,
+                    $"Abstand Welle {i} -> {i + 1}: {gap.TotalSeconds:F2} s, erwartet höchstens {(AppConstants.AlarmRepeatInterval + tolerance).TotalSeconds:F1} s.");
+            }
+        }
+        finally
+        {
+            session.Cancel();
+            session.Dispose();
+            serverCts.Cancel();
+            tcp.Stop();
+            await Task.WhenAny(serverTask, Task.Delay(TimeSpan.FromSeconds(2)));
+        }
+    }
+
     [Fact]
     public async Task RepeatingAlarmSession_OnMyWayWithoutAck_CountsAsReceived()
     {
@@ -341,7 +406,120 @@ public class SendingTests
         }
     }
 
-    private static async Task RunDelayingAckServerAsync(TcpListener tcp, Guid customerGroupId, Guid receiverDeviceId, CancellationToken ct)
+    [Fact]
+    public async Task RepeatingAlarmSession_TargetAddressChangedAfterTrigger_WaveUsesCurrentAddress()
+    {
+        // Das Ziel startet gerade und ist unter der beim Auslösen gespeicherten Adresse
+        // nicht erreichbar; sein Boot-Call hat dem Sender inzwischen die aktuelle Adresse
+        // mitgeteilt. Die Session muss das Ziel unter der aktuellen Adresse anschreiben,
+        // statt bis zum Ende der Session die alte zu verwenden.
+        var customerGroupId = Guid.NewGuid();
+        var senderIdentity = new LiveIdentity(customerGroupId, Guid.NewGuid(), "Sender-PC", "Frau Meier", "Zimmer", "1", Role.User, false, "0.0.0", 0, DateTimeOffset.UtcNow);
+        var receiverDeviceId = Guid.NewGuid();
+        var receiverIdentity = new LiveIdentity(customerGroupId, receiverDeviceId, "Empf-PC", "Herr Novak", "Raum", "2", Role.Admin, false, "0.0.0", 0, DateTimeOffset.UtcNow);
+
+        var stalePort = FreeTcpPort();
+        var currentPort = FreeTcpPort();
+        await using var receiver = new AlarmTcpListener(() => receiverIdentity);
+        Assert.True(receiver.Start(currentPort));
+
+        var feedbackChannel = new AlarmFeedbackChannel(() => senderIdentity);
+        var profile = new AlarmProfile { Text = "Bitte kommen!", ResponseThreshold = 1 };
+        var snapshotTarget = new DeviceEntry { DeviceId = receiverDeviceId, IpAddress = "127.0.0.1", TcpPort = stalePort };
+        var storedDevices = new List<DeviceEntry>
+        {
+            new() { DeviceId = receiverDeviceId, IpAddress = "127.0.0.1", TcpPort = currentPort },
+        };
+        var session = new RepeatingAlarmSession(
+            profile, new[] { snapshotTarget }, senderIdentity, new AlarmSender(), feedbackChannel, DateTimeOffset.UtcNow,
+            currentDevicesProvider: () => storedDevices);
+        try
+        {
+            var acked = new TaskCompletionSource<AlarmSessionStatus>(TaskCreationOptions.RunContinuationsAsynchronously);
+            session.StatusChanged += (_, status) =>
+            {
+                if (status.StillSending && status.AckedCount > 0)
+                {
+                    acked.TrySetResult(status);
+                }
+            };
+
+            _ = session.RunAsync();
+            var status = await acked.Task.WaitAsync(TimeSpan.FromSeconds(15));
+
+            Assert.Equal(1, status.TargetCount);
+            Assert.Equal(1, status.AckedCount);
+        }
+        finally
+        {
+            session.Cancel();
+            session.Dispose();
+        }
+    }
+
+    [Fact]
+    public async Task RepeatingAlarmSession_NoCurrentAddress_KeepsSnapshotAddress()
+    {
+        // Ein Ziel ohne Adresse in devices.json wird weiter unter der Adresse aus dem
+        // Auslösezeitpunkt angeschrieben; ebenso ein Ziel, das dort gar nicht mehr steht.
+        var customerGroupId = Guid.NewGuid();
+        var senderIdentity = new LiveIdentity(customerGroupId, Guid.NewGuid(), "Sender-PC", "Frau Meier", "Zimmer", "1", Role.User, false, "0.0.0", 0, DateTimeOffset.UtcNow);
+        var receiverDeviceId = Guid.NewGuid();
+        var receiverIdentity = new LiveIdentity(customerGroupId, receiverDeviceId, "Empf-PC", "Herr Novak", "Raum", "2", Role.User, false, "0.0.0", 0, DateTimeOffset.UtcNow);
+
+        var port = FreeTcpPort();
+        await using var receiver = new AlarmTcpListener(() => receiverIdentity);
+        Assert.True(receiver.Start(port));
+
+        var feedbackChannel = new AlarmFeedbackChannel(() => senderIdentity);
+        var profile = new AlarmProfile { Text = "Bitte kommen!", ResponseThreshold = 1 };
+        var snapshotTarget = new DeviceEntry { DeviceId = receiverDeviceId, IpAddress = "127.0.0.1", TcpPort = port };
+        var storedDevices = new List<DeviceEntry>
+        {
+            new() { DeviceId = receiverDeviceId, IpAddress = string.Empty, TcpPort = FreeTcpPort() },
+        };
+        var missingDeviceId = Guid.NewGuid();
+        var missingTarget = new DeviceEntry { DeviceId = missingDeviceId, IpAddress = "127.0.0.1", TcpPort = port };
+        var session = new RepeatingAlarmSession(
+            profile, new[] { snapshotTarget, missingTarget }, senderIdentity, new AlarmSender(), feedbackChannel, DateTimeOffset.UtcNow,
+            currentDevicesProvider: () => storedDevices);
+        try
+        {
+            // Erst ab der zweiten Welle werden die Adressen nachgelesen: zwei Ziele mal zwei Wellen.
+            var deliveries = 0;
+            var secondWaveDelivered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            receiver.AlarmReceived += (_, _) =>
+            {
+                if (Interlocked.Increment(ref deliveries) >= 4)
+                {
+                    secondWaveDelivered.TrySetResult();
+                }
+            };
+
+            _ = session.RunAsync();
+            await secondWaveDelivered.Task.WaitAsync(TimeSpan.FromSeconds(20));
+        }
+        finally
+        {
+            session.Cancel();
+            session.Dispose();
+        }
+    }
+
+    private static int FreeTcpPort()
+    {
+        var probe = new TcpListener(IPAddress.Loopback, 0);
+        probe.Start();
+        var port = ((IPEndPoint)probe.LocalEndpoint).Port;
+        probe.Stop();
+        return port;
+    }
+
+    private static Task RunDelayingAckServerAsync(TcpListener tcp, Guid customerGroupId, Guid receiverDeviceId, CancellationToken ct) =>
+        RunDelayingAckServerAsync(tcp, customerGroupId, receiverDeviceId,
+            round => round == 1 ? TimeSpan.Zero : AppConstants.AlarmAckTimeout + TimeSpan.FromSeconds(1), ct);
+
+    private static async Task RunDelayingAckServerAsync(TcpListener tcp, Guid customerGroupId, Guid receiverDeviceId, Func<int, TimeSpan> ackDelayForRound, CancellationToken ct)
     {
         var round = 0;
         try
@@ -350,7 +528,7 @@ public class SendingTests
             {
                 var client = await tcp.AcceptTcpClientAsync(ct);
                 round++;
-                var delay = round == 1 ? TimeSpan.Zero : AppConstants.AlarmAckTimeout + TimeSpan.FromSeconds(1);
+                var delay = ackDelayForRound(round);
                 _ = Task.Run(async () =>
                 {
                     using (client)

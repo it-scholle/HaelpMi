@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using HaelpMi.Core.Models;
 using HaelpMi.Core.Networking;
 using HaelpMi.Core.Networking.Protocol;
@@ -41,6 +42,9 @@ public enum AlarmStopReason
 /// a Config-Sync hot-reload arriving mid-session (6., known Version-2 challenge: "darf
 /// laufende Alarme nicht unterbrechen") cannot change an already-running session's
 /// behavior out from under it; it only affects the *next* time this profile's hotkey fires.
+/// Fest ist dabei nur die Empfängerliste: Ab der zweiten Welle liest die Session die aktuelle
+/// Adresse jedes Ziels per Geräte-ID nach (<c>currentDevicesProvider</c>), weil ein gerade
+/// startender Empfänger nach dem Auslösen eine andere Adresse melden kann.
 ///
 /// Pinging (repeated <see cref="AlarmSender.SendAsync"/>) stops the moment any of the
 /// three conditions above is met, but the session itself stays alive and keeps listening
@@ -59,6 +63,8 @@ public sealed class RepeatingAlarmSession : IDisposable
     private readonly AlarmSender _alarmSender;
     private readonly AlarmFeedbackChannel _feedbackChannel;
     private readonly LiveIdentity _ownIdentity;
+    private readonly Func<IReadOnlyList<DeviceEntry>>? _currentDevicesProvider;
+    private volatile IReadOnlyList<DeviceEntry> _currentTargets;
     private readonly CancellationTokenSource _stopCts = new();
     private readonly HashSet<Guid> _onTheWayResponderIds = new();
     private readonly List<string> _onTheWayNames = new();
@@ -84,10 +90,14 @@ public sealed class RepeatingAlarmSession : IDisposable
         LiveIdentity ownIdentity,
         AlarmSender alarmSender,
         AlarmFeedbackChannel feedbackChannel,
-        DateTimeOffset startedAtUtc)
+        DateTimeOffset startedAtUtc,
+        // Liefert die aktuelle Geräteliste (devices.json); darf nicht werfen, sonst endet die Session ohne Finished.
+        Func<IReadOnlyList<DeviceEntry>>? currentDevicesProvider = null)
     {
         Profile = profile;
         Targets = targets;
+        _currentTargets = targets;
+        _currentDevicesProvider = currentDevicesProvider;
         _ownIdentity = ownIdentity;
         _alarmSender = alarmSender;
         _feedbackChannel = feedbackChannel;
@@ -97,6 +107,7 @@ public sealed class RepeatingAlarmSession : IDisposable
 
     public async Task RunAsync()
     {
+        var wave = 0;
         try
         {
             while (!_stopCts.IsCancellationRequested)
@@ -106,13 +117,27 @@ public sealed class RepeatingAlarmSession : IDisposable
                     break;
                 }
 
-                var result = await _alarmSender.SendAsync(Profile, AlarmSessionId, _ownIdentity, Targets, ct: _stopCts.Token);
+                var waveStarted = Stopwatch.StartNew();
+                if (wave++ > 0 && _currentDevicesProvider is not null)
+                {
+                    // Abseits des UI-Threads: das Lesen von devices.json kann bei Dateikonflikten kurz blockieren.
+                    _currentTargets = await Task.Run(TargetsWithCurrentAddresses);
+                    if (_stopCts.IsCancellationRequested)
+                    {
+                        break;
+                    }
+                }
+
+                var result = await _alarmSender.SendAsync(Profile, AlarmSessionId, _ownIdentity, _currentTargets, ct: _stopCts.Token);
                 MarkReceived(result.AckedDeviceIds);
-                await RaiseAndRelayAsync(stillSending: true);
+
+                // Nicht abwarten: ein ausgeschaltetes Gerät hält das Relay bis zum Verbindungs-Timeout auf und bremst
+                // sonst die nächste Welle für alle. Relays dürfen ohnehin in beliebiger Reihenfolge ankommen (AlarmCloseGate).
+                _ = RaiseAndRelayAsync(stillSending: true);
 
                 try
                 {
-                    await Task.Delay(AppConstants.AlarmRepeatInterval, _stopCts.Token);
+                    await Task.Delay(TimeUntilNextWave(waveStarted.Elapsed), _stopCts.Token);
                 }
                 catch (OperationCanceledException)
                 {
@@ -155,7 +180,7 @@ public sealed class RepeatingAlarmSession : IDisposable
         // Sender verschwinden (09.08.2026), die zusätzliche Zustellsicherheit ist reine
         // Netzwerk-Härtung ohne Einfluss auf die lokale Sender-Statusanzeige.
         _ = RelayBurstSender.SendRemainingAsync(
-            () => _feedbackChannel.RelayStatusAsync(Targets, finalRelay),
+            () => _feedbackChannel.RelayStatusAsync(_currentTargets, finalRelay),
             AppConstants.AlarmFinalRelayBurstCount,
             AppConstants.AlarmFinalRelayBurstSpacing);
 
@@ -169,6 +194,16 @@ public sealed class RepeatingAlarmSession : IDisposable
         // durchgereicht zu Dispose() (siehe RunSessionAsync), das die Subscription kappte -
         // jede Spätantwort verschwand dadurch komplett, sender- wie empfängerseitig.
         await Task.Delay(AppConstants.AlarmAutoCloseAfterLastSignal);
+    }
+
+    /// <summary>
+    /// Der Takt zählt ab dem Start einer Welle, nicht ab ihrem Ende: Warten auf Quittungen und Relays verlängert
+    /// sonst jede Runde, und ein langsamer Empfänger bremst die Wiederholung für alle Empfänger.
+    /// </summary>
+    internal static TimeSpan TimeUntilNextWave(TimeSpan waveDuration)
+    {
+        var remaining = AppConstants.AlarmRepeatInterval - waveDuration;
+        return remaining > TimeSpan.Zero ? remaining : TimeSpan.Zero;
     }
 
     /// <summary>Manual "Abbrechen" (FR-50).</summary>
@@ -258,8 +293,30 @@ public sealed class RepeatingAlarmSession : IDisposable
         var relay = new AlarmStatusRelayMessage(
             _ownIdentity.CustomerGroupId, Profile.Id, AlarmSessionId,
             Targets.Count, ackedCount, status.OnTheWayNames, stillSending, DateTimeOffset.UtcNow);
-        await _feedbackChannel.RelayStatusAsync(Targets, relay);
+        await _feedbackChannel.RelayStatusAsync(_currentTargets, relay);
         return relay;
+    }
+
+    private IReadOnlyList<DeviceEntry> TargetsWithCurrentAddresses()
+    {
+        if (_currentDevicesProvider is null)
+        {
+            return Targets;
+        }
+
+        var currentById = new Dictionary<Guid, DeviceEntry>();
+        foreach (var device in _currentDevicesProvider())
+        {
+            currentById.TryAdd(device.DeviceId, device);
+        }
+
+        return Targets
+            .Select(target => currentById.TryGetValue(target.DeviceId, out var current)
+                && !string.IsNullOrEmpty(current.IpAddress)
+                && (current.IpAddress != target.IpAddress || current.TcpPort != target.TcpPort)
+                    ? target.WithAddress(current.IpAddress, current.TcpPort)
+                    : target)
+            .ToList();
     }
 
     public void Dispose()

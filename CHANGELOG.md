@@ -15,6 +15,7 @@ Details stehen in der Git-Historie. Der eingefrorene Stand `legacy/main-0.39.x` 
 - Farben und Logo liegen nur noch einmal zentral vor (#151)
 - Versionsnummer steht nur noch in `Directory.Build.props`; der Installer liest sie beim Bauen von dort (#168)
 ### Behoben
+- Ein Gerät, das während eines laufenden Alarms startet oder seine Adresse wechselt, wird von den folgenden Wellen unter der aktuellen Adresse erreicht; die Geräteliste eines anderen Geräts überschreibt eine direkt gemeldete Adresse nicht mehr mit einer veralteten; der Alarm-Empfang läuft schon, bevor sich das Gerät im Netz meldet (#73)
 - Lizenzablauf und „läuft bald ab“ werden auch im laufenden Betrieb erkannt (zum jeweiligen Zeitpunkt, sonst einmal täglich), nicht erst nach einem Neustart; User-Geräte zeigen bei abgelaufener Lizenz einen Hinweis, Alarme laufen weiter (#181)
 - Eine gültige Lizenz wird nicht mehr durch eine später ausgestellte, aber abgelaufene Lizenz eines anderen Geräts ersetzt (#183)
 - Ein im Dashboard deaktiviertes Gerät löst kein Banner „Lizenzkontingent überschritten“ mehr aus; der Sperrhinweis auf dem Gerät nennt den tatsächlichen Grund (#133)
