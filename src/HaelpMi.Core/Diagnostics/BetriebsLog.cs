@@ -52,7 +52,18 @@ public sealed class BetriebsLog
     public static BetriebsLog StarteFuerProzess(string name)
     {
         var stufe = LeseStufe(AppPaths.BetriebsLogEinstellungenPath, out var hinweis);
-        var log = new BetriebsLog(new BetriebsLogOptionen(SharedLogPaths.ResolveDirectory(AppPaths.RootFolder), name) { MinStufe = stufe });
+        string ordner;
+        try
+        {
+            ordner = SharedLogPaths.ResolveDirectory(AppPaths.RootFolder);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // Ohne beschreibbaren Ordner schreibt Schreibe nichts; der Start des Prozesses darf daran nicht scheitern.
+            ordner = AppPaths.RootFolder;
+        }
+
+        var log = new BetriebsLog(new BetriebsLogOptionen(ordner, name) { MinStufe = stufe });
         Prozess = log;
         if (hinweis is not null)
         {
@@ -261,7 +272,7 @@ public sealed class BetriebsLog
                 {
                     RaeumeAuf(heute);
                 }
-                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException)
+                catch (Exception ex)
                 {
                     Schreibe(LogStufe.Warnung, nameof(BetriebsLog), "Aufräumen der Log-Dateien fehlgeschlagen, wird beim nächsten Tageswechsel oder Start wiederholt.", ausnahme: ex);
                 }

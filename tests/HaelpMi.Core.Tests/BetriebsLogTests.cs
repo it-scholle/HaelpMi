@@ -12,22 +12,31 @@ public sealed class BetriebsLogTests : IDisposable
 
     public BetriebsLogTests() => Directory.CreateDirectory(_ordner);
 
+    private readonly List<BetriebsLog> _logs = [];
+
     public void Dispose()
     {
+        foreach (var log in _logs)
+        {
+            Assert.True(log.Aufraeumen.Wait(TimeSpan.FromSeconds(10)), "Aufräumen nicht nach 10 s fertig.");
+        }
+
         try
         {
             Directory.Delete(_ordner, recursive: true);
         }
-        catch (IOException)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            // nur Aufräumen
+            // nur Aufräumen des Temp-Ordners
         }
     }
 
     private BetriebsLog NeuesLog(Func<BetriebsLogOptionen, BetriebsLogOptionen>? anpassen = null)
     {
         var optionen = new BetriebsLogOptionen(_ordner, "agent") { Zeit = _zeit };
-        return new BetriebsLog(anpassen?.Invoke(optionen) ?? optionen);
+        var log = new BetriebsLog(anpassen?.Invoke(optionen) ?? optionen);
+        _logs.Add(log);
+        return log;
     }
 
     private string Datei(string name) => Path.Combine(_ordner, name);
@@ -225,7 +234,7 @@ public sealed class BetriebsLogTests : IDisposable
 
         var log = NeuesLog(o => o with { MaxGesamtBytes = 1000 });
         log.Schreibe(LogStufe.Info, "Test", "heute");
-        log.Aufraeumen.Wait(TimeSpan.FromSeconds(10));
+        Assert.True(log.Aufraeumen.Wait(TimeSpan.FromSeconds(10)), "Aufräumen nicht nach 10 s fertig.");
 
         Assert.False(File.Exists(aeltest));
         Assert.True(File.Exists(mittel));
@@ -252,7 +261,7 @@ public sealed class BetriebsLogTests : IDisposable
 
         var log = NeuesLog();
         log.Schreibe(LogStufe.Info, "Test", "heute");
-        log.Aufraeumen.Wait(TimeSpan.FromSeconds(10));
+        Assert.True(log.Aufraeumen.Wait(TimeSpan.FromSeconds(10)), "Aufräumen nicht nach 10 s fertig.");
 
         Assert.False(File.Exists(zuAlt));
         Assert.True(File.Exists(grenzeAufbewahrung));
