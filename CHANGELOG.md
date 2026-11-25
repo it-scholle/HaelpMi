@@ -6,6 +6,7 @@ Details stehen in der Git-Historie. Der eingefrorene Stand `legacy/main-0.39.x` 
 
 ## [Unveröffentlicht]
 ### Neu
+- HälpMi führt ein Betriebsprotokoll zur Fehlersuche (`agent.log` für das Hintergrundprogramm, `config.log` für Einstellungen und Dashboard unter `%ProgramData%\HaelpMi`), ohne Alarmtexte oder andere Inhalte. Die Protokolle bleiben klein: eine Datei pro Tag, ältere werden komprimiert und nach 90 Tagen gelöscht, höchstens 200 MB je Programm. Für die Fehlersuche lässt sich ein ausführlicheres Protokoll ohne Update einschalten (`betriebslog.json`, siehe Betriebsdoku) (#227)
 - E2E: drittes Testgerät C (VM 9103) mit den Testfällen T11 (Discovery mit drei Geräten) und T12 (Alarm an zwei Empfänger mit Schwelle 2); Workflow, Relay und Skripte arbeiten mit beliebig vielen Test-VMs aus `ci/e2e/geraete.json`, die Umgebung läuft auf pve-nzxt (#202)
 - E2E: Regressionstest T18 (Alarmfenster schließen) mit drei Geräten (Alarm an zwei Empfänger mit Schwelle 2) (#136)
 ### Verbessert
@@ -15,6 +16,7 @@ Details stehen in der Git-Historie. Der eingefrorene Stand `legacy/main-0.39.x` 
 - Farben und Logo liegen nur noch einmal zentral vor (#151)
 - Versionsnummer steht nur noch in `Directory.Build.props`; der Installer liest sie beim Bauen von dort (#168)
 ### Behoben
+- Nach einer Erstinstallation startet HälpMi sofort vollständig: Der Installer legt seine Einstellungsdateien an, bevor er HälpMi zum ersten Mal startet; vorher konnte direkt nach der Installation die Meldung „Installation unvollständig“ erscheinen (#229)
 - Hat ein Gerät in seinem Alarm-Profil keine Empfänger (nicht eingerichtet, noch kein Gerät installiert oder alle gesperrt), bleibt das Tastenkürzel nicht mehr wirkungslos: Das Gerät zeigt „Alarm nicht zugestellt“ mit einem Hinweis, wo ein Admin die Empfänger im Dashboard einrichtet (#41)
 - Das Tastenkürzel eines Alarm-Profils löst auf einem Gerät, das in diesem Profil nicht als Sender eingetragen ist, wieder nichts aus statt eines Banners „Alarm nicht zugestellt“ (#232)
 - Nach einer Installation, Reparatur oder einem Update empfängt ein Gerät Alarme zuverlässig: Die Firewall-Freigaben werden angelegt, bevor HälpMi zum ersten Mal startet; Sperren aus einer früher abgebrochenen Windows-Firewall-Abfrage werden beim Installieren, Reparieren oder Aktualisieren entfernt (#222)

@@ -38,6 +38,7 @@ public static class CrashLogger
     {
         try
         {
+            BetriebsLog.Fehler(source, $"Ausnahme in {processName} (auch in crash.log).", ex);
             var dir = ResolveLogDirectory();
             var entry = $"{DateTimeOffset.UtcNow:O}\t{processName}\t{source}\t{ex}{Environment.NewLine}{new string('-', 40)}{Environment.NewLine}";
             File.AppendAllText(Path.Combine(dir, "crash.log"), entry);

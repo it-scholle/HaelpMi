@@ -29,6 +29,16 @@ public class GeraetCTests
         Artefakte.SichereAsync(nameof(T1_UserInstaller_InstalliertStill),
             () => Installation.InstalliereUndPruefeAsync(Role.User, "C"));
 
+    /// <summary>T25 Regressionstest #229, direkt nach T1: wertet nur dessen Setup-Log aus.</summary>
+    [Fact, TestPriority(12), Trait("Bereich", "R229")]
+    public Task T25_Regression229_DateienVorErstemAgentStart() =>
+        Artefakte.SichereAsync(nameof(T25_Regression229_DateienVorErstemAgentStart),
+            () =>
+            {
+                Installation.PruefeDateienVorErstemStart("C");
+                return Task.CompletedTask;
+            });
+
     [Fact, TestPriority(53), Trait("Bereich", "Basis")]
     [Trait("Teil", DreiGeraete.Teil)]
     public Task T11_Discovery_CKenntAUndB() =>

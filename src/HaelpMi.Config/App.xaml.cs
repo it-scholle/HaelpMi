@@ -82,6 +82,8 @@ public partial class App : System.Windows.Application
         base.OnStartup(e);
 
         CrashLogger.InstallProcessWideHooks(nameof(HaelpMi.Config));
+        BetriebsLog.StarteFuerProzess("config");
+        BetriebsLog.Info("Start", $"Konfiguration {typeof(App).Assembly.GetName().Version?.ToString(3)} gestartet, Parameter: [{string.Join(' ', e.Args)}]");
         DispatcherUnhandledException += (_, args) =>
         {
             CrashLogger.Log(nameof(HaelpMi.Config), "DispatcherUnhandledException", args.Exception);
@@ -149,6 +151,7 @@ public partial class App : System.Windows.Application
                 // startet ohnehin eine frische Instanz.
             }
 
+            BetriebsLog.Info("Start", "Konfiguration läuft schon, vorhandenes Fenster aktiviert, diese Instanz beendet sich.");
             Shutdown();
             return;
         }
@@ -176,6 +179,7 @@ public partial class App : System.Windows.Application
             // DispatcherUnhandledException-Handler durch, der zwar loggt und den Prozess am
             // Leben hält, aber OnStartup an dieser Stelle abbricht - ohne Meldung, ohne
             // Fenster (genau das war "Dashboard öffnet nicht" ohne jede Rückmeldung).
+            BetriebsLog.Fehler("Start", "settings.json, deployment.json oder Lizenzschlüssel fehlt oder ist ungültig, Konfiguration beendet sich.", ex);
             MessageBox.Show(
                 $"Die Konfigurationsdatei ist beschädigt oder unvollständig:{Environment.NewLine}{ex.Message}{Environment.NewLine}{Environment.NewLine}Bitte HälpMi neu installieren/reparieren.",
                 "HälpMi - Installation unvollständig", MessageBoxButton.OK, MessageBoxImage.Error);
@@ -647,6 +651,7 @@ public partial class App : System.Windows.Application
         }
         _singleInstanceMutex?.Dispose();
 
+        BetriebsLog.Info("Ende", $"Konfiguration beendet, Exit-Code {e.ApplicationExitCode}.");
         base.OnExit(e);
     }
 }
