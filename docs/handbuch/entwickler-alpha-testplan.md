@@ -206,6 +206,9 @@ im Code schon als seltene Startrace eingeplant habe, aber nicht selbst timen kon
 - [ ] Alarm über die volle Dauer laufen lassen (5 Minuten) ODER 2x "bin unterwegs" von
       zwei verschiedenen Geräten → Sender-Wiederholung stoppt danach automatisch
 - [ ] "Abbrechen" auf dem Sender-Status-Fenster beendet die Wiederholung sofort
+- [ ] Tastenkürzel eines Alarm-Profils drücken, in dem für dieses Gerät keine Empfänger
+      eingerichtet sind → Status-Fenster erscheint trotzdem mit "Empfangen: 0 von 0" und dem
+      Hinweis, wo ein Admin die Empfänger zuordnet; "Abbrechen" schließt es
 
 **Melde zurück:** Vor allem der erzwungene Vordergrund (bei Vollbild-Anwendungen/Spielen)
 und der Signalton bei Stummschaltung sind die Punkte, die ich am wenigsten selbst prüfen

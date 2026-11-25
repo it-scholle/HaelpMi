@@ -103,6 +103,9 @@ public partial class SenderStatusWindow : Window
     {
         StatusText.Text = status.StillSending ? "Alarm wird gesendet..." : "Alarm beendet";
         AckedText.Text = $"Empfangen: {status.AckedCount} von {status.TargetCount}";
+        var noRecipientsHint = SenderStatusTexts.NoRecipientsHint(status.TargetCount);
+        NoRecipientsText.Text = noRecipientsHint ?? string.Empty;
+        NoRecipientsText.Visibility = noRecipientsHint is null ? Visibility.Collapsed : Visibility.Visible;
         CancelButton.IsEnabled = status.StillSending;
 
         OnTheWayList.ItemsSource = status.OnTheWayNames;

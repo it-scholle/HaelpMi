@@ -208,11 +208,8 @@ public sealed class AlarmFlowCoordinator
         var disabledDeviceIds = _licenseLimitGuard.GetDisabledDeviceIds();
         targets = targets.Where(t => !disabledDeviceIds.Contains(t.DeviceId) && !t.Removed).ToList();
 
-        if (targets.Count == 0)
-        {
-            return; // nothing to send, nothing to show (Teil 2, Abschnitt 4: an empty recipient set is a valid, if useless, admin configuration)
-        }
-
+        // Auch ohne Empfänger startet eine Sitzung: Das Tastenkürzel darf nie wirkungslos bleiben,
+        // die Statusanzeige nennt dann den Grund und den Lösungsweg.
         var session = new RepeatingAlarmSession(profile, targets, identity, _sender, _feedbackChannel, DateTimeOffset.UtcNow);
         System.Windows.Application.Current.Dispatcher.Invoke(() =>
         {
