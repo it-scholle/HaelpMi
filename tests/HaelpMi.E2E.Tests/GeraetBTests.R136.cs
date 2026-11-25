@@ -7,7 +7,7 @@ using static HaelpMi.E2E.Tests.ZweiGeraete;
 
 namespace HaelpMi.E2E.Tests;
 
-// T10 und T14 (Alarmfenster öffnet nach dem Schließen erneut), Gegenstücke in GeraetATests.R136.cs und GeraetCTests.cs, Messung in R136Messung.cs.
+// T10 und T18 (Alarmfenster öffnet nach dem Schließen erneut), Gegenstücke in GeraetATests.R136.cs und GeraetCTests.cs, Messung in R136Messung.cs.
 public partial class GeraetBTests
 {
     /// <summary>
@@ -92,20 +92,20 @@ public partial class GeraetBTests
                 $"(Agent {version}). Details: {Path.GetFileName(csv)} und r136-zusammenfassung.json im Artefakt.");
         }, "t10");
 
-    // Gegenstücke: GeraetATests.T14_Regression136_DreiGeraete_SendetWellen, GeraetCTests.T14_Regression136_DreiGeraete_FensterBleibtZu.
+    // Gegenstücke: GeraetATests.T18_Regression136_DreiGeraete_SendetWellen, GeraetCTests.T18_Regression136_DreiGeraete_FensterBleibtZu.
     [Fact, TestPriority(57)]
     [Trait("Teil", DreiGeraete.Teil), Trait("Bereich", "R136")]
-    public async Task T14_Regression136_DreiGeraete_FensterBleibtZu()
+    public async Task T18_Regression136_DreiGeraete_FensterBleibtZu()
     {
         try
         {
-            await Artefakte.SichereAsync(nameof(T14_Regression136_DreiGeraete_FensterBleibtZu),
-                () => DreiGeraeteEmpfaengerAsync("b", _ausgabe), "t14");
+            await Artefakte.SichereAsync(nameof(T18_Regression136_DreiGeraete_FensterBleibtZu),
+                () => DreiGeraeteEmpfaengerAsync("b", _ausgabe), "t18");
         }
         catch
         {
             // Erst nach SichereAsync, damit der Screenshot eines Fehlschlags das Alarmfenster noch zeigt.
-            await RaeumeAlarmfensterAufAsync("T14");
+            await RaeumeAlarmfensterAufAsync("T18");
             throw;
         }
     }

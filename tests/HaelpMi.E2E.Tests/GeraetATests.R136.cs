@@ -10,7 +10,7 @@ using static HaelpMi.E2E.Tests.ZweiGeraete;
 
 namespace HaelpMi.E2E.Tests;
 
-// T10 und T14 (Alarmfenster öffnet nach dem Schließen erneut), Gegenstücke und Auswertung in GeraetBTests.R136.cs und GeraetCTests.cs.
+// T10 und T18 (Alarmfenster öffnet nach dem Schließen erneut), Gegenstücke und Auswertung in GeraetBTests.R136.cs und GeraetCTests.cs.
 public partial class GeraetATests
 {
     /// <summary>
@@ -61,40 +61,40 @@ public partial class GeraetATests
         }, "t10");
 
     /// <summary>
-    /// T14, Sender-Seite: wie T10 Variante N, aber A alarmiert B und C mit Schwelle 2 (eigenes Profil, Config-Version
+    /// T18, Sender-Seite: wie T10 Variante N, aber A alarmiert B und C mit Schwelle 2 (eigenes Profil, Config-Version
     /// <see cref="DreiGeraete.ConfigVersionR136"/>). B und C melden "Bin unterwegs" im Versatz zur Repeat-Welle und
     /// schließen; A wartet pro Zyklus auf beide und meldet dann die Session-ID.
     /// </summary>
     [Fact, TestPriority(57)]
     [Trait("Teil", DreiGeraete.Teil), Trait("Bereich", "R136")]
-    public async Task T14_Regression136_DreiGeraete_SendetWellen()
+    public async Task T18_Regression136_DreiGeraete_SendetWellen()
     {
         try
         {
-            await T14_Rumpf();
+            await T18_Rumpf();
         }
         catch
         {
             // Wie bei T12: erst weiter, wenn C seinen Agent beendet hat, sonst läuft C in T6 hinein.
             try
             {
-                await Rendezvous.WaitForAsync(DreiGeraete.CGestopptT14, SchrittTimeout);
+                await Rendezvous.WaitForAsync(DreiGeraete.CGestopptT18, SchrittTimeout);
             }
             catch (TimeoutException ex)
             {
-                _ausgabe.WriteLine($"T14: {ex.Message}");
+                _ausgabe.WriteLine($"T18: {ex.Message}");
             }
 
             throw;
         }
     }
 
-    private Task T14_Rumpf() =>
-        Artefakte.SichereAsync(nameof(T14_Regression136_DreiGeraete_SendetWellen), async () =>
+    private Task T18_Rumpf() =>
+        Artefakte.SichereAsync(nameof(T18_Regression136_DreiGeraete_SendetWellen), async () =>
         {
             var (_, b, c) = await DreiGeraete.BereiteAlarmprofilVorAsync(DreiGeraete.ConfigVersionR136);
-            await Rendezvous.WaitForAsync("t14-b-bereit", GegenseiteTimeout);
-            await Rendezvous.WaitForAsync("t14-c-bereit", GegenseiteTimeout);
+            await Rendezvous.WaitForAsync("t18-b-bereit", GegenseiteTimeout);
+            await Rendezvous.WaitForAsync("t18-c-bereit", GegenseiteTimeout);
             await WarteAufGeraetAsync(b, DiscoveryTimeout);
             await WarteAufGeraetAsync(c, DiscoveryTimeout);
 
@@ -105,12 +105,12 @@ public partial class GeraetATests
             {
                 var seit = DateTimeOffset.UtcNow;
                 DrueckeHotkey(AlarmHotkey);
-                Rendezvous.Signal($"t14-{n}-aus", $"{DateTimeOffset.UtcNow:O}");
-                var banner = app.ErwarteBanner($"T14 Zyklus {n}");
+                Rendezvous.Signal($"t18-{n}-aus", $"{DateTimeOffset.UtcNow:O}");
+                var banner = app.ErwarteBanner($"T18 Zyklus {n}");
                 try
                 {
-                    await Rendezvous.WaitForAsync($"t14-{n}-b-zu", SchrittTimeout);
-                    await Rendezvous.WaitForAsync($"t14-{n}-c-zu", SchrittTimeout);
+                    await Rendezvous.WaitForAsync($"t18-{n}-b-zu", SchrittTimeout);
+                    await Rendezvous.WaitForAsync($"t18-{n}-c-zu", SchrittTimeout);
                 }
                 catch
                 {
@@ -134,12 +134,12 @@ public partial class GeraetATests
                     await app.SchliesseBannerAsync(banner);
                 }
 
-                Rendezvous.Signal($"t14-{n}-fertig", sitzung.ToString());
+                Rendezvous.Signal($"t18-{n}-fertig", sitzung.ToString());
             }
 
             // C beendet danach seinen Agent; ab T6 soll C nicht mehr mitspielen (siehe GeraetCTests).
-            await Rendezvous.WaitForAsync(DreiGeraete.CGestopptT14, SchrittTimeout);
-        }, "t14");
+            await Rendezvous.WaitForAsync(DreiGeraete.CGestopptT18, SchrittTimeout);
+        }, "t18");
 
     /// <returns>true, wenn der Alarm noch lief und abgebrochen wurde; das Banner schließt sich dann selbst.</returns>
     private static bool BrichAlarmAb(Window banner)

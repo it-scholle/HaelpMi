@@ -6,7 +6,7 @@ using static HaelpMi.E2E.Tests.ZweiGeraete;
 
 namespace HaelpMi.E2E.Tests;
 
-// T11/T12 mit drei Geräten, Gegenstücke in GeraetATests.DreiGeraete.cs und GeraetCTests.cs; T14 in GeraetBTests.R136.cs.
+// T11/T12 mit drei Geräten, Gegenstücke in GeraetATests.DreiGeraete.cs und GeraetCTests.cs; T18 in GeraetBTests.R136.cs.
 public partial class GeraetBTests
 {
     [Fact, TestPriority(53), Trait("Bereich", "Basis")]

@@ -13,7 +13,7 @@ using static HaelpMi.E2E.Tests.ZweiGeraete;
 namespace HaelpMi.E2E.Tests;
 
 /// <summary>
-/// Messung für die Regressionstests "Alarmfenster öffnet nach dem Schließen erneut" auf Empfängerseite: T10 (B) und T14 (B und C). Ein Zyklus in Variante N
+/// Messung für die Regressionstests "Alarmfenster öffnet nach dem Schließen erneut" auf Empfängerseite: T10 (B) und T18 (B und C). Ein Zyklus in Variante N
 /// klickt "Bin unterwegs" mit einem Versatz zur nächsten erwarteten Repeat-Welle, schließt sofort und achtet danach
 /// auf ein zweites Alarmfenster derselben Session. Ergebnisse als CSV-Zeilen (<see cref="R136Zeile"/>).
 /// </summary>
@@ -85,7 +85,7 @@ internal static class R136Messung
     }
 
     /// <summary>
-    /// T14 auf B und C (gleicher Ablauf): pro Zyklus Variante N gegen einen Alarm A an B und C mit Schwelle 2. Beide
+    /// T18 auf B und C (gleicher Ablauf): pro Zyklus Variante N gegen einen Alarm A an B und C mit Schwelle 2. Beide
     /// Empfänger zielen mit demselben Versatz auf dieselbe Welle; erst die zweite Rückmeldung gibt beide Fenster frei.
     /// Ohne produkt_ref rot bei einem zweiten Fenster, bei nie freiem Schließen oder bei einem Fenster, das nach dem
     /// Schließen offen blieb; mit produkt_ref (Vergleichslauf gegen einen alten Stand) wird nur gemessen.
@@ -95,7 +95,7 @@ internal static class R136Messung
     {
         var (a, _, _) = await DreiGeraete.BereiteAlarmprofilVorAsync(DreiGeraete.ConfigVersionR136);
         await WarteAufGeraetAsync(a, DiscoveryTimeout);
-        Rendezvous.Signal($"t14-{geraet}-bereit");
+        Rendezvous.Signal($"t18-{geraet}-bereit");
 
         using var app = new HaelpMiApp();
         var zyklen = E2EUmgebung.Zyklen;
@@ -109,12 +109,12 @@ internal static class R136Messung
         for (var n = 1; n <= zyklen; n++)
         {
             var seit = DateTimeOffset.UtcNow;
-            await Rendezvous.WaitForAsync($"t14-{n}-aus", n == 1 ? GegenseiteTimeout : SchrittTimeout);
-            var zeile = await NatuerlicheVarianteAsync(app, a, n, Versatz(n, zyklen), seit, perioden, $"T14 {geraet.ToUpperInvariant()}");
-            Rendezvous.Signal($"t14-{n}-{geraet}-zu", zeile.Neustart ? "neustart" : string.Empty);
+            await Rendezvous.WaitForAsync($"t18-{n}-aus", n == 1 ? GegenseiteTimeout : SchrittTimeout);
+            var zeile = await NatuerlicheVarianteAsync(app, a, n, Versatz(n, zyklen), seit, perioden, $"T18 {geraet.ToUpperInvariant()}");
+            Rendezvous.Signal($"t18-{n}-{geraet}-zu", zeile.Neustart ? "neustart" : string.Empty);
 
             // A meldet die Session-ID erst, wenn beide Empfänger fertig sind; erst dann beginnt der nächste Zyklus.
-            zeile.Sitzung = (await Rendezvous.WaitForAsync($"t14-{n}-fertig", SchrittTimeout)).Trim();
+            zeile.Sitzung = (await Rendezvous.WaitForAsync($"t18-{n}-fertig", SchrittTimeout)).Trim();
             zeilen.Add(zeile);
             File.AppendAllText(csv, zeile.Csv() + Environment.NewLine, Encoding.UTF8);
             ausgabe.WriteLine($"Zyklus {n}: {zeile.Kurz()}");

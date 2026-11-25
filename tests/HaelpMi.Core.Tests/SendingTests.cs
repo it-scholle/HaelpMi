@@ -1,3 +1,5 @@
+using System.Net;
+using System.Net.Sockets;
 using System.Reflection;
 using HaelpMi.Core.Models;
 using HaelpMi.Core.Networking;
@@ -230,5 +232,156 @@ public class SendingTests
         var handler = typeof(RepeatingAlarmSession).GetMethod("OnMyWayReceived", BindingFlags.NonPublic | BindingFlags.Instance)
             ?? throw new InvalidOperationException("OnMyWayReceived nicht gefunden - wurde die Methode umbenannt?");
         handler.Invoke(session, new object?[] { feedbackChannel, message });
+    }
+
+    [Fact]
+    public async Task RepeatingAlarmSession_LateAckInLaterRound_KeepsEarlierReceipt()
+    {
+        // Runde 1 wird sofort quittiert, ab Runde 2 kommt die Quittung erst nach
+        // AlarmAckTimeout - der Empfänger muss trotzdem als empfangen gezählt bleiben.
+        var customerGroupId = Guid.NewGuid();
+        var senderIdentity = new LiveIdentity(customerGroupId, Guid.NewGuid(), "Sender-PC", "Frau Meier", "Zimmer", "1", Role.User, false, "0.0.0", 0, DateTimeOffset.UtcNow);
+        var receiverDeviceId = Guid.NewGuid();
+
+        var tcp = new TcpListener(IPAddress.Loopback, 0);
+        tcp.Start();
+        var port = ((IPEndPoint)tcp.LocalEndpoint).Port;
+        using var serverCts = new CancellationTokenSource();
+        var serverTask = RunDelayingAckServerAsync(tcp, customerGroupId, receiverDeviceId, serverCts.Token);
+
+        var feedbackChannel = new AlarmFeedbackChannel(() => senderIdentity);
+        var profile = new AlarmProfile { Text = "Bitte kommen!", ResponseThreshold = 1 };
+        var target = new DeviceEntry { DeviceId = receiverDeviceId, IpAddress = "127.0.0.1", TcpPort = port };
+        var session = new RepeatingAlarmSession(profile, new[] { target }, senderIdentity, new AlarmSender(), feedbackChannel, DateTimeOffset.UtcNow);
+        try
+        {
+            var sendingUpdates = new List<AlarmSessionStatus>();
+            var secondRound = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            session.StatusChanged += (_, status) =>
+            {
+                if (!status.StillSending)
+                {
+                    return;
+                }
+
+                lock (sendingUpdates)
+                {
+                    sendingUpdates.Add(status);
+                    if (sendingUpdates.Count >= 2)
+                    {
+                        secondRound.TrySetResult();
+                    }
+                }
+            };
+
+            _ = session.RunAsync();
+            await secondRound.Task.WaitAsync(TimeSpan.FromSeconds(30));
+
+            lock (sendingUpdates)
+            {
+                Assert.Equal(1, sendingUpdates[0].AckedCount);
+                Assert.Equal(1, sendingUpdates[1].AckedCount);
+            }
+        }
+        finally
+        {
+            session.Cancel();
+            session.Dispose();
+            serverCts.Cancel();
+            tcp.Stop();
+            await Task.WhenAny(serverTask, Task.Delay(TimeSpan.FromSeconds(2)));
+        }
+    }
+
+    [Fact]
+    public async Task RepeatingAlarmSession_OnMyWayWithoutAck_CountsAsReceived()
+    {
+        var customerGroupId = Guid.NewGuid();
+        var senderIdentity = new LiveIdentity(customerGroupId, Guid.NewGuid(), "Sender-PC", "Frau Meier", "Zimmer", "1", Role.User, false, "0.0.0", 0, DateTimeOffset.UtcNow);
+        var receiverDeviceId = Guid.NewGuid();
+
+        var feedbackChannel = new AlarmFeedbackChannel(() => senderIdentity);
+        var profile = new AlarmProfile { Text = "Bitte kommen!", ResponseThreshold = 1 };
+        // Ohne gültige IP schlägt jeder Sendeversuch sofort fehl - es kommt nie eine Quittung.
+        var target = new DeviceEntry { DeviceId = receiverDeviceId, IpAddress = string.Empty };
+        var session = new RepeatingAlarmSession(profile, new[] { target }, senderIdentity, new AlarmSender(), feedbackChannel, DateTimeOffset.UtcNow);
+        try
+        {
+            var finished = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            session.Finished += (_, _) => finished.TrySetResult();
+            var updates = new List<AlarmSessionStatus>();
+            session.StatusChanged += (_, status) =>
+            {
+                lock (updates)
+                {
+                    updates.Add(status);
+                }
+            };
+
+            _ = session.RunAsync();
+
+            var handler = typeof(RepeatingAlarmSession).GetMethod("OnMyWayReceived", BindingFlags.NonPublic | BindingFlags.Instance)
+                ?? throw new InvalidOperationException("OnMyWayReceived nicht gefunden - wurde die Methode umbenannt?");
+            var onMyWay = new AlarmOnMyWayMessage(
+                customerGroupId, profile.Id, session.AlarmSessionId, receiverDeviceId,
+                "Empf-PC", "Herr Novak", "Raum", DateTimeOffset.UtcNow);
+            handler.Invoke(session, new object?[] { feedbackChannel, onMyWay });
+
+            await finished.Task.WaitAsync(TimeSpan.FromSeconds(10));
+
+            lock (updates)
+            {
+                Assert.Equal(1, updates[^1].AckedCount);
+                Assert.Equal(1, updates[^1].TargetCount);
+            }
+        }
+        finally
+        {
+            session.Dispose();
+        }
+    }
+
+    private static async Task RunDelayingAckServerAsync(TcpListener tcp, Guid customerGroupId, Guid receiverDeviceId, CancellationToken ct)
+    {
+        var round = 0;
+        try
+        {
+            while (!ct.IsCancellationRequested)
+            {
+                var client = await tcp.AcceptTcpClientAsync(ct);
+                round++;
+                var delay = round == 1 ? TimeSpan.Zero : AppConstants.AlarmAckTimeout + TimeSpan.FromSeconds(1);
+                _ = Task.Run(async () =>
+                {
+                    using (client)
+                    {
+                        try
+                        {
+                            var stream = client.GetStream();
+                            using var reader = new StreamReader(stream, NetworkSerializer.Encoding, leaveOpen: true);
+                            var line = await reader.ReadLineAsync(ct);
+                            var request = line is null ? null : NetworkSerializer.FromJsonLine<AlarmRequestMessage>(line);
+                            if (request is null)
+                            {
+                                return;
+                            }
+
+                            await Task.Delay(delay, ct);
+                            var ack = new AlarmAckMessage(customerGroupId, request.AlarmProfileId, request.AlarmSessionId, receiverDeviceId, DateTimeOffset.UtcNow);
+                            var payload = NetworkSerializer.Encoding.GetBytes(NetworkSerializer.ToJsonLine(ack));
+                            await stream.WriteAsync(payload, ct);
+                        }
+                        catch (Exception)
+                        {
+                            // Sender hat nach dem Timeout bereits geschlossen
+                        }
+                    }
+                }, CancellationToken.None);
+            }
+        }
+        catch (Exception)
+        {
+            // Listener gestoppt
+        }
     }
 }
