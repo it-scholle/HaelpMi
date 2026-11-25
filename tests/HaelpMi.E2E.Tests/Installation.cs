@@ -82,15 +82,16 @@ internal static class Installation
         await Task.Delay(TimeSpan.FromSeconds(3));
         HaelpMiApp.BeendeAlles();
         await HaelpMiApp.StarteAgentAsync();
+        Rendezvous.Signal($"{geraet.ToLowerInvariant()}-installiert", settings.DeviceId.ToString());
 
+        // Nach dem Signal, damit eine fehlende Regel nur T1 rot macht und die Gegenseite nicht ins Zeitlimit läuft.
+        // Ohne eigene Programmregel zeigt Windows beim ersten Lauschen den Firewall-Dialog, der das Alarmfenster verdeckt;
+        // das Dashboard (HaelpMi.Config.exe) öffnet nur in der Admin-Rolle Sockets.
+        PruefeProgrammregel("HälpMi Agent", Path.Combine(E2EUmgebung.ProgrammOrdner, HaelpMiApp.AgentProzess + ".exe"));
         if (rolle == Role.Admin)
         {
-            PruefeFirewallRegel("HälpMi Discovery", "UDP", AppConstants.DiscoveryUdpPort);
-            PruefeFirewallRegel("HälpMi Alarm", "TCP", AppConstants.AlarmTcpPort);
+            PruefeProgrammregel("HälpMi Konfiguration", HaelpMiApp.KonfigExe);
         }
-
-
-        Rendezvous.Signal($"{geraet.ToLowerInvariant()}-installiert", settings.DeviceId.ToString());
     }
 
     /// <summary>
@@ -131,12 +132,13 @@ internal static class Installation
         return settings;
     }
 
-    private static void PruefeFirewallRegel(string name, string protokoll, int port)
+    private static void PruefeProgrammregel(string name, string programm)
     {
         var ausgabe = Prozess.PowerShell(
-            $"$r = Get-NetFirewallRule -DisplayName '{name}' -ErrorAction Stop; " +
-            "$f = $r | Get-NetFirewallPortFilter; " +
-            "'{0}|{1}|{2}|{3}/{4}' -f $r.Enabled, $r.Direction, $r.Action, $f.Protocol, $f.LocalPort");
-        Assert.Equal($"True|Inbound|Allow|{protokoll}/{port}", ausgabe);
+            $"$r = @(Get-NetFirewallRule -DisplayName '{name}' -ErrorAction SilentlyContinue); " +
+            "if ($r.Count -ne 1) { 'Anzahl Regeln: ' + $r.Count; return }; " +
+            "$a = $r[0] | Get-NetFirewallApplicationFilter; " +
+            "'{0}|{1}|{2}|{3}|{4}' -f $r[0].Enabled, $r[0].Direction, $r[0].Action, $r[0].Profile, $a.Program");
+        Assert.Equal($"True|Inbound|Allow|Any|{programm}", ausgabe, ignoreCase: true);
     }
 }

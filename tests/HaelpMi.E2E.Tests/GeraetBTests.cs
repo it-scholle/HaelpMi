@@ -63,7 +63,7 @@ public partial class GeraetBTests
             }
             catch (TimeoutException)
             {
-                // Der User-Installer legt keine Firewall-Regeln an; netzwerk.txt im Artefakt zeigt, ob 51501 offen ist.
+                // netzwerk.txt im Artefakt zeigt die Firewall-Regeln und ob 51501 lauscht.
                 Assert.Fail($"Kein Alarmfenster {PopupTimeout.TotalSeconds:0} s nach der Marke a-ausgeloest.");
                 throw;
             }

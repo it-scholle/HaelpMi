@@ -1,6 +1,5 @@
 ; Shared between HaelpMi.iss (User-Installer, FR-35) and HaelpMi-Admin.iss (Admin-
-; Installer - zusätzlich Firewall-Regeln, da der Admin-Rechner laut FR-35 zugleich als
-; Testgerät dient). #include this near the top of each - ISPP just pastes it in place, so
+; Installer). #include this near the top of each - ISPP just pastes it in place, so
 ; the #define values below are usable in that script's own [Setup] section.
 ;
 ; Same AppId in both variants on purpose: if someone installs one variant and later runs
@@ -17,11 +16,10 @@
 #define MyConfigExeName "HaelpMi.Config.exe"
 #define MyAppId "{{4B6C0A6E-6D9C-4A2E-8C7E-2E7B7E1A5F3D}"
 
-; Must match HaelpMi.Core/Models/AppConstants.cs - there is no automatic sharing between
-; the C# and Pascal Script toolchains, so these two constants are the single place in the
-; installer scripts that needs updating if the app's ports ever change.
-#define DiscoveryUdpPort 51500
-#define AlarmTcpPort 51501
+; Programmregeln statt Portregeln: Windows zeigt beim ersten Lauschen einer .exe ohne eigene
+; Programmregel den Firewall-Dialog, auch wenn Portregeln den Verkehr schon erlauben würden.
+#define AgentFirewallRule "HälpMi Agent"
+#define ConfigFirewallRule "HälpMi Konfiguration"
 
 #include "HaelpMiKundengruppe.iss.inc"
 
@@ -151,14 +149,12 @@ Filename: "{app}\{#MyConfigExeName}"; Parameters: "--open-dashboard"; Descriptio
 Filename: "{app}\{#MyConfigExeName}"; Description: "HälpMi Konfiguration öffnen - hier siehst du deine Hotkeys und wen sie im Alarmfall erreichen"; Flags: nowait postinstall runasoriginaluser
 #endif
 
-#ifdef HaelpMiAdminInstall
 [UninstallRun]
 ; Mirror of EnsureFirewallRules below, run in reverse on uninstall - a stale allow-rule
 ; for a program that's no longer installed is exactly the kind of leftover Pflichtenheft
 ; 6. warns about avoiding.
-Filename: "netsh.exe"; Parameters: "advfirewall firewall delete rule name=""HälpMi Discovery"""; Flags: runhidden; RunOnceId: "HaelpMiRemoveDiscoveryRule"
-Filename: "netsh.exe"; Parameters: "advfirewall firewall delete rule name=""HälpMi Alarm"""; Flags: runhidden; RunOnceId: "HaelpMiRemoveAlarmRule"
-#endif
+Filename: "netsh.exe"; Parameters: "advfirewall firewall delete rule name=""{#AgentFirewallRule}"""; Flags: runhidden; RunOnceId: "HaelpMiRemoveAgentRule"
+Filename: "netsh.exe"; Parameters: "advfirewall firewall delete rule name=""{#ConfigFirewallRule}"""; Flags: runhidden; RunOnceId: "HaelpMiRemoveConfigRule"
 
 [Code]
 // Compares two dotted version strings (e.g. "1.2.0" vs "1.10.0") numerically,
@@ -538,23 +534,39 @@ begin
   end;
 end;
 
-#ifdef HaelpMiAdminInstall
-// Only reachable with admin rights (PrivilegesRequired=admin above) - this is the one
-// piece of installer behavior that genuinely needs elevation; the app itself never does
-// (Pflichtenheft: kein Admin). Delete-then-add rather than a "does it exist" check first,
-// since netsh's exit code for "rule not found" isn't consistent enough across Windows
-// versions to branch on reliably - this way is idempotent regardless.
-procedure EnsureFirewallRules();
+// Schreibt den netsh-Rückgabecode ins Setup-Log (/LOG), damit eine fehlende Regel ohne Nachstellen
+// erklärbar ist. Bei "delete" ist ein Code ungleich 0 normal, wenn die Regel nicht existiert.
+procedure RunNetsh(const Params: String);
 var
   ResultCode: Integer;
 begin
-  Exec('netsh.exe', 'advfirewall firewall delete rule name="HälpMi Discovery"', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
-  Exec('netsh.exe', 'advfirewall firewall add rule name="HälpMi Discovery" dir=in action=allow protocol=UDP localport={#DiscoveryUdpPort}', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
-
-  Exec('netsh.exe', 'advfirewall firewall delete rule name="HälpMi Alarm"', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
-  Exec('netsh.exe', 'advfirewall firewall add rule name="HälpMi Alarm" dir=in action=allow protocol=TCP localport={#AlarmTcpPort}', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  if Exec('netsh.exe', Params, '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
+    Log(Format('netsh %s -> Rückgabecode %d', [Params, ResultCode]))
+  else
+    Log(Format('netsh %s -> nicht gestartet: %s', [Params, SysErrorMessage(ResultCode)]));
 end;
+
+// Only reachable with admin rights (PrivilegesRequired=admin in both variants) - this is
+// the one piece of installer behavior that genuinely needs elevation; the app itself never
+// does (Pflichtenheft: kein Admin). Delete-then-add rather than a "does it exist" check
+// first, since netsh's exit code for "rule not found" isn't consistent enough across
+// Windows versions to branch on reliably - this way is idempotent regardless.
+// HaelpMi.Config.exe öffnet nur in der Admin-Rolle Sockets (Config-Sync, Edit-Lock); der
+// User-Installer entfernt deshalb eine von einer früheren Admin-Installation übrige Regel.
+// "HälpMi Discovery"/"HälpMi Alarm" sind die Portregeln älterer Versionen.
+procedure EnsureFirewallRules();
+begin
+  RunNetsh('advfirewall firewall delete rule name="HälpMi Discovery"');
+  RunNetsh('advfirewall firewall delete rule name="HälpMi Alarm"');
+
+  RunNetsh('advfirewall firewall delete rule name="{#AgentFirewallRule}"');
+  RunNetsh(ExpandConstant('advfirewall firewall add rule name="{#AgentFirewallRule}" dir=in action=allow profile=any program="{app}\{#MyAgentExeName}"'));
+
+  RunNetsh('advfirewall firewall delete rule name="{#ConfigFirewallRule}"');
+#ifdef HaelpMiAdminInstall
+  RunNetsh(ExpandConstant('advfirewall firewall add rule name="{#ConfigFirewallRule}" dir=in action=allow profile=any program="{app}\{#MyConfigExeName}"'));
 #endif
+end;
 
 // Update must stop the running Agent before overwriting its files, and the [Run]
 // section above starts it again afterwards (Pflichtenheft 5.8). The device list lives
@@ -597,9 +609,7 @@ begin
     // JEDEM Lauf neu geschrieben (siehe Kommentar bei WriteDeploymentJson).
     WriteDeploymentJson();
 
-#ifdef HaelpMiAdminInstall
     EnsureFirewallRules();
-#endif
   end;
 end;
 

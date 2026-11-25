@@ -66,10 +66,10 @@ Ausführungs-Hinweis (verändert das System, läuft NICHT automatisch in jedem `
 | A3 | Erneuter Lauf derselben Version = Reparatur, DeviceId bleibt unverändert | `[Installer.Tests]` ✅ |
 | A4 | Downgrade wird verweigert (silent UND interaktiv) | `[Installer.Tests]` ✅ |
 | A5 🔹 | Update über laufende Installation: alte Prozesse beendet, neue Dateien da, danach genau EIN Agent-Prozess, Ports binden ohne Kollision | `[Installer.Tests]` ✅ |
-| A6 🔹 | Silent-Deinstallation entfernt `{app}`, ProgramData, Dienste, Autostart-Task, (Admin) Firewall-Regeln vollständig | `[Installer.Tests]` ✅ |
+| A6 🔹 | Silent-Deinstallation entfernt `{app}`, ProgramData, Dienste, Autostart-Task, Firewall-Regeln vollständig | `[Installer.Tests]` ✅ |
 | A7 | Interaktive Deinstallation, Rückfrage mit "Nein" beantwortet: ProgramData/Einstellungen bleiben erhalten | `[Installer.Tests]` ✅ (steuert die native MsgBox) |
 | A8 | Neuinstallation über behaltener Config: Raum-Seite wird übersprungen, DeviceId bleibt gleich | `[Installer.Tests]` ✅ |
-| A9 🔹 | Admin- vs. User-Installer: korrekte Rolle, korrekte Startmenü-Verknüpfung, Firewall-Regeln nur beim Admin | `[Installer.Tests]` ✅ |
+| A9 🔹 | Admin- vs. User-Installer: korrekte Rolle, korrekte Startmenü-Verknüpfung, Firewall-Programmregel für den Agent bei beiden, für `HaelpMi.Config.exe` nur beim Admin | `[Installer.Tests]` ✅ |
 | A10 | User-Installer-Export (Install-Creator → eingebettete Datei) trägt dieselbe CustomerGroupId wie der Admin-Installer | `[Installer.Tests]` ✅ |
 | A11 🔹 | Zwei unabhängige CustomerGroupId-Installationen im selben Netz beeinflussen sich nie (Kreis-Isolation) | `HaelpMi.Core.Tests` ✅ (DiscoveryService/AlarmTcpListener) |
 | A12 🔹 | Autostart-Task-Prinzipal ist nach frischer Installation BUILTIN\Users (nicht nur der installierende Admin-Account) - Regressionstest 11.08.2026, siehe `docs/handbuch/entwickler-alpha-testplan.md` Test 2 | ❌ **Nicht coded** — braucht ein zweites, nicht-lokal-admin Windows-Konto auf der Testmaschine, das `Installer.Tests`-Setup hat nur eines |
@@ -156,7 +156,7 @@ Läuft auf bis zu drei Wegwerf-VMs auf pve-nzxt (A = Admin-Gerät, B und C = Use
 
 | # | Test | Gerät | FR-Bezug |
 |---|---|---|---|
-| T1 | Stille Installation (Admin- bzw. User-Installer): Programmordner, ProgramData, Rolle in `deployment.json`, unveränderte DeviceId/Raum in `settings.json`, Startmenü-Verknüpfung, geplante Aufgabe, Agent läuft; nur A: Firewall-Regeln 51500/51501 | A, B, C | FR-3, FR-4, FR-34, FR-35, FR-37, NFR-2 |
+| T1 | Stille Installation (Admin- bzw. User-Installer): Programmordner, ProgramData, Rolle in `deployment.json`, unveränderte DeviceId/Raum in `settings.json`, Startmenü-Verknüpfung, geplante Aufgabe, Agent läuft; eingehende Firewall-Programmregel „HälpMi Agent“, nur A zusätzlich „HälpMi Konfiguration“ | A, B, C | FR-3, FR-4, FR-34, FR-35, FR-37, NFR-2 |
 | T2 | Verknüpfung "HälpMi Dashboard" öffnet das Admin-Dashboard ohne neuen `crash.log`-Eintrag | A | FR-4 |
 | T3 | Selbsttest: Alarmfenster im Vordergrund mit "Raum (Nummer)", "Bin unterwegs", Schließen erst danach aktiv | A | FR-27, FR-40, FR-51 |
 | T4 | Discovery: die Gegenseite steht nach spätestens 60 s mit Adresse in `devices.json` | A, B | – |
@@ -216,11 +216,6 @@ Regressionsfälle wie T10, `Bereich=R136`). Mit C bedeutet „volle Suite“ `a,
 
 Bekannte Umgehungen in der Testvorbereitung (keine Produktkorrektur):
 
-- **Firewall-Programmregel:** Vor `dotnet test` legt der Workflow eine eingehende Programmregel
-  für `HaelpMi.Agent.exe` an, weil sonst beim ersten Agent-Start der Firewall-Dialog das
-  Alarmfenster verdeckt. Das ist ein Produktbefund: Der Admin-Installer legt nur Regeln für
-  51500/51501 an, nicht für 51502–51506, der User-Installer gar keine. Die Regel lebt nur bis
-  zum nächsten Reset.
 - **Eigene Kundengruppe und Testlizenz pro Lauf** (`ci/e2e/testlizenz-erzeugen.ps1`): Die
   Lizenz ist an die Kundengruppe gebunden (ohne `/DCustomerGroupId` bekäme der Installer eine
   eigene Zufallsgruppe, siehe `installer/HaelpMiKundengruppe.iss.inc`); ohne gültige Lizenz hat ein User-Gerät Kontingent 0.
