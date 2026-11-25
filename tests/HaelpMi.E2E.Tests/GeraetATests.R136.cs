@@ -1,4 +1,6 @@
+using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
+using FlaUI.Core.AutomationElements;
 using HaelpMi.Core.Networking;
 using HaelpMi.Core.Runtime;
 using HaelpMi.Installer.Tests;
@@ -8,7 +10,7 @@ using static HaelpMi.E2E.Tests.ZweiGeraete;
 
 namespace HaelpMi.E2E.Tests;
 
-// T10 Regressionstest #136, Gegenstück und Auswertung in GeraetBTests.R136.cs.
+// T10 und T18 (Alarmfenster öffnet nach dem Schließen erneut), Gegenstücke und Auswertung in GeraetBTests.R136.cs und GeraetCTests.cs.
 public partial class GeraetATests
 {
     /// <summary>
@@ -57,6 +59,107 @@ public partial class GeraetATests
                 await Rendezvous.WaitForAsync($"t10-{n}-fertig", SchrittTimeout);
             }
         }, "t10");
+
+    /// <summary>
+    /// T18, Sender-Seite: wie T10 Variante N, aber A alarmiert B und C mit Schwelle 2 (eigenes Profil, Config-Version
+    /// <see cref="DreiGeraete.ConfigVersionR136"/>). B und C melden "Bin unterwegs" im Versatz zur Repeat-Welle und
+    /// schließen; A wartet pro Zyklus auf beide und meldet dann die Session-ID.
+    /// </summary>
+    [Fact, TestPriority(57)]
+    [Trait("Teil", DreiGeraete.Teil), Trait("Bereich", "R136")]
+    public async Task T18_Regression136_DreiGeraete_SendetWellen()
+    {
+        try
+        {
+            await T18_Rumpf();
+        }
+        catch
+        {
+            // Wie bei T12: erst weiter, wenn C seinen Agent beendet hat, sonst läuft C in T6 hinein.
+            try
+            {
+                await Rendezvous.WaitForAsync(DreiGeraete.CGestopptT18, SchrittTimeout);
+            }
+            catch (TimeoutException ex)
+            {
+                _ausgabe.WriteLine($"T18: {ex.Message}");
+            }
+
+            throw;
+        }
+    }
+
+    private Task T18_Rumpf() =>
+        Artefakte.SichereAsync(nameof(T18_Regression136_DreiGeraete_SendetWellen), async () =>
+        {
+            var (_, b, c) = await DreiGeraete.BereiteAlarmprofilVorAsync(DreiGeraete.ConfigVersionR136);
+            await Rendezvous.WaitForAsync("t18-b-bereit", GegenseiteTimeout);
+            await Rendezvous.WaitForAsync("t18-c-bereit", GegenseiteTimeout);
+            await WarteAufGeraetAsync(b, DiscoveryTimeout);
+            await WarteAufGeraetAsync(c, DiscoveryTimeout);
+
+            using var app = new HaelpMiApp();
+            await app.SchliesseSenderBannerAsync();
+            var zyklen = E2EUmgebung.Zyklen;
+            for (var n = 1; n <= zyklen; n++)
+            {
+                var seit = DateTimeOffset.UtcNow;
+                DrueckeHotkey(AlarmHotkey);
+                Rendezvous.Signal($"t18-{n}-aus", $"{DateTimeOffset.UtcNow:O}");
+                var banner = app.ErwarteBanner($"T18 Zyklus {n}");
+                try
+                {
+                    await Rendezvous.WaitForAsync($"t18-{n}-b-zu", SchrittTimeout);
+                    await Rendezvous.WaitForAsync($"t18-{n}-c-zu", SchrittTimeout);
+                }
+                catch
+                {
+                    // Sonst wiederholt A den Alarm bis in T6 hinein.
+                    BrichAlarmAb(banner);
+                    await app.SchliesseSenderBannerAsync();
+                    throw;
+                }
+
+                var sitzung = SitzungAusAudit(seit)
+                    ?? throw new InvalidOperationException($"Zyklus {n}: audit.log auf A enthält keine Zeile 'alarm sent alarmProfileId={ProfilId} sessionId=…'.");
+
+                // Hat ein Empfänger nach einem Neustart nicht gemeldet, alarmiert A sonst bis zum Zeitlimit weiter.
+                if (BrichAlarmAb(banner))
+                {
+                    _ausgabe.WriteLine($"Zyklus {n}: Alarm lief nach beiden Rückmeldungen noch, abgebrochen.");
+                    await app.SchliesseSenderBannerAsync();
+                }
+                else
+                {
+                    await app.SchliesseBannerAsync(banner);
+                }
+
+                Rendezvous.Signal($"t18-{n}-fertig", sitzung.ToString());
+            }
+
+            // C beendet danach seinen Agent; ab T6 soll C nicht mehr mitspielen (siehe GeraetCTests).
+            await Rendezvous.WaitForAsync(DreiGeraete.CGestopptT18, SchrittTimeout);
+        }, "t18");
+
+    /// <returns>true, wenn der Alarm noch lief und abgebrochen wurde; das Banner schließt sich dann selbst.</returns>
+    private static bool BrichAlarmAb(Window banner)
+    {
+        try
+        {
+            var abbrechen = Element(banner, "CancelButton").AsButton();
+            if (!abbrechen.IsEnabled)
+            {
+                return false;
+            }
+
+            abbrechen.Invoke();
+            return true;
+        }
+        catch (Exception ex) when (ex is COMException or InvalidOperationException)
+        {
+            return false;
+        }
+    }
 
     private static Guid? SitzungAusAudit(DateTimeOffset seit)
     {

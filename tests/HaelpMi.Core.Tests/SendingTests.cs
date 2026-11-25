@@ -154,6 +154,87 @@ public class SendingTests
     }
 
     [Fact]
+    public async Task RepeatingAlarmSession_ThresholdTwo_KeepsSendingAfterFirstResponse_AndStopsAfterSecond()
+    {
+        var (session, feedbackChannel, customerGroupId) = NewSession(responseThreshold: 2);
+        try
+        {
+            var finished = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            session.Finished += (_, _) => finished.TrySetResult();
+            var statusUpdates = new System.Collections.Concurrent.ConcurrentQueue<AlarmSessionStatus>();
+            session.StatusChanged += (_, status) => statusUpdates.Enqueue(status);
+            _ = session.RunAsync();
+
+            var first = Guid.NewGuid();
+            InvokeOnMyWay(session, feedbackChannel, OnMyWay(customerGroupId, session, first));
+            // Dasselbe Gerät ein zweites Mal (z. B. doppelt zugestellt) zählt nicht als zweite Person.
+            InvokeOnMyWay(session, feedbackChannel, OnMyWay(customerGroupId, session, first));
+            await Task.Delay(TimeSpan.FromMilliseconds(300));
+
+            Assert.False(finished.Task.IsCompleted, "Die Session stoppt bei Schwelle 2 schon nach einer Rückmeldung.");
+            Assert.All(statusUpdates, s => Assert.True(s.StillSending));
+            Assert.Contains(statusUpdates, s => s.OnTheWayNames.Count == 1);
+            Assert.DoesNotContain(statusUpdates, s => s.OnTheWayNames.Count > 1);
+
+            InvokeOnMyWay(session, feedbackChannel, OnMyWay(customerGroupId, session, Guid.NewGuid()));
+            await finished.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+            Assert.Equal(AlarmStopReason.ThresholdReached, session.StopReason);
+            Assert.Contains(statusUpdates, s => !s.StillSending && s.OnTheWayNames.Count == 2);
+        }
+        finally
+        {
+            session.Dispose();
+        }
+    }
+
+    [Fact]
+    public async Task RepeatingAlarmSession_Cancel_SendsFinalStatusAsNoLongerSending()
+    {
+        // Abbruch an alle: das letzte Relay mit SenderStillSending=false gibt jedes Empfängerfenster frei (AlarmCloseGate).
+        var (session, _, _) = NewSession(responseThreshold: 2);
+        try
+        {
+            var finished = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            session.Finished += (_, _) => finished.TrySetResult();
+            var statusUpdates = new System.Collections.Concurrent.ConcurrentQueue<AlarmSessionStatus>();
+            session.StatusChanged += (_, status) => statusUpdates.Enqueue(status);
+            _ = session.RunAsync();
+
+            session.Cancel();
+            await finished.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+            Assert.Equal(AlarmStopReason.Cancelled, session.StopReason);
+            Assert.False(statusUpdates.Last().StillSending);
+        }
+        finally
+        {
+            session.Dispose();
+        }
+    }
+
+    private static (RepeatingAlarmSession Session, AlarmFeedbackChannel FeedbackChannel, Guid CustomerGroupId) NewSession(int responseThreshold)
+    {
+        var customerGroupId = Guid.NewGuid();
+        var senderIdentity = new LiveIdentity(customerGroupId, Guid.NewGuid(), "Sender-PC", "Frau Meier", "Zimmer", "1", Role.User, false, "0.0.0", 0, DateTimeOffset.UtcNow);
+        var feedbackChannel = new AlarmFeedbackChannel(() => senderIdentity);
+        var profile = new AlarmProfile { Text = "Bitte kommen!", ResponseThreshold = responseThreshold };
+        var session = new RepeatingAlarmSession(profile, Array.Empty<DeviceEntry>(), senderIdentity, new AlarmSender(), feedbackChannel, DateTimeOffset.UtcNow);
+        return (session, feedbackChannel, customerGroupId);
+    }
+
+    private static AlarmOnMyWayMessage OnMyWay(Guid customerGroupId, RepeatingAlarmSession session, Guid responderDeviceId) =>
+        new(customerGroupId, session.Profile.Id, session.AlarmSessionId, responderDeviceId, "Empf-PC", "Herr Novak", "Raum", DateTimeOffset.UtcNow);
+
+    // Per Reflection statt über TCP, Begründung im ersten RepeatingAlarmSession-Test oben.
+    private static void InvokeOnMyWay(RepeatingAlarmSession session, AlarmFeedbackChannel feedbackChannel, AlarmOnMyWayMessage message)
+    {
+        var handler = typeof(RepeatingAlarmSession).GetMethod("OnMyWayReceived", BindingFlags.NonPublic | BindingFlags.Instance)
+            ?? throw new InvalidOperationException("OnMyWayReceived nicht gefunden - wurde die Methode umbenannt?");
+        handler.Invoke(session, new object?[] { feedbackChannel, message });
+    }
+
+    [Fact]
     public async Task RepeatingAlarmSession_LateAckInLaterRound_KeepsEarlierReceipt()
     {
         // Runde 1 wird sofort quittiert, ab Runde 2 kommt die Quittung erst nach
