@@ -188,6 +188,11 @@ public sealed class RepeatingAlarmSession : IDisposable
     /// <summary>Manual "Abbrechen" (FR-50).</summary>
     public void Cancel()
     {
+        if (!_pingingActive)
+        {
+            return; // schon beendet; ohne Empfänger ist die Sitzung dann womöglich bereits entsorgt
+        }
+
         _cancelledByUser = true;
         _stopCts.Cancel();
     }

@@ -59,7 +59,7 @@ public class SendingTests
 
         var feedbackChannel = new AlarmFeedbackChannel(() => senderIdentity);
         var profile = new AlarmProfile { Text = "Bitte kommen!", ResponseThreshold = 1 };
-        var session = new RepeatingAlarmSession(profile, Array.Empty<DeviceEntry>(), senderIdentity, new AlarmSender(), feedbackChannel, DateTimeOffset.UtcNow);
+        var session = new RepeatingAlarmSession(profile, new[] { UnreachableTarget() }, senderIdentity, new AlarmSender(), feedbackChannel, DateTimeOffset.UtcNow);
         try
         {
             var finished = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -110,7 +110,7 @@ public class SendingTests
 
         var feedbackChannel = new AlarmFeedbackChannel(() => senderIdentity);
         var profile = new AlarmProfile { Text = "Bitte kommen!", ResponseThreshold = 1 };
-        var session = new RepeatingAlarmSession(profile, Array.Empty<DeviceEntry>(), senderIdentity, new AlarmSender(), feedbackChannel, DateTimeOffset.UtcNow);
+        var session = new RepeatingAlarmSession(profile, new[] { UnreachableTarget() }, senderIdentity, new AlarmSender(), feedbackChannel, DateTimeOffset.UtcNow);
         try
         {
             var finished = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -219,9 +219,13 @@ public class SendingTests
         var senderIdentity = new LiveIdentity(customerGroupId, Guid.NewGuid(), "Sender-PC", "Frau Meier", "Zimmer", "1", Role.User, false, "0.0.0", 0, DateTimeOffset.UtcNow);
         var feedbackChannel = new AlarmFeedbackChannel(() => senderIdentity);
         var profile = new AlarmProfile { Text = "Bitte kommen!", ResponseThreshold = responseThreshold };
-        var session = new RepeatingAlarmSession(profile, Array.Empty<DeviceEntry>(), senderIdentity, new AlarmSender(), feedbackChannel, DateTimeOffset.UtcNow);
+        var session = new RepeatingAlarmSession(profile, new[] { UnreachableTarget() }, senderIdentity, new AlarmSender(), feedbackChannel, DateTimeOffset.UtcNow);
         return (session, feedbackChannel, customerGroupId);
     }
+
+    // Ohne Ziel endet eine Sitzung nach einer Welle; ein Ziel ohne IP hält sie am Laufen,
+    // ohne dass ein Sendeversuch das Netz berührt.
+    private static DeviceEntry UnreachableTarget() => new() { DeviceId = Guid.NewGuid(), IpAddress = string.Empty };
 
     private static AlarmOnMyWayMessage OnMyWay(Guid customerGroupId, RepeatingAlarmSession session, Guid responderDeviceId) =>
         new(customerGroupId, session.Profile.Id, session.AlarmSessionId, responderDeviceId, "Empf-PC", "Herr Novak", "Raum", DateTimeOffset.UtcNow);
