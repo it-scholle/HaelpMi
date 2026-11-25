@@ -497,6 +497,7 @@ public partial class App : System.Windows.Application
             ImportLicenseKeyText = keyText => LicenseImporter.ImportFromKeyText(keyText, deployment.CustomerGroupId, Convert.FromHexString(deployment.LicensePublicKeyHex)),
             NotifyLicenseRenewed = () => _ = ipcClient.SendAsync(IpcCommandType.LicenseRenewed, TimeSpan.FromSeconds(10)),
             GetDisabledDeviceIds = licenseLimitGuard.GetDisabledDeviceIds,
+            GetBlockReasons = licenseLimitGuard.GetBlockReasons,
             GetLicenseSeatLimit = licenseLimitGuard.GetEffectiveUserLimit,
             AcknowledgeLicenseLimitWarning = deviceId =>
             {

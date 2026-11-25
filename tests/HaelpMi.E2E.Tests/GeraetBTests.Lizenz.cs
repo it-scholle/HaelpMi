@@ -49,6 +49,12 @@ public partial class GeraetBTests
             if (dialog is not null)
             {
                 _ausgabe.WriteLine($"L1: Hinweis-Dialog auf B '{dialog.Name}'");
+                var erwartet = $"HälpMi - {LicenseBlockTexts.Title(LicenseBlockReason.NoLicense)}";
+                if (dialog.Name != erwartet)
+                {
+                    befunde.Add($"Produktbefund L1: Der Hinweis-Dialog auf B heißt '{dialog.Name}', erwartet '{erwartet}' (Grund: keine Lizenz).");
+                }
+
                 BestaetigeDialog(dialog);
             }
 

@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Media.Animation;
+using HaelpMi.Core.Licensing;
 
 namespace HaelpMi.UI.Windows;
 
@@ -11,9 +12,10 @@ namespace HaelpMi.UI.Windows;
 /// </summary>
 public partial class LicenseLimitToastWindow : Window
 {
-    public LicenseLimitToastWindow(Action? openDashboard)
+    public LicenseLimitToastWindow(LicenseBlockReason reason, Action? openDashboard)
     {
         InitializeComponent();
+        ShowReason(reason);
 
         if (openDashboard is null)
         {
@@ -29,6 +31,12 @@ public partial class LicenseLimitToastWindow : Window
         }
 
         Loaded += (_, _) => AnimateIn();
+    }
+
+    public void ShowReason(LicenseBlockReason reason)
+    {
+        TitleText.Text = LicenseBlockTexts.Title(reason);
+        MessageText.Text = LicenseBlockTexts.Message(reason);
     }
 
     private void AnimateIn()

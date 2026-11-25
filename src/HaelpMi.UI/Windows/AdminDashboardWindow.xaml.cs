@@ -424,13 +424,18 @@ public partial class AdminDashboardWindow : Window
     // RefreshDeviceDerivedViews/_deviceFileWatcher), nicht nur beim Öffnen.
     private void RefreshLicenseLimitBanner()
     {
-        var disabledDeviceIds = _context.GetDisabledDeviceIds();
-        var rows = _context.LoadDevices()
-            .Where(d => disabledDeviceIds.Contains(d.DeviceId) && !d.LicenseLimitWarningAcknowledged)
+        var reasons = _context.GetBlockReasons();
+        var blocked = _context.LoadDevices()
+            .Where(d => !d.Removed && !d.LicenseLimitWarningAcknowledged
+                && reasons.TryGetValue(d.DeviceId, out var reason) && reason != LicenseBlockReason.ManuallyDisabled)
+            .ToList();
+        var rows = blocked
             .Select(d => new LicenseLimitDeviceRow(d.DeviceId, BuildDeviceDisplayName(d, isOwnDevice: false)))
             .OrderBy(r => r.DisplayName, StringComparer.CurrentCultureIgnoreCase)
             .ToList();
 
+        LicenseLimitBannerTitle.Text = LicenseBlockTexts.DashboardBannerTitle(
+            blocked.Any(d => reasons[d.DeviceId] == LicenseBlockReason.NoLicense) ? LicenseBlockReason.NoLicense : LicenseBlockReason.LimitExceeded);
         LicenseLimitDevicesList.ItemsSource = rows;
         LicenseLimitBanner.Visibility = rows.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
     }

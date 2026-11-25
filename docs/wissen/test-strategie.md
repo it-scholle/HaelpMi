@@ -170,16 +170,17 @@ Läuft auf bis zu drei Wegwerf-VMs auf pve-nzxt (A = Admin-Gerät, B und C = Use
 | T12 | Alarm per Hotkey von A an B und C mit Schwelle 2 (eigenes Profil, Config-Version 1100): Popup auf B und C mit Raum von A. B meldet "Bin unterwegs", Schließen bleibt auf B 5 s gesperrt, C zeigt "noch 1". Nach der Meldung von C wird Schließen auf beiden frei; A zeigt beide Räume unter "Auf dem Weg" und "Empfangen: 2 von 2". Danach beendet C seinen Agent | A, B, C | FR-47, FR-50, FR-51, FR-53 |
 | T13 | Regression #182: eigenes Profil A an B (Schwelle 1, Config-Version 6000), kein "Bin unterwegs". Nach "Empfangen: 1 von 1" auf A beendet B seinen Agent, A beobachtet das Banner 15 s lang. Rot, wenn trotz mindestens einer weiteren, unquittierten Welle (`audit.log` von A) ein anderer Text als "Empfangen: 1 von 1" erscheint; danach startet B den Agent wieder | A, B | FR-14, FR-53 |
 | T14 | Regression #183: A mit `lizenz.json`, B mit `lizenz-abgelaufen-neuer.json` (später ausgestellt, abgelaufen); B startet nach A neu, damit Boot-Call und Antwort die Lizenzen austauschen. A behält die gültige Lizenz (kein "Lizenz von Peer" im `audit.log`), B übernimmt sie binnen 60 s. Danach beide wieder `lizenz.json` | A, B | – |
+| T15 | Regression #133: A deaktiviert B im Dashboard, das Banner "Lizenzkontingent überschritten" bleibt 10 s aus; B zeigt den Sperr-Toast mit Grund "Gerät deaktiviert" (Titel und Text je Sperrgrund aus `LicenseBlockTexts`). A aktiviert B danach in einem neu geöffneten Dashboard wieder, der Toast auf B ist weg | A, B | – |
 | T16 | Regression #180: A deaktiviert B im Reiter "Geräte / Lizenz", wartet, bis B `ForceDisabled` übernommen hat, und aktiviert es wieder. Rot, wenn B danach in `devices.json` von A nicht auf `LicenseOverride` None steht (vor dem Fix: ForceEnabled, B umgeht dann das Kontingent). B prüft, dass es None per Gossip in `settings.json` übernimmt | A, B | – |
 
-T4 bis T10, T13, T14 und T16 (Trait `Teil=ZweiGeraete`) laufen nur, wenn A und B beteiligt sind, T11 und T12
+T4 bis T10 und T13 bis T16 (Trait `Teil=ZweiGeraete`) laufen nur, wenn A und B beteiligt sind, T11 und T12
 (`Teil=DreiGeraete`) nur mit A, B und C. Die Geräte stimmen sich über Markendateien ab, die
 `ci/e2e/rendezvous-relay.sh` zwischen allen beteiligten VMs spiegelt. T11/T12 laufen zwischen T5 und T6
 (Priorität 53/56). Ein Lauf mit `a,b` ist dadurch unverändert. C beendet nach T12 seinen Agent, damit es
 ab T6 nicht mehr mitspielt: sonst verteilte es in T9 seine gültige Lizenz per Gossip an A und B
 (`TryAdoptFromPeer`). Trait `Bereich`:
 `Haupt` (T6 bis T9) setzt Installation, Discovery und Alarm voraus (`Basis`: T1, T4, T5, T11, T12), ein
-Teillauf filtert deshalb z. B. auf `Bereich=Basis|Bereich=Haupt`. `R136` (T10), `R182` (T13), `R183` (T14) und `R180` (T16) brauchen nur `Basis`.
+Teillauf filtert deshalb z. B. auf `Bereich=Basis|Bereich=Haupt`. `R136` (T10), `R182` (T13), `R183` (T14), `R133` (T15) und `R180` (T16) brauchen nur `Basis`.
 
 Auslöser: Label `e2e` an einem PR aus diesem Repo (nicht aus Forks) oder `workflow_dispatch`
 (Input `vms`: Geräte aus `ci/e2e/geraete.json`, z. B. `a,b` oder `a,b,c`; Default `a,b,c`). Beim

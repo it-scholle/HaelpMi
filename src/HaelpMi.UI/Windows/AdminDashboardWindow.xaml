@@ -88,7 +88,8 @@
             <Border x:Name="LicenseLimitBanner" Visibility="Collapsed" Margin="0,0,0,10"
                     Padding="12,8" CornerRadius="4" Background="{StaticResource DangerBrush}">
                 <StackPanel>
-                    <TextBlock Text="Lizenzkontingent überschritten" Foreground="White" FontWeight="Bold" FontSize="13" Margin="0,0,0,4" />
+                    <TextBlock x:Name="LicenseLimitBannerTitle" AutomationProperties.AutomationId="LicenseLimitBannerTitle"
+                               Text="Lizenzkontingent überschritten" Foreground="White" FontWeight="Bold" FontSize="13" Margin="0,0,0,4" />
                     <ItemsControl x:Name="LicenseLimitDevicesList">
                         <ItemsControl.ItemTemplate>
                             <DataTemplate>
