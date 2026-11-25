@@ -165,9 +165,16 @@ public partial class GeraetATests
             Rendezvous.Signal("t8-aus");
 
             await Rendezvous.WaitForAsync("t8-b-gesperrt", SchrittTimeout);
+            // Der einzige Empfänger ist deaktiviert, also 0 Empfänger: eine Welle, dann sofort "nicht zugestellt".
             DrueckeHotkey(HotkeyP1);
-            await PruefeBefundAsync(befunde, () => WarteKeinFensterAsync(app.FindeSenderBanner, NegativDauer,
-                "Produktbefund: A zeigt ein Sender-Banner für P1, obwohl der einzige Empfänger B deaktiviert ist."));
+            var gesperrtBanner = app.ErwarteBanner("P1 mit deaktiviertem Empfänger B");
+            await PruefeBefundAsync(befunde, () => WarteBisAsync(() => NameVon(gesperrtBanner, "StatusText") == "Alarm nicht zugestellt", TimeSpan.FromSeconds(10),
+                () => $"Produktbefund: Das Banner meldet bei deaktiviertem Empfänger B '{NameVon(gesperrtBanner, "StatusText")}' statt \"Alarm nicht zugestellt\"."));
+            var gesperrtEmpfangen = NameVon(gesperrtBanner, "AckedText");
+            if (gesperrtEmpfangen != "Empfangen: 0 von 0")
+            {
+                befunde.Add($"Produktbefund: Das Banner zählt bei deaktiviertem Empfänger B '{gesperrtEmpfangen}' statt \"Empfangen: 0 von 0\".");
+            }
             await app.SchliesseSenderBannerAsync();
 
             // Am Empfängerfilter von A vorbei: belegt die Empfangssperre von B für sich allein.
