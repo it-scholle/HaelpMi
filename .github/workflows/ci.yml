@@ -75,6 +75,43 @@ jobs:
           )
           & $env:ISCC "/DErwartet=$erwartet" $skript
           if ($LASTEXITCODE) { throw "ISCC endete mit $LASTEXITCODE (erwartet: $erwartet)" }
+      # Ohne /DCustomerGroupId darf kein Installer mit der Null-GUID entstehen (MessageValidation verwirft sie):
+      # Test-Installer bekommen eine zufällige, pro Arbeitskopie gleichbleibende Gruppe, Kunden-Installer brechen ab.
+      - name: Kundengruppe ohne /DCustomerGroupId
+        run: |
+          $datei = Join-Path $PWD 'installer\test-kundengruppe.txt'
+          Remove-Item -LiteralPath $datei -ErrorAction SilentlyContinue
+          $skript = Join-Path $PWD 'installer\ci-kundengruppe.iss'
+          Set-Content -LiteralPath $skript -Encoding utf8 -Value @(
+              '#include "HaelpMiKundengruppe.iss.inc"'
+              '#if CustomerGroupId == "00000000-0000-0000-0000-000000000000" || Len(CustomerGroupId) != 36'
+              '  #error Ungültige Kundengruppe: {#CustomerGroupId}'
+              '#endif'
+              '#ifdef Erwartet'
+              '  #if CustomerGroupId != Erwartet'
+              '    #error Kundengruppe {#CustomerGroupId} statt {#Erwartet}'
+              '  #endif'
+              '#endif'
+              '[Setup]'
+              'AppName=Kundengruppenpruefung'
+              'AppVersion=1'
+              'DefaultDirName={autopf}\Kundengruppenpruefung'
+              'Output=no'
+          )
+          & $env:ISCC $skript
+          if ($LASTEXITCODE) { throw "Test-Installer ohne /DCustomerGroupId: ISCC endete mit $LASTEXITCODE" }
+          if (-not (Test-Path -LiteralPath $datei)) { throw 'installer\test-kundengruppe.txt wurde nicht angelegt.' }
+          $g = [guid]::Empty
+          $erste = (Get-Content -LiteralPath $datei -Raw).Trim()
+          if (-not [guid]::TryParse($erste, [ref]$g) -or $g -eq [guid]::Empty) { throw "Keine gültige Test-Kundengruppe: '$erste'" }
+          & $env:ISCC "/DErwartet=$erste" $skript
+          if ($LASTEXITCODE) { throw 'Zweiter Build nutzt nicht dieselbe Test-Kundengruppe.' }
+          $vorgabe = [guid]::NewGuid().ToString('D')
+          & $env:ISCC "/DCustomerGroupId=$vorgabe" "/DErwartet=$vorgabe" '/DIsTestInstaller=false' $skript
+          if ($LASTEXITCODE) { throw 'Vorgegebene /DCustomerGroupId wird nicht übernommen.' }
+          & $env:ISCC '/DIsTestInstaller=false' $skript
+          if (-not $LASTEXITCODE) { throw 'Kunden-Installer ohne /DCustomerGroupId wurde gebaut statt abgebrochen.' }
+          if ((Get-Content -LiteralPath $datei -Raw).Trim() -ne $erste) { throw 'Die Test-Kundengruppe hat sich geändert.' }
 
   exec-bits:
     name: Ausführbar-Bit (Hooks, Skripte)
