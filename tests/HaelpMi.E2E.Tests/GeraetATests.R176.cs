@@ -34,6 +34,7 @@ public partial class GeraetATests
             _ausgabe.WriteLine($"T21: Meldung '{text}'");
             Assert.Contains("Alarm-Profil", text);
             Assert.Contains("Dashboard", text);
+            Assert.Contains("jetzt öffnen", text);
             Assert.False(app.AlarmfensterOffen(), "Ohne Alarm-Profil darf der Selbsttest kein Alarmfenster öffnen.");
 
             // "Ja" (IDYES = 6) muss direkt zum Ort der Lösung führen.

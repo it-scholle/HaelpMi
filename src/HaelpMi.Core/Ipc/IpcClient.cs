@@ -12,15 +12,21 @@ namespace HaelpMi.Core.Ipc;
 /// </summary>
 public sealed class IpcClient
 {
-    private const string RestartHint =
-        "Bitte die HälpMi-Einstellungen schließen und neu öffnen, dabei startet der Hintergrunddienst neu. Hilft das nicht, Windows neu anmelden.";
+    internal const string RestartHint =
+        "Bitte die HälpMi-Einstellungen schließen und neu öffnen; läuft der Hintergrunddienst nicht, wird er dabei gestartet. " +
+        "Hilft das nicht, Windows neu anmelden.";
+
+    private readonly string? _pipeName;
+
+    /// <param name="pipeName">Nur für Tests; sonst die Pipe des Agents in dieser Windows-Sitzung.</param>
+    public IpcClient(string? pipeName = null) => _pipeName = pipeName;
 
     public async Task<IpcResponse> SendAsync(IpcCommandType command, TimeSpan? timeout = null, CancellationToken ct = default)
     {
         var effectiveTimeout = timeout ?? TimeSpan.FromSeconds(5);
         try
         {
-            var pipeName = IpcPipeNaming.BuildSessionScopedPipeName(Process.GetCurrentProcess().SessionId);
+            var pipeName = _pipeName ?? IpcPipeNaming.BuildSessionScopedPipeName(Process.GetCurrentProcess().SessionId);
             using var client = new NamedPipeClientStream(".", pipeName, PipeDirection.InOut, PipeOptions.Asynchronous);
             using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
             timeoutCts.CancelAfter(effectiveTimeout);

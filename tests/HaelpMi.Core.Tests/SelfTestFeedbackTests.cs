@@ -61,8 +61,8 @@ public class SelfTestFeedbackTests
     [Fact]
     public async Task AgentNotRunning_ClientReportsHowToRestartIt()
     {
-        // In der Testsitzung läuft kein Agent, die Pipe gibt es also nicht.
-        var response = await new IpcClient().SendAsync(IpcCommandType.Ping, TimeSpan.FromMilliseconds(300));
+        // Eigener Pipe-Name, damit ein auf dem Rechner laufender echter Agent den Test nicht beantwortet.
+        var response = await new IpcClient($"HaelpMi-Test-{Guid.NewGuid():N}").SendAsync(IpcCommandType.Ping, TimeSpan.FromMilliseconds(300));
 
         Assert.False(response.Success);
         Assert.Contains("neu öffnen", response.Error);

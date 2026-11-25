@@ -16,8 +16,8 @@ public static class SelfTestFeedback
         "Dieses Gerät wurde im Admin-Dashboard gelöscht und kann keine Alarme mehr senden. Um es wieder einzubinden, HälpMi auf diesem Gerät neu installieren.";
 
     public const string NotReceived =
-        "Der Testalarm ist auf diesem Gerät nicht angekommen. Bitte die HälpMi-Einstellungen schließen und neu öffnen. " +
-        "Hilft das nicht, prüfen, ob die Windows-Firewall HälpMi blockiert, und Windows neu anmelden.";
+        "Der Testalarm ist auf diesem Gerät nicht angekommen. Bitte prüfen, ob die Windows-Firewall HälpMi blockiert, " +
+        "und Windows neu anmelden; dabei startet HälpMi neu.";
 
     public const string OfferDashboardQuestion = "Admin-Dashboard jetzt öffnen?";
 
