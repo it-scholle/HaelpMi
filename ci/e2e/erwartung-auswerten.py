@@ -35,6 +35,7 @@ class Auswertung:
     unerwartet: list[str] = field(default_factory=list)
     hinweise: list[str] = field(default_factory=list)
     bestanden: int = 0
+    ausgefuehrt: list[str] = field(default_factory=list)
 
     @property
     def reproduziert(self) -> bool:
@@ -64,11 +65,19 @@ def trx_auswerten(datei: Path, geraet: str, muster: re.Pattern[str] | None, a: A
     lauf = zusammenfassung.get("outcome", "") if zusammenfassung is not None else ""
     if lauf not in ("Completed", "Failed"):
         a.unerwartet.append(f"{geraet}: Testlauf in {datei.name} endete mit „{lauf or 'unbekannt'}“")
+    # Testhost-Absturz oder xunit "Catastrophic failure" setzt in der trx nur outcome="Failed" und eine
+    # RunInfo mit Error; die danach geplanten Tests fehlen. Ohne diese Prüfung gälte der Lauf als reproduziert.
+    for info in wurzel.iterfind("t:ResultSummary/t:RunInfos/t:RunInfo", NS):
+        if info.get("outcome") == "Error":
+            text = info.find("t:Text", NS)
+            a.unerwartet.append(f"{geraet}: Fehler im Testlauf – {kurz(text.text or '') if text is not None and text.text else '(keine Meldung)'}")
 
     fehlgeschlagen = 0
     for ergebnis in wurzel.iterfind("t:Results/t:UnitTestResult", NS):
         name = ergebnis.get("testName", "(ohne Namen)")
         ausgang = ergebnis.get("outcome", "")
+        if ausgang in ("Passed", "Failed"):
+            a.ausgefuehrt.append(name)
         if ausgang == "Passed":
             a.bestanden += 1
         elif ausgang == "NotExecuted":
@@ -120,6 +129,8 @@ def bericht(a: Auswertung, geraete: list[str], muster_text: str) -> str:
         "",
         f"**Gesamturteil: {urteil}**",
         "",
+        "Messlauf gegen `produkt_ref`: prüft nicht den Stand dieses Branches und zählt nie als E2E-Gate.",
+        "",
         f"- Geräte: {', '.join(geraete)}",
         f"- ERWARTET_ROT: `{muster_text}`" if muster_text else "- ERWARTET_ROT: (leer, jeder Fehlschlag gilt als erwartet)",
         f"- bestanden: {a.bestanden}, erwartet fehlgeschlagen: {len(a.erwartet)}, unerwartet: {len(a.unerwartet)}",
@@ -161,6 +172,8 @@ def main(argumente: list[str]) -> int:
     a = Auswertung()
     for geraet in geraete:
         geraet_auswerten(verzeichnis, geraet, muster, a)
+    if muster is not None and len(a.ausgefuehrt) > 1 and all(muster.search(n) for n in a.ausgefuehrt):
+        a.hinweise.append("ERWARTET_ROT passt auf alle ausgeführten Tests und wirkt damit wie ein leeres Muster")
     print(bericht(a, geraete, muster_text))
     return 0 if a.reproduziert else 1
 

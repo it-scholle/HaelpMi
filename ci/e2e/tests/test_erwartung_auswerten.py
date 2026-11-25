@@ -21,7 +21,7 @@ _spec.loader.exec_module(auswerten)
 NS = "http://microsoft.com/schemas/VisualStudio/TeamTest/2010"
 
 
-def trx(ergebnisse: list[tuple[str, str, str]], lauf: str = "Completed") -> str:
+def trx(ergebnisse: list[tuple[str, str, str]], lauf: str = "Completed", laufmeldung: str = "") -> str:
     zeilen = []
     for name, ausgang, text in ergebnisse:
         fehler = f"<Output><ErrorInfo><Message>{text}</Message></ErrorInfo></Output>" if text else ""
@@ -29,7 +29,10 @@ def trx(ergebnisse: list[tuple[str, str, str]], lauf: str = "Completed") -> str:
     return (
         f'<?xml version="1.0" encoding="utf-8"?><TestRun xmlns="{NS}">'
         f"<Results>{''.join(zeilen)}</Results>"
-        f'<ResultSummary outcome="{lauf}"><Counters total="{len(ergebnisse)}" /></ResultSummary></TestRun>'
+        f'<ResultSummary outcome="{lauf}"><Counters total="{len(ergebnisse)}" />'
+        + (f'<RunInfos><RunInfo computerName="VM" outcome="Error" timestamp="2026-11-25T21:00:00">'
+           f"<Text>{laufmeldung}</Text></RunInfo></RunInfos>" if laufmeldung else "")
+        + "</ResultSummary></TestRun>"
     )
 
 
@@ -146,6 +149,24 @@ class ErwartungRotTests(unittest.TestCase):
         code, text = self.lauf.auswerten("a", "T22_")
         self.assertEqual(code, 1)
         self.assertIn("Aborted", text)
+
+    def test_laufmeldung_error_nach_erwartetem_fehlschlag_ist_rot(self) -> None:
+        # vstest setzt bei Testhost-Absturz oder xunit "Catastrophic failure" nur outcome="Failed" plus RunInfo Error;
+        # die restlichen Tests fehlen dann in der trx.
+        self.lauf.geraet("a", "1", trx([("GeraetATests.T22_X", "Failed", "erwartet")], lauf="Failed",
+                                        laufmeldung="The active test run was aborted. Reason: Test host process crashed"))
+        code, text = self.lauf.auswerten("a", "T22_")
+        self.assertEqual(code, 1, text)
+        self.assertIn("Test host process crashed", text)
+
+    def test_muster_auf_alle_tests_gibt_hinweis(self) -> None:
+        self.lauf.geraet("a", "1", trx([
+            ("HaelpMi.E2E.Tests.GeraetATests.T22_X", "Failed", "erwartet"),
+            ("HaelpMi.E2E.Tests.GeraetATests.T1_Installation", "Passed", ""),
+        ], lauf="Failed"))
+        code, text = self.lauf.auswerten("a", "E2E")
+        self.assertEqual(code, 0, text)
+        self.assertIn("passt auf alle ausgeführten Tests", text)
 
     def test_exitcode_ohne_fehlschlag_ist_rot(self) -> None:
         self.lauf.geraet("a", "1", trx([("GeraetATests.T22_X", "Failed", "erwartet")], lauf="Failed"))

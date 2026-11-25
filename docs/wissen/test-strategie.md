@@ -219,7 +219,8 @@ weil `workflow_dispatch` nur Workflows vom Default-Branch startet):
   Rot sind: kein erwarteter Fehlschlag (Fehler nicht reproduziert), ein Fehlschlag außerhalb von
   `erwartet_rot`, ein anderes Ergebnis als bestanden/fehlgeschlagen/nicht ausgeführt, ein abgebrochener
   Testlauf, ein Gerät ohne Artefakt oder Exit-Code, ein Exit-Code ungleich 0 ohne fehlgeschlagenen Test und
-  ein nicht erfolgreicher Test-Job. Die Step Summary nennt erwartete Fehlschläge mit Meldung, unerwartete
+  ein Fehler des Testlaufs selbst (Testhost-Absturz, xunit „Catastrophic failure“: `RunInfo` mit `Error`
+  in der trx) und ein nicht erfolgreicher Test-Job. Die Step Summary nennt erwartete Fehlschläge mit Meldung, unerwartete
   Ergebnisse und das Urteil „Fehler reproduziert ✔“ bzw. „Fehler nicht reproduziert ✘“. Tests werden dafür
   nicht abgeschwächt; Fälle wie T10/T18/T19, die mit `produkt_ref` ohnehin nur messen, bleiben grün und
   ergeben im Messlauf deshalb „nicht reproduziert“.
@@ -227,7 +228,10 @@ weil `workflow_dispatch` nur Workflows vom Default-Branch startet):
   auf den vollen Testnamen aus der trx-Datei passen muss, z. B. `T22_`. Leer = jeder Fehlschlag gilt als
   erwartet. Fallen auf dem Altstand auch die Gegenseiten auf anderen Geräten (Rendezvous), gehören sie mit
   ins Muster, z. B. `T23_`, das `GeraetATests` und `GeraetBTests` trifft. Selbsttest der Auswertung:
-  `python3 -m unittest discover -s ci/e2e/tests` (läuft in der CI).
+  `python3 -m unittest discover -s ci/e2e/tests` (läuft in der CI). Das Muster möglichst eng fassen: `T2`
+  trifft auch T20 bis T29, `E2E` oder `.*` treffen alles (die Summary weist darauf hin).
+- Ein Messlauf prüft nie den Stand des Branches und zählt nicht als E2E-Gate; dafür braucht der PR
+  zusätzlich einen normalen Lauf. `ci/e2e/lauf.env` vor dem Merge wieder leeren.
 
 Alle Werte werden per Regex geprüft, sonst bricht der Build-Job ab. Vergleichslauf #136 gegen den
 Stand vor dem Fix: in `ci/e2e/lauf.env` `PRODUKT_REF=v0.46.1` und `FILTER=Bereich=Basis|Bereich=R136`
