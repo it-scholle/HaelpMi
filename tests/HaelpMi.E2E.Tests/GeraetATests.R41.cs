@@ -14,7 +14,7 @@ public partial class GeraetATests
     /// Sender-Banner mit "Alarm nicht zugestellt", "Empfangen: 0 von 0" und einem Hinweis auf den Lösungsweg,
     /// genau eine Welle im Audit-Log und keine Wiederholung. Vor dem Fix passierte nichts.
     /// </summary>
-    [Fact, TestPriority(160)]
+    [Fact, TestPriority(155)]
     [Trait("Bereich", "R41"), Trait("FR", "FR-50"), Trait("FR", "FR-53")]
     public Task T22_Regression41_SendenOhneEmpfaenger() =>
         Artefakte.SichereAsync(nameof(T22_Regression41_SendenOhneEmpfaenger), async () =>

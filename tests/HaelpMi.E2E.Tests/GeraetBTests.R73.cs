@@ -9,7 +9,7 @@ namespace HaelpMi.E2E.Tests;
 public partial class GeraetBTests
 {
     /// <summary>Beendet den Agent, bevor A auslöst, startet ihn während des laufenden Alarms und erwartet das Alarmfenster.</summary>
-    [Fact, TestPriority(170)]
+    [Fact, TestPriority(158)]
     [Trait("Teil", ZweiGeraete.Teil), Trait("Bereich", "R73")]
     public Task T23_Regression73_StartetWaehrendAlarm() =>
         Artefakte.SichereAsync(nameof(T23_Regression73_StartetWaehrendAlarm), async () =>
