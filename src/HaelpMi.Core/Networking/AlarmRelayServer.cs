@@ -209,7 +209,7 @@ public sealed class AlarmRelayServer : IAsyncDisposable
         }
         catch (OperationCanceledException)
         {
-            // Frist abgelaufen: zählt als „nicht angezeigt“, die Verbindung bleibt bestehen
+            // Frist abgelaufen: zählt als „nicht angezeigt“
         }
         catch (Exception)
         {
