@@ -123,7 +123,11 @@ Name: "{group}\{cm:UninstallProgram,HälpMi}"; Filename: "{uninstallexe}"
 ; statt neu anzulegen. Best-effort: schlägt auch das fehl (z. B. echte GPO-Sperre), bleibt
 ; die bestehende Selbstheilung im Agent-Start plus Tray-Meldung an den Admin als
 ; Rückfallebene - deshalb kein Abbruch der Installation bei einem Fehlschlag hier.
-Filename: "{app}\{#MyAgentExeName}"; Parameters: "--register-autostart"; Flags: runhidden waituntilterminated
+;
+; BeforeInstall: Inno führt [Run]-Einträge ohne postinstall vor CurStepChanged(ssPostInstall) aus. Die Firewall-Regeln
+; müssen vor dem ersten HälpMi-Start stehen, sonst fragt Windows beim ersten Lauschen nach,
+; und eine abgebrochene Abfrage hinterlässt Block-Regeln, die die Allow-Regel schlagen.
+Filename: "{app}\{#MyAgentExeName}"; Parameters: "--register-autostart"; Flags: runhidden waituntilterminated; BeforeInstall: EnsureFirewallRules
 
 ; Startet den Agent automatisch im Hintergrund - kein Postinstall-Haken, weil der Agent
 ; kein eigenes Fenster hat (ein anhakbarer "jetzt starten"-Punkt ohne sichtbaren Effekt
@@ -546,6 +550,49 @@ begin
     Log(Format('netsh %s -> nicht gestartet: %s', [Params, SysErrorMessage(ResultCode)]));
 end;
 
+// Für einen PowerShell-String in einfachen Anführungszeichen (z. B. /DIR mit Apostroph im Pfad).
+function PsLiteral(Wert: String): String;
+begin
+  Result := Wert;
+  StringChangeEx(Result, '''', '''''', True);
+  Result := '''' + Result + '''';
+end;
+
+// Entfernt nur lokale (PersistentStore) Inbound-Block-Regeln, deren Programm genau eine HälpMi-.exe
+// in {app} ist, wie Windows sie nach einer abgebrochenen Firewall-Abfrage anlegt. GPO-Regeln
+// liegen in einem anderen Speicher und bleiben unberührt. Jede entfernte Regel steht im Setup-Log.
+// Gefiltert wird per Where-Object statt -Direction/-Action: Get-NetFirewallRule meldet bei null
+// Treffern einen Fehler, PowerShell endet dann mit 1. Regeln dürfen den Pfad mit Umgebungsvariablen
+// speichern (%ProgramFiles%\...), daher ExpandEnvironmentVariables; -contains ignoriert Groß-/Kleinschreibung.
+procedure EntferneBlockRegeln();
+var
+  Ausgabe, Skript: String;
+  Zeilen: TArrayOfString;
+  ResultCode, I: Integer;
+begin
+  Ausgabe := ExpandConstant('{tmp}\block-regeln.txt');
+  Skript := '& { $p = @(' + PsLiteral(ExpandConstant('{app}\{#MyAgentExeName}')) + ', ' + PsLiteral(ExpandConstant('{app}\{#MyConfigExeName}')) + '); ' +
+    'Get-NetFirewallRule -PolicyStore PersistentStore | Where-Object { $_.Direction -eq ''Inbound'' -and $_.Action -eq ''Block'' } | ForEach-Object { ' +
+    '$a = $_ | Get-NetFirewallApplicationFilter; ' +
+    'if ($p -contains [Environment]::ExpandEnvironmentVariables([string]$a.Program)) { ''entfernt: '' + $_.DisplayName + '' | '' + $_.Profile + '' | '' + $a.Program; $_ | Remove-NetFirewallRule } } } *>&1 ' +
+    '| Out-File -LiteralPath ' + PsLiteral(Ausgabe) + ' -Encoding utf8 -Width 4096';
+  if Exec('powershell.exe', '-NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "' + Skript + '"', '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
+    Log(Format('Block-Regeln mit HälpMi-Programmpfad prüfen -> Rückgabecode %d', [ResultCode]))
+  else
+    Log(Format('Block-Regeln mit HälpMi-Programmpfad prüfen -> nicht gestartet: %s', [SysErrorMessage(ResultCode)]));
+  // Fehler von Get-/Remove-NetFirewallRule stehen ebenfalls in der Datei; nur Treffer heißen "Block-Regel entfernt: ...".
+  if LoadStringsFromFile(Ausgabe, Zeilen) then
+  begin
+    for I := 0 to GetArrayLength(Zeilen) - 1 do
+      if Pos('entfernt: ', Zeilen[I]) > 0 then
+        Log('Block-Regel ' + Zeilen[I])
+      else if Trim(Zeilen[I]) <> '' then
+        Log('Block-Regel-Prüfung: ' + Zeilen[I]);
+  end
+  else
+    Log('Block-Regeln mit HälpMi-Programmpfad prüfen -> keine Ausgabe, PowerShell lief nicht bis zum Ende (Rückgabecode oben)');
+end;
+
 // Only reachable with admin rights (PrivilegesRequired=admin in both variants) - this is
 // the one piece of installer behavior that genuinely needs elevation; the app itself never
 // does (Pflichtenheft: kein Admin). Delete-then-add rather than a "does it exist" check
@@ -556,6 +603,7 @@ end;
 // "HälpMi Discovery"/"HälpMi Alarm" sind die Portregeln älterer Versionen.
 procedure EnsureFirewallRules();
 begin
+  EntferneBlockRegeln();
   RunNetsh('advfirewall firewall delete rule name="HälpMi Discovery"');
   RunNetsh('advfirewall firewall delete rule name="HälpMi Alarm"');
 
@@ -608,8 +656,6 @@ begin
     // Compile-time-konstant für diesen Installer-Build - anders als settings.json bei
     // JEDEM Lauf neu geschrieben (siehe Kommentar bei WriteDeploymentJson).
     WriteDeploymentJson();
-
-    EnsureFirewallRules();
   end;
 end;
 

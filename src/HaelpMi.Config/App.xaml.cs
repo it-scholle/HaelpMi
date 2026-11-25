@@ -385,7 +385,7 @@ public partial class App : System.Windows.Application
             LoadConfig = sharedConfigStore.LoadOrCreate,
             RequestRebroadcast = async () => (await ipcClient.SendAsync(IpcCommandType.Rebroadcast, TimeSpan.FromSeconds(10))).Success,
             RequestSearchAgain = async () => (await ipcClient.SendAsync(IpcCommandType.SearchAgain, TimeSpan.FromSeconds(10))).Success,
-            RequestSelfTest = async () => (await ipcClient.SendAsync(IpcCommandType.SelfTest, TimeSpan.FromSeconds(10))).Success,
+            RequestSelfTest = () => ipcClient.SendAsync(IpcCommandType.SelfTest, TimeSpan.FromSeconds(10)),
             // Issue #10: nur beim installierenden Windows-Nutzer, nicht bei jedem, der auf
             // diesem Admin-Gerät angemeldet ist (Fast User Switching).
             OpenAdminDashboard = DashboardAccessGuard.CurrentUserMayOpenDashboard(settings.Role)

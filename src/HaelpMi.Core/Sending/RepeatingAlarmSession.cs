@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using HaelpMi.Core.Models;
 using HaelpMi.Core.Networking;
 using HaelpMi.Core.Networking.Protocol;
@@ -116,6 +117,7 @@ public sealed class RepeatingAlarmSession : IDisposable
                     break;
                 }
 
+                var waveStarted = Stopwatch.StartNew();
                 if (wave++ > 0 && _currentDevicesProvider is not null)
                 {
                     // Abseits des UI-Threads: das Lesen von devices.json kann bei Dateikonflikten kurz blockieren.
@@ -128,11 +130,14 @@ public sealed class RepeatingAlarmSession : IDisposable
 
                 var result = await _alarmSender.SendAsync(Profile, AlarmSessionId, _ownIdentity, _currentTargets, ct: _stopCts.Token);
                 MarkReceived(result.AckedDeviceIds);
-                await RaiseAndRelayAsync(stillSending: true);
+
+                // Nicht abwarten: ein ausgeschaltetes Gerät hält das Relay bis zum Verbindungs-Timeout auf und bremst
+                // sonst die nächste Welle für alle. Relays dürfen ohnehin in beliebiger Reihenfolge ankommen (AlarmCloseGate).
+                _ = RaiseAndRelayAsync(stillSending: true);
 
                 try
                 {
-                    await Task.Delay(AppConstants.AlarmRepeatInterval, _stopCts.Token);
+                    await Task.Delay(TimeUntilNextWave(waveStarted.Elapsed), _stopCts.Token);
                 }
                 catch (OperationCanceledException)
                 {
@@ -189,6 +194,16 @@ public sealed class RepeatingAlarmSession : IDisposable
         // durchgereicht zu Dispose() (siehe RunSessionAsync), das die Subscription kappte -
         // jede Spätantwort verschwand dadurch komplett, sender- wie empfängerseitig.
         await Task.Delay(AppConstants.AlarmAutoCloseAfterLastSignal);
+    }
+
+    /// <summary>
+    /// Der Takt zählt ab dem Start einer Welle, nicht ab ihrem Ende: Warten auf Quittungen und Relays verlängert
+    /// sonst jede Runde, und ein langsamer Empfänger bremst die Wiederholung für alle Empfänger.
+    /// </summary>
+    internal static TimeSpan TimeUntilNextWave(TimeSpan waveDuration)
+    {
+        var remaining = AppConstants.AlarmRepeatInterval - waveDuration;
+        return remaining > TimeSpan.Zero ? remaining : TimeSpan.Zero;
     }
 
     /// <summary>Manual "Abbrechen" (FR-50).</summary>
