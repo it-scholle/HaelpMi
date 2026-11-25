@@ -341,6 +341,56 @@ public class SendingTests
         }
     }
 
+    [Fact]
+    public async Task RepeatingAlarmSession_WithoutTargets_KeepsSendingUntilCancelled()
+    {
+        // #41: Ein Alarm ohne eingerichtete Empfänger muss trotzdem als laufende Sitzung sichtbar sein
+        // (Statusanzeige mit "0 von 0" und Abbrechen), statt dass das Tastenkürzel wirkungslos bleibt.
+        var auditLines = new System.Collections.Concurrent.ConcurrentQueue<string>();
+        var senderIdentity = new LiveIdentity(Guid.NewGuid(), Guid.NewGuid(), "Sender-PC", "Frau Meier", "Zimmer", "1", Role.Admin, false, "0.0.0", 0, DateTimeOffset.UtcNow);
+        var feedbackChannel = new AlarmFeedbackChannel(() => senderIdentity);
+        var profile = new AlarmProfile { Text = "Bitte kommen!", ResponseThreshold = 1 };
+        var session = new RepeatingAlarmSession(profile, Array.Empty<DeviceEntry>(), senderIdentity, new AlarmSender(auditLines.Enqueue), feedbackChannel, DateTimeOffset.UtcNow);
+        try
+        {
+            var finished = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            session.Finished += (_, _) => finished.TrySetResult();
+            var statusUpdates = new System.Collections.Concurrent.ConcurrentQueue<AlarmSessionStatus>();
+            session.StatusChanged += (_, status) => statusUpdates.Enqueue(status);
+            _ = session.RunAsync();
+
+            await Task.Delay(TimeSpan.FromMilliseconds(300));
+            Assert.False(finished.Task.IsCompleted, "Eine Sitzung ohne Empfänger endet sofort statt bis zum Abbrechen zu laufen.");
+            Assert.Contains(auditLines, l => l.Contains($"alarm sent alarmProfileId={profile.Id}", StringComparison.Ordinal) && l.EndsWith("targetCount=0", StringComparison.Ordinal));
+            Assert.Contains(statusUpdates, s => s.StillSending && s.TargetCount == 0 && s.AckedCount == 0);
+
+            session.Cancel();
+            await finished.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.Equal(AlarmStopReason.Cancelled, session.StopReason);
+        }
+        finally
+        {
+            session.Dispose();
+        }
+    }
+
+    [Fact]
+    public void SenderStatusTexts_NoRecipientsHint_NamesWhereToFixIt()
+    {
+        var hint = SenderStatusTexts.NoRecipientsHint(targetCount: 0);
+
+        Assert.NotNull(hint);
+        Assert.Contains("keine Empfänger", hint);
+        Assert.Contains("Dashboard", hint);
+        Assert.Contains("Alarm-Profile", hint);
+    }
+
+    [Fact]
+    public void SenderStatusTexts_NoRecipientsHint_IsNullWithRecipients()
+    {
+        Assert.Null(SenderStatusTexts.NoRecipientsHint(targetCount: 1));
+    }
+
     private static async Task RunDelayingAckServerAsync(TcpListener tcp, Guid customerGroupId, Guid receiverDeviceId, CancellationToken ct)
     {
         var round = 0;
