@@ -101,10 +101,11 @@ public sealed class AlarmFlowCoordinator
         // Bei Fast User Switching bekommt JEDE angemeldete Sitzung ein empfangenes
         // Alarmsignal (siehe AlarmChannel), auch eine gerade weggeschaltete. Ein NEUES erzwungenes Popup dort kann niemand sehen oder
         // wegklicken - lieber gar nicht erst zeigen, als eine Zustellung vortäuschen, die
-        // niemand wahrnimmt. Der Ack ans sendende Gerät ist davon unabhängig (Geräte-Ebene,
-        // siehe AlarmTcpListener) - nur die lokale Anzeige wird hier unterdrückt. Ein schon
-        // offenes Popup (aus der Zeit, als diese Sitzung noch aktiv war) wird trotzdem
-        // weiter aktualisiert - das erzeugt kein neues Popup.
+        // niemand wahrnimmt. Die Quittung an den Sender folgt der Anzeige (ReportDisplayed):
+        // sie geht nur raus, wenn diese oder eine andere Sitzung der Maschine das Popup zeigt
+        // (siehe AlarmTcpListener, AlarmChannel). Ein schon offenes Popup (aus der Zeit, als
+        // diese Sitzung noch aktiv war) wird trotzdem weiter aktualisiert - das erzeugt kein
+        // neues Popup.
         var sessionVisible = ActiveSessionDetector.IsCurrentSessionActive();
         IncomingAlarmAction? action = null;
 
@@ -114,6 +115,7 @@ public sealed class AlarmFlowCoordinator
         if (_receivedSessions.IsCompleted(request.AlarmSessionId))
         {
             _auditLog.Append($"alarm-Welle für bereits abgeschlossene Session ignoriert: alarmSessionId={request.AlarmSessionId}");
+            args.ReportDisplayed(true); // schon gesehen und erledigt
             return;
         }
 
@@ -134,7 +136,6 @@ public sealed class AlarmFlowCoordinator
             switch (action)
             {
                 case IncomingAlarmAction.IgnoreCompletedSession:
-                    // Der Ack an den Sender (AlarmTcpListener) läuft unabhängig von dieser Methode.
                     _auditLog.Append($"alarm-Welle für bereits abgeschlossene Session ignoriert: alarmSessionId={request.AlarmSessionId}");
                     return;
                 case IncomingAlarmAction.SuppressInactiveSession:
@@ -165,6 +166,9 @@ public sealed class AlarmFlowCoordinator
             _receivedSessions.PopupShown(request.AlarmSessionId, popup);
             popup.Show();
         }, AppConstants.AlarmDispatcherReadyTimeout);
+
+        // Ohne Aktion hat der Dispatcher nicht rechtzeitig angefangen: kein Fenster in dieser Welle.
+        args.ReportDisplayed(action is not (null or IncomingAlarmAction.SuppressInactiveSession));
 
         if (action is IncomingAlarmAction.IgnoreCompletedSession or IncomingAlarmAction.SuppressInactiveSession)
         {

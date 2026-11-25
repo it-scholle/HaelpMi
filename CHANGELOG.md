@@ -28,6 +28,7 @@ Details stehen in der Git-Historie. Der eingefrorene Stand `legacy/main-0.39.x` 
   - Hinweis für bestehende Installationen: Geräte, die vor diesem Stand wieder aktiviert wurden, behalten ihren Eintrag „ForceEnabled“ (Kontingent umgangen). Es gibt keine automatische Umstellung; ein Admin schaltet solche Geräte im Reiter „Geräte / Lizenz“ einmal aus und wieder ein.
 - Ein ohne Kundengruppe gebauter Test-Installer bekommt eine zufällige Test-Gruppe statt der Null-GUID und empfängt dadurch Alarme und Boot-Calls; ein Kunden-Installer ohne Kundengruppe lässt sich nicht mehr bauen (#175)
 - Alarmfenster ließ sich in seltenen Fällen nicht schließen oder öffnete sich direkt nach dem Schließen noch einmal (#136)
+- Der Sender zeigt „empfangen“ erst, wenn der Alarm auf dem Empfänger-Gerät wirklich angezeigt wird, und nicht schon, während dort zum Beispiel noch ein Benutzerwechsel läuft (#37)
 
 ## [0.47.3] – 2026-11-18
 - Einrichtungs-Skript für die E2E-Vorlagen-VM (#165)
