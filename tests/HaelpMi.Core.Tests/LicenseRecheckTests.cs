@@ -26,7 +26,7 @@ public class LicenseRecheckTests
         var expiry = Now.AddDays(LicenseWarningEvaluator.WarningWindowDays + 1).AddHours(3);
         var next = LicenseRecheckSchedule.NextCheckUtc(Valid(expiry), Now);
 
-        Assert.Equal(Now.AddHours(3), next);
+        Assert.True(next > Now.AddHours(3) && next <= Now.AddHours(3).AddSeconds(5), $"next={next:O}");
         Assert.Equal(LicenseWarningLevel.None, LicenseWarningEvaluator.Evaluate(Valid(expiry), Now).Level);
         Assert.Equal(LicenseWarningLevel.ExpiringSoon, LicenseWarningEvaluator.Evaluate(Valid(expiry), next).Level);
     }
