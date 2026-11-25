@@ -298,6 +298,49 @@ public class LicenseWarningAndImportTests
     }
 
     [Fact]
+    public void TryAdoptFromPeer_Rejects_NewerButExpiredPeerLicense_WhenOwnLicenseIsValid()
+    {
+        var (privateKey, publicKeyBytes) = GenerateTestKeyPair();
+        var customerGroupId = Guid.NewGuid();
+        var current = SignLicense(MakeUnsigned(customerGroupId, DateTime.UtcNow.AddYears(1)) with { IssuedAtUtc = DateTime.UtcNow.AddDays(-10) }, privateKey);
+        var newerExpired = SignLicense(MakeUnsigned(customerGroupId, DateTime.UtcNow.AddDays(-1)) with { IssuedAtUtc = DateTime.UtcNow }, privateKey);
+        var destinationPath = Path.Combine(Path.GetTempPath(), $"lizenz-peer-dst-{Guid.NewGuid():N}.json");
+
+        var adopted = LicenseImporter.TryAdoptFromPeer(LicenseKeyText.Encode(newerExpired), customerGroupId, destinationPath, publicKeyBytes, currentLicense: current);
+
+        Assert.False(adopted);
+        Assert.False(File.Exists(destinationPath));
+    }
+
+    [Fact]
+    public void TryAdoptFromPeer_Adopts_OlderButValidPeerLicense_WhenOwnLicenseIsExpired()
+    {
+        var (privateKey, publicKeyBytes) = GenerateTestKeyPair();
+        var customerGroupId = Guid.NewGuid();
+        var currentExpired = SignLicense(MakeUnsigned(customerGroupId, DateTime.UtcNow.AddDays(-1)) with { IssuedAtUtc = DateTime.UtcNow }, privateKey);
+        var olderValid = SignLicense(MakeUnsigned(customerGroupId, DateTime.UtcNow.AddYears(1)) with { IssuedAtUtc = DateTime.UtcNow.AddDays(-10) }, privateKey);
+        var destinationPath = Path.Combine(Path.GetTempPath(), $"lizenz-peer-dst-{Guid.NewGuid():N}.json");
+
+        var adopted = LicenseImporter.TryAdoptFromPeer(LicenseKeyText.Encode(olderValid), customerGroupId, destinationPath, publicKeyBytes, currentLicense: currentExpired);
+
+        Assert.True(adopted);
+    }
+
+    [Fact]
+    public void TryAdoptFromPeer_Adopts_NewerExpiredPeerLicense_WhenOwnLicenseIsAlsoExpired()
+    {
+        var (privateKey, publicKeyBytes) = GenerateTestKeyPair();
+        var customerGroupId = Guid.NewGuid();
+        var currentExpired = SignLicense(MakeUnsigned(customerGroupId, DateTime.UtcNow.AddDays(-30)) with { IssuedAtUtc = DateTime.UtcNow.AddDays(-400) }, privateKey);
+        var newerExpired = SignLicense(MakeUnsigned(customerGroupId, DateTime.UtcNow.AddDays(-1)) with { IssuedAtUtc = DateTime.UtcNow.AddDays(-10) }, privateKey);
+        var destinationPath = Path.Combine(Path.GetTempPath(), $"lizenz-peer-dst-{Guid.NewGuid():N}.json");
+
+        var adopted = LicenseImporter.TryAdoptFromPeer(LicenseKeyText.Encode(newerExpired), customerGroupId, destinationPath, publicKeyBytes, currentLicense: currentExpired);
+
+        Assert.True(adopted);
+    }
+
+    [Fact]
     public void TryAdoptFromPeer_Rejects_ForWrongCustomerGroup()
     {
         var (privateKey, publicKeyBytes) = GenerateTestKeyPair();
@@ -453,5 +496,21 @@ public class LicenseWarningAndImportTests
             LicenseKeyText.Encode(olderPeerPending), customerGroupId, pendingPath, publicKeyBytes, ownActiveLicense: null, ownPendingLicense: ownPending);
 
         Assert.False(adopted);
+    }
+
+    [Fact]
+    public void TryAdoptPendingFromPeer_Rejects_NewerButExpiredPeerPending_WhenOwnPendingIsValid()
+    {
+        var (privateKey, publicKeyBytes) = GenerateTestKeyPair();
+        var customerGroupId = Guid.NewGuid();
+        var pendingPath = Path.Combine(Path.GetTempPath(), $"lizenz-pending-peer-{Guid.NewGuid():N}.json");
+        var ownPending = SignLicense(MakeUnsigned(customerGroupId, DateTime.UtcNow.AddYears(1)) with { UserLimit = 10, IssuedAtUtc = DateTime.UtcNow.AddDays(-10) }, privateKey);
+        var newerExpiredPeerPending = SignLicense(MakeUnsigned(customerGroupId, DateTime.UtcNow.AddDays(-1)) with { UserLimit = 10, IssuedAtUtc = DateTime.UtcNow }, privateKey);
+
+        var adopted = LicenseImporter.TryAdoptPendingFromPeer(
+            LicenseKeyText.Encode(newerExpiredPeerPending), customerGroupId, pendingPath, publicKeyBytes, ownActiveLicense: null, ownPendingLicense: ownPending);
+
+        Assert.False(adopted);
+        Assert.False(File.Exists(pendingPath));
     }
 }

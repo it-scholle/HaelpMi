@@ -11,6 +11,7 @@
 
     Ausgabe: lizenz.json unter -Ausgabe, daneben für T9 mit demselben Schlüssel
     lizenz-bald.json (läuft in 10 Tagen ab) und lizenz-abgelaufen.json (vor 60 Tagen ausgestellt,
+    seit einem Tag abgelaufen), für T14 lizenz-abgelaufen-neuer.json (nach lizenz.json ausgestellt,
     seit einem Tag abgelaufen); customer_group_id und license_public_key_hex nach
     $env:GITHUB_OUTPUT für ISCC /DCustomerGroupId=... /DLicensePublicKeyHex=...
 
@@ -77,6 +78,8 @@ function Schreibe-Lizenz([string] $Ziel, [datetime] $Ausgestellt, [datetime] $Ab
 Schreibe-Lizenz $Ausgabe $jetzt $jetzt.AddDays($GueltigTage)
 Schreibe-Lizenz (Join-Path $ordner 'lizenz-bald.json') $jetzt $jetzt.AddDays(10)
 Schreibe-Lizenz (Join-Path $ordner 'lizenz-abgelaufen.json') $jetzt.AddDays(-60) $jetzt.AddDays(-1)
+# T14: später ausgestellt als lizenz.json und trotzdem abgelaufen, darf die gültige per Gossip nicht verdrängen.
+Schreibe-Lizenz (Join-Path $ordner 'lizenz-abgelaufen-neuer.json') $jetzt.AddMinutes(1) $jetzt.AddDays(-1)
 
 $hex = [Convert]::ToHexString($oeffentlich)
 "Test-Kundengruppe $gruppe, Kontingent $UserLimit"

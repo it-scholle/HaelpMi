@@ -58,7 +58,9 @@ public class LifecycleTests
         Assert.Equal(Role.User, deployment!.Role);
 
         AssertAgentIsRunning();
-        AssertServiceExists("HaelpMiUpdateService");
+        // Der Installer registriert HaelpMiUpdateService absichtlich nicht mehr (siehe [Run] in
+        // HaelpMiCommon.iss.inc); ein vorhandener Dienst wäre ein Rückfall auf die alte Update-Pipeline.
+        AssertServiceDoesNotExist("HaelpMiUpdateService");
         AssertScheduledTaskExists("HaelpMi Agent");
 
         // Ohne Programmregel zeigt Windows beim ersten Lauschen des Agents den Firewall-Dialog.
@@ -329,9 +331,6 @@ public class LifecycleTests
             }
         }
     }
-
-    private static void AssertServiceExists(string serviceName) =>
-        Assert.Equal(0, RunSync("sc.exe", $"query {serviceName}").ExitCode);
 
     private static void AssertServiceDoesNotExist(string serviceName) =>
         Assert.NotEqual(0, RunSync("sc.exe", $"query {serviceName}").ExitCode);

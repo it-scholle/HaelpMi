@@ -8,7 +8,7 @@ using Xunit;
 
 namespace HaelpMi.E2E.Tests;
 
-/// <summary>T1: stille Installation und Prüfung des Ergebnisses, gemeinsam für A (Admin) und B (User).</summary>
+/// <summary>T1: stille Installation und Prüfung des Ergebnisses, gemeinsam für A (Admin), B und C (User).</summary>
 internal static class Installation
 {
     private static readonly TimeSpan InstallerTimeout = TimeSpan.FromMinutes(10);

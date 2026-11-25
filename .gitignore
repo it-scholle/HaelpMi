@@ -20,6 +20,8 @@ out/
 installer/Output/
 installer/payload/
 installer/UserInstallerPayload/
+## Zufällige Test-Kundengruppe für Builds ohne /DCustomerGroupId (installer/HaelpMiKundengruppe.iss.inc)
+installer/test-kundengruppe.txt
 ## Publish-Ausgabe des "Update erstellen"-Knopfs (Self-Bootstrap-Update, nur im Legacy-Stand) -
 ## gleiches Prinzip wie installer/payload/ oben, war hier nur versehentlich noch nicht gelistet
 ## und dadurch am 24.08.2026 kurzzeitig fälschlich mit eingecheckt (v0.16.6-Vorcommit).
