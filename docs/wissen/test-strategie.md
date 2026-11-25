@@ -232,6 +232,10 @@ weil `workflow_dispatch` nur Workflows vom Default-Branch startet):
   trifft auch T20 bis T29, `E2E` oder `.*` treffen alles (die Summary weist darauf hin).
 - Ein Messlauf prüft nie den Stand des Branches und zählt nicht als E2E-Gate; dafür braucht der PR
   zusätzlich einen normalen Lauf. `ci/e2e/lauf.env` vor dem Merge wieder leeren.
+- Ob ein erwarteter Test aus dem richtigen Grund fehlschlug (Produktfehler statt z. B. Rendezvous-Timeout
+  wegen eines ausgefallenen Partnergeräts), kann die Auswertung nicht erkennen: die Meldungen unter
+  „Erwartete Fehlschläge“ in der Summary immer lesen. Ohne `ERWARTET_ROT` zählt jeder Fehlschlag, auch
+  einer in `Basis`; deshalb das Muster möglichst immer setzen.
 
 Alle Werte werden per Regex geprüft, sonst bricht der Build-Job ab. Vergleichslauf #136 gegen den
 Stand vor dem Fix: in `ci/e2e/lauf.env` `PRODUKT_REF=v0.46.1` und `FILTER=Bereich=Basis|Bereich=R136`
