@@ -124,10 +124,11 @@ Name: "{group}\{cm:UninstallProgram,HälpMi}"; Filename: "{uninstallexe}"
 ; die bestehende Selbstheilung im Agent-Start plus Tray-Meldung an den Admin als
 ; Rückfallebene - deshalb kein Abbruch der Installation bei einem Fehlschlag hier.
 ;
-; BeforeInstall: Inno führt [Run]-Einträge ohne postinstall vor CurStepChanged(ssPostInstall) aus. Die Firewall-Regeln
-; müssen vor dem ersten HälpMi-Start stehen, sonst fragt Windows beim ersten Lauschen nach,
-; und eine abgebrochene Abfrage hinterlässt Block-Regeln, die die Allow-Regel schlagen.
-Filename: "{app}\{#MyAgentExeName}"; Parameters: "--register-autostart"; Flags: runhidden waituntilterminated; BeforeInstall: EnsureFirewallRules
+; BeforeInstall: Inno führt [Run]-Einträge ohne postinstall vor CurStepChanged(ssPostInstall) aus. Vor dem ersten
+; HälpMi-Start müssen deshalb hier stehen: die Installationsdateien (ohne deployment.json bricht der Agent mit
+; „Installation unvollständig“ ab) und die Firewall-Regeln (sonst fragt Windows beim ersten Lauschen nach, und eine
+; abgebrochene Abfrage hinterlässt Block-Regeln, die die Allow-Regel schlagen).
+Filename: "{app}\{#MyAgentExeName}"; Parameters: "--register-autostart"; Flags: runhidden waituntilterminated; BeforeInstall: BereiteErstenStartVor
 
 ; Startet den Agent automatisch im Hintergrund - kein Postinstall-Haken, weil der Agent
 ; kein eigenes Fenster hat (ein anhakbarer "jetzt starten"-Punkt ohne sichtbaren Effekt
@@ -462,7 +463,7 @@ end;
 // Issue #10: das Admin-Dashboard darf nur beim installierenden Windows-Nutzer sichtbar/
 // startbar sein - anders als deployment.json (WriteDeploymentJson, compile-time-konstant)
 // erst zur Installationszeit bekannt, welcher Windows-Nutzer das ist. Write-once wie
-// settings.json (siehe Aufrufstelle in CurStepChanged) - sonst könnte ein einfaches
+// settings.json (siehe SchreibeInstallationsdateien) - sonst könnte ein einfaches
 // "Reparieren" durch einen anderen Windows-Nutzer die Dashboard-Berechtigung stillschweigend
 // umziehen. {username} liefert laut Inno-Setup-Doku den Namen des gerade angemeldeten,
 // diesen Installer ausführenden Nutzers - identisches Format zu Environment.UserName, mit
@@ -616,6 +617,38 @@ begin
 #endif
 end;
 
+// Schreibt bei jedem Lauf eine Setup-Log-Zeile je Datei, damit die Reihenfolge zum ersten [Run]-Start nachprüfbar ist.
+// settings.json und installed-by.json nur beim ersten Mal (siehe WriteSettingsJson, WriteInstalledByJson),
+// deployment.json bei jedem Lauf (siehe WriteDeploymentJson).
+procedure SchreibeInstallationsdateien();
+begin
+  if not FileExists(ExpandConstant('{commonappdata}\HaelpMi\settings.json')) then
+  begin
+    WriteSettingsJson();
+    Log('Installationsdatei geschrieben: settings.json');
+  end
+  else
+    Log('Installationsdatei vorhanden, unverändert: settings.json');
+
+  if not FileExists(ExpandConstant('{app}\installed-by.json')) then
+  begin
+    WriteInstalledByJson();
+    Log('Installationsdatei geschrieben: installed-by.json');
+  end
+  else
+    Log('Installationsdatei vorhanden, unverändert: installed-by.json');
+
+  WriteDeploymentJson();
+  Log('Installationsdatei geschrieben: deployment.json');
+end;
+
+// BeforeInstall des ersten [Run]-Eintrags, siehe Kommentar dort.
+procedure BereiteErstenStartVor();
+begin
+  SchreibeInstallationsdateien();
+  EnsureFirewallRules();
+end;
+
 // Update must stop the running Agent before overwriting its files, and the [Run]
 // section above starts it again afterwards (Pflichtenheft 5.8). The device list lives
 // under %ProgramData%\HaelpMi, entirely outside {app}, so nothing here can touch it -
@@ -641,21 +674,6 @@ begin
     Exec('taskkill.exe', '/IM {#MyAgentExeName} /F', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
     Exec('taskkill.exe', '/IM {#MyConfigExeName} /F', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
     Sleep(500);
-  end;
-
-  if CurStep = ssPostInstall then
-  begin
-    if not FileExists(ExpandConstant('{commonappdata}\HaelpMi\settings.json')) then
-      WriteSettingsJson();
-
-    // Issue #10: write-once wie settings.json oben (siehe Kommentar bei
-    // WriteInstalledByJson) - nicht bei jedem Lauf neu, anders als deployment.json unten.
-    if not FileExists(ExpandConstant('{app}\installed-by.json')) then
-      WriteInstalledByJson();
-
-    // Compile-time-konstant für diesen Installer-Build - anders als settings.json bei
-    // JEDEM Lauf neu geschrieben (siehe Kommentar bei WriteDeploymentJson).
-    WriteDeploymentJson();
   end;
 end;
 

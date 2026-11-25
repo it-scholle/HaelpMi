@@ -15,6 +15,7 @@ Details stehen in der Git-Historie. Der eingefrorene Stand `legacy/main-0.39.x` 
 - Farben und Logo liegen nur noch einmal zentral vor (#151)
 - Versionsnummer steht nur noch in `Directory.Build.props`; der Installer liest sie beim Bauen von dort (#168)
 ### Behoben
+- Nach einer Erstinstallation startet HälpMi sofort vollständig: Der Installer legt seine Einstellungsdateien an, bevor er HälpMi zum ersten Mal startet; vorher konnte direkt nach der Installation die Meldung „Installation unvollständig“ erscheinen (#229)
 - Hat ein Gerät in seinem Alarm-Profil keine Empfänger (nicht eingerichtet, noch kein Gerät installiert oder alle gesperrt), bleibt das Tastenkürzel nicht mehr wirkungslos: Das Gerät zeigt „Alarm nicht zugestellt“ mit einem Hinweis, wo ein Admin die Empfänger im Dashboard einrichtet (#41)
 - Nach einer Installation, Reparatur oder einem Update empfängt ein Gerät Alarme zuverlässig: Die Firewall-Freigaben werden angelegt, bevor HälpMi zum ersten Mal startet; Sperren aus einer früher abgebrochenen Windows-Firewall-Abfrage werden beim Installieren, Reparieren oder Aktualisieren entfernt (#222)
 - Nach dem ersten empfangenen Alarm wiederholt der Sender seine Alarm-Meldungen wieder im vorgesehenen Takt von wenigen Sekunden statt erst nach rund 30 Sekunden (#177)
