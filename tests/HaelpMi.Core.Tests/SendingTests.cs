@@ -342,10 +342,10 @@ public class SendingTests
     }
 
     [Fact]
-    public async Task RepeatingAlarmSession_WithoutTargets_KeepsSendingUntilCancelled()
+    public async Task RepeatingAlarmSession_WithoutTargets_SendsOneWaveAndStopsAsNotDelivered()
     {
-        // Ein Alarm ohne erreichbare Empfänger muss trotzdem als laufende Sitzung sichtbar sein
-        // (Statusanzeige mit "0 von 0" und Abbrechen), statt dass das Tastenkürzel wirkungslos bleibt.
+        // Ein Alarm ohne Empfänger geht genau einmal raus und endet sofort als "nicht zugestellt",
+        // statt minutenlang ins Leere zu wiederholen.
         var auditLines = new System.Collections.Concurrent.ConcurrentQueue<string>();
         var senderIdentity = new LiveIdentity(Guid.NewGuid(), Guid.NewGuid(), "Sender-PC", "Frau Meier", "Zimmer", "1", Role.Admin, false, "0.0.0", 0, DateTimeOffset.UtcNow);
         var feedbackChannel = new AlarmFeedbackChannel(() => senderIdentity);
@@ -357,21 +357,31 @@ public class SendingTests
             session.Finished += (_, _) => finished.TrySetResult();
             var statusUpdates = new System.Collections.Concurrent.ConcurrentQueue<AlarmSessionStatus>();
             session.StatusChanged += (_, status) => statusUpdates.Enqueue(status);
-            _ = session.RunAsync();
+            var runTask = session.RunAsync();
 
-            await Task.Delay(TimeSpan.FromMilliseconds(300));
-            Assert.False(finished.Task.IsCompleted, "Eine Sitzung ohne Empfänger endet sofort statt bis zum Abbrechen zu laufen.");
-            Assert.Contains(auditLines, l => l.Contains($"alarm sent alarmProfileId={profile.Id}", StringComparison.Ordinal) && l.EndsWith("targetCount=0", StringComparison.Ordinal));
-            Assert.Contains(statusUpdates, s => s.StillSending && s.TargetCount == 0 && s.AckedCount == 0);
+            await finished.Task.WaitAsync(TimeSpan.FromSeconds(3));
+            Assert.Equal(AlarmStopReason.NoRecipients, session.StopReason);
+            Assert.Contains(statusUpdates, s => !s.StillSending && s.TargetCount == 0 && s.AckedCount == 0);
 
-            session.Cancel();
-            await finished.Task.WaitAsync(TimeSpan.FromSeconds(5));
-            Assert.Equal(AlarmStopReason.Cancelled, session.StopReason);
+            // Ohne Empfänger gibt es auch keine Spätantworten, auf die die Sitzung noch warten müsste.
+            await runTask.WaitAsync(TimeSpan.FromSeconds(3));
+
+            // Länger als ein Wiederholungstakt: Es darf keine zweite Welle folgen.
+            await Task.Delay(AppConstants.AlarmRepeatInterval + TimeSpan.FromSeconds(1));
+            Assert.Single(auditLines, l => l.Contains($"alarm sent alarmProfileId={profile.Id}", StringComparison.Ordinal) && l.EndsWith("targetCount=0", StringComparison.Ordinal));
         }
         finally
         {
             session.Dispose();
         }
+    }
+
+    [Fact]
+    public void SenderStatusTexts_Headline_NotDeliveredWithoutRecipients()
+    {
+        Assert.Equal("Alarm wird gesendet...", SenderStatusTexts.Headline(stillSending: true, targetCount: 0));
+        Assert.Equal("Alarm nicht zugestellt", SenderStatusTexts.Headline(stillSending: false, targetCount: 0));
+        Assert.Equal("Alarm beendet", SenderStatusTexts.Headline(stillSending: false, targetCount: 2));
     }
 
     [Fact]
