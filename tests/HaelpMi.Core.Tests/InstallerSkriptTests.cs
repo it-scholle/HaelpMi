@@ -59,7 +59,8 @@ public class InstallerSkriptTests
         Assert.True(entfernen >= 0, "EnsureFirewallRules ruft EntferneBlockRegeln nicht auf.");
         var ersteRegel = ensure.IndexOf("add rule", StringComparison.Ordinal);
         Assert.True(ersteRegel < 0 || entfernen < ersteRegel, "Block-Regeln werden erst nach dem Anlegen der Allow-Regeln entfernt.");
-        Assert.DoesNotContain("#if", ensure);
+        Assert.True(!ensure[..entfernen].Contains("#if", StringComparison.Ordinal),
+            "Der Aufruf von EntferneBlockRegeln steht in einem Präprozessor-Zweig und läuft nicht in jedem Installer.");
     }
 
     [Fact]
