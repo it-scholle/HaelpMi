@@ -681,9 +681,16 @@ public sealed class DiscoveryService : IAsyncDisposable
                     // Issue #61 (Override) / #61-Nachtrag (Removed): Drittwissen trägt eine
                     // Fremdmeinung mit (siehe KnownDeviceSummary) - Upsert wendet beide per
                     // "neuester Zeitstempel gewinnt" auf den lokalen Stand an.
+                    // Die Adresse aus Drittwissen kann veraltet sein (z. B. von einem Gerät, das
+                    // gerade selbst erst startet). Sie füllt nur eine noch leere Adresse; sonst
+                    // gilt, was das Gerät selbst zuletzt per Boot-Call oder Antwort gemeldet hat.
+                    var knownAddressHolder = devices.FirstOrDefault(d => d.DeviceId == known.DeviceId && !string.IsNullOrEmpty(d.IpAddress));
                     var knownInfo = new DeviceUpsertInfo(
                         known.ComputerName, known.User, known.RoomName, known.RoomNumber,
-                        known.Role, false, known.IpAddress, known.TcpPort, known.FirstSeenUtc,
+                        known.Role, false,
+                        knownAddressHolder?.IpAddress ?? known.IpAddress,
+                        knownAddressHolder?.TcpPort ?? known.TcpPort,
+                        known.FirstSeenUtc,
                         known.Override, known.OverrideSetAtUtc,
                         known.RemovedSetAtUtc is not null ? known.Removed : null, known.RemovedSetAtUtc);
                     DeviceStore.Upsert(devices, known.DeviceId, knownInfo, DateTimeOffset.UtcNow);
