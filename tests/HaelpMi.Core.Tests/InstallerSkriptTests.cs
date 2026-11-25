@@ -70,12 +70,13 @@ public class InstallerSkriptTests
 
         Assert.Contains("Get-NetFirewallRule -PolicyStore PersistentStore |", prozedur);
         Assert.Contains("$_.Direction -eq ''Inbound'' -and $_.Action -eq ''Block''", prozedur);
-        Assert.Contains("$p = @(''' + ExpandConstant('{app}\\{#MyAgentExeName}') + ''', ''' + ExpandConstant('{app}\\{#MyConfigExeName}') + ''');", prozedur);
+        Assert.Contains("$p = @(' + PsLiteral(ExpandConstant('{app}\\{#MyAgentExeName}')) + ', ' + PsLiteral(ExpandConstant('{app}\\{#MyConfigExeName}')) + '); ", prozedur);
+        Assert.Contains("StringChangeEx(Result, '''', '''''', True);", Prozedur(InnoCode(), "PsLiteral", "function"));
         Assert.Single(Regex.Matches(prozedur, "Remove-NetFirewallRule"));
         Assert.Contains("$_ | Remove-NetFirewallRule } } }", prozedur);
         Assert.DoesNotContain("-like", prozedur, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("-match", prozedur, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("Log('Block-Regel ' + Zeilen[I]);", prozedur);
+        Assert.Contains("Log('Block-Regel ' + Zeilen[I])", prozedur);
     }
 
     /// <summary>Wertet die Bedingung aus dem Installer-Skript mit PowerShell aus (nur lesend, keine Firewall-Änderung).</summary>
@@ -130,9 +131,9 @@ public class InstallerSkriptTests
 
     private static string InnoCode() => File.ReadAllText(Path.Combine(InstallerOrdner, "HaelpMiCommon.iss.inc"));
 
-    private static string Prozedur(string code, string name)
+    private static string Prozedur(string code, string name, string art = "procedure")
     {
-        var start = code.IndexOf($"procedure {name}(", StringComparison.Ordinal);
+        var start = code.IndexOf($"{art} {name}(", StringComparison.Ordinal);
         Assert.True(start >= 0, $"{name} fehlt in HaelpMiCommon.iss.inc.");
         var ende = code.IndexOf("\nend;", start, StringComparison.Ordinal);
         Assert.True(ende > start, $"Ende von {name} (Zeile \"end;\") nicht gefunden.");

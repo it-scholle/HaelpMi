@@ -18,7 +18,7 @@
   Installation und Reparatur entfernen lokale Inbound-Block-Regeln, deren Programm genau
   `HaelpMi.Agent.exe` oder `HaelpMi.Config.exe` im Programmordner ist, und schreiben jede
   entfernte Regel als „Block-Regel entfernt: …“ ins Setup-Log. Per GPO verteilte Regeln bleiben
-  unberührt (Prüfung: `Get-NetFirewallRule -Action Block`).
+  unberührt (Prüfung: `Get-NetFirewallRule -Action Block -ErrorAction SilentlyContinue`).
   Wer die Firewall per GPO verwaltet und lokale Regeln nicht zulässt, gibt die beiden Programme
   oder die Ports aus `docs/architektur.md` dort frei.
 

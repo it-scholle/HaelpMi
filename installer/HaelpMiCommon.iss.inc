@@ -550,6 +550,14 @@ begin
     Log(Format('netsh %s -> nicht gestartet: %s', [Params, SysErrorMessage(ResultCode)]));
 end;
 
+// Für einen PowerShell-String in einfachen Anführungszeichen (z. B. /DIR mit Apostroph im Pfad).
+function PsLiteral(Wert: String): String;
+begin
+  Result := Wert;
+  StringChangeEx(Result, '''', '''''', True);
+  Result := '''' + Result + '''';
+end;
+
 // Entfernt nur lokale (PersistentStore) Inbound-Block-Regeln, deren Programm genau eine HälpMi-.exe
 // in {app} ist, wie Windows sie nach einer abgebrochenen Firewall-Abfrage anlegt. GPO-Regeln
 // liegen in einem anderen Speicher und bleiben unberührt. Jede entfernte Regel steht im Setup-Log.
@@ -563,18 +571,26 @@ var
   ResultCode, I: Integer;
 begin
   Ausgabe := ExpandConstant('{tmp}\block-regeln.txt');
-  Skript := '& { $p = @(''' + ExpandConstant('{app}\{#MyAgentExeName}') + ''', ''' + ExpandConstant('{app}\{#MyConfigExeName}') + '''); ' +
+  Skript := '& { $p = @(' + PsLiteral(ExpandConstant('{app}\{#MyAgentExeName}')) + ', ' + PsLiteral(ExpandConstant('{app}\{#MyConfigExeName}')) + '); ' +
     'Get-NetFirewallRule -PolicyStore PersistentStore | Where-Object { $_.Direction -eq ''Inbound'' -and $_.Action -eq ''Block'' } | ForEach-Object { ' +
     '$a = $_ | Get-NetFirewallApplicationFilter; ' +
     'if ($p -contains [Environment]::ExpandEnvironmentVariables([string]$a.Program)) { ''entfernt: '' + $_.DisplayName + '' | '' + $_.Profile + '' | '' + $a.Program; $_ | Remove-NetFirewallRule } } } *>&1 ' +
-    '| Out-File -LiteralPath ''' + Ausgabe + ''' -Encoding utf8';
+    '| Out-File -LiteralPath ' + PsLiteral(Ausgabe) + ' -Encoding utf8 -Width 4096';
   if Exec('powershell.exe', '-NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "' + Skript + '"', '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
     Log(Format('Block-Regeln mit HälpMi-Programmpfad prüfen -> Rückgabecode %d', [ResultCode]))
   else
     Log(Format('Block-Regeln mit HälpMi-Programmpfad prüfen -> nicht gestartet: %s', [SysErrorMessage(ResultCode)]));
+  // Fehler von Get-/Remove-NetFirewallRule stehen ebenfalls in der Datei; nur Treffer heißen "Block-Regel entfernt: ...".
   if LoadStringsFromFile(Ausgabe, Zeilen) then
+  begin
     for I := 0 to GetArrayLength(Zeilen) - 1 do
-      Log('Block-Regel ' + Zeilen[I]);
+      if Pos('entfernt: ', Zeilen[I]) > 0 then
+        Log('Block-Regel ' + Zeilen[I])
+      else if Trim(Zeilen[I]) <> '' then
+        Log('Block-Regel-Prüfung: ' + Zeilen[I]);
+  end
+  else
+    Log('Block-Regeln mit HälpMi-Programmpfad prüfen -> keine Ausgabe, PowerShell lief nicht bis zum Ende (Rückgabecode oben)');
 end;
 
 // Only reachable with admin rights (PrivilegesRequired=admin in both variants) - this is
