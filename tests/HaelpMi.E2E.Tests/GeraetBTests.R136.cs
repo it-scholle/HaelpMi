@@ -82,6 +82,9 @@ public partial class GeraetBTests
 
             var wTreffer = zeilen.Count(z => z.Variante == "W" && z.Treffer);
             var wAuswertbar = zeilen.Count(z => z.Variante == "W" && !z.Uebersprungen);
+            // Ohne auswertbare Nachwelle wäre ein grünes T10 keine Aussage.
+            Assert.True(wAuswertbar > 0,
+                $"T10: alle {zeilen.Count(z => z.Variante == "W")} Nachwellen übersprungen (Agent-Neustart auf B), die Messung sagt nichts aus. Details: {Path.GetFileName(csv)} im Artefakt.");
             Assert.True(wTreffer == 0,
                 $"[T10W] Regression #136: nach einer Nachwelle derselben Session erschien in {wTreffer} von {wAuswertbar} Zyklen erneut ein Alarmfenster " +
                 $"(Agent {version}). Details: {Path.GetFileName(csv)} und r136-zusammenfassung.json im Artefakt.");

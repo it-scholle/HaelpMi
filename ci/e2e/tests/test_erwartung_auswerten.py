@@ -133,6 +133,33 @@ class NegativtestTests(unittest.TestCase):
         code, text = self.lauf.auswerten("b", "T10")
         self.assertEqual(code, 0, text)
 
+    def test_folgefehler_allein_ist_kein_nachweis(self) -> None:
+        # T23 scheitert auf A nur, weil B aus einem fremden Grund abgebrochen hat; B's Fehlschlag passt nicht zu T22.
+        self.lauf.geraet("a", "1", trx([
+            ("GeraetATests.T23_X", "Failed", "Rendezvous-Marke 't23-b': Test t23 ist auf der Gegenseite gescheitert, siehe deren Ergebnis."),
+        ], lauf="Failed"))
+        code, text = self.lauf.auswerten("a", "T23")
+        self.assertEqual(code, 1, text)
+        self.assertIn("Folgefehler ohne eigentlichen Fehlschlag", text)
+        self.assertIn("Kein Fehlschlag für T23", text)
+
+    def test_folgefehler_neben_eigentlichem_fehlschlag_ist_erlaubt(self) -> None:
+        self.lauf.geraet("a", "1", trx([
+            ("GeraetATests.T23_X", "Failed", "Test t23 ist auf der Gegenseite gescheitert, siehe deren Ergebnis."),
+        ], lauf="Failed"))
+        self.lauf.geraet("b", "1", trx([("GeraetBTests.T23_Y", "Failed", "Empfänger hat das Popup nicht gezeigt")], lauf="Failed"))
+        code, text = self.lauf.auswerten("a,b", "T23")
+        self.assertEqual(code, 0, text)
+        self.assertIn("Folgefehler zu T23", text)
+
+    def test_folgefehler_zaehlt_nicht_fuer_variante(self) -> None:
+        self.lauf.geraet("a", "1", trx([
+            ("GeraetATests.T10_S", "Failed", "Test t10 ist auf der Gegenseite gescheitert"),
+        ], lauf="Failed"))
+        self.lauf.geraet("b", "1", trx([("GeraetBTests.T10_R", "Failed", "[T10W] Regression #136: 3 von 25")], lauf="Failed"))
+        code, text = self.lauf.auswerten("a,b", "T10W")
+        self.assertEqual(code, 1, text)
+
     def test_zusaetzlicher_unerwarteter_fehlschlag_ist_rot(self) -> None:
         self.lauf.geraet("a", "1", trx([
             ("GeraetATests.T22_Regression41_Banner", "Failed", "Kein Banner"),
@@ -217,7 +244,7 @@ class NegativtestTests(unittest.TestCase):
         self.assertEqual(code, 1)
 
     def test_ungueltige_kuerzel_brechen_ab(self) -> None:
-        for wert in ("", "T22_", "T22|T23", "t22", "T1234", "T10WW", "T6,T6", "T6,", "E2E", ".*", "T6;rm"):
+        for wert in ("", "T22_", "T22|T23", "t22", "T1234", "T10WW", "T010", "T0", "T6,T6", "T6,", "E2E", ".*", "T6;rm"):
             with self.subTest(wert=wert):
                 code, _ = self.lauf.auswerten("a", wert)
                 self.assertEqual(code, 2)

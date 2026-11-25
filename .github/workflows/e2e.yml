@@ -156,7 +156,7 @@ jobs:
           if (-not $werte.ERWARTUNG) { $werte.ERWARTUNG = 'positiv' }
           if ($werte.ERWARTUNG -cnotin 'positiv', 'negativ') { throw 'erwartung: nur positiv oder negativ (leer = positiv).' }
           $werte.ERWARTET_ROT = $werte.ERWARTET_ROT -replace ' ', ''
-          if ($werte.ERWARTET_ROT -cnotmatch '^(T[0-9]{1,3}[A-Z]?(,T[0-9]{1,3}[A-Z]?)*)?$') { throw 'erwartet_rot: T-Kürzel, kommagetrennt, z. B. T6,T10W (T, Testnummer, optional ein Großbuchstabe für das Fehlerbild).' }
+          if ($werte.ERWARTET_ROT -cnotmatch '\A(T[1-9][0-9]{0,2}[A-Z]?(,T[1-9][0-9]{0,2}[A-Z]?)*)?\z') { throw 'erwartet_rot: T-Kürzel, kommagetrennt, z. B. T6,T10W (T, Testnummer ohne führende Null, optional ein Großbuchstabe für das Fehlerbild).' }
           # Ein Negativtest dreht das Urteil um; auf dem aktuellen Stand würde er echte Fehler als Erfolg melden.
           if ($werte.ERWARTUNG -eq 'negativ' -and -not $werte.PRODUKT_REF) { throw 'erwartung=negativ (Negativtest) nur zusammen mit produkt_ref: er läuft gegen den Stand vor dem Fix. produkt_ref (bzw. PRODUKT_REF= in ci/e2e/lauf.env) setzen oder erwartung=positiv wählen.' }
           if ($werte.ERWARTUNG -eq 'negativ' -and -not $werte.ERWARTET_ROT) { throw 'erwartung=negativ braucht erwartet_rot: die T-Kürzel der Tests, die auf dem Altstand fehlschlagen müssen, z. B. T22 oder T6,T10W.' }

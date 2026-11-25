@@ -165,7 +165,7 @@ Läuft auf bis zu drei Wegwerf-VMs auf pve-nzxt (A = Admin-Gerät, B und C = Use
 | T7 | Config-Sync: A ändert Name, Schwelle und Hotkey von P2, B übernimmt ohne Neustart (Version, Audit-Zeile, "Meine Alarme"; Latenz wird gemessen), altes Kürzel wirkungslos, neues wirkt | A, B | – |
 | T8 | Gerät B im Dashboard deaktivieren: B empfängt nicht (auch nicht bei Direktversand am Filter von A vorbei) und sendet nicht, Toast und Hinweis auf B; nach dem Aktivieren steht B in `devices.json` von A auf `LicenseOverride` None (#180) und beide Richtungen gehen wieder | A, B | – |
 | T9 | Lizenz in fünf Stufen, Dateiwechsel jeweils mit gestoppten Agents auf beiden Geräten (sonst Übernahme per Gossip). L1 ohne Lizenz: A Erinnerungs-Toast, Banner, Bearbeitung gesperrt, Selbsttest geht; B Sperr-Toast, Hotkey nur mit Hinweis, Direktversand unbestätigt. L2 Import im Dashboard ohne Neustart: Toast weg, Bearbeitung frei, B übernimmt per Gossip (Latenz wird gemessen), Alarm A an B. L3 läuft in 10 Tagen ab: Warnung ohne Sperre, Alarm geht, "Später erinnern" hält über einen Neustart. L4 abgelaufen: Alarme in beide Richtungen (Soft-Expiry), A Toast und Sperre, B Hinweis-Toast „Lizenz … abgelaufen … Alarme weiter“ (#181). L5 gültige Lizenz zurück | A, B | – |
-| T10 | Regression #136, `zyklen` Durchläufe (Default 25) mit eigenem Profil A an B (Schwelle 1, Config-Version 5000). Variante N: "Bin unterwegs" mit Versatz von -400 bis +400 ms zur nächsten Repeat-Welle (Phase aus den ms-Zeitstempeln "alarm received" in `audit.log` von B), sofort schließen, 8 s auf ein zweites Fenster achten. Variante W: A schickt nach dem Schließen dieselbe Session per `AlarmSender` noch einmal (Nachwelle), B beobachtet 8 s. Ergebnis je Zyklus in `out\r136-<Agent-Version>.csv`, Quoten in `r136-zusammenfassung.json`. Rot (Marke `[T10W]`), wenn W ein zweites Fenster zeigt, auch mit `produkt_ref`; Gegenprobe auf dem Altstand als Negativtest mit `ERWARTET_ROT=T10W` | A, B | – |
+| T10 | Regression #136, `zyklen` Durchläufe (Default 25) mit eigenem Profil A an B (Schwelle 1, Config-Version 5000). Variante N: "Bin unterwegs" mit Versatz von -400 bis +400 ms zur nächsten Repeat-Welle (Phase aus den ms-Zeitstempeln "alarm received" in `audit.log` von B), sofort schließen, 8 s auf ein zweites Fenster achten. Variante W: A schickt nach dem Schließen dieselbe Session per `AlarmSender` noch einmal (Nachwelle), B beobachtet 8 s. Ergebnis je Zyklus in `out\r136-<Agent-Version>.csv`, Quoten in `r136-zusammenfassung.json`. Rot (Marke `[T10W]`), wenn W ein zweites Fenster zeigt, auch mit `produkt_ref`; rot ohne Marke, wenn alle Nachwellen übersprungen wurden; Gegenprobe auf dem Altstand als Negativtest mit `ERWARTET_ROT=T10W` | A, B | – |
 | T11 | Discovery mit drei Geräten: A und B kennen C, C kennt A und B (je nach spätestens 60 s mit Adresse in `devices.json`) | A, B, C | – |
 | T12 | Alarm per Hotkey von A an B und C mit Schwelle 2 (eigenes Profil, Config-Version 1100): Popup auf B und C mit Raum von A. B meldet "Bin unterwegs", Schließen bleibt auf B 5 s gesperrt, C zeigt "noch 1". Nach der Meldung von C wird Schließen auf beiden frei; A zeigt beide Räume unter "Auf dem Weg" und "Empfangen: 2 von 2". Danach beendet C seinen Agent | A, B, C | FR-47, FR-50, FR-51, FR-53 |
 | T13 | Regression #182: eigenes Profil A an B (Schwelle 1, Config-Version 6000), kein "Bin unterwegs". Nach "Empfangen: 1 von 1" auf A beendet B seinen Agent, A beobachtet das Banner 15 s lang. Rot, wenn trotz mindestens einer weiteren, unquittierten Welle (`audit.log` von A) ein anderer Text als "Empfangen: 1 von 1" erscheint; danach startet B den Agent wieder | A, B | FR-14, FR-53 |
@@ -229,7 +229,7 @@ weil `workflow_dispatch` nur Workflows vom Default-Branch startet):
   erfolgreicher Test-Job. Die Summary nennt erwartete Fehlschläge mit Meldung, unerwartete Ergebnisse und das
   Urteil „Negativtest bestanden ✔“ bzw. „NICHT bestanden ✘“.
 - `erwartet_rot` / `ERWARTET_ROT`: Pflicht bei `negativ`, sonst leer. T-Kürzel, kommagetrennt, z. B. `T22`
-  oder `T6,T10W` (geprüft: `T`, 1–3 Ziffern, optional ein Großbuchstabe; Leerzeichen werden entfernt). `T22`
+  oder `T6,T10W` (geprüft: `T`, 1–3 Ziffern ohne führende Null, optional ein Großbuchstabe; Leerzeichen werden entfernt). `T22`
   steht für jeden Fehlschlag eines Tests `T22_…` auf jedem Gerät (auch Gegenseiten mit gleicher Nummer, z. B.
   T23 auf A und B). Ein Buchstabe benennt ein bestimmtes **Fehlerbild**: `T10W` zählt nur, wenn die
   Fehlermeldung von `T10_…` die Marke `[T10W]` trägt. So wird ein T10, der an einem Rendezvous-Timeout statt an
@@ -244,8 +244,12 @@ weil `workflow_dispatch` nur Workflows vom Default-Branch startet):
   einen Negativtest. Die Messdaten (CSV, `r136-*-zusammenfassung.json`) liegen weiter im Artefakt.
 - Ein Negativtest prüft nie den Stand des Branches und zählt nicht als E2E-Gate; dafür braucht der PR
   zusätzlich einen positiven Lauf. `ci/e2e/lauf.env` vor dem Merge wieder leeren.
+- Folgefehler („Test tN ist auf der Gegenseite gescheitert“, aus `Rendezvous.WaitForAsync`) zählen nie als
+  Nachweis, nur als erlaubter Begleiter eines eigentlichen Fehlschlags mit demselben Kürzel. Hat die Gegenseite
+  ihre Marke schon gesetzt und scheitert erst danach (Abschluss-Assert), gilt die Marke noch; das Warten
+  meldet dann keinen Folgefehler.
 - Ob ein erwarteter Test aus dem richtigen Grund fehlschlug, sichern nur Fehlerbild-Marken ab; ohne Marke
-  zählt jeder Fehlschlag des Tests. Die Meldungen unter „Erwartete Fehlschläge“ in der Summary deshalb lesen.
+  zählt jeder eigene Fehlschlag des Tests. Die Meldungen unter „Erwartete Fehlschläge“ in der Summary deshalb lesen.
 
 Alle Werte werden per Regex geprüft, sonst bricht der Build-Job ab. Negativtest #136 gegen den
 Stand vor dem Fix: in `ci/e2e/lauf.env` `PRODUKT_REF=v0.46.1`, `FILTER=Bereich=Basis|Bereich=R136`,

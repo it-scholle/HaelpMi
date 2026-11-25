@@ -12,7 +12,8 @@ Aufruf: erwartung-auswerten.py <ergebnis-verzeichnis> <geraete> <erwartet-rot> [
   produkt-ref           nur für den Bericht
 
 Urteil "Negativtest bestanden" (Exit 0) genau dann, wenn jedes Kürzel mindestens einen passenden
-Fehlschlag hat und nichts Unerwartetes vorliegt. Unerwartet ist: ein Fehlschlag, der zu keinem Kürzel
+Fehlschlag hat und nichts Unerwartetes vorliegt. Ein Folgefehler ("Test tN ist auf der Gegenseite
+gescheitert") zählt nie als Nachweis, nur als erlaubter Begleiter eines eigentlichen Fehlschlags desselben Kürzels. Unerwartet ist: ein Fehlschlag, der zu keinem Kürzel
 passt, jedes andere Ergebnis als Passed/Failed/NotExecuted, ein abgebrochener Testlauf, ein Gerät ohne
 Artefakt oder Exit-Code, ein Exit-Code ungleich 0 ohne fehlgeschlagenen Test. Sonst Exit 1.
 Exit 2 = Aufruf ungültig. Den Bericht (Markdown) schreibt das Skript auf stdout.
@@ -28,8 +29,10 @@ from pathlib import Path
 
 NS = {"t": "http://microsoft.com/schemas/VisualStudio/TeamTest/2010"}
 MELDUNG_MAX = 300
-KUERZEL = re.compile(r"T([0-9]{1,3})([A-Z]?)")
+KUERZEL = re.compile(r"T([1-9][0-9]{0,2})([A-Z]?)")
 TESTNAME = re.compile(r"(?:^|\.)T([0-9]{1,3})_[^.]*$")
+# Meldung aus Rendezvous.WaitForAsync, wenn die Gegenseite ihren Teil desselben Tests abgebrochen hat.
+FOLGEFEHLER = re.compile(r"Test t[0-9]+ ist auf der Gegenseite gescheitert")
 
 
 @dataclass(frozen=True)
@@ -52,6 +55,15 @@ class Auswertung:
     hinweise: list[str] = field(default_factory=list)
     bestanden: int = 0
     getroffen: set[str] = field(default_factory=set)
+    folgefehler: list[tuple[list[str], str]] = field(default_factory=list)
+
+    def folgefehler_einordnen(self) -> None:
+        """Ein Folgefehler ist nie selbst der Nachweis, nur erlaubt neben einem eigentlichen Fehlschlag desselben Kürzels."""
+        for passende, zeile in self.folgefehler:
+            if any(k in self.getroffen for k in passende):
+                self.erwartet.append(f"{zeile} (Folgefehler zu {', '.join(passende)})")
+            else:
+                self.unerwartet.append(zeile + " (Folgefehler ohne eigentlichen Fehlschlag desselben Tests)")
 
     @property
     def fehlend(self) -> list[str]:
@@ -118,7 +130,9 @@ def trx_auswerten(datei: Path, geraet: str, a: Auswertung) -> int:
             zeile = f"{geraet}: `{name}` – {kurz(roh) if roh else '(keine Meldung)'}"
             nummer = testnummer(name)
             passende = [k.text for k in a.kuerzel if k.passt(nummer, roh)]
-            if passende:
+            if passende and FOLGEFEHLER.search(roh):
+                a.folgefehler.append((passende, zeile))
+            elif passende:
                 a.getroffen.update(passende)
                 a.erwartet.append(f"{zeile} ({', '.join(passende)})")
             else:
@@ -209,6 +223,7 @@ def main(argumente: list[str]) -> int:
     a = Auswertung(kuerzel)
     for geraet in geraete:
         geraet_auswerten(verzeichnis, geraet, a)
+    a.folgefehler_einordnen()
     print(bericht(a, geraete, produkt_ref))
     return 0 if a.bestanden_urteil else 1
 

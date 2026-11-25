@@ -36,27 +36,48 @@ internal static partial class Rendezvous
         var frist = DateTime.UtcNow + timeout;
         while (DateTime.UtcNow < frist)
         {
-            if (abbruch is not null && File.Exists(abbruch))
+            if (await LiesAsync(pfad) is { } inhalt)
             {
-                throw new TimeoutException($"Rendezvous-Marke '{marke}': Test {praefix.Groups[1].Value} ist auf der Gegenseite gescheitert, siehe deren Ergebnis.");
+                return inhalt;
             }
 
-            if (File.Exists(pfad))
+            if (abbruch is not null && File.Exists(abbruch))
             {
-                try
+                // Scheitert die Gegenseite erst nach ihrer letzten Marke (Abschluss-Assert), spiegelt das Relay beide
+                // Marken im selben Durchlauf in beliebiger Reihenfolge; die schon gesetzte Marke gilt dann noch.
+                await Task.Delay(AbbruchNachlauf);
+                if (await LiesAsync(pfad) is { } spaet)
                 {
-                    return await File.ReadAllTextAsync(pfad);
+                    return spaet;
                 }
-                catch (IOException)
-                {
-                    // Spiegel-Job schreibt gerade, nächster Durchlauf.
-                }
+
+                throw new TimeoutException($"Rendezvous-Marke '{marke}': Test {praefix.Groups[1].Value} ist auf der Gegenseite gescheitert, siehe deren Ergebnis.");
             }
 
             await Task.Delay(500);
         }
 
         throw new TimeoutException($"Rendezvous-Marke '{marke}' ist nach {timeout} nicht in {Ordner} erschienen.");
+    }
+
+    private static readonly TimeSpan AbbruchNachlauf = TimeSpan.FromSeconds(1);
+
+    private static async Task<string?> LiesAsync(string pfad)
+    {
+        if (!File.Exists(pfad))
+        {
+            return null;
+        }
+
+        try
+        {
+            return await File.ReadAllTextAsync(pfad);
+        }
+        catch (IOException)
+        {
+            // Spiegel-Job schreibt gerade, nächster Durchlauf.
+            return null;
+        }
     }
 
     private static string PfadFuer(string marke)
