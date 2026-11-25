@@ -40,7 +40,7 @@ aber nicht vor erster Interaktion nötig (Hintergrund-Kandidat).
 | # | Schritt | Ort | Dauer | Quelle | Kat. |
 |---|---------|-----|-------|--------|------|
 | 1 | Datei-Extraktion/Kopie (Inno Setup) | Installation | ~2–5 s | Schätzung (übliche Payload-Größe) | a |
-| 2 | .NET-8-Runtime-Prüfung, ggf. Nachinstallation | Installation | 0 s (vorhanden) bis 30–60 s (Download+Install fehlt) | Schätzung | a, sofern fehlend — Download selbst wäre c-fähig (parallel zu Dateikopie) |
+| 2 | .NET-Runtime-Prüfung, ggf. Nachinstallation | Installation | 0 s (vorhanden) bis 30–60 s (Download+Install fehlt) | Schätzung | a, sofern fehlend — Download selbst wäre c-fähig (parallel zu Dateikopie) |
 | 3 | `AutostartRegistrar.EnsureRegistered` elevated via `RunRegisterAutostartOnlyAndExit` (separater `schtasks.exe`-Aufruf vor dem eigentlichen `[Run]`) | Installation | ~0,3–1 s je `schtasks.exe`-Aufruf | Schätzung (Prozessstart-Overhead) | a (muss elevated vor dem de-elevated `[Run]`-Start passieren) |
 | 4 | `[Run]`: `Agent.exe` + `Config.exe --open-dashboard`, beide `nowait` | Installation | parallel, kein Zusatz-Wait | Code (`installer/HaelpMiCommon.iss.inc:198,204,206`) | bereits optimal (a, aber schon parallelisiert) |
 | 5 | Agent `OnStartup` entered → `IpcServer.Start()` | Agent-Start | kurz (kein I/O, reine Objektkonstruktion) | `StartupTimingLog`-Meilenstein, Wert nicht gemessen | a |

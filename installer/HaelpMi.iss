@@ -36,7 +36,7 @@
 ; App-DLLs vorkompiliert statt kalt gejittet, kein Bundle-Extraktions-Overhead) - siehe
 ; docs/handbuch/entwickler-bauen-und-installieren.md für die Messung/Begründung.
 ;
-; Self-contained (bundles the .NET 8 runtime) so office workstations need no separate
+; Self-contained (bundles the .NET 10 runtime) so office workstations need no separate
 ; runtime install/internet access (Pflichtenheft 2.: no internet dependency). Built for
 ; win-x64 - the vast majority of real-world office PCs; a network with ARM64 Windows
 ; devices would need a second payload/installer built with -r win-arm64.

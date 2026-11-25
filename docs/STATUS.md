@@ -1,6 +1,6 @@
 # Status
 
-Stand: 2026-11-24
+Stand: 2026-11-25
 
 ## Aktueller Stand
 
@@ -15,6 +15,8 @@ Stand: 2026-11-24
 - Update-Pipeline (Update-Dienst, P2P-Verteilung) ist in dieser Linie inaktiv; Updates erfolgen
   manuell per Installer.
 - CI (Windows-Build + Tests), gitleaks und Dependabot: aktiv seit v0.47.1 (#145).
+- Ziel-Framework .NET 10 (`net10.0-windows`, LTS bis 14.11.2028) statt .NET 8 (Support seit
+  10.11.2026 beendet), #154.
 - Struktur an die MasterAgents-Vorlage angeglichen (v0.47.4, #151); die Ausnahmen von Teil A
   sind vom Repo-Owner am 2026-11-18 entschieden (`AGENTS.md` Teil B).
 

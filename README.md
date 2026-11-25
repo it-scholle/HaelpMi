@@ -11,7 +11,7 @@ Status: Entwicklungsstand v0.47.x auf `develop`, Version 1.0 ist geplant (Milest
 1. Repo klonen.
 2. Hooks aktivieren: `git config core.hooksPath .githooks` (baut u. a. den Install-Creator
    automatisch neu, siehe [`docs/wissen/installcreator-rebuild-hook.md`](docs/wissen/installcreator-rebuild-hook.md)).
-3. .NET 8 SDK (Windows) und Inno Setup installieren; Details in
+3. .NET 10 SDK (Windows) und Inno Setup installieren; Details in
    [`docs/handbuch/entwickler-bauen-und-installieren.md`](docs/handbuch/entwickler-bauen-und-installieren.md).
 4. Bauen und schnell testen:
    ```

@@ -29,7 +29,7 @@ nicht nur Code gelesen) - was unten steht, ist tatsächlich geprüft, nicht nur 
 
 ## Einmalige Einrichtung (nur auf deinem eigenen Rechner, nicht beim Kunden)
 
-1. [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0)
+1. [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0)
 2. Inno Setup (aktuell Version 7, 6 geht laut Hersteller auch) von
    <https://jrsoftware.org/isdl.php> - kostenlos, normal installieren.
 3. Kompletten Inhalt deiner Inno-Setup-Installation (nicht nur `ISCC.exe` - welche

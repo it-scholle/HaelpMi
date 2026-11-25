@@ -155,7 +155,7 @@ jobs:
 
       - uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: 8.0.x
+          dotnet-version: 10.0.x
 
       # Befehle wie in docs/handbuch/entwickler-bauen-und-installieren.md.
       - name: Nutzlast veröffentlichen
@@ -235,7 +235,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: e2e-tests
-          path: tests/HaelpMi.E2E.Tests/bin/Release/net8.0-windows/
+          path: tests/HaelpMi.E2E.Tests/bin/Release/net10.0-windows/
           if-no-files-found: error
           retention-days: 3
 
