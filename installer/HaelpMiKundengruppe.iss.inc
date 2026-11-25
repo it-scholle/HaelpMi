@@ -32,8 +32,8 @@
   #define CustomerGroupId Trim(FileRead(TestKundengruppeHandle))
   #expr FileClose(TestKundengruppeHandle)
 
-  #if Len(CustomerGroupId) != 36 || CustomerGroupId == "00000000-0000-0000-0000-000000000000"
-    #error installer\test-kundengruppe.txt enthält keine gültige GUID; Datei löschen, sie wird beim nächsten Build neu erzeugt.
+  #if Len(CustomerGroupId) != 36 || CustomerGroupId == "00000000-0000-0000-0000-000000000000" || Copy(CustomerGroupId, 9, 1) != "-" || Copy(CustomerGroupId, 14, 1) != "-" || Copy(CustomerGroupId, 19, 1) != "-" || Copy(CustomerGroupId, 24, 1) != "-"
+    #error installer\test-kundengruppe.txt enthält keine GUID im Format xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx (ohne BOM); Datei löschen, sie wird beim nächsten Build neu erzeugt.
   #endif
   #pragma message "Test-Kundengruppe " + CustomerGroupId + " aus " + TestKundengruppePfad
 #endif

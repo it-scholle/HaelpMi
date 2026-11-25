@@ -109,8 +109,9 @@ jobs:
           $vorgabe = [guid]::NewGuid().ToString('D')
           & $env:ISCC "/DCustomerGroupId=$vorgabe" "/DErwartet=$vorgabe" '/DIsTestInstaller=false' $skript
           if ($LASTEXITCODE) { throw 'Vorgegebene /DCustomerGroupId wird nicht übernommen.' }
-          & $env:ISCC '/DIsTestInstaller=false' $skript
+          $ausgabe = & $env:ISCC '/DIsTestInstaller=false' $skript 2>&1 | Out-String
           if (-not $LASTEXITCODE) { throw 'Kunden-Installer ohne /DCustomerGroupId wurde gebaut statt abgebrochen.' }
+          if ($ausgabe -notmatch 'ohne /DCustomerGroupId') { throw "Kunden-Installer brach aus einem anderen Grund ab:`n$ausgabe" }
           if ((Get-Content -LiteralPath $datei -Raw).Trim() -ne $erste) { throw 'Die Test-Kundengruppe hat sich geändert.' }
           # Der erwartete Abbruch oben hinterlässt einen Exit-Code ungleich 0, den der Runner sonst übernimmt.
           exit 0
