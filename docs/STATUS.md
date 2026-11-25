@@ -23,7 +23,10 @@ Stand: 2026-11-25
 ## Offene Annahmen
 <!-- Jede mit Fundstelle (Datei oder Ticket). Sonst „keine“. -->
 
-keine
+- #73 (PR #220): Ursache des Original-Vorfalls (v0.34.1) nicht per Log belegt, Logs gibt es nicht
+  mehr. Der Fix behebt die im Code belegten Wege (veraltete Adresse in der laufenden Session,
+  Gossip überschreibt direkt gemeldete Adresse, Boot-Call vor Alarm-Port). Andere Ursachen aus dem
+  Ticket (Mutex, Abbruch von `StartBackgroundServices`) sind damit nicht ausgeschlossen.
 
 ## Bekannte Abweichungen von `AGENTS.md` Teil A
 

@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.IO.Pipes;
+using HaelpMi.Core.Diagnostics;
 using HaelpMi.Core.Models;
 using HaelpMi.Core.Networking.Protocol;
 
@@ -120,7 +121,8 @@ public sealed class IpcServer : IAsyncDisposable
         }
         catch (Exception ex)
         {
-            return new IpcResponse(false, ex.Message);
+            CrashLogger.Log(Process.GetCurrentProcess().ProcessName, $"IpcServer {request.Command}", ex);
+            return new IpcResponse(false, $"Der HälpMi-Hintergrunddienst konnte die Anfrage nicht ausführen ({ex.Message}). {IpcClient.RestartHint}");
         }
     }
 

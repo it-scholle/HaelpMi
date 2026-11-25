@@ -65,6 +65,34 @@ public sealed class AlarmFlowCoordinator
     /// </summary>
     public bool IsOwnDeviceRemoved() => _settingsProvider().Removed;
 
+    /// <summary>
+    /// Liefert für eine Session die aktuellen Adressen vor jeder weiteren Welle. Wirft nie: Bei
+    /// einem Lesefehler sendet die Session mit den bisherigen Adressen weiter. Erwartete Dateifehler
+    /// werden nur beim ersten Mal je Session protokolliert (sonst eine Zeile pro Welle), andere immer.
+    /// </summary>
+    private Func<IReadOnlyList<DeviceEntry>> CreateWaveDeviceLoader(Guid alarmProfileId)
+    {
+        var fehlerProtokolliert = false;
+        return () =>
+        {
+            try
+            {
+                return _deviceStore.Load();
+            }
+            catch (Exception ex)
+            {
+                var erwartet = ex is System.IO.IOException or UnauthorizedAccessException or System.Text.Json.JsonException;
+                if (!erwartet || !fehlerProtokolliert)
+                {
+                    fehlerProtokolliert |= erwartet;
+                    _auditLog.Append($"alarm-Welle: devices.json nicht lesbar, Adressen vom Auslösezeitpunkt bleiben: alarmProfileId={alarmProfileId} {ex.GetType().Name}: {ex.Message}");
+                }
+
+                return Array.Empty<DeviceEntry>();
+            }
+        };
+    }
+
     /// <summary>Called from the TCP listener's background thread when an alarm arrives (FR-9/FR-47).</summary>
     public void HandleIncomingAlarmRequest(AlarmReceivedEventArgs args)
     {
@@ -210,7 +238,7 @@ public sealed class AlarmFlowCoordinator
 
         // Auch ohne Empfänger startet eine Sitzung (eine Welle, dann "nicht zugestellt"): Das
         // Tastenkürzel darf nie wirkungslos bleiben, die Statusanzeige nennt Grund und Lösungsweg.
-        var session = new RepeatingAlarmSession(profile, targets, identity, _sender, _feedbackChannel, DateTimeOffset.UtcNow);
+        var session = new RepeatingAlarmSession(profile, targets, identity, _sender, _feedbackChannel, DateTimeOffset.UtcNow, CreateWaveDeviceLoader(profile.Id));
         System.Windows.Application.Current.Dispatcher.Invoke(() =>
         {
             var window = new SenderStatusWindow(session, profile.Name);

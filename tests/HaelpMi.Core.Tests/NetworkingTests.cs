@@ -312,6 +312,94 @@ public class NetworkingTests
         Assert.Equal("Lager", gossiped.RoomName);
     }
 
+    [Fact]
+    public async Task DiscoveryService_GossipAboutKnownDevice_KeepsDirectlyObservedAddress()
+    {
+        // Ein Gerät startet neu und meldet sich direkt mit seiner aktuellen Adresse.
+        // Ein zweites, gleichzeitig startendes Gerät schickt danach seine Geräteliste mit
+        // einer veralteten Adresse für dasselbe Gerät. Die direkt beobachtete Adresse muss
+        // bleiben, sonst laufen Alarme an die alte Adresse ins Leere.
+        using var scope = new TestAppDataScope();
+        var discoveryPort = GetFreeUdpPort();
+        var customerGroupId = Guid.NewGuid();
+        var ownIdentity = MakeIdentity(customerGroupId, Guid.NewGuid(), "Sender-PC");
+
+        var rebootedDeviceId = Guid.NewGuid();
+        new DeviceStore().Save(new List<DeviceEntry>
+        {
+            new() { DeviceId = rebootedDeviceId, ComputerName = "Admin-PC", Role = Role.Admin, IpAddress = "192.168.1.20", TcpPort = 51501 },
+        });
+
+        var gossiperDeviceId = Guid.NewGuid();
+        var updatedSignal = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        await using var discovery = new DiscoveryService(() => ownIdentity, discoveryPort: discoveryPort);
+        discovery.DeviceUpdated += (_, entry) =>
+        {
+            if (entry.DeviceId == gossiperDeviceId)
+            {
+                updatedSignal.TrySetResult();
+            }
+        };
+        discovery.StartListening();
+
+        using var gossiperSocket = new UdpClient(0) { EnableBroadcast = true };
+        var announce = new BootCallMessage(
+            MessageKind.Announce, customerGroupId, gossiperDeviceId, "Client-PC", "Frau Zwei", "Büro", "2",
+            Role.User, false, 51501, "9.9.9", 0, DateTimeOffset.UtcNow,
+            new List<KnownDeviceSummary> { new(rebootedDeviceId, "Admin-PC", "Herr Admin", "Leitung", "1", Role.Admin, "192.168.1.99", 51777) });
+        var bytes = JsonSerializer.SerializeToUtf8Bytes(announce, WireOptions);
+        await gossiperSocket.SendAsync(bytes, bytes.Length, new IPEndPoint(IPAddress.Loopback, discoveryPort));
+
+        await updatedSignal.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+        var rebooted = Assert.Single(new DeviceStore().Load(), d => d.DeviceId == rebootedDeviceId);
+        Assert.Equal("192.168.1.20", rebooted.IpAddress);
+        Assert.Equal(51501, rebooted.TcpPort);
+        // Die übrigen Angaben aus dem Drittwissen werden weiterhin übernommen.
+        Assert.Equal("Leitung", rebooted.RoomName);
+    }
+
+    [Fact]
+    public async Task DiscoveryService_GossipAboutKnownDeviceWithoutAddress_AdoptsGossipedAddress()
+    {
+        using var scope = new TestAppDataScope();
+        var discoveryPort = GetFreeUdpPort();
+        var customerGroupId = Guid.NewGuid();
+        var ownIdentity = MakeIdentity(customerGroupId, Guid.NewGuid(), "Sender-PC");
+
+        var deviceId = Guid.NewGuid();
+        new DeviceStore().Save(new List<DeviceEntry>
+        {
+            new() { DeviceId = deviceId, ComputerName = "Alt-PC", IpAddress = string.Empty, TcpPort = 0 },
+        });
+
+        var gossiperDeviceId = Guid.NewGuid();
+        var updatedSignal = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        await using var discovery = new DiscoveryService(() => ownIdentity, discoveryPort: discoveryPort);
+        discovery.DeviceUpdated += (_, entry) =>
+        {
+            if (entry.DeviceId == gossiperDeviceId)
+            {
+                updatedSignal.TrySetResult();
+            }
+        };
+        discovery.StartListening();
+
+        using var gossiperSocket = new UdpClient(0) { EnableBroadcast = true };
+        var reply = new BootCallMessage(
+            MessageKind.Reply, customerGroupId, gossiperDeviceId, "Client-PC", "Frau Zwei", "Büro", "2",
+            Role.User, false, 51501, "9.9.9", 0, DateTimeOffset.UtcNow,
+            new List<KnownDeviceSummary> { new(deviceId, "Alt-PC", "Herr Alt", "Lager", "7", Role.User, "192.168.1.77", 51501) });
+        var bytes = JsonSerializer.SerializeToUtf8Bytes(reply, WireOptions);
+        await gossiperSocket.SendAsync(bytes, bytes.Length, new IPEndPoint(IPAddress.Loopback, discoveryPort));
+
+        await updatedSignal.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+        var entry = Assert.Single(new DeviceStore().Load(), d => d.DeviceId == deviceId);
+        Assert.Equal("192.168.1.77", entry.IpAddress);
+        Assert.Equal(51501, entry.TcpPort);
+    }
+
     // --- Issue #61-Nachtrag (Propagierungs-Bugfix 08.09.2026, Nutzerbericht "Deaktivieren/
     // Aktivieren im Geräte-Tab hat keine Wirkung"): der bisherige blanke "Gossip über mich
     // selbst wird ignoriert"-Filter hat versehentlich auch die einzige legitime
