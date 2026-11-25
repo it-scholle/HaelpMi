@@ -20,8 +20,9 @@ namespace HaelpMi.Core.Licensing;
 /// Gerät ist immer deaktiviert und belegt keinen Kontingent-Platz (gibt einen Platz für
 /// andere frei); ein <see cref="LicenseOverride.ForceEnabled"/>-Gerät ist immer aktiv, belegt
 /// aber weiterhin einen Platz (verkleinert das für die Rangfolge verbleibende Kontingent) -
-/// ein manueller Override darf das Lizenzkontingent selbst nicht aushebeln. Heute setzt
-/// nichts diesen Wert je auf etwas anderes als <see cref="LicenseOverride.None"/>.
+/// ein manueller Override darf das Lizenzkontingent selbst nicht aushebeln. ForceEnabled
+/// entsteht nur noch für Admin-Geräte (LicenseLimitGuard) und in Altbeständen; der Schalter
+/// im Geräte-Tab setzt None bzw. ForceDisabled (DeviceActivationGate.OverrideAfterToggle).
 /// </summary>
 public static class LicenseLimitEvaluator
 {

@@ -17,6 +17,7 @@ Details stehen in der Git-Historie. Der eingefrorene Stand `legacy/main-0.39.x` 
 - Eine gültige Lizenz wird nicht mehr durch eine später ausgestellte, aber abgelaufene Lizenz eines anderen Geräts ersetzt (#183)
 - Ein im Dashboard deaktiviertes Gerät löst kein Banner „Lizenzkontingent überschritten“ mehr aus; der Sperrhinweis auf dem Gerät nennt den tatsächlichen Grund (#133)
 - Der Hinweis „Alarm nicht gesendet“ auf einem gesperrten Gerät erscheint als eigenes Fenster im Vordergrund statt verdeckt unter dem Sperr-Toast (#179)
+- Wieder-Aktivieren eines Geräts im Reiter „Geräte / Lizenz“ hebt nur die Deaktivierung auf; das Gerät umgeht das Lizenzkontingent nicht mehr dauerhaft (#180)
 
 ## [0.47.3] – 2026-11-18
 - Einrichtungs-Skript für die E2E-Vorlagen-VM (#165)
