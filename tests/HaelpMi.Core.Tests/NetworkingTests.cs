@@ -89,6 +89,94 @@ public class NetworkingTests
     }
 
     [Fact]
+    public async Task AlarmTcpListener_NotDisplayed_SendsNoAck()
+    {
+        // Wird das Popup nicht angezeigt (z. B. Sitzung mitten im Nutzerwechsel), darf der Sender kein "empfangen" sehen.
+        var (listener, port, customerGroupId, receiverDeviceId) = StartListener(args => args.ReportDisplayed(false));
+        try
+        {
+            var result = await SendOneAsync(customerGroupId, receiverDeviceId, port);
+
+            Assert.Equal(0, result.AckedCount);
+        }
+        finally
+        {
+            await listener.DisposeAsync();
+        }
+    }
+
+    [Fact]
+    public async Task AlarmTcpListener_DisplayReportedLater_AcksAfterDisplay()
+    {
+        var (listener, port, customerGroupId, receiverDeviceId) = StartListener(args =>
+        {
+            args.ReportDisplayed(false);
+            args.ReportDisplayed(DelayedAsync(TimeSpan.FromMilliseconds(300), true));
+        });
+        try
+        {
+            var result = await SendOneAsync(customerGroupId, receiverDeviceId, port);
+
+            Assert.Equal(1, result.AckedCount);
+        }
+        finally
+        {
+            await listener.DisposeAsync();
+        }
+    }
+
+    [Fact]
+    public async Task AlarmReceivedEventArgs_WasDisplayed_CombinesReports()
+    {
+        Assert.True(await NewArgs().WasDisplayedAsync()); // ohne Rückmeldung wie bisher: quittieren
+
+        var allFalse = NewArgs();
+        allFalse.ReportDisplayed(false);
+        allFalse.ReportDisplayed(DelayedAsync(TimeSpan.FromMilliseconds(50), false));
+        Assert.False(await allFalse.WasDisplayedAsync());
+
+        var oneTrue = NewArgs();
+        oneTrue.ReportDisplayed(false);
+        oneTrue.ReportDisplayed(DelayedAsync(TimeSpan.FromMilliseconds(50), true));
+        Assert.True(await oneTrue.WasDisplayedAsync());
+
+        var faulted = NewArgs();
+        faulted.ReportDisplayed(Task.FromException<bool>(new IOException("Pipe weg")));
+        Assert.False(await faulted.WasDisplayedAsync());
+    }
+
+    private static AlarmReceivedEventArgs NewArgs() => new()
+    {
+        Request = new AlarmRequestMessage(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), "PC", "User", "Raum", "1", false, "Text", 1, DateTimeOffset.UtcNow),
+        SenderAddress = IPAddress.Loopback,
+    };
+
+    private static async Task<bool> DelayedAsync(TimeSpan delay, bool result)
+    {
+        await Task.Delay(delay);
+        return result;
+    }
+
+    private static (AlarmTcpListener Listener, int Port, Guid CustomerGroupId, Guid ReceiverDeviceId) StartListener(Action<AlarmReceivedEventArgs> onReceived)
+    {
+        var customerGroupId = Guid.NewGuid();
+        var receiverDeviceId = Guid.NewGuid();
+        var receiverIdentity = MakeIdentity(customerGroupId, receiverDeviceId);
+        var listener = new AlarmTcpListener(() => receiverIdentity);
+        listener.AlarmReceived += (_, args) => onReceived(args);
+        var port = GetFreeTcpPort();
+        listener.Start(port);
+        return (listener, port, customerGroupId, receiverDeviceId);
+    }
+
+    private static Task<AlarmSendResult> SendOneAsync(Guid customerGroupId, Guid receiverDeviceId, int port)
+    {
+        var senderIdentity = MakeIdentity(customerGroupId, Guid.NewGuid());
+        var target = new DeviceEntry { DeviceId = receiverDeviceId, IpAddress = "127.0.0.1", TcpPort = port };
+        return new AlarmSender().SendAsync(new AlarmProfile { Text = "Test", ResponseThreshold = 1 }, Guid.NewGuid(), senderIdentity, new[] { target });
+    }
+
+    [Fact]
     public async Task AlarmTcpListener_DifferentCustomerGroupId_IsSilentlyIgnored()
     {
         // Teil 2, Abschnitt 6: zwei unabhängige Installationsgruppen im selben Netz
