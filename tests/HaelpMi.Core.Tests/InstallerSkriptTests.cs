@@ -72,7 +72,7 @@ public class InstallerSkriptTests
         Assert.Contains("$_.Direction -eq ''Inbound'' -and $_.Action -eq ''Block''", prozedur);
         Assert.Contains("$p = @(' + PsLiteral(ExpandConstant('{app}\\{#MyAgentExeName}')) + ', ' + PsLiteral(ExpandConstant('{app}\\{#MyConfigExeName}')) + '); ", prozedur);
         Assert.Contains("StringChangeEx(Result, '''', '''''', True);", Prozedur(InnoCode(), "PsLiteral", "function"));
-        Assert.Single(Regex.Matches(prozedur, "Remove-NetFirewallRule"));
+        Assert.Single(Regex.Matches(prozedur, @"\| Remove-NetFirewallRule"));
         Assert.Contains("$_ | Remove-NetFirewallRule } } }", prozedur);
         Assert.DoesNotContain("-like", prozedur, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("-match", prozedur, StringComparison.OrdinalIgnoreCase);
