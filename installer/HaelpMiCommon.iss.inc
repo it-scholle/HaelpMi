@@ -534,6 +534,18 @@ begin
   end;
 end;
 
+// Schreibt den netsh-Rückgabecode ins Setup-Log (/LOG), damit eine fehlende Regel ohne Nachstellen
+// erklärbar ist. Bei "delete" ist ein Code ungleich 0 normal, wenn die Regel nicht existiert.
+procedure RunNetsh(const Params: String);
+var
+  ResultCode: Integer;
+begin
+  if Exec('netsh.exe', Params, '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
+    Log(Format('netsh %s -> Rückgabecode %d', [Params, ResultCode]))
+  else
+    Log(Format('netsh %s -> nicht gestartet: %s', [Params, SysErrorMessage(ResultCode)]));
+end;
+
 // Only reachable with admin rights (PrivilegesRequired=admin in both variants) - this is
 // the one piece of installer behavior that genuinely needs elevation; the app itself never
 // does (Pflichtenheft: kein Admin). Delete-then-add rather than a "does it exist" check
@@ -543,18 +555,16 @@ end;
 // User-Installer entfernt deshalb eine von einer früheren Admin-Installation übrige Regel.
 // "HälpMi Discovery"/"HälpMi Alarm" sind die Portregeln älterer Versionen.
 procedure EnsureFirewallRules();
-var
-  ResultCode: Integer;
 begin
-  Exec('netsh.exe', 'advfirewall firewall delete rule name="HälpMi Discovery"', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
-  Exec('netsh.exe', 'advfirewall firewall delete rule name="HälpMi Alarm"', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  RunNetsh('advfirewall firewall delete rule name="HälpMi Discovery"');
+  RunNetsh('advfirewall firewall delete rule name="HälpMi Alarm"');
 
-  Exec('netsh.exe', 'advfirewall firewall delete rule name="{#AgentFirewallRule}"', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
-  Exec('netsh.exe', ExpandConstant('advfirewall firewall add rule name="{#AgentFirewallRule}" dir=in action=allow profile=any program="{app}\{#MyAgentExeName}"'), '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  RunNetsh('advfirewall firewall delete rule name="{#AgentFirewallRule}"');
+  RunNetsh(ExpandConstant('advfirewall firewall add rule name="{#AgentFirewallRule}" dir=in action=allow profile=any program="{app}\{#MyAgentExeName}"'));
 
-  Exec('netsh.exe', 'advfirewall firewall delete rule name="{#ConfigFirewallRule}"', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  RunNetsh('advfirewall firewall delete rule name="{#ConfigFirewallRule}"');
 #ifdef HaelpMiAdminInstall
-  Exec('netsh.exe', ExpandConstant('advfirewall firewall add rule name="{#ConfigFirewallRule}" dir=in action=allow profile=any program="{app}\{#MyConfigExeName}"'), '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  RunNetsh(ExpandConstant('advfirewall firewall add rule name="{#ConfigFirewallRule}" dir=in action=allow profile=any program="{app}\{#MyConfigExeName}"'));
 #endif
 end;
 
