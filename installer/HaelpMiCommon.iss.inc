@@ -124,7 +124,7 @@ Name: "{group}\{cm:UninstallProgram,HälpMi}"; Filename: "{uninstallexe}"
 ; die bestehende Selbstheilung im Agent-Start plus Tray-Meldung an den Admin als
 ; Rückfallebene - deshalb kein Abbruch der Installation bei einem Fehlschlag hier.
 ;
-; BeforeInstall: Inno führt [Run] vor CurStepChanged(ssPostInstall) aus. Die Firewall-Regeln
+; BeforeInstall: Inno führt [Run]-Einträge ohne postinstall vor CurStepChanged(ssPostInstall) aus. Die Firewall-Regeln
 ; müssen vor dem ersten HälpMi-Start stehen, sonst fragt Windows beim ersten Lauschen nach,
 ; und eine abgebrochene Abfrage hinterlässt Block-Regeln, die die Allow-Regel schlagen.
 Filename: "{app}\{#MyAgentExeName}"; Parameters: "--register-autostart"; Flags: runhidden waituntilterminated; BeforeInstall: EnsureFirewallRules

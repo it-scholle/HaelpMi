@@ -4,7 +4,7 @@ namespace HaelpMi.Core.Tests;
 
 /// <summary>
 /// Prüft die Installer-Skripte (installer/*.iss, *.iss.inc) am Quelltext. Inno Setup führt die
-/// [Run]-Einträge vor CurStepChanged(ssPostInstall) aus; startet dort ein HälpMi-Prozess ohne
+/// [Run]-Einträge ohne postinstall vor CurStepChanged(ssPostInstall) aus; startet dort ein HälpMi-Prozess ohne
 /// Firewall-Programmregel, fragt Windows nach, und eine abgebrochene Abfrage hinterlässt
 /// Inbound-Block-Regeln, die die Allow-Regel des Installers schlagen.
 /// </summary>
@@ -41,6 +41,7 @@ public class InstallerSkriptTests
         var start = code.IndexOf("procedure CurStepChanged(", StringComparison.Ordinal);
         Assert.True(start >= 0, "CurStepChanged fehlt in HaelpMiCommon.iss.inc.");
         var ende = code.IndexOf("\nend;", start, StringComparison.Ordinal);
+        Assert.True(ende > start, "Ende von CurStepChanged (Zeile \"end;\") nicht gefunden.");
         var prozedur = code[start..ende];
 
         Assert.DoesNotContain("EnsureFirewallRules", prozedur);
