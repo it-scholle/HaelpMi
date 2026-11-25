@@ -79,9 +79,20 @@ internal static class Installation
 
         // Die postinstall-Einträge starten Agent und Konfiguration mit dem Token des Installers, je nach Aufrufer
         // erhöht oder in einer fremden Sitzung. Der Test braucht den Agent rechtelos in der eigenen Sitzung, wie nach einer Anmeldung.
-        await Task.Delay(TimeSpan.FromSeconds(3));
-        _abbruchNachInstallation = AbbruchfensterDesAgents();
-        _erstinstallationGeprueft = true;
+        // Bis zu 5 s: ein kalter WPF-Start auf einer langsamen VM zeigt die Abbruchmeldung nicht sofort.
+        _t1HatErstinstallationBeobachtet = false;
+        _agentInEigenerSitzung = false;
+        _abbruchNachInstallation = null;
+        var bis = DateTime.UtcNow.AddSeconds(5);
+        do
+        {
+            await Task.Delay(TimeSpan.FromMilliseconds(250));
+            _agentInEigenerSitzung |= Prozess.LaeuftInEigenerSitzung(HaelpMiApp.AgentProzess);
+            _abbruchNachInstallation = AbbruchfensterDesAgents();
+        }
+        while (_abbruchNachInstallation is null && DateTime.UtcNow < bis);
+
+        _t1HatErstinstallationBeobachtet = true;
         HaelpMiApp.BeendeAlles();
         await HaelpMiApp.StarteAgentAsync();
         Rendezvous.Signal($"{geraet.ToLowerInvariant()}-installiert", settings.DeviceId.ToString());
@@ -187,7 +198,11 @@ internal static class Installation
     /// </summary>
     public static void PruefeDateienVorErstemStart(string geraet)
     {
-        Assert.True(_erstinstallationGeprueft, "T25 braucht T1 im selben Lauf (Filter z. B. Bereich=Basis|Bereich=R229).");
+        Assert.True(_t1HatErstinstallationBeobachtet,
+            "T1 lief in diesem Lauf nicht oder scheiterte vor dem Agent-Start (Filter z. B. Bereich=Basis|Bereich=R229, sonst Fehler in T1 ansehen).");
+        // MainWindowTitle sieht nur Fenster der eigenen Sitzung; ohne Agent dort wäre die Fensterprüfung blind.
+        Assert.True(_agentInEigenerSitzung,
+            "Der vom Installer gestartete Agent lief nicht in der Sitzung des Tests, die Abbruchmeldung ist so nicht prüfbar.");
         Assert.True(_abbruchNachInstallation is null,
             $"Der vom Installer gestartete Agent zeigte nach der Erstinstallation „{_abbruchNachInstallation}“ (deployment.json fehlte beim Start).");
 
@@ -213,7 +228,8 @@ internal static class Installation
     }
 
     private static string? _abbruchNachInstallation;
-    private static bool _erstinstallationGeprueft;
+    private static bool _agentInEigenerSitzung;
+    private static bool _t1HatErstinstallationBeobachtet;
 
     /// <summary>Titel der Meldung, mit der der Agent ohne settings.json/deployment.json abbricht (App.xaml.cs), sonst null.</summary>
     private static string? AbbruchfensterDesAgents()
@@ -222,7 +238,7 @@ internal static class Installation
         {
             using (prozess)
             {
-                if (prozess.MainWindowTitle.Contains("Installation unvollständig", StringComparison.Ordinal))
+                if (prozess.SessionId == Prozess.EigeneSitzung && prozess.MainWindowTitle.Contains("Installation unvollständig", StringComparison.Ordinal))
                 {
                     return prozess.MainWindowTitle;
                 }
