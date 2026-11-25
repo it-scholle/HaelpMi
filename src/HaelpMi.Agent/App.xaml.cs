@@ -1042,6 +1042,7 @@ public partial class App : System.Windows.Application
         {
             _trayIcon.Visible = false;
             _trayIcon.Dispose();
+            _trayIcon = null;
         }
 
         _hotkey?.Dispose();

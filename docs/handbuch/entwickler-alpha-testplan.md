@@ -216,7 +216,9 @@ im Code schon als seltene Startrace eingeplant habe, aber nicht selbst timen kon
       "Wartung erforderlich" mit dem Text "Ein Hintergrunddienst konnte eine Meldung nicht
       zustellen (Code H-00). Bitte die IT informieren." Als Absender steht dort
       "Arbeitsplatz-Dienst", nirgends "HälpMi" oder "HaelpMi". Mehrmaliges Drücken innerhalb
-      der 30 Sekunden ergibt nur eine Benachrichtigung. Mit "Nicht stören" bzw. ausgeschalteten
+      der 30 Sekunden ergibt nur eine Benachrichtigung. Einmal auf einem Gerät prüfen, das
+      vorher eine ältere Version hatte und schon eine Sprechblase gezeigt hat (Absendername
+      bleibt dort evtl. "HaelpMi.Agent"), und notieren, welches Symbol neben dem Absender steht. Mit "Nicht stören" bzw. ausgeschalteten
       Benachrichtigungen landet sie nur im Infobereich bzw. entfällt (Windows-Verhalten)
 - [ ] Tastenkürzel eines Alarm-Profils drücken, in dem dieses Gerät gar nicht als Sender
       eingetragen ist → nichts passiert (kein Status-Fenster, kein Hinweis)

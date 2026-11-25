@@ -31,7 +31,9 @@ Stand: 2026-11-25
 - #232 (PR #233): Als Absender der Windows-Benachrichtigung „Wartung erforderlich“ zeigt Windows die
   Dateibeschreibung des Agents. Sie ist dafür auf „Arbeitsplatz-Dienst“ gesetzt
   (`src/HaelpMi.Agent/HaelpMi.Agent.csproj`, `AssemblyTitle`) und erscheint so auch im
-  Task-Manager. Unter Windows noch nicht von Hand geprüft (Handtestplan).
+  Task-Manager. Unter Windows noch nicht von Hand geprüft (Handtestplan). Offen dabei: Windows
+  merkt sich den Anzeigenamen pro Programmpfad, nach einem Update kann deshalb weiter
+  „HaelpMi.Agent“ dastehen; neben dem Absender zeigt Windows vermutlich das HälpMi-Logo.
 
 ## Bekannte Abweichungen von `AGENTS.md` Teil A
 
