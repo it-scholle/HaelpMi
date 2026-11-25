@@ -213,6 +213,16 @@ public sealed class AlarmFlowCoordinator
     /// <summary>Hotkey-triggered send for one <see cref="AlarmProfile"/> (FR-50): resolves this sender's asymmetric recipient set and starts a repeating session.</summary>
     public void TriggerAlarmProfile(AlarmProfile profile)
     {
+        var identity = _identityProvider();
+        var groups = _sharedConfigProvider().DeviceGroups;
+
+        // Die Tastenkürzel aller Profile sind auf jedem Gerät registriert. Ist dieses Gerät im Profil
+        // kein Sender, gehört das Kürzel nicht ihm: keine Sitzung, kein Banner, kein Hinweis.
+        if (!RecipientResolver.IsSender(profile, identity.DeviceId, identity.RoomNumber, groups))
+        {
+            return;
+        }
+
         var removed = IsOwnDeviceRemoved();
         var blockReason = _licenseLimitGuard.GetOwnBlockReason();
         if (SendBlockNotice.For(removed, blockReason) is { } notice)
@@ -222,9 +232,7 @@ public sealed class AlarmFlowCoordinator
             return;
         }
 
-        var identity = _identityProvider();
         var devices = _deviceStore.Load();
-        var groups = _sharedConfigProvider().DeviceGroups;
         var targets = RecipientResolver.ResolveRecipientsForSender(profile, identity.DeviceId, identity.RoomNumber, devices, groups, excludeSender: true);
 
         // Issue #60: lizenzüberschrittene Empfänger sind für andere unerreichbar (siehe

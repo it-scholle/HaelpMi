@@ -209,7 +209,10 @@ im Code schon als seltene Startrace eingeplant habe, aber nicht selbst timen kon
 - [ ] Tastenkürzel eines Alarm-Profils drücken, in dem für dieses Gerät keine Empfänger
       eingerichtet sind → Status-Fenster erscheint trotzdem, sofort mit "Alarm nicht zugestellt",
       "Empfangen: 0 von 0" und dem Hinweis, wo ein Admin die Empfänger zuordnet; keine
-      Wiederholung (eine Zeile im `audit.log`), "Schließen" (X) schließt es
+      Wiederholung (eine Zeile im `audit.log`), "Schließen" (X) schließt es. Gleiches, wenn
+      alle eingerichteten Empfänger deaktiviert sind
+- [ ] Tastenkürzel eines Alarm-Profils drücken, in dem dieses Gerät gar nicht als Sender
+      eingetragen ist → nichts passiert (kein Status-Fenster, kein Hinweis)
 
 **Melde zurück:** Vor allem der erzwungene Vordergrund (bei Vollbild-Anwendungen/Spielen)
 und der Signalton bei Stummschaltung sind die Punkte, die ich am wenigsten selbst prüfen
