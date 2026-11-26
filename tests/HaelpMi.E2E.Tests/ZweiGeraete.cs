@@ -69,7 +69,8 @@ internal static class ZweiGeraete
 
     /// <summary>
     /// Frist vom Hotkey bis A „Empfangen: 1 von 1“ zeigt: die erste Welle wartet höchstens AlarmAckTimeout (5 s)
-    /// auf die Quittung, dazu Spielraum für Banner und UI-Automation. Vor dem Fix zu #238 kam sie erst nach 20 s und mehr.
+    /// auf die Quittung, dazu Spielraum für Banner und UI-Automation. Damit besteht auch eine Quittung erst der
+    /// zweiten Welle (ab etwa 5 s); vor dem Fix zu #238 kam sie erst nach 20 s und mehr.
     /// </summary>
     public static readonly TimeSpan QuittungFrist = TimeSpan.FromSeconds(8);
 

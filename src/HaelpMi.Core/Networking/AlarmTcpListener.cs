@@ -44,9 +44,10 @@ public sealed class AlarmReceivedEventArgs : EventArgs
                 _firstDisplayed.TrySetResult(true);
             }
         }
-        catch (Exception)
+        catch (Exception ex)
         {
-            // Ein fehlgeschlagener Melder zählt als „nicht angezeigt“ (siehe WasDisplayedAsync).
+            // Zählt als „nicht angezeigt“ (siehe WasDisplayedAsync).
+            BetriebsLog.Warnung("Alarmempfang", "Anzeige-Rückmeldung fehlgeschlagen, zählt als nicht angezeigt.", ex, vorgangsId: Request.AlarmSessionId.ToString());
         }
     }
 
@@ -54,7 +55,10 @@ public sealed class AlarmReceivedEventArgs : EventArgs
     /// true, sobald eine Rückmeldung „angezeigt“ ist; false, wenn alle „nicht angezeigt“ sind. Ohne jede
     /// Rückmeldung true: Wer die Anzeige nicht prüft, bekommt die Quittung wie bisher.
     /// </summary>
-    public async Task<bool> WasDisplayedAsync()
+    public Task<bool> WasDisplayedAsync() => WasDisplayedAsync(ohneRueckmeldung: true);
+
+    /// <param name="ohneRueckmeldung">Ergebnis, wenn kein Melder etwas gemeldet hat.</param>
+    internal async Task<bool> WasDisplayedAsync(bool ohneRueckmeldung)
     {
         List<Task<bool>> pending;
         lock (_displayReports)
@@ -64,7 +68,7 @@ public sealed class AlarmReceivedEventArgs : EventArgs
 
         if (pending.Count == 0)
         {
-            return true;
+            return ohneRueckmeldung;
         }
 
         while (pending.Count > 0)
@@ -198,6 +202,7 @@ public sealed class AlarmTcpListener : IAsyncDisposable
     private async Task HandleClientAsync(TcpClient client, CancellationToken ct)
     {
         using var _ = client;
+        string? vorgangsId = null;
         try
         {
             if (_isOwnDeviceLicenseDisabled?.Invoke() == true)
@@ -248,7 +253,7 @@ public sealed class AlarmTcpListener : IAsyncDisposable
             }
 
             _audit?.Invoke($"alarm received from deviceId={request.SenderDeviceId}");
-            var vorgangsId = request.AlarmSessionId.ToString();
+            vorgangsId = request.AlarmSessionId.ToString();
             var args = new AlarmReceivedEventArgs { Request = request, SenderAddress = senderAddress };
             BetriebsLog.Debug(LogModul, "Alarm empfangen.", request.SenderDeviceId.ToString(), vorgangsId);
 
@@ -285,13 +290,16 @@ public sealed class AlarmTcpListener : IAsyncDisposable
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
-            // Listener wird beendet.
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is IOException or SocketException or OperationCanceledException)
         {
             // Abgebrochene oder zu langsame Verbindung vor der Quittung: Der Sender zählt das Ziel
             // als „nicht bestätigt“ (FR-14), der Listener läuft weiter.
-            BetriebsLog.Debug(LogModul, $"Verbindung ohne Quittung beendet ({ex.GetType().Name}: {ex.Message}).");
+            BetriebsLog.Debug(LogModul, $"Verbindung ohne Quittung beendet ({ex.GetType().Name}).", vorgangsId: vorgangsId);
+        }
+        catch (Exception ex)
+        {
+            BetriebsLog.Warnung(LogModul, "Unerwarteter Fehler beim Empfang, keine Quittung.", ex, vorgangsId: vorgangsId);
         }
     }
 
@@ -324,7 +332,9 @@ public sealed class AlarmTcpListener : IAsyncDisposable
         catch (Exception ex)
         {
             BetriebsLog.Fehler(LogModul, "Verarbeitung des empfangenen Alarms fehlgeschlagen.", ex, vorgangsId: vorgangsId);
-            return false;
+
+            // Eine schon gemeldete Anzeige (z. B. in einer anderen Sitzung) zählt trotzdem.
+            return await args.WasDisplayedAsync(ohneRueckmeldung: false);
         }
 
         return await args.WasDisplayedAsync();

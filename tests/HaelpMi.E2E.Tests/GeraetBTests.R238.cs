@@ -21,8 +21,9 @@ public partial class GeraetBTests
         {
             var b = EigeneDeviceId();
             var a = await DeviceIdDerGegenseiteAsync("a");
-            R238Latenz.BetriebsLogAufDebug();
+            var stufeVorher = R238Latenz.BetriebsLogAufDebug();
             TimeSpan bisBedienbar;
+            var geschlossen = false;
             try
             {
                 // Startet den Agent neu: Der Fehler trat beim ersten Empfang kurz nach dem Start auf.
@@ -48,6 +49,7 @@ public partial class GeraetBTests
                 try
                 {
                     await app.QuittiereUndSchliesseAsync(popup!, "T26");
+                    geschlossen = true;
                 }
                 finally
                 {
@@ -57,7 +59,14 @@ public partial class GeraetBTests
             finally
             {
                 R238Latenz.Sichere("t26-betriebslog-b.txt", R238Latenz.BetriebsLogZeilen());
-                R238Latenz.BetriebsLogZuruecksetzen();
+                R238Latenz.BetriebsLogZuruecksetzen(stufeVorher);
+                if (!geschlossen)
+                {
+                    // Ein offenes oder hängendes Alarmfenster störte die folgenden Tests; der Neustart liest auch die alte Stufe wieder.
+                    BeendeAlles();
+                    await StarteAgentAsync();
+                    await Task.Delay(AgentAnlaufzeit);
+                }
             }
 
             R238Latenz.Sichere("t26-latenz-b.txt", new[] { $"Alarmfenster bedienbar {R238Latenz.Sekunden(bisBedienbar)} nach 'alarm received'" });

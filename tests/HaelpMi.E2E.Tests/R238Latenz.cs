@@ -33,13 +33,25 @@ internal static class R238Latenz
         }
     }
 
-    /// <summary>Schaltet das Betriebs-Log für den nächsten Agent-Start auf DEBUG, damit die Zeitmessungen im Empfangspfad mitgeschrieben werden.</summary>
-    public static void BetriebsLogAufDebug() =>
-        File.WriteAllText(AppPaths.BetriebsLogEinstellungenPath, "{\"Stufe\": \"Debug\"}");
-
-    public static void BetriebsLogZuruecksetzen()
+    /// <summary>
+    /// Schaltet das Betriebs-Log für den nächsten Agent-Start auf DEBUG, damit die Zeitmessungen im Empfangspfad
+    /// mitgeschrieben werden. Liefert den bisherigen Inhalt (null: keine Datei) für <see cref="BetriebsLogZuruecksetzen"/>.
+    /// </summary>
+    public static string? BetriebsLogAufDebug()
     {
-        if (File.Exists(AppPaths.BetriebsLogEinstellungenPath))
+        var vorher = File.Exists(AppPaths.BetriebsLogEinstellungenPath) ? File.ReadAllText(AppPaths.BetriebsLogEinstellungenPath) : null;
+        File.WriteAllText(AppPaths.BetriebsLogEinstellungenPath, "{\"Stufe\": \"Debug\"}");
+        return vorher;
+    }
+
+    /// <summary>Stellt den Stand vor <see cref="BetriebsLogAufDebug"/> wieder her; wirkt ab dem nächsten Agent-Start.</summary>
+    public static void BetriebsLogZuruecksetzen(string? vorher)
+    {
+        if (vorher is not null)
+        {
+            File.WriteAllText(AppPaths.BetriebsLogEinstellungenPath, vorher);
+        }
+        else if (File.Exists(AppPaths.BetriebsLogEinstellungenPath))
         {
             File.Delete(AppPaths.BetriebsLogEinstellungenPath);
         }

@@ -40,7 +40,7 @@ public static class ForegroundHelper
     [DllImport("user32.dll", EntryPoint = "SystemParametersInfoW")]
     private static extern bool SystemParametersInfoSet(uint uiAction, uint uiParam, IntPtr pvParam, uint fWinIni);
 
-    [DllImport("user32.dll")]
+    [DllImport("user32.dll", EntryPoint = "SendMessageTimeoutW")]
     private static extern IntPtr SendMessageTimeout(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam, uint flags, uint timeoutMs, out IntPtr result);
 
     private const uint SPI_GETFOREGROUNDLOCKTIMEOUT = 0x2000;
