@@ -268,7 +268,7 @@ public sealed class EditLockService : IAsyncDisposable
             }
 
             var identity = _identityProvider();
-            if (!CustomerGroupFilter.Matches(request.CustomerGroupId, identity.CustomerGroupId))
+            if (!CustomerGroupFilter.Matches(request.CustomerGroupId, identity.CustomerGroupId, "Edit-Lock", request.RequesterDeviceId))
             {
                 return; // Teil 2, Abschnitt 6
             }

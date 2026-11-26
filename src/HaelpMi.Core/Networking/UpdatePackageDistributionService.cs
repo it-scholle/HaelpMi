@@ -163,7 +163,7 @@ public sealed class UpdatePackageDistributionService : IAsyncDisposable
             }
 
             var identity = _identityProvider();
-            if (!CustomerGroupFilter.Matches(request.CustomerGroupId, identity.CustomerGroupId))
+            if (!CustomerGroupFilter.Matches(request.CustomerGroupId, identity.CustomerGroupId, "Update-Abruf", request.RequesterDeviceId))
             {
                 return;
             }
