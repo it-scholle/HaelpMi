@@ -35,7 +35,7 @@ internal static class Program
         using var symbol = new NotifyIcon
         {
             Icon = SystemIcons.Application,
-            Text = "Arbeitsplatz-Dienst",
+            Text = Application.ProductName,
             Visible = true,
         };
         symbol.BalloonTipClosed += (_, _) => Application.ExitThread();

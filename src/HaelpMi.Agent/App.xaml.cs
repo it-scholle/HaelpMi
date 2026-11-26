@@ -861,11 +861,19 @@ public partial class App : System.Windows.Application
         }
     }
 
+    // Läuft auf einem Threadpool-Thread in einer verworfenen Aufgabe: unerwartete Fehler hier selbst loggen.
     private static void ShowMaintenanceHint()
     {
-        if (new MaintenanceHintLauncher(AppContext.BaseDirectory).Launch())
+        try
         {
-            BetriebsLog.Info("Alarm", "Wartungshinweis nach Alarm ohne Empfänger an das Hilfsprogramm übergeben.");
+            if (new MaintenanceHintLauncher(AppContext.BaseDirectory).Launch())
+            {
+                BetriebsLog.Info("Alarm", "Wartungshinweis nach Alarm ohne Empfänger an das Hilfsprogramm übergeben.");
+            }
+        }
+        catch (Exception ex)
+        {
+            BetriebsLog.Warnung("Alarm", "Wartungshinweis nach Alarm ohne Empfänger nicht angezeigt.", ex);
         }
     }
 

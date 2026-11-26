@@ -219,7 +219,8 @@ im Code schon als seltene Startrace eingeplant habe, aber nicht selbst timen kon
       Mehrmaliges Drücken innerhalb der 30 Sekunden ergibt nur eine Benachrichtigung. Im
       Task-Manager erscheint dabei kurz "Arbeitsplatz-Dienst" (`HaelpMi.Notify.exe`), der
       Agent selbst heißt dort weiter wie bisher ("HaelpMi.Agent"). Notieren, welches Symbol neben dem
-      Absender steht. Mit "Nicht stören" bzw. ausgeschalteten Benachrichtigungen landet sie nur
+      Absender steht. Nach etwa einer Minute im Benachrichtigungscenter nachsehen, ob der
+      Hinweis dort noch steht (das Hilfsprogramm hat sich dann beendet). Mit "Nicht stören" bzw. ausgeschalteten Benachrichtigungen landet sie nur
       im Infobereich bzw. entfällt (Windows-Verhalten)
 - [ ] Tastenkürzel eines Alarm-Profils drücken, in dem dieses Gerät gar nicht als Sender
       eingetragen ist → nichts passiert (kein Status-Fenster, kein Hinweis)
