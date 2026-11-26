@@ -47,7 +47,8 @@ public partial class GeraetBTests
             var a = await ZweiGeraete.DeviceIdDerGegenseiteAsync("a");
 
             // Zeitmessungen im Empfangspfad (#238) landen so im agent.log des Artefakts. Die Stufe wird beim
-            // Agent-Start gelesen; der Neustart steckt in BereiteAlarmprofilVorAsync, danach gilt wieder die alte.
+            // Agent-Start gelesen; der Neustart steckt in BereiteAlarmprofilVorAsync. Dieser Agent bleibt auf DEBUG,
+            // ab seinem nächsten Start gilt wieder die alte Stufe.
             var stufeVorher = R238Latenz.BetriebsLogAufDebug();
             try
             {
