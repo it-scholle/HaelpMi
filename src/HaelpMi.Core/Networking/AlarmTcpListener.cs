@@ -1,5 +1,7 @@
+using System.Diagnostics;
 using System.Net;
 using System.Net.Sockets;
+using HaelpMi.Core.Diagnostics;
 using HaelpMi.Core.Models;
 using HaelpMi.Core.Networking.Protocol;
 
@@ -8,9 +10,16 @@ namespace HaelpMi.Core.Networking;
 public sealed class AlarmReceivedEventArgs : EventArgs
 {
     private readonly List<Task<bool>> _displayReports = new();
+    private readonly TaskCompletionSource<bool> _firstDisplayed = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
     public required AlarmRequestMessage Request { get; init; }
     public required IPAddress SenderAddress { get; init; }
+
+    /// <summary>Zeitpunkt des Empfangs als <see cref="Stopwatch.GetTimestamp"/>, für Laufzeitmessungen im Empfangspfad.</summary>
+    public long ReceivedTimestamp { get; init; } = Stopwatch.GetTimestamp();
+
+    /// <summary>Wird true, sobald eine Rückmeldung „angezeigt“ ist; bleibt sonst offen.</summary>
+    internal Task<bool> FirstDisplayedAsync => _firstDisplayed.Task;
 
     /// <summary>Meldet, ob die Meldung angezeigt wurde. Mehrere Melder (eigene Sitzung, andere Sitzungen) sind erlaubt.</summary>
     public void ReportDisplayed(bool displayed) => ReportDisplayed(Task.FromResult(displayed));
@@ -21,6 +30,23 @@ public sealed class AlarmReceivedEventArgs : EventArgs
         lock (_displayReports)
         {
             _displayReports.Add(displayed);
+        }
+
+        _ = SignalIfDisplayedAsync(displayed);
+    }
+
+    private async Task SignalIfDisplayedAsync(Task<bool> displayed)
+    {
+        try
+        {
+            if (await displayed.ConfigureAwait(false))
+            {
+                _firstDisplayed.TrySetResult(true);
+            }
+        }
+        catch (Exception)
+        {
+            // Ein fehlgeschlagener Melder zählt als „nicht angezeigt“ (siehe WasDisplayedAsync).
         }
     }
 
@@ -66,14 +92,15 @@ public sealed class AlarmReceivedEventArgs : EventArgs
 /// die Rückmeldung nicht innerhalb von <see cref="Models.AppConstants.AlarmAckTimeout"/>, bleibt die
 /// Quittung aus: Der Sender zählt das Gerät nicht als „empfangen“, die nächste Welle versucht es erneut.
 ///
-/// Important: subscribers of <see cref="AlarmReceived"/> must only *start* showing the
-/// popup (e.g. Window.Show(), which returns immediately) and must not block until the
-/// user dismisses it - the ack is defined to follow display, not dismissal (FR-13; the
-/// dismissal-triggered second ack is now <c>AlarmOnMyWayMessage</c> on the separate
-/// feedback channel, Teil 2 Abschnitt 7/8, not sent from here).
+/// Die Melder von <see cref="AlarmReceived"/> laufen auf einem eigenen Task, nicht auf der
+/// Accept-Schleife. Die Quittung geht raus, sobald ein Melder „angezeigt“ meldet, auch wenn er
+/// danach noch arbeitet (z. B. den Ton startet). Sie folgt der Anzeige, nicht dem Schließen
+/// (FR-13; die zweite Rückmeldung beim Schließen ist <c>AlarmOnMyWayMessage</c> auf dem
+/// Feedback-Kanal, Teil 2 Abschnitt 7/8).
 /// </summary>
 public sealed class AlarmTcpListener : IAsyncDisposable
 {
+    private const string LogModul = "Alarmempfang";
     private readonly Func<LiveIdentity> _identityProvider;
     private readonly Func<bool>? _isOwnDeviceLicenseDisabled;
     private readonly Action<string>? _audit;
@@ -163,7 +190,8 @@ public sealed class AlarmTcpListener : IAsyncDisposable
                 continue;
             }
 
-            _ = HandleClientAsync(client, ct);
+            // Eigener Task: Kein Handler darf die Annahme der nächsten Verbindung aufhalten.
+            _ = Task.Run(() => HandleClientAsync(client, ct), CancellationToken.None);
         }
     }
 
@@ -220,9 +248,14 @@ public sealed class AlarmTcpListener : IAsyncDisposable
             }
 
             _audit?.Invoke($"alarm received from deviceId={request.SenderDeviceId}");
+            var vorgangsId = request.AlarmSessionId.ToString();
             var args = new AlarmReceivedEventArgs { Request = request, SenderAddress = senderAddress };
-            AlarmReceived?.Invoke(this, args);
-            if (!await WasDisplayedInTimeAsync(args, ct))
+            BetriebsLog.Debug(LogModul, "Alarm empfangen.", request.SenderDeviceId.ToString(), vorgangsId);
+
+            // Die Melder laufen getrennt: Was sie nach der Anzeige noch tun (z. B. den Ton starten),
+            // darf die Quittung nicht verzögern, denn der Sender wartet nur AlarmAckTimeout darauf.
+            var melder = Task.Run(() => AlarmReceived?.Invoke(this, args), CancellationToken.None);
+            if (!await WasDisplayedInTimeAsync(args, melder, vorgangsId, ct))
             {
                 _audit?.Invoke($"alarm nicht quittiert (nicht angezeigt): alarmSessionId={request.AlarmSessionId}");
                 return;
@@ -231,27 +264,70 @@ public sealed class AlarmTcpListener : IAsyncDisposable
             var ack = new AlarmAckMessage(request.CustomerGroupId, request.AlarmProfileId, request.AlarmSessionId, identity.DeviceId, DateTimeOffset.UtcNow);
             var ackLine = NetworkSerializer.ToJsonLine(ack);
             var ackBytes = NetworkSerializer.Encoding.GetBytes(ackLine);
-            await stream.WriteAsync(ackBytes, ct);
-            await stream.FlushAsync(ct);
+            try
+            {
+                await stream.WriteAsync(ackBytes, ct);
+                await stream.FlushAsync(ct);
+            }
+            catch (Exception ex) when (ex is IOException or SocketException or ObjectDisposedException)
+            {
+                // Der Sender zählt das Gerät dann als „nicht empfangen“ und versucht es mit der nächsten Welle erneut.
+                BetriebsLog.Warnung(
+                    LogModul,
+                    $"Quittung nicht zustellbar, {Stopwatch.GetElapsedTime(args.ReceivedTimestamp).TotalMilliseconds:F0} ms nach dem Empfang ({ex.GetType().Name}).",
+                    ex,
+                    request.SenderDeviceId.ToString(),
+                    vorgangsId);
+                return;
+            }
+
+            BetriebsLog.Debug(LogModul, $"Quittung geschrieben, {Stopwatch.GetElapsedTime(args.ReceivedTimestamp).TotalMilliseconds:F0} ms nach dem Empfang.", request.SenderDeviceId.ToString(), vorgangsId);
         }
-        catch (Exception)
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
-            // Best-effort delivery: a dropped/slow connection just means the sender
-            // counts this target as not-yet-acked (FR-14) - it does not crash the listener.
+            // Listener wird beendet.
+        }
+        catch (Exception ex)
+        {
+            // Abgebrochene oder zu langsame Verbindung vor der Quittung: Der Sender zählt das Ziel
+            // als „nicht bestätigt“ (FR-14), der Listener läuft weiter.
+            BetriebsLog.Debug(LogModul, $"Verbindung ohne Quittung beendet ({ex.GetType().Name}: {ex.Message}).");
         }
     }
 
-    /// <summary>Begrenzt die Wartezeit, damit ein hängender Melder weder Handler noch Socket festhält.</summary>
-    private static async Task<bool> WasDisplayedInTimeAsync(AlarmReceivedEventArgs args, CancellationToken ct)
+    /// <summary>
+    /// true, sobald ein Melder „angezeigt“ meldet, auch wenn er danach noch weiterarbeitet; sonst das
+    /// Gesamtergebnis, wenn alle Melder fertig sind. Begrenzt die Wartezeit, damit ein hängender Melder
+    /// weder Handler noch Socket festhält.
+    /// </summary>
+    private static async Task<bool> WasDisplayedInTimeAsync(AlarmReceivedEventArgs args, Task melder, string vorgangsId, CancellationToken ct)
     {
         try
         {
-            return await args.WasDisplayedAsync().WaitAsync(Models.AppConstants.AlarmAckTimeout, ct);
+            var erstes = await Task.WhenAny(args.FirstDisplayedAsync, AfterMelderAsync(args, melder, vorgangsId))
+                .WaitAsync(Models.AppConstants.AlarmAckTimeout, ct);
+            return await erstes;
         }
         catch (TimeoutException)
         {
+            BetriebsLog.Warnung(LogModul, $"Keine Anzeige-Rückmeldung binnen {Models.AppConstants.AlarmAckTimeout.TotalSeconds:F0} s, keine Quittung.", vorgangsId: vorgangsId);
             return false;
         }
+    }
+
+    private static async Task<bool> AfterMelderAsync(AlarmReceivedEventArgs args, Task melder, string vorgangsId)
+    {
+        try
+        {
+            await melder;
+        }
+        catch (Exception ex)
+        {
+            BetriebsLog.Fehler(LogModul, "Verarbeitung des empfangenen Alarms fehlgeschlagen.", ex, vorgangsId: vorgangsId);
+            return false;
+        }
+
+        return await args.WasDisplayedAsync();
     }
 
     public async ValueTask DisposeAsync()
