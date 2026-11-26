@@ -18,11 +18,11 @@ Windows-Benachrichtigungen, Firewall-Abfragen, Update-Weg).
 
 Rückmeldung je Punkt: ✅ geht / ❌ geht nicht + was passiert ist (Text der Meldung, Screenshot,
 `agent.log` und `audit.log` des betroffenen Geräts). Bei Abstürzen zusätzlich
-`C:\ProgramData\HaelpMi\crash.log`.
+`C:\ProgramData\HaelpMi\crash.log` (bei verbundenem Laufwerk `Z:` siehe Abschnitt 7).
 
 **HälpMi neu starten** (in mehreren Punkten gebraucht): `HaelpMi.Agent.exe` im Task-Manager beenden
-und danach entweder ab- und wieder anmelden oder `HaelpMi.Agent.exe` im Installationsordner per
-Doppelklick starten. Einen Startmenü-Eintrag dafür gibt es nicht.
+und danach entweder ab- und wieder anmelden oder `HaelpMi.Agent.exe` im Installationsordner
+(`C:\Program Files\HaelpMi\`) per Doppelklick starten. Einen Startmenü-Eintrag dafür gibt es nicht.
 
 ## Aufbau
 
@@ -141,10 +141,13 @@ Doppelklick starten. Einen Startmenü-Eintrag dafür gibt es nicht.
 
 Vorbereitung: C auf den Ausgangszustand bringen (deinstallieren mit „Einstellungen entfernen“), dann
 den 0.46.x-Installer derselben Kundengruppe installieren, Profil P2 so ändern, dass C Empfänger ist,
-einen Alarm empfangen und schließen.
+einen Alarm empfangen und schließen. Auf A ein Profil „P4“ anlegen: Sender C, Empfänger B,
+Schwelle 1.
 
-- [ ] Mischbetrieb vor dem Update: A (1.0.0) löst P2 bzw. P1 aus → C (0.46.x) empfängt, Quittung
-      und Schließen funktionieren. Umgekehrt, falls C Sender ist: C (0.46.x) → B (1.0.0).
+- [ ] Mischbetrieb vor dem Update: A (1.0.0) löst P2 aus → C (0.46.x) zeigt das Alarmfenster,
+      „Bin unterwegs“ auf C → A zeigt „Empfangen: 1 von 1“ und C unter „Auf dem Weg“, Schließen
+      auf C klappt. Rückrichtung: P4 auf C auslösen → B (1.0.0) zeigt das Alarmfenster, C zählt B
+      als empfangen, Schließen auf B klappt.
 
 - [ ] User-Installer 1.0.0 auf C ausführen (Update). Keine Raum-Abfrage, keine Firewall-Abfrage.
 - [ ] Nach dem Update: genau ein `HaelpMi.Agent.exe`, Dateiversion 1.0.0 (Task-Manager → Details →
