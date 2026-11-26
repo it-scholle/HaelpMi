@@ -2,37 +2,39 @@
 
 Alle relevanten Änderungen, für Menschen lesbar. Versionen nach SemVer.
 Einträge vor v0.47.4 sind aus den Git-Tags dieser Versionslinie erzeugt (Titel des getaggten Commits);
-Details stehen in der Git-Historie. Der eingefrorene Stand `legacy/main-0.39.x` ist hier nicht aufgeführt.
+Details stehen in der Git-Historie. Ab 1.0.0 nennt jeder Abschnitt nur Änderungen, die Anwender und Administratoren betreffen. Der eingefrorene Stand `legacy/main-0.39.x` ist hier nicht aufgeführt.
 
-## [Unveröffentlicht]
+## [1.0.0] – unveröffentlicht
+Erste freigegebene Version. Aufgeführt ist, was sich gegenüber den Vorversionen 0.46.x für Anwender und Administratoren ändert. Änderungen an Entwicklungswerkzeugen, automatischen Tests und Arbeitsabläufen stehen nur in der Git-Historie. Einträge mit „(folgt)“ sind noch nicht im Stand enthalten und kommen vor der Freigabe dazu.
 ### Neu
-- Empfängt ein Gerät Nachrichten einer anderen HälpMi-Installation im selben Netz (andere Kundengruppe, z. B. ein mit falschem Installer eingerichtetes Gerät), steht das jetzt als Warnung im Betriebsprotokoll `agent.log`, höchstens einmal pro Stunde je Art und fremder Gruppe mit der Anzahl der verworfenen Nachrichten. Die Nachrichten werden wie bisher ignoriert und nicht beantwortet (#214)
-- HälpMi führt ein Betriebsprotokoll zur Fehlersuche (`agent.log` für das Hintergrundprogramm, `config.log` für Einstellungen und Dashboard unter `%ProgramData%\HaelpMi`), ohne Alarmtexte oder andere Inhalte. Die Protokolle bleiben klein: eine Datei pro Tag, ältere werden komprimiert und nach 90 Tagen gelöscht, höchstens 200 MB je Programm. Für die Fehlersuche lässt sich ein ausführlicheres Protokoll ohne Update einschalten (`betriebslog.json`, siehe Betriebsdoku) (#227)
-- E2E: drittes Testgerät C (VM 9103) mit den Testfällen T11 (Discovery mit drei Geräten) und T12 (Alarm an zwei Empfänger mit Schwelle 2); Workflow, Relay und Skripte arbeiten mit beliebig vielen Test-VMs aus `ci/e2e/geraete.json`, die Umgebung läuft auf pve-nzxt (#202)
-- E2E: Regressionstest T18 (Alarmfenster schließen) mit drei Geräten (Alarm an zwei Empfänger mit Schwelle 2) (#136)
-- E2E: Negativtests für Gegenproben auf dem Altstand (`erwartung=negativ`, `erwartet_rot` mit T-Kürzeln und Fehlerbild-Marken wie `T10W`): grün genau dann, wenn nur die erwarteten Tests fehlschlagen; T10, T18 und T19 prüfen auch mit `produkt_ref` statt nur zu messen. Grundregel „grün = gewollt, rot = ungewollt“ für alle Testarten (#234, #236)
+- Betriebsprotokoll zur Fehlersuche: `agent.log` (Hintergrundprogramm) und `config.log` (Einstellungen und Dashboard) unter `%ProgramData%\HaelpMi`, ohne Alarmtexte oder andere Inhalte. Eine Datei pro Tag, ältere werden komprimiert und nach 90 Tagen gelöscht, höchstens 200 MB je Programm. Ein ausführlicheres Protokoll lässt sich ohne Update über `betriebslog.json` einschalten (#227)
+- Empfängt ein Gerät Nachrichten einer anderen HälpMi-Installation im selben Netz (z. B. ein mit falschem Installer eingerichtetes Gerät), steht das als Warnung im Betriebsprotokoll, höchstens einmal pro Stunde je Art und fremder Installation. Die Nachrichten werden wie bisher ignoriert (#214)
+- Die Installer richten die Windows-Firewall-Freigaben für HälpMi selbst ein; Windows fragt beim ersten Start nicht mehr nach (#150)
+- (folgt) Ist für ein Alarm-Profil kein Empfänger erreichbar, zeigt das Sender-Gerät sofort „Kein Empfänger eingestellt!“ mit dem Hinweis, dass ein Admin im Dashboard Empfänger einrichten muss; die Meldung blendet sich nach wenigen Sekunden aus. Nach 30 Sekunden erscheint zusätzlich eine Windows-Benachrichtigung „Wartung erforderlich“, höchstens eine pro 30 Sekunden (#233)
 ### Verbessert
-- Branch-Modell auf `develop`/`main` mit Stabilisierungs-Branch `release-X.Y` umgestellt, Conventional Commits, Hook `pre-push` (#194)
-- Struktur an die MasterAgents-Vorlage angeglichen: Doku-Struktur (`docs/`), Arbeitsregeln in `AGENTS.md`, Entscheidungen als ADR, Design-System-Verzeichnis `design/` (#151)
-- Einheitliche Linien-Icons (Lucide) statt Schriftzeichen und Einzelzeichnungen; Icon-Buttons haben eine Textalternative für Screenreader (#151)
-- Farben und Logo liegen nur noch einmal zentral vor (#151)
-- Versionsnummer steht nur noch in `Directory.Build.props`; der Installer liest sie beim Bauen von dort (#168)
+- HälpMi läuft auf .NET 10 (Langzeit-Support bis November 2028) statt .NET 8; die Laufzeit ist im Installer enthalten, eine eigene .NET-Installation ist nicht nötig (#154)
+- Einheitliche Linien-Symbole; Symbol-Schaltflächen haben eine Textalternative für Screenreader (#151)
+- Die Versionsnummer im Installer und im Programm stimmt immer überein (#168)
+- (folgt) Ein Gerät, das in einem Alarm-Profil nicht als Sender eingetragen ist, reagiert auf dessen Tastenkürzel nicht mehr und zeigt keine Meldung (#233)
 ### Behoben
-- Nach einer Erstinstallation startet HälpMi sofort vollständig: Der Installer legt seine Einstellungsdateien an, bevor er HälpMi zum ersten Mal startet; vorher konnte direkt nach der Installation die Meldung „Installation unvollständig“ erscheinen (#229)
-- Hat ein Gerät in seinem Alarm-Profil keine Empfänger (nicht eingerichtet, noch kein Gerät installiert oder alle gesperrt), bleibt das Tastenkürzel nicht mehr wirkungslos: Das Gerät zeigt „Alarm nicht zugestellt“ mit einem Hinweis, wo ein Admin die Empfänger im Dashboard einrichtet (#41)
-- Nach einer Installation, Reparatur oder einem Update empfängt ein Gerät Alarme zuverlässig: Die Firewall-Freigaben werden angelegt, bevor HälpMi zum ersten Mal startet; Sperren aus einer früher abgebrochenen Windows-Firewall-Abfrage werden beim Installieren, Reparieren oder Aktualisieren entfernt (#222)
-- Nach dem ersten empfangenen Alarm wiederholt der Sender seine Alarm-Meldungen wieder im vorgesehenen Takt von wenigen Sekunden statt erst nach rund 30 Sekunden (#177)
-- Der Selbsttest im Einstellungsfenster meldet, wenn er nicht möglich ist oder der Testalarm nicht ankommt, mit Grund und Lösungsweg (z. B. fehlendes Alarm-Profil) und bietet bei Bedarf das Admin-Dashboard an (#176)
-- Ein Gerät, das während eines laufenden Alarms startet oder seine Adresse wechselt, wird von den folgenden Wellen unter der aktuellen Adresse erreicht; die Geräteliste eines anderen Geräts überschreibt eine direkt gemeldete Adresse nicht mehr mit einer veralteten; der Alarm-Empfang läuft schon, bevor sich das Gerät im Netz meldet (#73)
-- Lizenzablauf und „läuft bald ab“ werden auch im laufenden Betrieb erkannt (zum jeweiligen Zeitpunkt, sonst einmal täglich), nicht erst nach einem Neustart; User-Geräte zeigen bei abgelaufener Lizenz einen Hinweis, Alarme laufen weiter (#181)
-- Eine gültige Lizenz wird nicht mehr durch eine später ausgestellte, aber abgelaufene Lizenz eines anderen Geräts ersetzt (#183)
-- Ein im Dashboard deaktiviertes Gerät löst kein Banner „Lizenzkontingent überschritten“ mehr aus; der Sperrhinweis auf dem Gerät nennt den tatsächlichen Grund (#133)
-- Der Hinweis „Alarm nicht gesendet“ auf einem gesperrten Gerät erscheint als eigenes Fenster im Vordergrund statt verdeckt unter dem Sperr-Toast (#179)
-- Wieder-Aktivieren eines Geräts im Reiter „Geräte / Lizenz“ hebt nur die Deaktivierung auf; das Gerät umgeht das Lizenzkontingent nicht mehr dauerhaft (#180)
-  - Hinweis für bestehende Installationen: Geräte, die vor diesem Stand wieder aktiviert wurden, behalten ihren Eintrag „ForceEnabled“ (Kontingent umgangen). Es gibt keine automatische Umstellung; ein Admin schaltet solche Geräte im Reiter „Geräte / Lizenz“ einmal aus und wieder ein.
-- Ein ohne Kundengruppe gebauter Test-Installer bekommt eine zufällige Test-Gruppe statt der Null-GUID und empfängt dadurch Alarme und Boot-Calls; ein Kunden-Installer ohne Kundengruppe lässt sich nicht mehr bauen (#175)
-- Alarmfenster ließ sich in seltenen Fällen nicht schließen oder öffnete sich direkt nach dem Schließen noch einmal (#136)
+- Das Alarmfenster ließ sich in seltenen Fällen nicht schließen oder öffnete sich direkt nach dem Schließen noch einmal. Nach Erreichen der Schwelle, nach einem Abbruch durch den Sender und nach Ablauf lässt es sich jetzt zuverlässig schließen; spätere Wiederholungen desselben Alarms öffnen kein neues Fenster (#136)
+- Bricht der Sender einen Alarm ab, wird das an alle Empfänger übertragen, und deren Fenster lassen sich sofort schließen (#36)
 - Der Sender zeigt „empfangen“ erst, wenn der Alarm auf dem Empfänger-Gerät wirklich angezeigt wird, und nicht schon, während dort zum Beispiel noch ein Benutzerwechsel läuft (#37)
+- Die Anzeige „Empfangen: x von y“ beim Sender zählt alle Empfänge eines Alarms, auch die aus späteren Wiederholungen (#182)
+- Nach dem ersten empfangenen Alarm wiederholt der Sender seine Alarm-Meldungen wieder im vorgesehenen Takt von wenigen Sekunden statt erst nach rund 30 Sekunden (#177)
+- Ein Gerät, das während eines laufenden Alarms startet oder seine Netzwerkadresse wechselt, wird von den folgenden Wiederholungen erreicht; der Alarm-Empfang läuft schon, bevor sich das Gerät im Netz meldet (#73)
+- Hat ein Gerät in seinem Alarm-Profil keine Empfänger, bleibt das Tastenkürzel nicht mehr wirkungslos: Das Gerät zeigt einen Hinweis, wo ein Admin die Empfänger im Dashboard einrichtet (#41)
+- Nach einer Installation, Reparatur oder einem Update empfängt ein Gerät Alarme zuverlässig: Die Firewall-Freigaben werden angelegt, bevor HälpMi zum ersten Mal startet; Sperren aus einer früher abgebrochenen Windows-Firewall-Abfrage werden entfernt (#222)
+- Nach einer Erstinstallation startet HälpMi sofort vollständig; vorher konnte direkt nach der Installation die Meldung „Installation unvollständig“ erscheinen (#229)
+- Der Selbsttest im Einstellungsfenster meldet, wenn er nicht möglich ist oder der Testalarm nicht ankommt, mit Grund und Lösungsweg (z. B. fehlendes Alarm-Profil) und bietet bei Bedarf das Admin-Dashboard an (#176)
+- Lizenzablauf und „läuft bald ab“ werden auch im laufenden Betrieb erkannt, nicht erst nach einem Neustart; User-Geräte zeigen bei abgelaufener Lizenz einen Hinweis, Alarme laufen weiter (#181)
+- Eine gültige Lizenz wird nicht mehr durch eine später ausgestellte, aber abgelaufene Lizenz eines anderen Geräts ersetzt (#183)
+- Ein im Dashboard deaktiviertes Gerät löst kein Banner „Lizenzkontingent überschritten“ mehr aus; der Hinweis auf dem gesperrten Gerät nennt den tatsächlichen Grund (#133)
+- Der Hinweis „Alarm nicht gesendet“ auf einem gesperrten Gerät erscheint als eigenes Fenster im Vordergrund statt verdeckt unter einer anderen Meldung (#179)
+- Wieder-Aktivieren eines Geräts im Reiter „Geräte / Lizenz“ hebt nur die Deaktivierung auf; das Gerät umgeht das Lizenzkontingent nicht mehr dauerhaft (#180)
+  - Hinweis für bestehende Installationen: Geräte, die vorher wieder aktiviert wurden, umgehen das Kontingent weiterhin. Es gibt keine automatische Umstellung; ein Admin schaltet solche Geräte im Reiter „Geräte / Lizenz“ einmal aus und wieder ein.
+- Ein ohne Kundengruppe gebauter Test-Installer bekommt eine eigene, zufällige Test-Gruppe und empfängt dadurch Alarme; ein Kunden-Installer ohne Kundengruppe lässt sich nicht mehr bauen (#175)
+- (folgt) Das Alarmfenster ist sofort bedienbar und der Sender erhält die Empfangsbestätigung, auch wenn die Tonausgabe kurz nach dem Start von HälpMi länger braucht; vorher konnte das Fenster bis zu rund 20 Sekunden nicht reagieren (#238)
 
 ## [0.47.3] – 2026-11-18
 - Einrichtungs-Skript für die E2E-Vorlagen-VM (#165)

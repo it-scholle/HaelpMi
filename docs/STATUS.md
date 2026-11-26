@@ -1,14 +1,20 @@
 # Status
 
-Stand: 2026-11-25
+Stand: 2026-11-26
 
 ## Aktueller Stand
 
-- `release-1.0-MVP` ist mit v0.47.11 abgeschlossen, ein Release gibt es daraus nicht. Entwicklung
-  läuft auf `develop` (GitHub-Default) mit PATCH-Version und Tag pro Merge. Ziel ist Milestone
-  `v1.0` (geplant 08.01.2027); vorher kommt der Hotfix v0.46.2-rc.1 (#210). Stabilisierungs-Branch
-  `release-X.Y` nach #194 und ADR 0010. Status „stable+buggy“: Alarmversand/-empfang, Selbsttest, Config-Sync, Discovery/Boot-Call und
-  Install-Creator/Installer funktionieren weitgehend, ohne Anspruch auf Produktionsreife.
+- Release-Kandidat 1.0 in Vorbereitung (#204, DoD 5; #241): `CHANGELOG.md` Abschnitt
+  „[1.0.0] – unveröffentlicht“, Versionshinweise `docs/release-notes/1.0.0.md`, Handtest
+  `docs/handbuch/handtest-1.0.md`. Versionsvorschlag 1.0.0; `Directory.Build.props` steht noch auf
+  0.47.x und wird erst im Release-PR gesetzt. Vor dem RC fehlen noch #233 (B2, „Kein Empfänger
+  eingestellt!“) und #239 (#238, Quittung unabhängig von der Tonausgabe), beide im CHANGELOG als
+  „folgt“ geführt, sowie zwei grüne volle E2E-Läufe (DoD 3).
+- Entwicklung läuft auf `develop` (GitHub-Default) mit PATCH-Version und Tag pro Merge, Stand
+  v0.47.37. Milestone `v1.0` (geplant 08.01.2027). Alarmweg einschließlich Schließpfad (#136, #36),
+  Empfangsbestätigung (#37, #182), Wiederholungstakt (#177), Erreichbarkeit beim Start (#73),
+  Firewall (#150, #222), Lizenz- und Sperrhinweise (#133, #179, #180, #181, #183) und Betriebs-Log
+  (#227, #214) sind auf `develop` gemergt.
 - `main` nimmt nur noch Releases auf und steht noch auf v0.16.5 (1.0 wurde bisher nicht nach
   `main` übernommen); `legacy/main-0.39.x` ist der alte,
   nicht mehr weiterentwickelte Stand (siehe `docs/entscheidungen/0001-neustart-auf-v0-16.md`).
@@ -26,7 +32,14 @@ Stand: 2026-11-25
 - #73 (PR #220): Ursache des Original-Vorfalls (v0.34.1) nicht per Log belegt, Logs gibt es nicht
   mehr. Der Fix behebt die im Code belegten Wege (veraltete Adresse in der laufenden Session,
   Gossip überschreibt direkt gemeldete Adresse, Boot-Call vor Alarm-Port). Andere Ursachen aus dem
-  Ticket (Mutex, Abbruch von `StartBackgroundServices`) sind damit nicht ausgeschlossen.
+  Ticket (Mutex, Abbruch von `StartBackgroundServices`) sind damit nicht ausgeschlossen. In den
+  Versionshinweisen 1.0.0 als bekannte Einschränkung („Startprobleme sind nicht sichtbar“, #226).
+- #233 (noch nicht gemergt): Absender und Symbol der Windows-Benachrichtigung „Wartung
+  erforderlich“ (`AssemblyTitle` „Arbeitsplatz-Dienst“) sind unter Windows nicht von Hand geprüft;
+  auf Altinstallationen kann Windows weiter „HaelpMi.Agent“ zeigen. Handtest 1.0 Abschnitt 3,
+  Versionshinweise „Bekannte Einschränkungen“.
+- #180 (Owner-Entscheidung 22d): Altbestände mit `ForceEnabled` werden nicht migriert; Hinweis in
+  den Versionshinweisen 1.0.0 („Update von einer Vorversion“).
 
 ## Bekannte Abweichungen von `AGENTS.md` Teil A
 
@@ -59,9 +72,14 @@ Bei #151 aufgefallen, nicht Teil des Tickets, jeweils als eigenes Issue angelegt
 
 ## Nächste Schritte
 
-- Version 1.0 nach `main` übernehmen und taggen (Freigabe Repo-Owner offen).
-- Rulesets an das neue Modell anpassen (#160): „Block-all“ verlangt lineare Historie auf allen
-  Branches außer `develop`, das Ruleset für `develop` ebenfalls. Teil A und `release-X.Y` brauchen
-  aber Merge-Commits (`release-X.Y` bzw. `main` → `develop`, `release-X.Y` → `main`) und einen
-  Fast-Forward `develop` → `release-X.Y`, den ein GitHub-PR nicht kann. Vor dem ersten Release klären.
+- #233 und #239 nach E2E-Nachweis mergen, danach im CHANGELOG und in den Versionshinweisen die
+  Markierung „(folgt)“ entfernen.
+- Volle E2E-Suite `a,b,c` zweimal grün (DoD 3), CI grün.
+- Release-PR: Version 1.0.0 in `Directory.Build.props`, Datum in CHANGELOG und Versionshinweisen,
+  `dependency-check`. Vorher klären, ob der Weg über `release-1.0` (`AGENTS.md` Teil B, Ausnahme
+  „Release-Stabilisierung“) oder direkt `develop` → `main` (#204, DoD 5) gilt.
+- Handtest des Repo-Owners nach `docs/handbuch/handtest-1.0.md`, danach Merge nach `main`, Tag
+  `v1.0.0` und Kundeninstallat durch den Repo-Owner.
+- Rulesets an das neue Modell anpassen (#160): Fast-Forward `develop` → `release-X.Y` kann ein
+  GitHub-PR nicht; vor dem ersten Release klären.
 - Tickets im Milestone `v1.0`, danach `Regelentwicklung`; zurückgestellte Themen in `release-2.0-…` bzw. `Backlog`.
