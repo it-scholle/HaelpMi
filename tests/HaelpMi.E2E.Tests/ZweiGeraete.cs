@@ -67,6 +67,12 @@ internal static class ZweiGeraete
         return DateTime.UtcNow - start;
     }
 
+    /// <summary>
+    /// Frist vom Hotkey bis A „Empfangen: 1 von 1“ zeigt: die erste Welle wartet höchstens AlarmAckTimeout (5 s)
+    /// auf die Quittung, dazu Spielraum für Banner und UI-Automation. Vor dem Fix zu #238 kam sie erst nach 20 s und mehr.
+    /// </summary>
+    public static readonly TimeSpan QuittungFrist = TimeSpan.FromSeconds(8);
+
     // Hotkeys und Boot-Call kommen erst nach dem Prozessstart im Hintergrund (StartBackgroundServices).
     public static readonly TimeSpan AgentAnlaufzeit = TimeSpan.FromSeconds(10);
 

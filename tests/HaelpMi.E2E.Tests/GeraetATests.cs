@@ -96,6 +96,7 @@ public partial class GeraetATests
             await ZweiGeraete.WarteAufGeraetAsync(b, ZweiGeraete.DiscoveryTimeout);
 
             using var app = new HaelpMiApp();
+            var ausgeloest = DateTimeOffset.UtcNow;
             DrueckeHotkey(ZweiGeraete.AlarmHotkey);
             Rendezvous.Signal("a-ausgeloest", $"{E2EUmgebung.Raum} ({E2EUmgebung.Raumnummer})\n{DateTimeOffset.UtcNow:O}");
 
@@ -111,8 +112,10 @@ public partial class GeraetATests
                 throw;
             }
 
+            var befunde = new List<string>();
             try
             {
+                await PruefeBefundAsync(befunde, () => WarteAufQuittungAsync(banner, ausgeloest, "t5-latenz-a.txt"));
                 await Rendezvous.WaitForAsync("b-quittiert", TimeSpan.FromMinutes(2));
                 await WarteBisAsync(() => AufDemWeg(banner).Any(n => n.StartsWith(raumB + " - ", StringComparison.Ordinal)),
                     TimeSpan.FromSeconds(15), $"'Bin unterwegs' von B (Raum '{raumB}') erscheint nicht unter 'Auf dem Weg'.");
@@ -133,6 +136,7 @@ public partial class GeraetATests
             }
 
             Assert.True(Element(banner, "AckedText").Name == "Empfangen: 1 von 1", AckBefund(Element(banner, "AckedText").Name));
+            MeldeBefunde(befunde);
         });
 
     internal static string AckBefund(string angezeigt) =>
