@@ -1,4 +1,6 @@
+using System.Diagnostics;
 using HaelpMi.Core.Audio;
+using HaelpMi.Core.Diagnostics;
 using HaelpMi.Core.Interop;
 using HaelpMi.Core.Licensing;
 using HaelpMi.Core.Models;
@@ -24,6 +26,7 @@ namespace HaelpMi.Agent;
 /// </summary>
 public sealed class AlarmFlowCoordinator
 {
+    private const string LogModul = "Alarmempfang";
     private readonly Func<LiveIdentity> _identityProvider;
     private readonly Func<OwnSettings> _settingsProvider;
     private readonly Func<SharedConfig> _sharedConfigProvider;
@@ -34,6 +37,9 @@ public sealed class AlarmFlowCoordinator
     private readonly MultiDeviceAlarmPlayer _audioPlayer;
     private readonly LicenseLimitGuard _licenseLimitGuard;
     private readonly ReceivedAlarmSessions<AlarmPopupWindow> _receivedSessions = new(AppConstants.AlarmAutoCloseAfterLastSignal);
+
+    /// <summary>Löst den neutralen Wartungshinweis nach einem Alarm ohne erreichbare Empfänger aus.</summary>
+    public MaintenanceHintScheduler MaintenanceHint { get; } = new(AppConstants.NoRecipientsMaintenanceHintDelay);
 
     public AlarmFlowCoordinator(
         Func<LiveIdentity> identityProvider,
@@ -122,6 +128,9 @@ public sealed class AlarmFlowCoordinator
         var settings = _settingsProvider();
         var soundOption = IncomingSoundCatalog.Resolve(settings.IncomingSoundId);
 
+        var vorgangsId = request.AlarmSessionId.ToString();
+        BetriebsLog.Debug(LogModul, $"Anzeige angefordert, {MsSeitEmpfang(args)} ms nach dem Empfang.", vorgangsId: vorgangsId);
+
         // Timeout statt unbegrenztem Invoke - direkt nach Logon ist der Dispatcher (siehe
         // AlarmDispatcherReadyTimeout) unter Umständen noch nicht am Pumpen, sonst würde dieser
         // Aufruf den Empfangsthread bis zum Ende von OnStartup blockieren und der Ack käme beim
@@ -160,11 +169,20 @@ public sealed class AlarmFlowCoordinator
                 request.AlarmSessionId,
                 request.SentAtUtc);
 
+            BetriebsLog.Debug(LogModul, $"UI-Thread übernimmt, {MsSeitEmpfang(args)} ms nach dem Empfang.", vorgangsId: vorgangsId);
+            popup.ContentRendered += (_, _) => BetriebsLog.Debug(LogModul, $"Popup sichtbar, {MsSeitEmpfang(args)} ms nach dem Empfang.", vorgangsId: vorgangsId);
             popup.OnMyWayRequested += (_, _) => _ = ReportOnMyWayAsync(request, args);
             popup.Closed += (_, _) => _receivedSessions.PopupClosed(request.AlarmSessionId, popup.IsCloseAllowed);
 
             _receivedSessions.PopupShown(request.AlarmSessionId, popup);
             popup.Show();
+            BetriebsLog.Debug(LogModul, $"Popup geöffnet (Show), {MsSeitEmpfang(args)} ms nach dem Empfang.", vorgangsId: vorgangsId);
+
+            // Erst bei leerer Warteschlange: Bleibt der UI-Thread nach dem Zeichnen beschäftigt, beantwortet
+            // er auch keine UI-Automation-Anfragen; der Abstand zu „Popup sichtbar“ zeigt das.
+            popup.Dispatcher.BeginInvoke(
+                System.Windows.Threading.DispatcherPriority.ApplicationIdle,
+                () => BetriebsLog.Debug(LogModul, $"UI-Thread frei, {MsSeitEmpfang(args)} ms nach dem Empfang.", vorgangsId: vorgangsId));
         }, AppConstants.AlarmDispatcherReadyTimeout);
 
         // Ohne Aktion hat der Dispatcher nicht rechtzeitig angefangen: kein Fenster in dieser Welle.
@@ -175,8 +193,27 @@ public sealed class AlarmFlowCoordinator
             return;
         }
 
-        _ = _audioPlayer.PlayOnAllActiveDevicesAsync(soundOption);
+        // Eigener Task: Der synchrone Anfang der Tonausgabe (Geräte aufzählen, WASAPI initialisieren)
+        // kann kurz nach dem Start sekundenlang dauern und darf weder Quittung noch Empfang aufhalten.
+        _ = Task.Run(() => PlaySoundAsync(soundOption, vorgangsId));
     }
+
+    private async Task PlaySoundAsync(IncomingSoundCatalog.Option soundOption, string vorgangsId)
+    {
+        var start = Stopwatch.GetTimestamp();
+        try
+        {
+            await _audioPlayer.PlayOnAllActiveDevicesAsync(soundOption);
+            BetriebsLog.Debug(LogModul, $"Ton beendet nach {Stopwatch.GetElapsedTime(start).TotalMilliseconds:F0} ms.", vorgangsId: vorgangsId);
+        }
+        catch (Exception ex)
+        {
+            BetriebsLog.Fehler(LogModul, "Ton für den empfangenen Alarm konnte nicht abgespielt werden.", ex, vorgangsId: vorgangsId);
+        }
+    }
+
+    private static string MsSeitEmpfang(AlarmReceivedEventArgs args) =>
+        Stopwatch.GetElapsedTime(args.ReceivedTimestamp).TotalMilliseconds.ToString("F0");
 
     /// <summary>Every aggregated status update from the sender (FR-51): keeps a still-open receiver popup's threshold gate current.</summary>
     private void HandleStatusRelay(AlarmStatusRelayMessage relay)
@@ -213,6 +250,16 @@ public sealed class AlarmFlowCoordinator
     /// <summary>Hotkey-triggered send for one <see cref="AlarmProfile"/> (FR-50): resolves this sender's asymmetric recipient set and starts a repeating session.</summary>
     public void TriggerAlarmProfile(AlarmProfile profile)
     {
+        var identity = _identityProvider();
+        var groups = _sharedConfigProvider().DeviceGroups;
+
+        // Die Tastenkürzel aller Profile sind auf jedem Gerät registriert. Ist dieses Gerät im Profil
+        // kein Sender, gehört das Kürzel nicht ihm: keine Sitzung, kein Banner, kein Hinweis.
+        if (!RecipientResolver.IsSender(profile, identity.DeviceId, identity.RoomNumber, groups))
+        {
+            return;
+        }
+
         var removed = IsOwnDeviceRemoved();
         var blockReason = _licenseLimitGuard.GetOwnBlockReason();
         if (SendBlockNotice.For(removed, blockReason) is { } notice)
@@ -222,9 +269,7 @@ public sealed class AlarmFlowCoordinator
             return;
         }
 
-        var identity = _identityProvider();
         var devices = _deviceStore.Load();
-        var groups = _sharedConfigProvider().DeviceGroups;
         var targets = RecipientResolver.ResolveRecipientsForSender(profile, identity.DeviceId, identity.RoomNumber, devices, groups, excludeSender: true);
 
         // Issue #60: lizenzüberschrittene Empfänger sind für andere unerreichbar (siehe
@@ -240,14 +285,20 @@ public sealed class AlarmFlowCoordinator
         var disabledDeviceIds = _licenseLimitGuard.GetDisabledDeviceIds();
         targets = targets.Where(t => !disabledDeviceIds.Contains(t.DeviceId) && !t.Removed).ToList();
 
-        // Auch ohne Empfänger startet eine Sitzung (eine Welle, dann "nicht zugestellt"): Das
-        // Tastenkürzel darf nie wirkungslos bleiben, die Statusanzeige nennt Grund und Lösungsweg.
+        // Auch ohne Empfänger startet eine Sitzung (eine Welle im Audit-Log, keine Wiederholung): Das
+        // Tastenkürzel darf nie wirkungslos bleiben. Das Popup meldet "Kein Empfänger eingestellt!",
+        // später folgt ein neutraler Wartungshinweis, der den stillen Alarm nicht verrät.
         var session = new RepeatingAlarmSession(profile, targets, identity, _sender, _feedbackChannel, DateTimeOffset.UtcNow, CreateWaveDeviceLoader(profile.Id));
         System.Windows.Application.Current.Dispatcher.Invoke(() =>
         {
             var window = new SenderStatusWindow(session, profile.Name);
             window.Show();
         });
+
+        if (targets.Count == 0)
+        {
+            _ = MaintenanceHint.Schedule();
+        }
 
         _ = RunSessionAsync(session);
     }

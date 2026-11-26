@@ -45,7 +45,19 @@ public partial class GeraetBTests
         {
             var b = ZweiGeraete.EigeneDeviceId();
             var a = await ZweiGeraete.DeviceIdDerGegenseiteAsync("a");
-            await ZweiGeraete.BereiteAlarmprofilVorAsync(a, b);
+
+            // Zeitmessungen im Empfangspfad (#238) landen so im agent.log des Artefakts. Die Stufe wird beim
+            // Agent-Start gelesen; der Neustart steckt in BereiteAlarmprofilVorAsync. Dieser Agent bleibt auf DEBUG,
+            // ab seinem nächsten Start gilt wieder die alte Stufe.
+            var stufeVorher = R238Latenz.BetriebsLogAufDebug();
+            try
+            {
+                await ZweiGeraete.BereiteAlarmprofilVorAsync(a, b);
+            }
+            finally
+            {
+                R238Latenz.BetriebsLogZuruecksetzen(stufeVorher);
+            }
 
             // Erster UIA-Zugriff dieses Testprozesses dauert auf einer frischen VM teils über 10 s, deshalb vor der Marke.
             using var app = new HaelpMiApp();
@@ -61,10 +73,10 @@ public partial class GeraetBTests
             {
                 popup = app.WarteAufAlarmfenster(PopupTimeout);
             }
-            catch (TimeoutException)
+            catch (TimeoutException ex)
             {
                 // netzwerk.txt im Artefakt zeigt die Firewall-Regeln und ob 51501 lauscht.
-                Assert.Fail($"Kein Alarmfenster {PopupTimeout.TotalSeconds:0} s nach der Marke a-ausgeloest.");
+                Assert.Fail($"Kein Alarmfenster {PopupTimeout.TotalSeconds:0} s nach der Marke a-ausgeloest ({ex.Message}).");
                 throw;
             }
 

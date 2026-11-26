@@ -7,14 +7,17 @@ Stand: 2026-11-26
 - Release-Kandidat 1.0 in Vorbereitung (#204, DoD 5; #241): `CHANGELOG.md` Abschnitt
   „[1.0.0] – unveröffentlicht“, Versionshinweise `docs/release-notes/1.0.0.md`, Handtest
   `docs/handbuch/handtest-1.0.md`. Versionsvorschlag 1.0.0; `Directory.Build.props` steht noch auf
-  0.47.x und wird erst im Release-PR gesetzt. Vor dem RC fehlen noch #233 (B2, „Kein Empfänger
-  eingestellt!“) und #239 (#238, Quittung unabhängig von der Tonausgabe), beide im CHANGELOG als
-  „folgt“ geführt, sowie zwei grüne volle E2E-Läufe (DoD 3).
+  0.47.x und wird erst im Release-PR gesetzt. Inhaltlich vollständig: #233 (v0.47.38, #232,
+  „Kein Empfänger eingestellt!“ mit Hilfsprogramm `HaelpMi.Notify`) und #239 (v0.47.39, #238,
+  Alarmfenster sofort bedienbar, Quittung unabhängig von der Tonausgabe) sind gemergt. Vor dem RC
+  fehlen noch zwei grüne volle E2E-Läufe auf dem RC-Stand (DoD 3); bisher eine volle Suite grün auf
+  dem #239-Branch (Lauf 45865691457).
 - Entwicklung läuft auf `develop` (GitHub-Default) mit PATCH-Version und Tag pro Merge, Stand
-  v0.47.37. Milestone `v1.0` (geplant 08.01.2027). Alarmweg einschließlich Schließpfad (#136, #36),
+  v0.47.39. Milestone `v1.0` (geplant 08.01.2027). Alarmweg einschließlich Schließpfad (#136, #36),
   Empfangsbestätigung (#37, #182), Wiederholungstakt (#177), Erreichbarkeit beim Start (#73),
-  Firewall (#150, #222), Lizenz- und Sperrhinweise (#133, #179, #180, #181, #183) und Betriebs-Log
-  (#227, #214) sind auf `develop` gemergt.
+  Firewall (#150, #222), Erstinstallation (#229), Lizenz- und Sperrhinweise (#133, #179, #180,
+  #181, #183), Betriebs-Log (#227, #214), „Kein Empfänger eingestellt!“ (#232) und sofort
+  bedienbares Alarmfenster (#238) sind auf `develop` gemergt.
 - `main` nimmt nur noch Releases auf und steht noch auf v0.16.5 (1.0 wurde bisher nicht nach
   `main` übernommen); `legacy/main-0.39.x` ist der alte,
   nicht mehr weiterentwickelte Stand (siehe `docs/entscheidungen/0001-neustart-auf-v0-16.md`).
@@ -34,10 +37,16 @@ Stand: 2026-11-26
   Gossip überschreibt direkt gemeldete Adresse, Boot-Call vor Alarm-Port). Andere Ursachen aus dem
   Ticket (Mutex, Abbruch von `StartBackgroundServices`) sind damit nicht ausgeschlossen. In den
   Versionshinweisen 1.0.0 als bekannte Einschränkung („Startprobleme sind nicht sichtbar“, #226).
-- #233 (noch nicht gemergt): Absender und Symbol der Windows-Benachrichtigung „Wartung
-  erforderlich“ (`AssemblyTitle` „Arbeitsplatz-Dienst“) sind unter Windows nicht von Hand geprüft;
-  auf Altinstallationen kann Windows weiter „HaelpMi.Agent“ zeigen. Handtest 1.0 Abschnitt 3,
-  Versionshinweise „Bekannte Einschränkungen“.
+- #232 (PR #233): Absender „Arbeitsplatz-Dienst“ und neutrales Symbol der Windows-Benachrichtigung
+  „Wartung erforderlich“ (eigenes Hilfsprogramm `HaelpMi.Notify.exe`): Die Dateibeschreibung prüft
+  E2E (T1), die Anzeige von Absender und Symbol unter Windows ist nicht von Hand geprüft. Handtest
+  1.0 Abschnitt 3.
+- #224: Ursache vermutlich mit #238 beseitigt, nie reproduziert; `status:review`, Abschluss nach
+  weiteren grünen T20/T26-Läufen bzw. dem Handtest 1.0 Abschnitt 2 („Erster Alarm nach dem
+  Hochfahren“).
+- #244 (Barrierefreiheit): Alarmfenster erst 2,5–6 s nach dem Öffnen per UI-Automation
+  (Screenreader) erreichbar; Meldung „Kein Empfänger eingestellt!“ ohne Ansage. In den
+  Versionshinweisen 1.0.0 als bekannte Einschränkung geführt.
 - #180 (Owner-Entscheidung 22d): Altbestände mit `ForceEnabled` werden nicht migriert; Hinweis in
   den Versionshinweisen 1.0.0 („Update von einer Vorversion“).
 
@@ -46,8 +55,9 @@ Stand: 2026-11-26
 Nicht als Ausnahme freigegeben, Umsetzung steht noch aus:
 
 - Audit-Log ohne Hash-Kette, Aufbewahrung und Schutz (`src/HaelpMi.Core/Storage/AuditLog.cs`).
-- Betriebs-Log (`BetriebsLog.cs`, #227) bisher nur mit Start, Ende, Startfehlern und unbehandelten
-  Ausnahmen; die übrigen Module schreiben noch nicht hinein (erstes Modul: #214).
+- Betriebs-Log (`BetriebsLog.cs`, #227) bisher nur mit Start, Ende, Startfehlern, unbehandelten
+  Ausnahmen, Alarmempfang und Vordergrund (#238) sowie verworfenen Nachrichten fremder
+  Kundengruppen (#214); die übrigen Module schreiben noch nicht hinein.
 - Feste Werte im Code (z. B. Log-Laufwerk `Z:` in `SharedLogPaths.cs`, Ports in
   `AppConstants.cs`, dort bewusst fest).
 - Kein Linter/Formatierer konfiguriert.
@@ -72,9 +82,7 @@ Bei #151 aufgefallen, nicht Teil des Tickets, jeweils als eigenes Issue angelegt
 
 ## Nächste Schritte
 
-- #233 und #239 nach E2E-Nachweis mergen, danach im CHANGELOG und in den Versionshinweisen die
-  Markierung „(folgt)“ entfernen.
-- Volle E2E-Suite `a,b,c` zweimal grün (DoD 3), CI grün.
+- Volle E2E-Suite `a,b,c` auf dem RC-Stand (`develop` ab v0.47.39) zweimal grün (DoD 3), CI grün.
 - Release-PR: Version 1.0.0 in `Directory.Build.props`, Datum in CHANGELOG und Versionshinweisen,
   `dependency-check`. Vorher klären, ob der Weg über `release-1.0` (`AGENTS.md` Teil B, Ausnahme
   „Release-Stabilisierung“) oder direkt `develop` → `main` (#204, DoD 5) gilt.

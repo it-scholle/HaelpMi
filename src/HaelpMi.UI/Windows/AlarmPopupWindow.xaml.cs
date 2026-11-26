@@ -103,7 +103,7 @@ public partial class AlarmPopupWindow : Window
         var hwnd = new WindowInteropHelper(this).Handle;
         if (hwnd != IntPtr.Zero)
         {
-            ForegroundHelper.ForceForeground(hwnd);
+            ForegroundHelper.ForceForeground(hwnd, AlarmSessionId.ToString());
         }
     }
 
@@ -137,7 +137,7 @@ public partial class AlarmPopupWindow : Window
     private void OnLoaded(object sender, RoutedEventArgs e)
     {
         var hwnd = new WindowInteropHelper(this).Handle;
-        ForegroundHelper.ForceForeground(hwnd);
+        ForegroundHelper.ForceForeground(hwnd, AlarmSessionId.ToString());
 
         // A second attempt shortly after helps against some fullscreen apps that
         // re-assert their own foreground state right after losing it (5.3/6.).
@@ -147,7 +147,7 @@ public partial class AlarmPopupWindow : Window
             retryTimer.Stop();
             if (IsVisible)
             {
-                ForegroundHelper.ForceForeground(hwnd);
+                ForegroundHelper.ForceForeground(hwnd, AlarmSessionId.ToString());
             }
         };
         retryTimer.Start();

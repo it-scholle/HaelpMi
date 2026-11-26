@@ -64,9 +64,14 @@ und danach entweder ab- und wieder anmelden oder `HaelpMi.Agent.exe` im Installa
 
 - [ ] Tastenkürzel von P1 auf A → B und C zeigen das Alarmfenster **im Vordergrund**, auch über einer
       Vollbild-Anwendung (z. B. Video im Vollbild, PowerPoint-Präsentation).
-- [ ] Das Fenster ist **sofort** bedienbar (Knopf „Bin unterwegs“ reagiert ohne Verzögerung, auch
-      wenn HälpMi auf dem Empfänger gerade erst gestartet wurde: HälpMi auf B neu starten, nach ca.
-      10 s den Alarm auslösen). (folgt: #238)
+- [ ] Das Fenster ist **sofort** bedienbar: Der Knopf „Bin unterwegs“ reagiert ohne Verzögerung auf
+      Maus und Tastatur.
+- [ ] **Erster Alarm nach dem Hochfahren:** B neu starten (Windows-Neustart, nicht nur HälpMi),
+      anmelden, warten, bis das Tray-Symbol erscheint, dann ca. 10 s später P1 auf A auslösen →
+      das erste Alarmfenster auf B ist **sofort** bedienbar (kein „hängendes“ Fenster, Ton läuft),
+      und A zeigt B nach etwa einer Sekunde als empfangen. Dasselbe einmal nur mit HälpMi-Neustart
+      auf B (siehe oben). Bei Verzögerung: `agent.log` von B mit `betriebslog.json` auf DEBUG
+      (Abschnitt 7) wiederholen und beilegen, die Zeitmessungen „Alarmempfang“ zeigen, wo es hängt.
 - [ ] Raum und Raumnummer groß, Benutzername klein.
 - [ ] Ton auf B und C hörbar, auch bei stummgeschaltetem Windows-Ton.
 - [ ] Sender-Fenster auf A unten rechts: „Empfangen: 2 von 2“ spätestens mit der zweiten Welle
@@ -99,19 +104,18 @@ und danach entweder ab- und wieder anmelden oder `HaelpMi.Agent.exe` im Installa
 
 - [ ] Tastenkürzel von P3 auf A → Sender-Fenster zeigt sofort „Kein Empfänger eingestellt!“ und
       darunter „Info: Ein Admin muss im Dashboard Empfänger für dieses Profil einrichten.“ Kein
-      Zähler, kein „Abbrechen“; das Fenster blendet sich nach ca. 6 s selbst aus. (folgt: #233)
+      Zähler, kein „Abbrechen“; das Fenster blendet sich nach ca. 6 s selbst aus.
 - [ ] Ca. 30 s nach dem Drücken: Windows-Benachrichtigung „Wartung erforderlich“ mit „Ein
       Hintergrunddienst konnte eine Meldung nicht zustellen (Code H-00). Bitte die IT informieren.“
-      (folgt: #233)
-      - [ ] Absender lautet „Arbeitsplatz-Dienst“, auf einem **frisch** installierten Gerät.
-      - [ ] Nur falls vorhanden: Absender auf einem Gerät, auf dem früher schon eine Sprechblase von
-            HälpMi erschienen ist (z. B. „Autostart nicht eingerichtet“): Name notieren
-            („Arbeitsplatz-Dienst“ oder „HaelpMi.Agent“).
-      - [ ] Welches Symbol zeigt Windows neben dem Absender? Screenshot.
+      - [ ] Absender lautet „Arbeitsplatz-Dienst“ (nicht „HälpMi“ oder „HaelpMi.Agent“), auf einem
+            frisch installierten und auf einem von 0.46.x aktualisierten Gerät (Abschnitt 6).
+      - [ ] Neben dem Absender steht ein neutrales Windows-Symbol, nicht das HälpMi-Logo.
+            Screenshot.
+      - [ ] Spätestens 60 s danach läuft kein `HaelpMi.Notify.exe` mehr (Task-Manager → Details).
 - [ ] P3 dreimal innerhalb von 30 s drücken → genau **eine** Benachrichtigung.
 - [ ] `audit.log` auf A: genau eine Welle je Druck, keine Wiederholung.
 - [ ] Gerät B (in P3 nicht als Sender eingetragen) drückt das Tastenkürzel von P3 → **nichts**
-      passiert, kein Fenster, keine Benachrichtigung. (folgt: #233)
+      passiert, kein Fenster, keine Benachrichtigung.
 
 ## 4. Lizenz- und Sperrhinweise
 

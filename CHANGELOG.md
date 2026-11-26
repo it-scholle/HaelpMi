@@ -5,17 +5,17 @@ Einträge vor v0.47.4 sind aus den Git-Tags dieser Versionslinie erzeugt (Titel 
 Details stehen in der Git-Historie. Ab 1.0.0 nennt jeder Abschnitt nur Änderungen, die Anwender und Administratoren betreffen. Der eingefrorene Stand `legacy/main-0.39.x` ist hier nicht aufgeführt.
 
 ## [1.0.0] – unveröffentlicht
-Erste freigegebene Version. Aufgeführt ist, was sich gegenüber den Vorversionen 0.46.x für Anwender und Administratoren ändert. Änderungen an Entwicklungswerkzeugen, automatischen Tests und Arbeitsabläufen stehen nur in der Git-Historie. Einträge mit „(folgt)“ sind noch nicht im Stand enthalten und kommen vor der Freigabe dazu.
+Erste freigegebene Version. Aufgeführt ist, was sich gegenüber den Vorversionen 0.46.x für Anwender und Administratoren ändert. Änderungen an Entwicklungswerkzeugen, automatischen Tests und Arbeitsabläufen stehen nur in der Git-Historie.
 ### Neu
 - Betriebsprotokoll zur Fehlersuche: `agent.log` (Hintergrundprogramm) und `config.log` (Einstellungen und Dashboard) unter `%ProgramData%\HaelpMi`, ohne Alarmtexte oder andere Inhalte. Eine Datei pro Tag, ältere werden komprimiert und nach 90 Tagen gelöscht, höchstens 200 MB je Programm. Ein ausführlicheres Protokoll lässt sich ohne Update über `betriebslog.json` einschalten (#227)
 - Empfängt ein Gerät Nachrichten einer anderen HälpMi-Installation im selben Netz (z. B. ein mit falschem Installer eingerichtetes Gerät), steht das als Warnung im Betriebsprotokoll, höchstens einmal pro Stunde je Art und fremder Installation. Die Nachrichten werden wie bisher ignoriert (#214)
 - Die Installer richten die Windows-Firewall-Freigaben für HälpMi selbst ein; Windows fragt beim ersten Start nicht mehr nach (#150)
-- (folgt) Ist für ein Alarm-Profil kein Empfänger eingerichtet oder sind alle Empfänger deaktiviert, zeigt das Sender-Gerät sofort „Kein Empfänger eingestellt!“ mit dem Hinweis, dass ein Admin im Dashboard Empfänger einrichten muss; die Meldung blendet sich nach wenigen Sekunden aus. Nach 30 Sekunden erscheint zusätzlich eine Windows-Benachrichtigung „Wartung erforderlich“, höchstens eine pro 30 Sekunden (#233)
+- Ist für ein Alarm-Profil kein Empfänger eingerichtet oder sind alle Empfänger deaktiviert, zeigt das Sender-Gerät sofort „Kein Empfänger eingestellt!“ mit dem Hinweis, dass ein Admin im Dashboard Empfänger einrichten muss; die Meldung blendet sich nach wenigen Sekunden aus. Nach 30 Sekunden erscheint zusätzlich eine neutrale Windows-Benachrichtigung „Wartung erforderlich“ mit der Bitte, die IT zu informieren, höchstens eine pro 30 Sekunden. Absender ist „Arbeitsplatz-Dienst“, ein kleines neues Hilfsprogramm (`HaelpMi.Notify.exe`) im Programmordner, damit die Benachrichtigung den Alarm nicht verrät (#232)
 ### Verbessert
 - HälpMi läuft auf .NET 10 (Langzeit-Support bis November 2028) statt .NET 8; die Laufzeit ist im Installer enthalten, eine eigene .NET-Installation ist nicht nötig (#154)
 - Einheitliche Linien-Symbole; Symbol-Schaltflächen haben eine Textalternative für Screenreader (#151)
 - Die Versionsnummer im Installer und im Programm stimmt immer überein (#168)
-- (folgt) Ein Gerät, das in einem Alarm-Profil nicht als Sender eingetragen ist, reagiert auf dessen Tastenkürzel nicht mehr und zeigt keine Meldung (#233)
+- Ein Gerät, das in einem Alarm-Profil nicht als Sender eingetragen ist, reagiert auf dessen Tastenkürzel nicht mehr und zeigt keine Meldung (#232)
 ### Behoben
 - Das Alarmfenster ließ sich in seltenen Fällen nicht schließen oder öffnete sich direkt nach dem Schließen noch einmal. Nach Erreichen der Schwelle, nach einem Abbruch durch den Sender und nach Ablauf lässt es sich jetzt zuverlässig schließen; spätere Wiederholungen desselben Alarms öffnen kein neues Fenster (#136)
 - Bricht der Sender einen Alarm ab, wird das an alle Empfänger übertragen, und deren Fenster lassen sich sofort schließen (#36)
@@ -33,7 +33,7 @@ Erste freigegebene Version. Aufgeführt ist, was sich gegenüber den Vorversione
 - Der Hinweis „Alarm nicht gesendet“ auf einem gesperrten Gerät erscheint als eigenes Fenster im Vordergrund statt verdeckt unter einer anderen Meldung (#179)
 - Wieder-Aktivieren eines Geräts im Reiter „Geräte / Lizenz“ hebt nur die Deaktivierung auf; das Gerät umgeht das Lizenzkontingent nicht mehr dauerhaft (#180)
   - Hinweis für bestehende Installationen: Geräte, die vorher wieder aktiviert wurden, umgehen das Kontingent weiterhin. Es gibt keine automatische Umstellung; ein Admin schaltet solche Geräte im Reiter „Geräte / Lizenz“ einmal aus und wieder ein.
-- (folgt) Das Alarmfenster ist sofort bedienbar und der Sender erhält die Empfangsbestätigung, auch wenn die Tonausgabe kurz nach dem Start von HälpMi länger braucht; vorher konnte das Fenster bis zu rund 20 Sekunden nicht reagieren (#238)
+- Das Alarmfenster ist auf dem Empfänger sofort bedienbar, auch beim ersten Alarm nach dem Hochfahren, und der Sender sieht „empfangen“ nach etwa einer Sekunde. Vorher konnte das Fenster bis zu 24 Sekunden lang nicht reagieren, und die Empfangsbestätigung kam so spät, weil sie auf den Start des Alarmtons wartete (#238)
 
 ## [0.47.3] – 2026-11-18
 - Einrichtungs-Skript für die E2E-Vorlagen-VM (#165)

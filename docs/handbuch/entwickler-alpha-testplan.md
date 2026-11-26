@@ -207,9 +207,23 @@ im Code schon als seltene Startrace eingeplant habe, aber nicht selbst timen kon
       zwei verschiedenen Geräten → Sender-Wiederholung stoppt danach automatisch
 - [ ] "Abbrechen" auf dem Sender-Status-Fenster beendet die Wiederholung sofort
 - [ ] Tastenkürzel eines Alarm-Profils drücken, in dem für dieses Gerät keine Empfänger
-      eingerichtet sind → Status-Fenster erscheint trotzdem, sofort mit "Alarm nicht zugestellt",
-      "Empfangen: 0 von 0" und dem Hinweis, wo ein Admin die Empfänger zuordnet; keine
-      Wiederholung (eine Zeile im `audit.log`), "Schließen" (X) schließt es
+      eingerichtet sind → das gewohnte Status-Fenster unten rechts erscheint sofort mit
+      "Kein Empfänger eingestellt!" und "Info: Ein Admin muss im Dashboard Empfänger für
+      dieses Profil einrichten.", ohne "Empfangen: x von y" und ohne "Abbrechen"; es blendet
+      sich nach etwa 6 Sekunden selbst aus; keine Wiederholung (eine Zeile im `audit.log`).
+      Gleiches, wenn alle eingerichteten Empfänger deaktiviert sind
+- [ ] Etwa 30 Sekunden nach dem vorigen Punkt erscheint eine Windows-Benachrichtigung
+      "Wartung erforderlich" mit dem Text "Ein Hintergrunddienst konnte eine Meldung nicht
+      zustellen (Code H-00). Bitte die IT informieren." Als Absender steht dort
+      "Arbeitsplatz-Dienst" mit neutralem Standardsymbol, nirgends "HälpMi" oder "HaelpMi".
+      Mehrmaliges Drücken innerhalb der 30 Sekunden ergibt nur eine Benachrichtigung. Im
+      Task-Manager erscheint dabei kurz "Arbeitsplatz-Dienst" (`HaelpMi.Notify.exe`), der
+      Agent selbst heißt dort weiter wie bisher ("HaelpMi.Agent"). Notieren, welches Symbol neben dem
+      Absender steht. Nach etwa einer Minute im Benachrichtigungscenter nachsehen, ob der
+      Hinweis dort noch steht (das Hilfsprogramm hat sich dann beendet). Mit "Nicht stören" bzw. ausgeschalteten Benachrichtigungen landet sie nur
+      im Infobereich bzw. entfällt (Windows-Verhalten)
+- [ ] Tastenkürzel eines Alarm-Profils drücken, in dem dieses Gerät gar nicht als Sender
+      eingetragen ist → nichts passiert (kein Status-Fenster, kein Hinweis)
 
 **Melde zurück:** Vor allem der erzwungene Vordergrund (bei Vollbild-Anwendungen/Spielen)
 und der Signalton bei Stummschaltung sind die Punkte, die ich am wenigsten selbst prüfen

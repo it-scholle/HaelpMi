@@ -24,6 +24,7 @@ zurücksetzen.
    ```
    dotnet publish src\HaelpMi.Agent\HaelpMi.Agent.csproj -c Release -r win-x64 -p:Platform=x64 --self-contained true -p:PublishReadyToRun=true -o installer\payload
    dotnet publish src\HaelpMi.Config\HaelpMi.Config.csproj -c Release -r win-x64 -p:Platform=x64 --self-contained true -p:PublishReadyToRun=true -o installer\payload
+   dotnet publish src\HaelpMi.Notify\HaelpMi.Notify.csproj -c Release -r win-x64 -p:Platform=x64 --self-contained true -p:PublishReadyToRun=true -o installer\payload
    dotnet publish src\HaelpMi.UpdateService\HaelpMi.UpdateService.csproj -c Release -r win-x64 -p:Platform=x64 --self-contained true -p:PublishReadyToRun=true -o installer\payload
    installer\inno-compiler\ISCC.exe installer\HaelpMi.iss
    installer\inno-compiler\ISCC.exe installer\HaelpMi-Admin.iss

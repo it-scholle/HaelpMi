@@ -24,7 +24,7 @@ public enum AlarmStopReason
     MaxDuration,
     ThresholdReached,
     Cancelled,
-    /// <summary>Keine Empfänger: genau eine Welle, dann Ende als "nicht zugestellt".</summary>
+    /// <summary>Keine Empfänger: genau eine Welle, dann Ende ohne Wiederholung.</summary>
     NoRecipients,
 }
 
