@@ -156,7 +156,7 @@ Läuft auf bis zu drei Wegwerf-VMs auf pve-nzxt (A = Admin-Gerät, B und C = Use
 
 | # | Test | Gerät | FR-Bezug |
 |---|---|---|---|
-| T1 | Stille Installation (Admin- bzw. User-Installer): Programmordner, ProgramData, Rolle in `deployment.json`, unveränderte DeviceId/Raum in `settings.json`, Startmenü-Verknüpfung, geplante Aufgabe, Agent läuft; eingehende Firewall-Programmregel „HälpMi Agent“, nur A zusätzlich „HälpMi Konfiguration“, beide laut Setup-Log vor dem ersten HälpMi-Start angelegt; keine Inbound-Block-Regel mit HälpMi-Programmpfad (#222); `agent.log` liegt neben `crash.log`, jede Zeile ist JSON mit Zeit (mit Zone), Stufe, Prozess, Modul und Meldung, der Start steht als INFO darin, DEBUG ist aus (#227) | A, B, C | FR-3, FR-4, FR-34, FR-35, FR-37, NFR-2 |
+| T1 | Stille Installation (Admin- bzw. User-Installer): Programmordner, ProgramData, Rolle in `deployment.json`, unveränderte DeviceId/Raum in `settings.json`, Startmenü-Verknüpfung, geplante Aufgabe, Agent läuft; eingehende Firewall-Programmregel „HälpMi Agent“, nur A zusätzlich „HälpMi Konfiguration“, beide laut Setup-Log vor dem ersten HälpMi-Start angelegt; keine Inbound-Block-Regel mit HälpMi-Programmpfad (#222); `agent.log` liegt neben `crash.log`, jede Zeile ist JSON mit Zeit (mit Zone), Stufe, Prozess, Modul und Meldung, der Start steht als INFO darin, DEBUG ist aus (#227). Mit `produkt_ref` laufen die Firewall- und Log-Prüfungen nur ab ihrer Einführungsversion (siehe „Altstände“) | A, B, C | FR-3, FR-4, FR-34, FR-35, FR-37, NFR-2 |
 | T2 | Verknüpfung "HälpMi Dashboard" öffnet das Admin-Dashboard ohne neuen `crash.log`-Eintrag | A | FR-4 |
 | T3 | Selbsttest: Alarmfenster im Vordergrund mit "Raum (Nummer)", "Bin unterwegs", Schließen erst danach aktiv | A | FR-27, FR-40, FR-51 |
 | T4 | Discovery: die Gegenseite steht nach spätestens 60 s mit Adresse in `devices.json` | A, B | – |
@@ -165,7 +165,7 @@ Läuft auf bis zu drei Wegwerf-VMs auf pve-nzxt (A = Admin-Gerät, B und C = Use
 | T7 | Config-Sync: A ändert Name, Schwelle und Hotkey von P2, B übernimmt ohne Neustart (Version, Audit-Zeile, "Meine Alarme"; Latenz wird gemessen), altes Kürzel wirkungslos, neues wirkt | A, B | – |
 | T8 | Gerät B im Dashboard deaktivieren: B empfängt nicht (auch nicht bei Direktversand am Filter von A vorbei) und sendet nicht, Toast und Hinweis auf B; nach dem Aktivieren steht B in `devices.json` von A auf `LicenseOverride` None (#180) und beide Richtungen gehen wieder | A, B | – |
 | T9 | Lizenz in fünf Stufen, Dateiwechsel jeweils mit gestoppten Agents auf beiden Geräten (sonst Übernahme per Gossip). L1 ohne Lizenz: A Erinnerungs-Toast, Banner, Bearbeitung gesperrt, Selbsttest geht; B Sperr-Toast, Hotkey nur mit Hinweis, Direktversand unbestätigt. L2 Import im Dashboard ohne Neustart: Toast weg, Bearbeitung frei, B übernimmt per Gossip (Latenz wird gemessen), Alarm A an B. L3 läuft in 10 Tagen ab: Warnung ohne Sperre, Alarm geht, "Später erinnern" hält über einen Neustart. L4 abgelaufen: Alarme in beide Richtungen (Soft-Expiry), A Toast und Sperre, B Hinweis-Toast „Lizenz … abgelaufen … Alarme weiter“ (#181). L5 gültige Lizenz zurück | A, B | – |
-| T10 | Regression #136, `zyklen` Durchläufe (Default 25) mit eigenem Profil A an B (Schwelle 1, Config-Version 5000). Variante N: "Bin unterwegs" mit Versatz von -400 bis +400 ms zur nächsten Repeat-Welle (Phase aus den ms-Zeitstempeln "alarm received" in `audit.log` von B), sofort schließen, 8 s auf ein zweites Fenster achten. Variante W: A schickt nach dem Schließen dieselbe Session per `AlarmSender` noch einmal (Nachwelle), B beobachtet 8 s. Ergebnis je Zyklus in `out\r136-<Agent-Version>.csv`, Quoten in `r136-zusammenfassung.json`. Rot, wenn W ohne `produkt_ref` ein zweites Fenster zeigt; mit `produkt_ref` nur Messung | A, B | – |
+| T10 | Regression #136, `zyklen` Durchläufe (Default 25) mit eigenem Profil A an B (Schwelle 1, Config-Version 5000). Variante N: "Bin unterwegs" mit Versatz von -400 bis +400 ms zur nächsten Repeat-Welle (Phase aus den ms-Zeitstempeln "alarm received" in `audit.log` von B), sofort schließen, 8 s auf ein zweites Fenster achten. Variante W: A schickt nach dem Schließen dieselbe Session per `AlarmSender` noch einmal (Nachwelle), B beobachtet 8 s. Ergebnis je Zyklus in `out\r136-<Agent-Version>.csv`, Quoten in `r136-zusammenfassung.json`. Rot (Marke `[T10W]`), wenn W ein zweites Fenster zeigt, auch mit `produkt_ref`; rot ohne Marke, wenn alle Nachwellen übersprungen wurden; Gegenprobe auf dem Altstand als Negativtest mit `ERWARTET_ROT=T10W` | A, B | – |
 | T11 | Discovery mit drei Geräten: A und B kennen C, C kennt A und B (je nach spätestens 60 s mit Adresse in `devices.json`) | A, B, C | – |
 | T12 | Alarm per Hotkey von A an B und C mit Schwelle 2 (eigenes Profil, Config-Version 1100): Popup auf B und C mit Raum von A. B meldet "Bin unterwegs", Schließen bleibt auf B 5 s gesperrt, C zeigt "noch 1". Nach der Meldung von C wird Schließen auf beiden frei; A zeigt beide Räume unter "Auf dem Weg" und "Empfangen: 2 von 2". Danach beendet C seinen Agent | A, B, C | FR-47, FR-50, FR-51, FR-53 |
 | T13 | Regression #182: eigenes Profil A an B (Schwelle 1, Config-Version 6000), kein "Bin unterwegs". Nach "Empfangen: 1 von 1" auf A beendet B seinen Agent, A beobachtet das Banner 15 s lang. Rot, wenn trotz mindestens einer weiteren, unquittierten Welle (`audit.log` von A) ein anderer Text als "Empfangen: 1 von 1" erscheint; danach startet B den Agent wieder | A, B | FR-14, FR-53 |
@@ -173,8 +173,8 @@ Läuft auf bis zu drei Wegwerf-VMs auf pve-nzxt (A = Admin-Gerät, B und C = Use
 | T15 | Regression #133: A deaktiviert B im Dashboard, das Banner "Lizenzkontingent überschritten" bleibt 10 s aus; B zeigt den Sperr-Toast mit Grund "Gerät deaktiviert" (Titel und Text je Sperrgrund aus `LicenseBlockTexts`). A aktiviert B danach in einem neu geöffneten Dashboard wieder, der Toast auf B ist weg | A, B | – |
 | T16 | Regression #180: A deaktiviert B im Reiter "Geräte / Lizenz", wartet, bis B `ForceDisabled` übernommen hat, und aktiviert es wieder. Rot, wenn B danach in `devices.json` von A nicht auf `LicenseOverride` None steht (vor dem Fix: ForceEnabled, B umgeht dann das Kontingent). B prüft, dass es None per Gossip in `settings.json` übernimmt | A, B | – |
 | T17 | Regression #181: A und B bekommen aus `lizenz-kurz/` die Lizenz, die als nächste, aber frühestens 3 min später abläuft (gleiche Ausstellungszeit wie `lizenz.json`). A schließt den Start-Toast „läuft in 0 Tag(en) ab“. Rot, wenn ohne Agent-Neustart bis 60 s nach dem Ablauf auf A kein Toast „Lizenz seit … abgelaufen“ bzw. auf B kein Hinweis „… abgelaufen … Alarme weiter …“ erscheint. Danach beide wieder `lizenz.json` | A, B | – |
-| T18 | Regression #136 mit drei Geräten, `zyklen` Durchläufe: A alarmiert B und C mit Schwelle 2 (eigenes Profil, Config-Version 1200). B und C klicken "Bin unterwegs" wie in T10 Variante N mit demselben Versatz von -400 bis +400 ms zur nächsten Repeat-Welle (je eigene Wellenphase), schließen sofort, sobald frei, und achten 8 s auf ein zweites Fenster; keine Nachwelle. Läuft nach einem Neustart eines Empfängers der Alarm noch, bricht A ihn ab. Ergebnis je Empfänger in `out\r136-drei-<b\|c>-<Agent-Version>.csv` und `r136-drei-<b\|c>-zusammenfassung.json`. Rot ohne `produkt_ref`, wenn ein zweites Fenster erscheint, Schließen nicht frei wird oder das Fenster offen bleibt; mit `produkt_ref` nur Messung. Danach beendet C seinen Agent wieder | A, B, C | FR-47, FR-50, FR-51 |
-| T19 | Regression #136 "Mehrfach-Nachwelle", `zyklen` Durchläufe, Trait `Teil=MehrfachNachwelle` (zusätzlich zu `Teil=DreiGeraete`): A alarmiert B und C mit Schwelle 2 (eigenes Profil, Config-Version 1300). B und C klicken sofort "Bin unterwegs" und "Schließen", sobald frei. Danach schickt A per `AlarmSender` 3 bis 5 weitere Wellen derselben Session an beide, jeweils nach 0,5 bis 2 s (zufällig, pro Zyklus reproduzierbar). B klickt jedes wieder erscheinende Fenster sofort erneut weg ("Bin unterwegs", "Schließen", wie beim Kunden), C zählt nur. Gezählt wird je Zyklus und Empfänger die Zahl der verschiedenen Alarmfenster (Fenster-Handles, erwartet 1) und, ob "Bin unterwegs" wieder aktiv war (Rücksetzung); beobachtet wird bis 3 s nach der letzten Nachwelle. Ergebnis in `out\r136-mehrfach-<b\|c>-<Agent-Version>.csv` und `r136-mehrfach-<b\|c>-zusammenfassung.json`. Rot ohne `produkt_ref` bei mehr als einem Fenster, einer Rücksetzung, nie freiem Schließen, offen gebliebenem Fenster oder wenn in einem Zyklus keine Nachwelle ankam (`alarm received` im `audit.log`); mit `produkt_ref` nur Messung. Danach beendet C seinen Agent wieder | A, B, C | FR-50, FR-51 |
+| T18 | Regression #136 mit drei Geräten, `zyklen` Durchläufe: A alarmiert B und C mit Schwelle 2 (eigenes Profil, Config-Version 1200). B und C klicken "Bin unterwegs" wie in T10 Variante N mit demselben Versatz von -400 bis +400 ms zur nächsten Repeat-Welle (je eigene Wellenphase), schließen sofort, sobald frei, und achten 8 s auf ein zweites Fenster; keine Nachwelle. Läuft nach einem Neustart eines Empfängers der Alarm noch, bricht A ihn ab. Ergebnis je Empfänger in `out\r136-drei-<b\|c>-<Agent-Version>.csv` und `r136-drei-<b\|c>-zusammenfassung.json`. Rot (Marke `[T18F]`), wenn ein zweites Fenster erscheint, Schließen nicht frei wird oder das Fenster offen bleibt, auch mit `produkt_ref`. Danach beendet C seinen Agent wieder | A, B, C | FR-47, FR-50, FR-51 |
+| T19 | Regression #136 "Mehrfach-Nachwelle", `zyklen` Durchläufe, Trait `Teil=MehrfachNachwelle` (zusätzlich zu `Teil=DreiGeraete`): A alarmiert B und C mit Schwelle 2 (eigenes Profil, Config-Version 1300). B und C klicken sofort "Bin unterwegs" und "Schließen", sobald frei. Danach schickt A per `AlarmSender` 3 bis 5 weitere Wellen derselben Session an beide, jeweils nach 0,5 bis 2 s (zufällig, pro Zyklus reproduzierbar). B klickt jedes wieder erscheinende Fenster sofort erneut weg ("Bin unterwegs", "Schließen", wie beim Kunden), C zählt nur. Gezählt wird je Zyklus und Empfänger die Zahl der verschiedenen Alarmfenster (Fenster-Handles, erwartet 1) und, ob "Bin unterwegs" wieder aktiv war (Rücksetzung); beobachtet wird bis 3 s nach der letzten Nachwelle. Ergebnis in `out\r136-mehrfach-<b\|c>-<Agent-Version>.csv` und `r136-mehrfach-<b\|c>-zusammenfassung.json`. Rot (Marke `[T19F]`) bei mehr als einem Fenster, einer Rücksetzung, nie freiem Schließen oder offen gebliebenem Fenster, auch mit `produkt_ref`; rot ohne Marke, wenn in einem Zyklus keine Nachwelle ankam (`alarm received` im `audit.log`, Messung sagt nichts aus). Danach beendet C seinen Agent wieder | A, B, C | FR-50, FR-51 |
 | T20 | Regression #177, Wiederholungstakt (Trait `Bereich=R177`): eigenes Profil A an B (Schwelle 1, Config-Version 6100), B startet seinen Agent vorher neu, der Alarm ist also sein erster Empfang. B misst die Abstände der ersten drei Wellen (`alarm received` im `audit.log`) und die Dauer einer UI-Automation-Abfrage am frisch geöffneten Alarmfenster, beendet dann seinen Agent. A beobachtet danach 20 s lang die Wellen ohne Quittung (`alarm sent`). Rot, wenn ein Abstand über 6 s liegt, A in 20 s weniger als 3 Wellen sendet oder die UIA-Abfrage länger als 2 s dauert. Ergebnisse in `out\t20-takt-a.txt` und `out\t20-takt-b.txt`. Vor dem Fix: erste Welle nach Agent-Start 6,3–6,8 s, ohne Quittung 15 s (Quittungs-Timeout + Relay-Timeout + Pause) | A, B | FR-50 |
 | T21 | Regression #176 (Trait `Bereich=R176`, Priorität 25, direkt nach T1): Selbsttest auf A ohne Alarm-Profil. Erwartet eine Meldung des Einstellungsfensters mit Grund („Alarm-Profil“) und Lösungsweg („Dashboard“), kein Alarmfenster; „Ja“ öffnet das Admin-Dashboard. Rot, wenn keine Meldung erscheint (vor dem Fix: nichts passiert) | A | FR-27 |
 | T22 | Regression #41 (Trait `Bereich=R41`, Priorität 155, nach T17): eigenes Profil ohne Empfänger für A (Config-Version 1400), A drückt das Tastenkürzel. Erwartet das Sender-Banner mit „Alarm nicht zugestellt“, „Empfangen: 0 von 0“, den Hinweis „kein Gerät … Dashboard“ (`NoRecipientsText`) und „Abbrechen“ inaktiv; nach 12 s genau eine Welle im `audit.log` (keine Wiederholung); „Schließen“ schließt das Banner. Rot, wenn kein Banner erscheint (vor dem Fix: das Tastenkürzel löste nichts aus) | A | FR-50, FR-53 |
@@ -211,10 +211,78 @@ weil `workflow_dispatch` nur Workflows vom Default-Branch startet):
   passen in das Zeitlimit.
 - `vms` / `VMS`: Geräteauswahl, geprüft im Job `plan` (`ci/e2e/geraete.sh`); aus ihr entstehen die
   Matrix der Test-Jobs, die VMIDs für Reset und Stopp und die Argumente des Relays.
+- `erwartung` / `ERWARTUNG`: `positiv` (Standard, leer) oder `negativ`. Grundregel (AGENTS.md Teil B):
+  **Grün heißt immer, das Ergebnis ist gewollt; rot heißt immer, es ist ungewollt.** Ein positiver Lauf ist
+  grün, wenn alle Tests bestehen. Ein **Negativtest** ist die absichtliche Gegenprobe auf dem Stand vor dem
+  Fix (Regressionsnachweis, Muster T10): er ist **grün genau dann, wenn genau die erwarteten Tests
+  fehlschlagen** und alle anderen bestehen. `negativ` ist nur zusammen mit `produkt_ref` und `erwartet_rot`
+  erlaubt, sonst bricht der Build-Job ab. Kennzeichnung: Run-Name „Negativtest (erwartet: Fehler …) –
+  PRODUKT_REF=…“ (nur bei `workflow_dispatch`; beim Label-Lauf ist `lauf.env` beim Start noch nicht lesbar),
+  Zusatz „(Negativtest)“ an den Test-Jobs und eine Überschrift in der Step Summary. Die Test-Jobs enden bei
+  Testfehlern nicht rot; sie legen den Exit-Code von `dotnet test` als `dotnet-test-exitcode.txt` neben die
+  trx-Datei. Der Job „Negativtest auswerten“ liest beides aus den Artefakten `e2e-<gerät>`
+  (`ci/e2e/erwartung-auswerten.py`). Rot sind: ein Kürzel ohne passenden Fehlschlag (der Regressionstest
+  erkennt den Fehler nicht), ein Fehlschlag, der zu keinem Kürzel passt, ein anderes Ergebnis als
+  bestanden/fehlgeschlagen/nicht ausgeführt, ein abgebrochener Testlauf, ein Gerät ohne Artefakt oder
+  Exit-Code, ein Exit-Code ungleich 0 ohne fehlgeschlagenen Test, ein Fehler des Testlaufs selbst
+  (Testhost-Absturz, xunit „Catastrophic failure“: `RunInfo` mit `Error` in der trx) und ein nicht
+  erfolgreicher Test-Job. Die Summary nennt erwartete Fehlschläge mit Meldung, unerwartete Ergebnisse und das
+  Urteil „Negativtest bestanden ✔“ bzw. „NICHT bestanden ✘“.
+- `erwartet_rot` / `ERWARTET_ROT`: Pflicht bei `negativ`, sonst leer. T-Kürzel, kommagetrennt, z. B. `T22`
+  oder `T6,T10W` (geprüft: `T`, 1–3 Ziffern ohne führende Null, optional ein Großbuchstabe; Leerzeichen werden entfernt). `T22`
+  steht für jeden Fehlschlag eines Tests `T22_…` auf jedem Gerät (auch Gegenseiten mit gleicher Nummer, z. B.
+  T23 auf A und B). Ein Buchstabe benennt ein bestimmtes **Fehlerbild**: `T10W` zählt nur, wenn die
+  Fehlermeldung von `T10_…` die Marke `[T10W]` trägt. So wird ein T10, der an einem Rendezvous-Timeout statt an
+  der Nachwelle scheitert, als unerwartet gewertet statt als Nachweis. Marken setzen die Tests selbst in ihre
+  Assert-Meldung; vorhanden sind `[T10W]` (Nachwelle öffnet ein zweites Fenster), `[T18F]` und `[T19F]`
+  (Fenster-Fehlerbild von #136) sowie `[T1P]`, `[T1R]` und `[T1L]` (Teilprüfungen von T1, siehe „Altstände“). Kürzel statt regulärer Ausdrücke, weil eine Liste genau sagt, welche Tests rot
+  sein müssen („genau die erwarteten“), `T2` nicht versehentlich T20 bis T29 trifft und die Eingabe sich
+  einfach gegen Einschleusen prüfen lässt. Selbsttest der Auswertung:
+  `python3 -m unittest discover -s ci/e2e/tests` (läuft in der CI).
+- Keine „nur messen“-Sonderfälle mehr: T10, T18 und T19 asserten auch mit `produkt_ref`. Ein positiver Lauf
+  gegen einen Altstand mit dem Fehler ist deshalb rot (ungewollt); wer den Fehler dort nachweisen will, startet
+  einen Negativtest. Die Messdaten (CSV, `r136-*-zusammenfassung.json`) liegen weiter im Artefakt.
+- Ein Negativtest prüft nie den Stand des Branches und zählt nicht als E2E-Gate; dafür braucht der PR
+  zusätzlich einen positiven Lauf. `ci/e2e/lauf.env` vor dem Merge wieder leeren.
+- Folgefehler („Test tN ist auf der Gegenseite gescheitert“, aus `Rendezvous.WaitForAsync`) zählen nie als
+  Nachweis, nur als erlaubter Begleiter eines eigentlichen Fehlschlags mit demselben Kürzel. Damit ein Fehler
+  im Abschluss-Assert keine Folgefehler auslöst, melden die Empfänger von T10, T18 und T19 nach ihrer letzten
+  Marke `Rendezvous.Abschliessen` (danach kein Abbruch mehr an die Gegenseite), und eine schon gespiegelte
+  Marke gilt beim Warten vor einer Abbruch-Marke.
+- Ob ein erwarteter Test aus dem richtigen Grund fehlschlug, sichern nur Fehlerbild-Marken ab; ohne Marke
+  zählt jeder eigene Fehlschlag des Tests. Die Meldungen unter „Erwartete Fehlschläge“ in der Summary deshalb lesen.
+- **Altstände** (gilt nur mit `produkt_ref`, positiv wie negativ). Ohne `produkt_ref` wird immer alles geprüft.
+  - Teilprüfungen in T1 für Features, die erst später kamen, laufen nur, wenn die installierte Agent-Version
+    (Dateiversion von `HaelpMi.Agent.exe`) mindestens die Einführungsversion ist (`tests/HaelpMi.E2E.Tests/Altstand.cs`):
+    Firewall-Programmregeln ab v0.47.26 (#150), Regeln vor dem ersten Start und keine Block-Regel ab v0.47.28
+    (#222), `agent.log` ab v0.47.35 (#227). Sonst steht die Prüfung als „übersprungen: … Feature erst ab vX“ in
+    `out\uebersprungen.txt`, in der Step Summary des Test-Jobs und im Bericht „Negativtest auswerten“
+    (ändert das Urteil nicht). Ist die Version nicht lesbar, wird geprüft.
+    Grundlage ist die Versionsnummer: ein `produkt_ref` auf einen nicht gemergten Branch trägt noch die alte
+    Nummer, dort entfallen die Prüfungen auch, wenn das Feature schon drin ist (steht im Protokoll).
+  - Jede dieser Teilprüfungen trägt eine Fehlerbild-Marke: `[T1P]` Programmregeln, `[T1R]` Regeln vor dem
+    ersten Start/Block-Regel, `[T1L]` `agent.log`. Negativtest zu #222 also mit `ERWARTET_ROT=T1R` gegen
+    v0.47.27: Die Prüfung mit dieser Marke läuft immer, die übrigen nach Version (dort läuft T1P mit, T1L
+    entfällt), und nur ein Fehlschlag mit `[T1R]` zählt als Nachweis. `T1R` setzt die Programmregeln voraus;
+    gegen einen Stand davor (unter v0.47.26) scheitert T1 ohne Marke, der Negativtest ist dann rot statt aus dem
+    falschen Grund grün. Fehler, die keine Assert-Fehler sind (z. B. eine nicht lesbare JSON-Zeile), tragen keine
+    Marke und zählen nie als Nachweis. Steht `T1` ohne Buchstaben in `erwartet_rot`, wird nichts übersprungen und
+    jeder Fehlschlag von T1 zählt.
+  - Alle übrigen Tests, vor allem die Regressionstests (T10, T13 bis T25), werden nie übersprungen: Sie sind der Nachweis und sollen auf
+    dem Altstand rot werden.
+  - Legt der Installer des Produktstands keine Firewall-Programmregeln an (Stand vor #150, erkannt am
+    Installer-Quelltext und an `<Version>` unter 0.47.26), legt der Test-Job vor den Tests die frühere Testvorbereitung „Firewall-Freigabe
+    (Umgehung für Altstände)“ an: Inbound-Allow-Regeln „HaelpMi E2E Agent/Config (Testvorbereitung)“ für
+    `HaelpMi.Agent.exe` und `HaelpMi.Config.exe`. Sonst verdeckt die Windows-Firewall-Abfrage das Alarmfenster und
+    Discovery/Alarm kommen nicht an (T4, T5, T10 …). Die Summary vermerkt die Umgehung.
 
-Alle Werte werden per Regex geprüft, sonst bricht der Build-Job ab. Vergleichslauf #136 gegen den
-Stand vor dem Fix: in `ci/e2e/lauf.env` `PRODUKT_REF=v0.46.1` und `FILTER=Bereich=Basis|Bereich=R136`
-(mit `VMS=a,b,c` auch T18) committen, Label `e2e` setzen, danach die Datei wieder leeren.
+Alle Werte werden per Regex geprüft, sonst bricht der Build-Job ab. Negativtest #136 gegen den
+Stand vor dem Fix: in `ci/e2e/lauf.env` `PRODUKT_REF=v0.46.1`, `FILTER=Bereich=Basis|Bereich=R136`,
+`VMS=a,b`, `ERWARTUNG=negativ` und `ERWARTET_ROT=T10W` committen, Label `e2e` setzen, danach die Datei wieder
+leeren (mit `VMS=a,b,c` laufen T18/T19 mit; schlagen sie auf dem Altstand fehl, gehören `T18F`/`T19F` in die
+Liste). Negativtest für einen Bugfix, z. B. #41: `PRODUKT_REF=v0.47.32` (Stand vor dem Fix),
+`FILTER=Bereich=Basis|Bereich=R41`, `ERWARTUNG=negativ`, `ERWARTET_ROT=T22`. Grün heißt dann „Fehler auf dem
+Altstand nachgewiesen“; der Lauf auf dem Ticket-Branch selbst läuft positiv (`ERWARTUNG` leer).
 
 Gate-Einordnung: verbindlich ist `AGENTS.md` Teil B, Abschnitt "E2E-Tests" (Patch: betroffene
 Bereiche, sofern E2E-relevant; Minor: volle Suite `a,b`; Major/1.0+: volle Suite inkl.
