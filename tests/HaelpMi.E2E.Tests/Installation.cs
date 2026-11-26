@@ -108,17 +108,50 @@ internal static class Installation
         // Ohne eigene Programmregel zeigt Windows beim ersten Lauschen den Firewall-Dialog, der das Alarmfenster verdeckt;
         // das Dashboard (HaelpMi.Config.exe) öffnet nur in der Admin-Rolle Sockets.
         var agentExe = Path.Combine(E2EUmgebung.ProgrammOrdner, HaelpMiApp.AgentProzess + ".exe");
-        PruefeProgrammregel("HälpMi Agent", agentExe);
-        var regelProgramme = new List<string> { HaelpMiApp.AgentProzess + ".exe" };
-        if (rolle == Role.Admin)
+        if (Altstand.Pruefen("T1", Altstand.Programmregeln))
         {
-            PruefeProgrammregel("HälpMi Konfiguration", HaelpMiApp.KonfigExe);
-            regelProgramme.Add(HaelpMiApp.KonfigProzess + ".exe");
+            MitMarke(Altstand.Programmregeln, () =>
+            {
+                PruefeProgrammregel("HälpMi Agent", agentExe);
+                if (rolle == Role.Admin)
+                {
+                    PruefeProgrammregel("HälpMi Konfiguration", HaelpMiApp.KonfigExe);
+                }
+            });
         }
 
-        PruefeRegelnVorErstemStart(log, regelProgramme);
-        PruefeKeineBlockregel(agentExe, HaelpMiApp.KonfigExe);
-        PruefeBetriebsLog();
+        if (Altstand.Pruefen("T1", Altstand.RegelnVorErstemStart))
+        {
+            var regelProgramme = new List<string> { HaelpMiApp.AgentProzess + ".exe" };
+            if (rolle == Role.Admin)
+            {
+                regelProgramme.Add(HaelpMiApp.KonfigProzess + ".exe");
+            }
+
+            MitMarke(Altstand.RegelnVorErstemStart, () =>
+            {
+                PruefeRegelnVorErstemStart(log, regelProgramme);
+                PruefeKeineBlockregel(agentExe, HaelpMiApp.KonfigExe);
+            });
+        }
+
+        if (Altstand.Pruefen("T1", Altstand.BetriebsLog))
+        {
+            MitMarke(Altstand.BetriebsLog, PruefeBetriebsLog);
+        }
+    }
+
+    /// <summary>Setzt die Fehlerbild-Marke des Merkmals vor jede Assert-Meldung, damit ein Negativtest z. B. mit T1R nur diesen Grund zählt.</summary>
+    private static void MitMarke(Altstand.Merkmal merkmal, Action pruefung)
+    {
+        try
+        {
+            pruefung();
+        }
+        catch (Xunit.Sdk.XunitException e)
+        {
+            throw new Xunit.Sdk.XunitException($"[{merkmal.Marke}] {e.Message}", e);
+        }
     }
 
     /// <summary>Betriebs-Log des Agents (AGENTS.md Teil A): agent.log neben crash.log, eine JSON-Zeile je Eintrag, Start als INFO.</summary>

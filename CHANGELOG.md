@@ -6,9 +6,11 @@ Details stehen in der Git-Historie. Der eingefrorene Stand `legacy/main-0.39.x` 
 
 ## [Unveröffentlicht]
 ### Neu
+- Empfängt ein Gerät Nachrichten einer anderen HälpMi-Installation im selben Netz (andere Kundengruppe, z. B. ein mit falschem Installer eingerichtetes Gerät), steht das jetzt als Warnung im Betriebsprotokoll `agent.log`, höchstens einmal pro Stunde je Art und fremder Gruppe mit der Anzahl der verworfenen Nachrichten. Die Nachrichten werden wie bisher ignoriert und nicht beantwortet (#214)
 - HälpMi führt ein Betriebsprotokoll zur Fehlersuche (`agent.log` für das Hintergrundprogramm, `config.log` für Einstellungen und Dashboard unter `%ProgramData%\HaelpMi`), ohne Alarmtexte oder andere Inhalte. Die Protokolle bleiben klein: eine Datei pro Tag, ältere werden komprimiert und nach 90 Tagen gelöscht, höchstens 200 MB je Programm. Für die Fehlersuche lässt sich ein ausführlicheres Protokoll ohne Update einschalten (`betriebslog.json`, siehe Betriebsdoku) (#227)
 - E2E: drittes Testgerät C (VM 9103) mit den Testfällen T11 (Discovery mit drei Geräten) und T12 (Alarm an zwei Empfänger mit Schwelle 2); Workflow, Relay und Skripte arbeiten mit beliebig vielen Test-VMs aus `ci/e2e/geraete.json`, die Umgebung läuft auf pve-nzxt (#202)
 - E2E: Regressionstest T18 (Alarmfenster schließen) mit drei Geräten (Alarm an zwei Empfänger mit Schwelle 2) (#136)
+- E2E: Negativtests für Gegenproben auf dem Altstand (`erwartung=negativ`, `erwartet_rot` mit T-Kürzeln und Fehlerbild-Marken wie `T10W`): grün genau dann, wenn nur die erwarteten Tests fehlschlagen; T10, T18 und T19 prüfen auch mit `produkt_ref` statt nur zu messen. Grundregel „grün = gewollt, rot = ungewollt“ für alle Testarten (#234, #236)
 ### Verbessert
 - Branch-Modell auf `develop`/`main` mit Stabilisierungs-Branch `release-X.Y` umgestellt, Conventional Commits, Hook `pre-push` (#194)
 - Struktur an die MasterAgents-Vorlage angeglichen: Doku-Struktur (`docs/`), Arbeitsregeln in `AGENTS.md`, Entscheidungen als ADR, Design-System-Verzeichnis `design/` (#151)

@@ -232,7 +232,7 @@ public sealed class ConfigSyncService : IAsyncDisposable
         }
 
         var identity = _identityProvider();
-        if (!CustomerGroupFilter.Matches(announce.CustomerGroupId, identity.CustomerGroupId))
+        if (!CustomerGroupFilter.Matches(announce.CustomerGroupId, identity.CustomerGroupId, "Config-Ankündigung", announce.OriginDeviceId))
         {
             return; // Teil 2, Abschnitt 6
         }
@@ -384,7 +384,7 @@ public sealed class ConfigSyncService : IAsyncDisposable
             }
 
             var identity = _identityProvider();
-            if (!CustomerGroupFilter.Matches(request.CustomerGroupId, identity.CustomerGroupId))
+            if (!CustomerGroupFilter.Matches(request.CustomerGroupId, identity.CustomerGroupId, "Config-Abruf", request.RequesterDeviceId))
             {
                 return;
             }

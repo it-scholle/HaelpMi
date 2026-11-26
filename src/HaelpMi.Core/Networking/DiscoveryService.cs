@@ -561,7 +561,7 @@ public sealed class DiscoveryService : IAsyncDisposable
 
         var ownIdentity = _identityProvider();
 
-        if (!CustomerGroupFilter.Matches(message.CustomerGroupId, ownIdentity.CustomerGroupId))
+        if (!CustomerGroupFilter.Matches(message.CustomerGroupId, ownIdentity.CustomerGroupId, "Boot-Call", message.DeviceId))
         {
             return; // different deployment sharing the same physical network (Teil 2, Abschnitt 6) - not our traffic
         }
