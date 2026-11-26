@@ -750,7 +750,7 @@ public partial class App : System.Windows.Application
         _feedbackChannel.Start();
 
         _coordinator = new AlarmFlowCoordinator(BuildIdentity, () => _settings, _sharedConfigStore.LoadOrCreate, () => _license, _feedbackChannel);
-        _coordinator.MaintenanceHint.Due += (_, _) => Dispatcher.BeginInvoke(ShowMaintenanceHint);
+        _coordinator.MaintenanceHint.Due += (_, _) => ShowMaintenanceHint();
 
         // Issue #9 (Fast User Switching ohne Logout/Reboot): AlarmChannel entscheidet
         // selbst, ob diese Sitzung den echten TCP-Port hält (Primary) oder als Satellite
@@ -856,18 +856,12 @@ public partial class App : System.Windows.Application
         }
     }
 
-    // Windows zeigt die Sprechblase als normale Benachrichtigung; als Absender erscheint die
-    // Dateibeschreibung des Agents (AssemblyTitle in HaelpMi.Agent.csproj).
-    private void ShowMaintenanceHint()
+    private static void ShowMaintenanceHint()
     {
-        if (_trayIcon is null)
+        if (new MaintenanceHintLauncher(AppContext.BaseDirectory).Launch())
         {
-            BetriebsLog.Warnung("Alarm", "Wartungshinweis nach Alarm ohne Empfänger nicht angezeigt: kein Tray-Icon.");
-            return;
+            BetriebsLog.Info("Alarm", "Wartungshinweis nach Alarm ohne Empfänger an das Hilfsprogramm übergeben.");
         }
-
-        _trayIcon.ShowBalloonTip(10000, SenderStatusTexts.MaintenanceHintTitle, SenderStatusTexts.MaintenanceHintText, System.Windows.Forms.ToolTipIcon.None);
-        BetriebsLog.Info("Alarm", "Wartungshinweis nach Alarm ohne Empfänger angezeigt.");
     }
 
     // Nutzerwunsch 05.08.2026: Tray-Icon zum Öffnen von Konfiguration/Dashboard - siehe
@@ -1042,7 +1036,6 @@ public partial class App : System.Windows.Application
         {
             _trayIcon.Visible = false;
             _trayIcon.Dispose();
-            _trayIcon = null;
         }
 
         _hotkey?.Dispose();

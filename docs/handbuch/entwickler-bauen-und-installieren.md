@@ -61,6 +61,7 @@ Im Projekt-Root (`HälpMi\`):
 ```powershell
 dotnet publish HälpMi\src\HaelpMi.Agent\HaelpMi.Agent.csproj         -c Release -r win-x64 -p:Platform=x64 --self-contained true -p:PublishReadyToRun=true -o HälpMi\installer\payload
 dotnet publish HälpMi\src\HaelpMi.Config\HaelpMi.Config.csproj       -c Release -r win-x64 -p:Platform=x64 --self-contained true -p:PublishReadyToRun=true -o HälpMi\installer\payload
+dotnet publish HälpMi\src\HaelpMi.Notify\HaelpMi.Notify.csproj       -c Release -r win-x64 -p:Platform=x64 --self-contained true -p:PublishReadyToRun=true -o HälpMi\installer\payload
 dotnet publish HälpMi\src\HaelpMi.UpdateService\HaelpMi.UpdateService.csproj -c Release -r win-x64 -p:Platform=x64 --self-contained true -p:PublishReadyToRun=true -o HälpMi\installer\payload
 ```
 

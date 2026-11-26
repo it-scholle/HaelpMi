@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Net;
 using System.Net.Sockets;
 using System.Reflection;
@@ -595,6 +596,85 @@ public class SendingTests
         await scheduler.Schedule().WaitAsync(TimeSpan.FromSeconds(3));
 
         Assert.Equal(2, raised);
+    }
+
+    [Fact]
+    public void MaintenanceHintTexts_FitTheNotificationLimits()
+    {
+        // HaelpMi.Notify lehnt längere Argumente ab (NOTIFYICONDATA: 63 bzw. 255 Zeichen).
+        Assert.InRange(SenderStatusTexts.MaintenanceHintTitle.Length, 1, 63);
+        Assert.InRange(SenderStatusTexts.MaintenanceHintText.Length, 1, 255);
+    }
+
+    [Fact]
+    public void MaintenanceHintLauncher_StartsNotifyNextToTheAgentWithTitleAndText()
+    {
+        var ordner = Path.Combine(Path.GetTempPath(), "agent");
+        ProcessStartInfo? gestartet = null;
+        var warnungen = new List<string>();
+        var launcher = new MaintenanceHintLauncher(ordner, info =>
+        {
+            gestartet = info;
+            return Process.GetCurrentProcess();
+        }, (meldung, _) => warnungen.Add(meldung));
+
+        Assert.True(launcher.Launch());
+
+        Assert.NotNull(gestartet);
+        Assert.Equal(Path.Combine(ordner, "HaelpMi.Notify.exe"), gestartet!.FileName);
+        Assert.Equal(ordner, gestartet.WorkingDirectory);
+        Assert.False(gestartet.UseShellExecute);
+        Assert.Equal(new[] { SenderStatusTexts.MaintenanceHintTitle, SenderStatusTexts.MaintenanceHintText }, gestartet.ArgumentList);
+        Assert.Empty(warnungen);
+    }
+
+    [Fact]
+    public void MaintenanceHintLauncher_MissingExe_WarnsAndDoesNotThrow()
+    {
+        var ordner = Path.Combine(Path.GetTempPath(), "HaelpMiNotifyFehlt_" + Guid.NewGuid().ToString("N"));
+        var warnungen = new List<(string Meldung, Exception? Ausnahme)>();
+        var launcher = new MaintenanceHintLauncher(ordner, warn: (meldung, ausnahme) => warnungen.Add((meldung, ausnahme)));
+
+        Assert.False(launcher.Launch());
+
+        var warnung = Assert.Single(warnungen);
+        Assert.Contains("HaelpMi.Notify.exe", warnung.Meldung);
+        Assert.Contains("neu installieren", warnung.Meldung);
+        Assert.NotNull(warnung.Ausnahme);
+    }
+
+    [Fact]
+    public void MaintenanceHintLauncher_ProcessNotStarted_Warns()
+    {
+        var warnungen = new List<string>();
+        var launcher = new MaintenanceHintLauncher(Path.GetTempPath(), _ => null, (meldung, _) => warnungen.Add(meldung));
+
+        Assert.False(launcher.Launch());
+        Assert.Single(warnungen);
+    }
+
+    [Fact]
+    public async Task MaintenanceHint_RepeatedTriggers_StartNotifyOnceAfterTheDelay()
+    {
+        // Zusammenspiel wie im Agent: Drosselung, danach genau ein Start des Hilfsprogramms.
+        var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var scheduler = new MaintenanceHintScheduler(AppConstants.NoRecipientsMaintenanceHintDelay, _ => gate.Task);
+        var starts = 0;
+        var launcher = new MaintenanceHintLauncher(Path.GetTempPath(), _ =>
+        {
+            Interlocked.Increment(ref starts);
+            return Process.GetCurrentProcess();
+        }, (_, _) => { });
+        scheduler.Due += (_, _) => launcher.Launch();
+
+        var first = scheduler.Schedule();
+        _ = scheduler.Schedule();
+        _ = scheduler.Schedule();
+        Assert.Equal(0, starts);
+
+        gate.SetResult();
+        await first.WaitAsync(TimeSpan.FromSeconds(3));
+        Assert.Equal(1, starts);
     }
 
     [Fact]

@@ -160,7 +160,7 @@ jobs:
       # Befehle wie in docs/handbuch/entwickler-bauen-und-installieren.md.
       - name: Nutzlast veröffentlichen
         run: |
-          foreach ($p in 'HaelpMi.Agent', 'HaelpMi.Config', 'HaelpMi.UpdateService') {
+          foreach ($p in 'HaelpMi.Agent', 'HaelpMi.Config', 'HaelpMi.Notify', 'HaelpMi.UpdateService') {
               dotnet publish "$env:QUELLE/src/$p/$p.csproj" -c Release -r win-x64 -p:Platform=x64 --self-contained true -p:PublishReadyToRun=true -o "$env:QUELLE/installer/payload"
               if ($LASTEXITCODE) { exit $LASTEXITCODE }
           }

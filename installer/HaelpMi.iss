@@ -16,6 +16,7 @@
 ; verbindliche, zuletzt geprüfte Fassung dieser Befehle):
 ;   dotnet publish src\HaelpMi.Agent\HaelpMi.Agent.csproj  -c Release -r win-x64 -p:Platform=x64 --self-contained true -p:PublishReadyToRun=true -o installer\payload
 ;   dotnet publish src\HaelpMi.Config\HaelpMi.Config.csproj -c Release -r win-x64 -p:Platform=x64 --self-contained true -p:PublishReadyToRun=true -o installer\payload
+;   dotnet publish src\HaelpMi.Notify\HaelpMi.Notify.csproj -c Release -r win-x64 -p:Platform=x64 --self-contained true -p:PublishReadyToRun=true -o installer\payload
 ; then compile this script with ISCC.exe (Inno Setup 6 or 7).
 ;
 ; Nutzerwunsch 20.08.2026 ("die 16 soll das Update-Ei und die Update-Pipeline komplett

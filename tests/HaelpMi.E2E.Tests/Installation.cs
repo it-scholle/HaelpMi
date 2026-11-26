@@ -1,8 +1,10 @@
+using System.Diagnostics;
 using System.Security.AccessControl;
 using System.Security.Principal;
 using HaelpMi.Core.Autostart;
 using HaelpMi.Core.Licensing;
 using HaelpMi.Core.Models;
+using HaelpMi.Core.Sending;
 using HaelpMi.Core.Storage;
 using Xunit;
 
@@ -39,10 +41,15 @@ internal static class Installation
 
         // FR-34: Machine-Scope unter Program Files und ProgramData.
         Assert.True(Directory.Exists(E2EUmgebung.ProgrammOrdner), $"{E2EUmgebung.ProgrammOrdner} fehlt.");
-        foreach (var datei in new[] { HaelpMiApp.AgentProzess + ".exe", HaelpMiApp.KonfigProzess + ".exe", "deployment.json", "installed-by.json" })
+        foreach (var datei in new[] { HaelpMiApp.AgentProzess + ".exe", HaelpMiApp.KonfigProzess + ".exe", MaintenanceHintLauncher.ExeName, "deployment.json", "installed-by.json" })
         {
             Assert.True(File.Exists(Path.Combine(E2EUmgebung.ProgrammOrdner, datei)), $"{datei} fehlt im Programme-Ordner.");
         }
+
+        // Windows nennt die Dateibeschreibung als Absender: der Wartungshinweis kommt neutral vom Hilfsprogramm,
+        // der Agent behält seine eigene Beschreibung (Task-Manager, Autostart-Sprechblase).
+        Assert.Equal("Arbeitsplatz-Dienst", FileVersionInfo.GetVersionInfo(Path.Combine(E2EUmgebung.ProgrammOrdner, MaintenanceHintLauncher.ExeName)).FileDescription);
+        Assert.NotEqual("Arbeitsplatz-Dienst", FileVersionInfo.GetVersionInfo(Path.Combine(E2EUmgebung.ProgrammOrdner, HaelpMiApp.AgentProzess + ".exe")).FileDescription);
 
         Assert.True(Directory.Exists(E2EUmgebung.DatenOrdner), $"{E2EUmgebung.DatenOrdner} fehlt.");
 
