@@ -165,9 +165,19 @@ public partial class GeraetATests
             Rendezvous.Signal("t8-aus");
 
             await Rendezvous.WaitForAsync("t8-b-gesperrt", SchrittTimeout);
+            // Der einzige Empfänger ist deaktiviert, also 0 erreichbare Empfänger: das Popup aus Entwurf B2
+            // (Owner-Entscheidung 29), eine Welle, keine Wiederholung, Ausblenden nach einigen Sekunden.
             DrueckeHotkey(HotkeyP1);
-            await PruefeBefundAsync(befunde, () => WarteKeinFensterAsync(app.FindeSenderBanner, NegativDauer,
-                "Produktbefund: A zeigt ein Sender-Banner für P1, obwohl der einzige Empfänger B deaktiviert ist."));
+            var gesperrtBanner = app.ErwarteBanner("P1 mit deaktiviertem Empfänger B");
+            await PruefeBefundAsync(befunde, () => WarteBisAsync(() => NameVon(gesperrtBanner, "StatusText") == "Kein Empfänger eingestellt!", TimeSpan.FromSeconds(5),
+                () => $"Produktbefund: Das Popup meldet bei deaktiviertem Empfänger B '{NameVon(gesperrtBanner, "StatusText")}' statt \"Kein Empfänger eingestellt!\"."));
+            if (SichtbarerText(gesperrtBanner, "CancelButton") != string.Empty || SichtbarerText(gesperrtBanner, "AckedText") != string.Empty)
+            {
+                befunde.Add($"Produktbefund: Das Popup zeigt bei deaktiviertem Empfänger B noch Zähler '{SichtbarerText(gesperrtBanner, "AckedText")}' " +
+                    $"bzw. Abbrechen-Knopf '{SichtbarerText(gesperrtBanner, "CancelButton")}'.");
+            }
+            await PruefeBefundAsync(befunde, () => WarteBisAsync(() => app.FindeSenderBanner() is null, TimeSpan.FromSeconds(15),
+                "Produktbefund: Das Popup bei deaktiviertem Empfänger B blendet sich nicht von selbst aus."));
             await app.SchliesseSenderBannerAsync();
 
             // Am Empfängerfilter von A vorbei: belegt die Empfangssperre von B für sich allein.

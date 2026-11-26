@@ -14,6 +14,8 @@
 #define MyAppPublisher "HälpMi contributors"
 #define MyAgentExeName "HaelpMi.Agent.exe"
 #define MyConfigExeName "HaelpMi.Config.exe"
+; Zeigt nur den neutralen Wartungshinweis; keine Netzwerkfunktion, daher keine Firewall-Regel.
+#define MyNotifyExeName "HaelpMi.Notify.exe"
 #define MyAppId "{{4B6C0A6E-6D9C-4A2E-8C7E-2E7B7E1A5F3D}"
 
 ; Programmregeln statt Portregeln: Windows zeigt beim ersten Lauschen einer .exe ohne eigene
@@ -677,6 +679,7 @@ begin
   begin
     Exec('taskkill.exe', '/IM {#MyAgentExeName} /F', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
     Exec('taskkill.exe', '/IM {#MyConfigExeName} /F', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+    Exec('taskkill.exe', '/IM {#MyNotifyExeName} /F', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
     Sleep(500);
   end;
 
@@ -780,6 +783,7 @@ begin
     // der ganze Ordner nicht leer und damit nicht entfernbar wird. Gleiches Muster wie
     // CurStepChanged oben bei der Installation, hier nur bisher vergessen.
     Exec('taskkill.exe', '/IM {#MyConfigExeName} /F', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+    Exec('taskkill.exe', '/IM {#MyNotifyExeName} /F', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
     // Stop the Agent first - otherwise its own files can be locked and skipped/
     // deferred-to-reboot instead of actually being removed. taskkill /IM matcht nach reinem
     // Bilddateinamen, unabhängig vom Pfad - trifft also auch eine herrenlose Testinstanz

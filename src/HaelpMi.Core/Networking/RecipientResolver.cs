@@ -60,6 +60,13 @@ public static class RecipientResolver
     }
 
     /// <summary>
+    /// Ob das Gerät in mindestens einer Zeile des Profils als Sender eingetragen ist (direkt, über eine
+    /// Gruppe oder seinen Raum). Eine Sender-Zeile ohne Empfänger zählt mit.
+    /// </summary>
+    public static bool IsSender(AlarmProfile profile, Guid deviceId, string roomNumber, IReadOnlyList<DeviceGroup> groups) =>
+        profile.RecipientAssignments.Any(row => SenderMatches(row.Sender, deviceId, roomNumber, groups));
+
+    /// <summary>
     /// Distinct-Geräte-Anzahl für eine Empfänger-Liste (Admin-Dashboard-Anzeige, z. B. der
     /// Zähler-Badge im Sender-Auswahl - Nutzerwunsch 04.08.2026: "Gruppen werden nicht als
     /// 1 gezählt sondern als die Anzahl der hinterliegenden Empfänger, nicht doppelt

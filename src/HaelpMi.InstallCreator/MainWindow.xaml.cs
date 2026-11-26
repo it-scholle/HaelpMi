@@ -428,6 +428,7 @@ public partial class MainWindow : Window
     {
         Path.Combine("src", "HaelpMi.Agent", "HaelpMi.Agent.csproj"),
         Path.Combine("src", "HaelpMi.Config", "HaelpMi.Config.csproj"),
+        Path.Combine("src", "HaelpMi.Notify", "HaelpMi.Notify.csproj"),
     };
 
     private async Task<bool> RefreshPayloadAsync(string installerDir)

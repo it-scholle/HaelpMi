@@ -133,6 +133,12 @@ public static class AppConstants
     /// </summary>
     public static readonly TimeSpan SenderStatusBannerAutoCloseAfterFinish = TimeSpan.FromMinutes(3);
 
+    /// <summary>Sender-Popup "Kein Empfänger eingestellt!": blendet sich nach dieser Zeit selbst aus.</summary>
+    public static readonly TimeSpan SenderStatusNoRecipientsAutoClose = TimeSpan.FromSeconds(6);
+
+    /// <summary>Verzögerung des neutralen Wartungshinweises nach einem Alarm ohne erreichbare Empfänger.</summary>
+    public static readonly TimeSpan NoRecipientsMaintenanceHintDelay = TimeSpan.FromSeconds(30);
+
     /// <summary>Exclusive edit-lock auto-release after this much inactivity (Teil 2, Abschnitt 5).</summary>
     public static readonly TimeSpan EditLockInactivityTimeout = TimeSpan.FromMinutes(10);
 

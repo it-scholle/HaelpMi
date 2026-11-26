@@ -44,6 +44,66 @@ public class ModelsTests
     // --- Teil 2, Abschnitt 4: RecipientResolver - Kernfunktion für die asymmetrische
     // Empfänger-Zuordnung, die Task #20 (Drag-and-Drop) letztlich verwaltet. ---
 
+    // Ein Gerät, das im Profil kein Sender ist, darf mit dessen Tastenkürzel keinen Alarm auslösen;
+    // ein Sender ohne Empfänger dagegen schon (Popup "Kein Empfänger eingestellt!").
+    [Fact]
+    public void RecipientResolver_IsSender_FalseForDeviceOnlyListedInAnotherSendersRow()
+    {
+        var a = Guid.NewGuid();
+        var b = Guid.NewGuid();
+        var profile = new AlarmProfile
+        {
+            RecipientAssignments =
+            {
+                new RecipientAssignment
+                {
+                    Sender = new EntityRef(EntityKind.Device, b),
+                    Recipients = { new EntityRef(EntityKind.Device, a) },
+                },
+            },
+        };
+
+        Assert.False(RecipientResolver.IsSender(profile, a, "1", new List<DeviceGroup>()));
+        Assert.True(RecipientResolver.IsSender(profile, b, "1", new List<DeviceGroup>()));
+    }
+
+    [Fact]
+    public void RecipientResolver_IsSender_FalseForProfileWithoutAssignments()
+    {
+        Assert.False(RecipientResolver.IsSender(new AlarmProfile(), Guid.NewGuid(), "1", new List<DeviceGroup>()));
+    }
+
+    [Fact]
+    public void RecipientResolver_IsSender_TrueForSenderWithoutRecipients()
+    {
+        var a = Guid.NewGuid();
+        var profile = new AlarmProfile
+        {
+            RecipientAssignments = { new RecipientAssignment { Sender = new EntityRef(EntityKind.Device, a) } },
+        };
+
+        Assert.True(RecipientResolver.IsSender(profile, a, "1", new List<DeviceGroup>()));
+    }
+
+    [Fact]
+    public void RecipientResolver_IsSender_MatchesGroupRoomAndAllDevices()
+    {
+        var a = Guid.NewGuid();
+        var group = new DeviceGroup { DeviceIds = { a } };
+        var otherGroup = new DeviceGroup();
+        var groups = new List<DeviceGroup> { group, otherGroup };
+        AlarmProfile ProfileWithSender(EntityRef sender) => new()
+        {
+            RecipientAssignments = { new RecipientAssignment { Sender = sender } },
+        };
+
+        Assert.True(RecipientResolver.IsSender(ProfileWithSender(new EntityRef(EntityKind.Group, group.Id)), a, "1", groups));
+        Assert.False(RecipientResolver.IsSender(ProfileWithSender(new EntityRef(EntityKind.Group, otherGroup.Id)), a, "1", groups));
+        Assert.True(RecipientResolver.IsSender(ProfileWithSender(new EntityRef(EntityKind.Room, EntityRef.RoomId("1"))), a, "1", groups));
+        Assert.False(RecipientResolver.IsSender(ProfileWithSender(new EntityRef(EntityKind.Room, EntityRef.RoomId("2"))), a, "1", groups));
+        Assert.True(RecipientResolver.IsSender(ProfileWithSender(new EntityRef(EntityKind.Group, AppConstants.AllDevicesGroupId)), a, "1", groups));
+    }
+
     [Fact]
     public void RecipientResolver_ResolvesDirectDeviceSender_ToItsDirectDeviceRecipient()
     {

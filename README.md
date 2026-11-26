@@ -29,6 +29,7 @@ src/
   HaelpMi.UI/              Gemeinsame WPF-Fenster (Popup, Dashboard, Konfiguration)
   HaelpMi.Agent/           Hintergrundprozess (Listener, Sender, Hotkey, Tray), autostartend
   HaelpMi.Config/          Konfigurationsprogramm / Admin-Dashboard, separater Prozess
+  HaelpMi.Notify/          Hilfsprogramm für den neutralen Wartungshinweis (Absender „Arbeitsplatz-Dienst“)
   HaelpMi.InstallCreator/  Entwickler-Tool: baut pro Kunde den Admin-Installer
   HaelpMi.UpdateService/   Update-Dienst (derzeit inaktiv)
   HaelpMi.UpdateSigner/    Update-Signatur-Tool (derzeit inaktiv)

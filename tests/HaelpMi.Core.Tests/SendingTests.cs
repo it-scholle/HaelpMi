@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Net;
 using System.Net.Sockets;
 using System.Reflection;
@@ -411,9 +412,9 @@ public class SendingTests
     }
 
     [Fact]
-    public async Task RepeatingAlarmSession_WithoutTargets_SendsOneWaveAndStopsAsNotDelivered()
+    public async Task RepeatingAlarmSession_WithoutTargets_SendsOneWaveAndStops()
     {
-        // Ein Alarm ohne Empfänger geht genau einmal raus und endet sofort als "nicht zugestellt",
+        // Ein Alarm ohne Empfänger geht genau einmal raus und endet sofort,
         // statt minutenlang ins Leere zu wiederholen.
         var auditLines = new System.Collections.Concurrent.ConcurrentQueue<string>();
         var senderIdentity = new LiveIdentity(Guid.NewGuid(), Guid.NewGuid(), "Sender-PC", "Frau Meier", "Zimmer", "1", Role.Admin, false, "0.0.0", 0, DateTimeOffset.UtcNow);
@@ -497,28 +498,183 @@ public class SendingTests
     }
 
     [Fact]
-    public void SenderStatusTexts_Headline_NotDeliveredWithoutRecipients()
+    public void SenderStatusTexts_Headline_NoRecipientsFromTheStart()
     {
-        Assert.Equal("Alarm wird gesendet...", SenderStatusTexts.Headline(stillSending: true, targetCount: 0));
-        Assert.Equal("Alarm nicht zugestellt", SenderStatusTexts.Headline(stillSending: false, targetCount: 0));
+        // Ohne Empfänger steht die Abbruchmeldung sofort da, nie "Alarm wird gesendet...".
+        Assert.Equal("Kein Empfänger eingestellt!", SenderStatusTexts.Headline(stillSending: true, targetCount: 0));
+        Assert.Equal("Kein Empfänger eingestellt!", SenderStatusTexts.Headline(stillSending: false, targetCount: 0));
+        Assert.Equal("Alarm wird gesendet...", SenderStatusTexts.Headline(stillSending: true, targetCount: 2));
         Assert.Equal("Alarm beendet", SenderStatusTexts.Headline(stillSending: false, targetCount: 2));
     }
 
     [Fact]
     public void SenderStatusTexts_NoRecipientsHint_NamesWhereToFixIt()
     {
-        var hint = SenderStatusTexts.NoRecipientsHint(targetCount: 0);
-
-        Assert.NotNull(hint);
-        Assert.Contains("kein Gerät", hint);
-        Assert.Contains("Dashboard", hint);
-        Assert.Contains("Alarm-Profile", hint);
+        Assert.Equal("Info: Ein Admin muss im Dashboard Empfänger für dieses Profil einrichten.", SenderStatusTexts.NoRecipientsHint(targetCount: 0));
     }
 
     [Fact]
     public void SenderStatusTexts_NoRecipientsHint_IsNullWithRecipients()
     {
         Assert.Null(SenderStatusTexts.NoRecipientsHint(targetCount: 1));
+    }
+
+    [Fact]
+    public void SenderStatusTexts_MaintenanceHint_IsNeutral()
+    {
+        Assert.Equal("Wartung erforderlich", SenderStatusTexts.MaintenanceHintTitle);
+        Assert.Equal("Ein Hintergrunddienst konnte eine Meldung nicht zustellen (Code H-00). Bitte die IT informieren.", SenderStatusTexts.MaintenanceHintText);
+        foreach (var text in new[] { SenderStatusTexts.MaintenanceHintTitle, SenderStatusTexts.MaintenanceHintText })
+        {
+            Assert.DoesNotContain("HälpMi", text, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("HaelpMi", text, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("Alarm", text, StringComparison.OrdinalIgnoreCase);
+        }
+    }
+
+    [Fact]
+    public void AppConstants_NoRecipientsTimings_MatchMockup()
+    {
+        Assert.Equal(TimeSpan.FromSeconds(30), AppConstants.NoRecipientsMaintenanceHintDelay);
+        Assert.InRange(AppConstants.SenderStatusNoRecipientsAutoClose, TimeSpan.FromSeconds(3), TimeSpan.FromSeconds(10));
+    }
+
+    [Fact]
+    public async Task MaintenanceHintScheduler_RaisesOnceAfterTheDelay()
+    {
+        var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        TimeSpan? requested = null;
+        var scheduler = new MaintenanceHintScheduler(TimeSpan.FromSeconds(30), delay =>
+        {
+            requested = delay;
+            return gate.Task;
+        });
+        var raised = 0;
+        scheduler.Due += (_, _) => Interlocked.Increment(ref raised);
+
+        var first = scheduler.Schedule();
+        Assert.Equal(TimeSpan.FromSeconds(30), requested);
+        Assert.Equal(0, raised);
+
+        gate.SetResult();
+        await first.WaitAsync(TimeSpan.FromSeconds(3));
+        Assert.Equal(1, raised);
+    }
+
+    [Fact]
+    public async Task MaintenanceHintScheduler_RepeatedTriggersWhileWaiting_GiveOneHint()
+    {
+        // Mehrmals das Kürzel gedrückt: trotzdem nur ein Hinweis.
+        var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var waits = 0;
+        var scheduler = new MaintenanceHintScheduler(TimeSpan.FromSeconds(30), _ =>
+        {
+            Interlocked.Increment(ref waits);
+            return gate.Task;
+        });
+        var raised = 0;
+        scheduler.Due += (_, _) => Interlocked.Increment(ref raised);
+
+        var first = scheduler.Schedule();
+        var second = scheduler.Schedule();
+        Assert.True(second.IsCompleted);
+        gate.SetResult();
+        await first.WaitAsync(TimeSpan.FromSeconds(3));
+
+        Assert.Equal(1, waits);
+        Assert.Equal(1, raised);
+    }
+
+    [Fact]
+    public async Task MaintenanceHintScheduler_AfterAHint_CanScheduleAgain()
+    {
+        var scheduler = new MaintenanceHintScheduler(TimeSpan.FromSeconds(30), _ => Task.CompletedTask);
+        var raised = 0;
+        scheduler.Due += (_, _) => Interlocked.Increment(ref raised);
+
+        await scheduler.Schedule().WaitAsync(TimeSpan.FromSeconds(3));
+        await scheduler.Schedule().WaitAsync(TimeSpan.FromSeconds(3));
+
+        Assert.Equal(2, raised);
+    }
+
+    [Fact]
+    public void MaintenanceHintTexts_FitTheNotificationLimits()
+    {
+        // HaelpMi.Notify lehnt längere Argumente ab (NOTIFYICONDATA: 63 bzw. 255 Zeichen).
+        Assert.InRange(SenderStatusTexts.MaintenanceHintTitle.Length, 1, 63);
+        Assert.InRange(SenderStatusTexts.MaintenanceHintText.Length, 1, 255);
+    }
+
+    [Fact]
+    public void MaintenanceHintLauncher_StartsNotifyNextToTheAgentWithTitleAndText()
+    {
+        var ordner = Path.Combine(Path.GetTempPath(), "agent");
+        ProcessStartInfo? gestartet = null;
+        var warnungen = new List<string>();
+        var launcher = new MaintenanceHintLauncher(ordner, info =>
+        {
+            gestartet = info;
+            return Process.GetCurrentProcess();
+        }, (meldung, _) => warnungen.Add(meldung));
+
+        Assert.True(launcher.Launch());
+
+        Assert.NotNull(gestartet);
+        Assert.Equal(Path.Combine(ordner, "HaelpMi.Notify.exe"), gestartet!.FileName);
+        Assert.Equal(ordner, gestartet.WorkingDirectory);
+        Assert.False(gestartet.UseShellExecute);
+        Assert.Equal(new[] { SenderStatusTexts.MaintenanceHintTitle, SenderStatusTexts.MaintenanceHintText }, gestartet.ArgumentList);
+        Assert.Empty(warnungen);
+    }
+
+    [Fact]
+    public void MaintenanceHintLauncher_MissingExe_WarnsAndDoesNotThrow()
+    {
+        var ordner = Path.Combine(Path.GetTempPath(), "HaelpMiNotifyFehlt_" + Guid.NewGuid().ToString("N"));
+        var warnungen = new List<(string Meldung, Exception? Ausnahme)>();
+        var launcher = new MaintenanceHintLauncher(ordner, warn: (meldung, ausnahme) => warnungen.Add((meldung, ausnahme)));
+
+        Assert.False(launcher.Launch());
+
+        var warnung = Assert.Single(warnungen);
+        Assert.Contains("HaelpMi.Notify.exe", warnung.Meldung);
+        Assert.Contains("neu installieren", warnung.Meldung);
+        Assert.NotNull(warnung.Ausnahme);
+    }
+
+    [Fact]
+    public void MaintenanceHintLauncher_ProcessNotStarted_Warns()
+    {
+        var warnungen = new List<string>();
+        var launcher = new MaintenanceHintLauncher(Path.GetTempPath(), _ => null, (meldung, _) => warnungen.Add(meldung));
+
+        Assert.False(launcher.Launch());
+        Assert.Single(warnungen);
+    }
+
+    [Fact]
+    public async Task MaintenanceHint_RepeatedTriggers_StartNotifyOnceAfterTheDelay()
+    {
+        // Zusammenspiel wie im Agent: Drosselung, danach genau ein Start des Hilfsprogramms.
+        var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var scheduler = new MaintenanceHintScheduler(AppConstants.NoRecipientsMaintenanceHintDelay, _ => gate.Task);
+        var starts = 0;
+        var launcher = new MaintenanceHintLauncher(Path.GetTempPath(), _ =>
+        {
+            Interlocked.Increment(ref starts);
+            return Process.GetCurrentProcess();
+        }, (_, _) => { });
+        scheduler.Due += (_, _) => launcher.Launch();
+
+        var first = scheduler.Schedule();
+        _ = scheduler.Schedule();
+        _ = scheduler.Schedule();
+        Assert.Equal(0, starts);
+
+        gate.SetResult();
+        await first.WaitAsync(TimeSpan.FromSeconds(3));
+        Assert.Equal(1, starts);
     }
 
     [Fact]
