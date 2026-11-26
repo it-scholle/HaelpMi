@@ -214,7 +214,7 @@ public sealed class AlarmTcpListener : IAsyncDisposable
             }
 
             var identity = _identityProvider();
-            if (!CustomerGroupFilter.Matches(request.CustomerGroupId, identity.CustomerGroupId))
+            if (!CustomerGroupFilter.Matches(request.CustomerGroupId, identity.CustomerGroupId, "Alarm", request.SenderDeviceId))
             {
                 return; // different deployment sharing the same physical network (Teil 2, Abschnitt 6)
             }

@@ -103,6 +103,11 @@ public partial class App : System.Windows.Application
         CrashLogger.InstallProcessWideHooks(nameof(HaelpMi.Agent));
         BetriebsLog.StarteFuerProzess("agent");
         BetriebsLog.Info("Start", $"Agent {typeof(App).Assembly.GetName().Version?.ToString(3)} gestartet, Parameter: [{string.Join(' ', e.Args)}]");
+        FremdeKundengruppeMelder.Prozess = new(FremdeKundengruppeMelder.LeseIntervall(AppPaths.BetriebsLogEinstellungenPath, out var drosselHinweis));
+        if (drosselHinweis is not null)
+        {
+            BetriebsLog.Warnung(FremdeKundengruppeMelder.Modul, drosselHinweis);
+        }
         DispatcherUnhandledException += (_, args) =>
         {
             CrashLogger.Log(nameof(HaelpMi.Agent), "DispatcherUnhandledException", args.Exception);
