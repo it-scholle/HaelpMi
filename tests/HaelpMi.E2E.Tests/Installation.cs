@@ -1,8 +1,10 @@
+using System.Diagnostics;
 using System.Security.AccessControl;
 using System.Security.Principal;
 using HaelpMi.Core.Autostart;
 using HaelpMi.Core.Licensing;
 using HaelpMi.Core.Models;
+using HaelpMi.Core.Sending;
 using HaelpMi.Core.Storage;
 using Xunit;
 
@@ -39,10 +41,15 @@ internal static class Installation
 
         // FR-34: Machine-Scope unter Program Files und ProgramData.
         Assert.True(Directory.Exists(E2EUmgebung.ProgrammOrdner), $"{E2EUmgebung.ProgrammOrdner} fehlt.");
-        foreach (var datei in new[] { HaelpMiApp.AgentProzess + ".exe", HaelpMiApp.KonfigProzess + ".exe", "deployment.json", "installed-by.json" })
+        foreach (var datei in new[] { HaelpMiApp.AgentProzess + ".exe", HaelpMiApp.KonfigProzess + ".exe", MaintenanceHintLauncher.ExeName, "deployment.json", "installed-by.json" })
         {
             Assert.True(File.Exists(Path.Combine(E2EUmgebung.ProgrammOrdner, datei)), $"{datei} fehlt im Programme-Ordner.");
         }
+
+        // Windows nennt die Dateibeschreibung als Absender: der Wartungshinweis kommt neutral vom Hilfsprogramm,
+        // der Agent behält seine eigene Beschreibung (Task-Manager, Autostart-Sprechblase).
+        Assert.Equal("Arbeitsplatz-Dienst", FileVersionInfo.GetVersionInfo(Path.Combine(E2EUmgebung.ProgrammOrdner, MaintenanceHintLauncher.ExeName)).FileDescription);
+        Assert.NotEqual("Arbeitsplatz-Dienst", FileVersionInfo.GetVersionInfo(Path.Combine(E2EUmgebung.ProgrammOrdner, HaelpMiApp.AgentProzess + ".exe")).FileDescription);
 
         Assert.True(Directory.Exists(E2EUmgebung.DatenOrdner), $"{E2EUmgebung.DatenOrdner} fehlt.");
 
@@ -101,17 +108,50 @@ internal static class Installation
         // Ohne eigene Programmregel zeigt Windows beim ersten Lauschen den Firewall-Dialog, der das Alarmfenster verdeckt;
         // das Dashboard (HaelpMi.Config.exe) öffnet nur in der Admin-Rolle Sockets.
         var agentExe = Path.Combine(E2EUmgebung.ProgrammOrdner, HaelpMiApp.AgentProzess + ".exe");
-        PruefeProgrammregel("HälpMi Agent", agentExe);
-        var regelProgramme = new List<string> { HaelpMiApp.AgentProzess + ".exe" };
-        if (rolle == Role.Admin)
+        if (Altstand.Pruefen("T1", Altstand.Programmregeln))
         {
-            PruefeProgrammregel("HälpMi Konfiguration", HaelpMiApp.KonfigExe);
-            regelProgramme.Add(HaelpMiApp.KonfigProzess + ".exe");
+            MitMarke(Altstand.Programmregeln, () =>
+            {
+                PruefeProgrammregel("HälpMi Agent", agentExe);
+                if (rolle == Role.Admin)
+                {
+                    PruefeProgrammregel("HälpMi Konfiguration", HaelpMiApp.KonfigExe);
+                }
+            });
         }
 
-        PruefeRegelnVorErstemStart(log, regelProgramme);
-        PruefeKeineBlockregel(agentExe, HaelpMiApp.KonfigExe);
-        PruefeBetriebsLog();
+        if (Altstand.Pruefen("T1", Altstand.RegelnVorErstemStart))
+        {
+            var regelProgramme = new List<string> { HaelpMiApp.AgentProzess + ".exe" };
+            if (rolle == Role.Admin)
+            {
+                regelProgramme.Add(HaelpMiApp.KonfigProzess + ".exe");
+            }
+
+            MitMarke(Altstand.RegelnVorErstemStart, () =>
+            {
+                PruefeRegelnVorErstemStart(log, regelProgramme);
+                PruefeKeineBlockregel(agentExe, HaelpMiApp.KonfigExe);
+            });
+        }
+
+        if (Altstand.Pruefen("T1", Altstand.BetriebsLog))
+        {
+            MitMarke(Altstand.BetriebsLog, PruefeBetriebsLog);
+        }
+    }
+
+    /// <summary>Setzt die Fehlerbild-Marke des Merkmals vor jede Assert-Meldung, damit ein Negativtest z. B. mit T1R nur diesen Grund zählt.</summary>
+    private static void MitMarke(Altstand.Merkmal merkmal, Action pruefung)
+    {
+        try
+        {
+            pruefung();
+        }
+        catch (Xunit.Sdk.XunitException e)
+        {
+            throw new Xunit.Sdk.XunitException($"[{merkmal.Marke}] {e.Message}", e);
+        }
     }
 
     /// <summary>Betriebs-Log des Agents (AGENTS.md Teil A): agent.log neben crash.log, eine JSON-Zeile je Eintrag, Start als INFO.</summary>

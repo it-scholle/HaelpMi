@@ -38,6 +38,9 @@ public sealed class AlarmFlowCoordinator
     private readonly LicenseLimitGuard _licenseLimitGuard;
     private readonly ReceivedAlarmSessions<AlarmPopupWindow> _receivedSessions = new(AppConstants.AlarmAutoCloseAfterLastSignal);
 
+    /// <summary>Löst den neutralen Wartungshinweis nach einem Alarm ohne erreichbare Empfänger aus.</summary>
+    public MaintenanceHintScheduler MaintenanceHint { get; } = new(AppConstants.NoRecipientsMaintenanceHintDelay);
+
     public AlarmFlowCoordinator(
         Func<LiveIdentity> identityProvider,
         Func<OwnSettings> settingsProvider,
@@ -247,6 +250,16 @@ public sealed class AlarmFlowCoordinator
     /// <summary>Hotkey-triggered send for one <see cref="AlarmProfile"/> (FR-50): resolves this sender's asymmetric recipient set and starts a repeating session.</summary>
     public void TriggerAlarmProfile(AlarmProfile profile)
     {
+        var identity = _identityProvider();
+        var groups = _sharedConfigProvider().DeviceGroups;
+
+        // Die Tastenkürzel aller Profile sind auf jedem Gerät registriert. Ist dieses Gerät im Profil
+        // kein Sender, gehört das Kürzel nicht ihm: keine Sitzung, kein Banner, kein Hinweis.
+        if (!RecipientResolver.IsSender(profile, identity.DeviceId, identity.RoomNumber, groups))
+        {
+            return;
+        }
+
         var removed = IsOwnDeviceRemoved();
         var blockReason = _licenseLimitGuard.GetOwnBlockReason();
         if (SendBlockNotice.For(removed, blockReason) is { } notice)
@@ -256,9 +269,7 @@ public sealed class AlarmFlowCoordinator
             return;
         }
 
-        var identity = _identityProvider();
         var devices = _deviceStore.Load();
-        var groups = _sharedConfigProvider().DeviceGroups;
         var targets = RecipientResolver.ResolveRecipientsForSender(profile, identity.DeviceId, identity.RoomNumber, devices, groups, excludeSender: true);
 
         // Issue #60: lizenzüberschrittene Empfänger sind für andere unerreichbar (siehe
@@ -274,14 +285,20 @@ public sealed class AlarmFlowCoordinator
         var disabledDeviceIds = _licenseLimitGuard.GetDisabledDeviceIds();
         targets = targets.Where(t => !disabledDeviceIds.Contains(t.DeviceId) && !t.Removed).ToList();
 
-        // Auch ohne Empfänger startet eine Sitzung (eine Welle, dann "nicht zugestellt"): Das
-        // Tastenkürzel darf nie wirkungslos bleiben, die Statusanzeige nennt Grund und Lösungsweg.
+        // Auch ohne Empfänger startet eine Sitzung (eine Welle im Audit-Log, keine Wiederholung): Das
+        // Tastenkürzel darf nie wirkungslos bleiben. Das Popup meldet "Kein Empfänger eingestellt!",
+        // später folgt ein neutraler Wartungshinweis, der den stillen Alarm nicht verrät.
         var session = new RepeatingAlarmSession(profile, targets, identity, _sender, _feedbackChannel, DateTimeOffset.UtcNow, CreateWaveDeviceLoader(profile.Id));
         System.Windows.Application.Current.Dispatcher.Invoke(() =>
         {
             var window = new SenderStatusWindow(session, profile.Name);
             window.Show();
         });
+
+        if (targets.Count == 0)
+        {
+            _ = MaintenanceHint.Schedule();
+        }
 
         _ = RunSessionAsync(session);
     }

@@ -20,6 +20,10 @@ mit Windows-Rechten zu tun haben; ein Windows-Standardnutzer kann App-Admin sein
 3. **`HaelpMi.UpdateService`** (Windows-Dienst, LocalSystem): auf `release-1.0-MVP` **inaktiv**,
    wird weder installiert noch gestartet (siehe "Programm-Update" unten). Updates laufen in dieser
    Linie ausschließlich manuell über einen neuen Installer.
+4. **`HaelpMi.Notify`**: vom Agent gestartet, etwa 30 s nach einem Alarm ohne erreichbare
+   Empfänger. Zeigt nur die neutrale Windows-Benachrichtigung „Wartung erforderlich“ und beendet
+   sich. Eigenes Programm, weil Windows die Dateibeschreibung der .exe als Absender nennt: Hier
+   steht „Arbeitsplatz-Dienst“, der Agent behält seine eigene. Kein Netz, keine Firewall-Regel.
 
 ### Kreis vs. Gruppe
 
@@ -37,6 +41,7 @@ mit Windows-Rechten zu tun haben; ein Windows-Standardnutzer kann App-Admin sein
 | `HaelpMi.UI` | WPF-Library | Gemeinsame Fenster/ViewModels (Popup, Dashboard, Config); bekommt Netzwerk/IPC per Context-Objekt |
 | `HaelpMi.Agent` | WinExe (WPF + WinForms-Tray) | Hintergrundprozess: Listener, Sender, Hotkeys, Tray |
 | `HaelpMi.Config` | WinExe (WPF) | Konfigurationsfenster bzw. Admin-Dashboard, separater Prozess |
+| `HaelpMi.Notify` | WinExe (WinForms, ohne ProjectReference) | Zeigt den neutralen Wartungshinweis (Titel und Text als Argumente) und beendet sich |
 | `HaelpMi.InstallCreator` | WinExe (WPF, Entwickler-Tool) | Baut pro Kunde den Admin-Installer (ruft `ISCC.exe`), erzeugt Kunden-/Gruppen-ID, Installer-Passwort, Lizenzdateien. Bewusst ohne Referenz auf Core/UI |
 | `HaelpMi.UpdateService` | Windows-Dienst (Worker, LocalSystem) | Install/Test/Swap/Deinstall bei Auto-Updates, nur per lokaler Named Pipe |
 | `HaelpMi.UpdateSigner` | CLI-Tool | Erzeugt das Update-Schlüsselpaar, signiert Update-Pakete; läuft nie beim Kunden |

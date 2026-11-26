@@ -12,6 +12,7 @@ using HaelpMi.Core.Licensing;
 using HaelpMi.Core.Models;
 using HaelpMi.Core.Networking;
 using HaelpMi.Core.Runtime;
+using HaelpMi.Core.Sending;
 using HaelpMi.Core.Storage;
 using HaelpMi.UI.Windows;
 
@@ -103,6 +104,11 @@ public partial class App : System.Windows.Application
         CrashLogger.InstallProcessWideHooks(nameof(HaelpMi.Agent));
         BetriebsLog.StarteFuerProzess("agent");
         BetriebsLog.Info("Start", $"Agent {typeof(App).Assembly.GetName().Version?.ToString(3)} gestartet, Parameter: [{string.Join(' ', e.Args)}]");
+        FremdeKundengruppeMelder.Prozess = new(FremdeKundengruppeMelder.LeseIntervall(AppPaths.BetriebsLogEinstellungenPath, out var drosselHinweis));
+        if (drosselHinweis is not null)
+        {
+            BetriebsLog.Warnung(FremdeKundengruppeMelder.Modul, drosselHinweis);
+        }
         DispatcherUnhandledException += (_, args) =>
         {
             CrashLogger.Log(nameof(HaelpMi.Agent), "DispatcherUnhandledException", args.Exception);
@@ -749,6 +755,7 @@ public partial class App : System.Windows.Application
         _feedbackChannel.Start();
 
         _coordinator = new AlarmFlowCoordinator(BuildIdentity, () => _settings, _sharedConfigStore.LoadOrCreate, () => _license, _feedbackChannel);
+        _coordinator.MaintenanceHint.Due += (_, _) => ShowMaintenanceHint();
 
         // Issue #9 (Fast User Switching ohne Logout/Reboot): AlarmChannel entscheidet
         // selbst, ob diese Sitzung den echten TCP-Port hält (Primary) oder als Satellite
@@ -851,6 +858,22 @@ public partial class App : System.Windows.Application
                 "HälpMi - Autostart nicht eingerichtet",
                 "HälpMi startet nach einem Geräteneustart NICHT automatisch (Task-Planer-Registrierung fehlgeschlagen, vermutlich durch eine Richtlinie blockiert). Bitte den Systemadministrator informieren - Details im lokalen Protokoll.",
                 System.Windows.Forms.ToolTipIcon.Warning);
+        }
+    }
+
+    // Läuft auf einem Threadpool-Thread in einer verworfenen Aufgabe: unerwartete Fehler hier selbst loggen.
+    private static void ShowMaintenanceHint()
+    {
+        try
+        {
+            if (new MaintenanceHintLauncher(AppContext.BaseDirectory).Launch())
+            {
+                BetriebsLog.Info("Alarm", "Wartungshinweis nach Alarm ohne Empfänger an das Hilfsprogramm übergeben.");
+            }
+        }
+        catch (Exception ex)
+        {
+            BetriebsLog.Warnung("Alarm", "Wartungshinweis nach Alarm ohne Empfänger nicht angezeigt.", ex);
         }
     }
 

@@ -38,6 +38,12 @@ public partial class SenderStatusWindow : Window
             StillSending = true,
         });
 
+        // Ohne Empfänger gibt es nichts zu verfolgen: Das Popup meldet nur kurz, dass niemand eingestellt ist.
+        if (session.Targets.Count == 0)
+        {
+            StartAutoClose(AppConstants.SenderStatusNoRecipientsAutoClose);
+        }
+
         Loaded += (_, _) => PositionInCorner();
         // Issue #7: die "Auf dem Weg"-Liste wächst per SizeToContent nach jeder Antwort -
         // ohne Neupositionierung hier bliebe die einmalig in Loaded gesetzte Top-Kante stehen
@@ -75,7 +81,7 @@ public partial class SenderStatusWindow : Window
 
     // Nutzerwunsch 09.08.2026: das Banner soll nicht wie bisher unbegrenzt stehen bleiben.
     // Bei manuellem Abbrechen sofort weg (der Sender hat gerade selbst aktiv gehandelt,
-    // braucht keine Bestätigungsanzeige mehr) - bei Schwellwert/Zeitablauf/"nicht zugestellt" noch
+    // braucht keine Bestätigungsanzeige mehr) - bei Schwellwert/Zeitablauf noch
     // SenderStatusBannerAutoCloseAfterFinish (3 Min., Issue #100) sichtbar, genug Zeit für
     // einen Blick auf die "Auf dem Weg"-Liste, aber nicht dauerhaft manuell wegzuklicken.
     private void Session_Finished(object? sender, EventArgs e) =>
@@ -90,22 +96,33 @@ public partial class SenderStatusWindow : Window
                 return;
             }
 
-            _autoCloseTimer = new DispatcherTimer { Interval = AppConstants.SenderStatusBannerAutoCloseAfterFinish };
-            _autoCloseTimer.Tick += (_, _) =>
+            if (_autoCloseTimer is null)
             {
-                _autoCloseTimer!.Stop();
-                Close();
-            };
-            _autoCloseTimer.Start();
+                StartAutoClose(AppConstants.SenderStatusBannerAutoCloseAfterFinish);
+            }
         });
+
+    private void StartAutoClose(TimeSpan after)
+    {
+        _autoCloseTimer = new DispatcherTimer { Interval = after };
+        _autoCloseTimer.Tick += (_, _) =>
+        {
+            _autoCloseTimer!.Stop();
+            Close();
+        };
+        _autoCloseTimer.Start();
+    }
 
     private void ApplyStatus(AlarmSessionStatus status)
     {
         StatusText.Text = SenderStatusTexts.Headline(status.StillSending, status.TargetCount);
         AckedText.Text = $"Empfangen: {status.AckedCount} von {status.TargetCount}";
         var noRecipientsHint = SenderStatusTexts.NoRecipientsHint(status.TargetCount);
+        var hasRecipients = noRecipientsHint is null;
         NoRecipientsText.Text = noRecipientsHint ?? string.Empty;
-        NoRecipientsText.Visibility = noRecipientsHint is null ? Visibility.Collapsed : Visibility.Visible;
+        NoRecipientsText.Visibility = hasRecipients ? Visibility.Collapsed : Visibility.Visible;
+        AckedText.Visibility = hasRecipients ? Visibility.Visible : Visibility.Collapsed;
+        CancelButton.Visibility = hasRecipients ? Visibility.Visible : Visibility.Collapsed;
         CancelButton.IsEnabled = status.StillSending;
 
         OnTheWayList.ItemsSource = status.OnTheWayNames;
