@@ -79,7 +79,7 @@ Bei #151 aufgefallen, nicht Teil des Tickets, jeweils als eigenes Issue angelegt
   `dependency-check`. Vorher klären, ob der Weg über `release-1.0` (`AGENTS.md` Teil B, Ausnahme
   „Release-Stabilisierung“) oder direkt `develop` → `main` (#204, DoD 5) gilt.
 - Handtest des Repo-Owners nach `docs/handbuch/handtest-1.0.md`, danach Merge nach `main`, Tag
-  `v1.0.0` und Kundeninstallat durch den Repo-Owner.
+  `v1.0.0` und Kundeninstaller durch den Repo-Owner.
 - Rulesets an das neue Modell anpassen (#160): Fast-Forward `develop` → `release-X.Y` kann ein
   GitHub-PR nicht; vor dem ersten Release klären.
 - Tickets im Milestone `v1.0`, danach `Regelentwicklung`; zurückgestellte Themen in `release-2.0-…` bzw. `Backlog`.

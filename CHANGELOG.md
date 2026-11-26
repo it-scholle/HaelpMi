@@ -10,7 +10,7 @@ Erste freigegebene Version. Aufgeführt ist, was sich gegenüber den Vorversione
 - Betriebsprotokoll zur Fehlersuche: `agent.log` (Hintergrundprogramm) und `config.log` (Einstellungen und Dashboard) unter `%ProgramData%\HaelpMi`, ohne Alarmtexte oder andere Inhalte. Eine Datei pro Tag, ältere werden komprimiert und nach 90 Tagen gelöscht, höchstens 200 MB je Programm. Ein ausführlicheres Protokoll lässt sich ohne Update über `betriebslog.json` einschalten (#227)
 - Empfängt ein Gerät Nachrichten einer anderen HälpMi-Installation im selben Netz (z. B. ein mit falschem Installer eingerichtetes Gerät), steht das als Warnung im Betriebsprotokoll, höchstens einmal pro Stunde je Art und fremder Installation. Die Nachrichten werden wie bisher ignoriert (#214)
 - Die Installer richten die Windows-Firewall-Freigaben für HälpMi selbst ein; Windows fragt beim ersten Start nicht mehr nach (#150)
-- (folgt) Ist für ein Alarm-Profil kein Empfänger erreichbar, zeigt das Sender-Gerät sofort „Kein Empfänger eingestellt!“ mit dem Hinweis, dass ein Admin im Dashboard Empfänger einrichten muss; die Meldung blendet sich nach wenigen Sekunden aus. Nach 30 Sekunden erscheint zusätzlich eine Windows-Benachrichtigung „Wartung erforderlich“, höchstens eine pro 30 Sekunden (#233)
+- (folgt) Ist für ein Alarm-Profil kein Empfänger eingerichtet oder sind alle Empfänger deaktiviert, zeigt das Sender-Gerät sofort „Kein Empfänger eingestellt!“ mit dem Hinweis, dass ein Admin im Dashboard Empfänger einrichten muss; die Meldung blendet sich nach wenigen Sekunden aus. Nach 30 Sekunden erscheint zusätzlich eine Windows-Benachrichtigung „Wartung erforderlich“, höchstens eine pro 30 Sekunden (#233)
 ### Verbessert
 - HälpMi läuft auf .NET 10 (Langzeit-Support bis November 2028) statt .NET 8; die Laufzeit ist im Installer enthalten, eine eigene .NET-Installation ist nicht nötig (#154)
 - Einheitliche Linien-Symbole; Symbol-Schaltflächen haben eine Textalternative für Screenreader (#151)
@@ -33,7 +33,6 @@ Erste freigegebene Version. Aufgeführt ist, was sich gegenüber den Vorversione
 - Der Hinweis „Alarm nicht gesendet“ auf einem gesperrten Gerät erscheint als eigenes Fenster im Vordergrund statt verdeckt unter einer anderen Meldung (#179)
 - Wieder-Aktivieren eines Geräts im Reiter „Geräte / Lizenz“ hebt nur die Deaktivierung auf; das Gerät umgeht das Lizenzkontingent nicht mehr dauerhaft (#180)
   - Hinweis für bestehende Installationen: Geräte, die vorher wieder aktiviert wurden, umgehen das Kontingent weiterhin. Es gibt keine automatische Umstellung; ein Admin schaltet solche Geräte im Reiter „Geräte / Lizenz“ einmal aus und wieder ein.
-- Ein ohne Kundengruppe gebauter Test-Installer bekommt eine eigene, zufällige Test-Gruppe und empfängt dadurch Alarme; ein Kunden-Installer ohne Kundengruppe lässt sich nicht mehr bauen (#175)
 - (folgt) Das Alarmfenster ist sofort bedienbar und der Sender erhält die Empfangsbestätigung, auch wenn die Tonausgabe kurz nach dem Start von HälpMi länger braucht; vorher konnte das Fenster bis zu rund 20 Sekunden nicht reagieren (#238)
 
 ## [0.47.3] – 2026-11-18

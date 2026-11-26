@@ -18,7 +18,11 @@ Windows-Benachrichtigungen, Firewall-Abfragen, Update-Weg).
 
 Rückmeldung je Punkt: ✅ geht / ❌ geht nicht + was passiert ist (Text der Meldung, Screenshot,
 `agent.log` und `audit.log` des betroffenen Geräts). Bei Abstürzen zusätzlich
-`%LocalAppData%\HaelpMi\crash-*.log`.
+`C:\ProgramData\HaelpMi\crash.log`.
+
+**HälpMi neu starten** (in mehreren Punkten gebraucht): `HaelpMi.Agent.exe` im Task-Manager beenden
+und danach entweder ab- und wieder anmelden oder `HaelpMi.Agent.exe` im Installationsordner per
+Doppelklick starten. Einen Startmenü-Eintrag dafür gibt es nicht.
 
 ## Aufbau
 
@@ -52,16 +56,17 @@ Rückmeldung je Punkt: ✅ geht / ❌ geht nicht + was passiert ist (Text der Me
       Block-Regel ist weg, C empfängt Alarme (Punkt 2).
 - [ ] Nach spätestens einer Minute sehen sich A, B und C gegenseitig (Dashboard auf A, Reiter
       „Geräte / Lizenz“).
-- [ ] Startmenü auf jedem Gerät: „HälpMi starten“ vorhanden; bei laufendem HälpMi erneut klicken →
-      Sprechblase „HälpMi läuft bereits“, genau ein `HaelpMi.Agent.exe` im Task-Manager.
+- [ ] Bei laufendem HälpMi `HaelpMi.Agent.exe` im Installationsordner ein zweites Mal starten →
+      kein zweiter Prozess im Task-Manager, kein Fehlerdialog, im `agent.log` ein Eintrag, dass schon
+      ein Agent läuft.
 
 ## 2. Alarmweg (P1: A → B und C, Schwelle 2)
 
 - [ ] Tastenkürzel von P1 auf A → B und C zeigen das Alarmfenster **im Vordergrund**, auch über einer
       Vollbild-Anwendung (z. B. Video im Vollbild, PowerPoint-Präsentation).
 - [ ] Das Fenster ist **sofort** bedienbar (Knopf „Bin unterwegs“ reagiert ohne Verzögerung, auch
-      wenn HälpMi auf dem Empfänger gerade erst gestartet wurde: Agent auf B beenden, „HälpMi
-      starten“, nach ca. 10 s den Alarm auslösen). (folgt: #238)
+      wenn HälpMi auf dem Empfänger gerade erst gestartet wurde: HälpMi auf B neu starten, nach ca.
+      10 s den Alarm auslösen). (folgt: #238)
 - [ ] Raum und Raumnummer groß, Benutzername klein.
 - [ ] Ton auf B und C hörbar, auch bei stummgeschaltetem Windows-Ton.
 - [ ] Sender-Fenster auf A unten rechts: „Empfangen: 2 von 2“ spätestens mit der zweiten Welle
@@ -86,10 +91,9 @@ Rückmeldung je Punkt: ✅ geht / ❌ geht nicht + was passiert ist (Text der Me
       sofort auf B „Benutzer wechseln“ → zweites Konto anmelden. Solange die Anmeldung läuft (noch
       kein Tray-Symbol), zeigt A „Empfangen: 0 von 1“. Sobald HälpMi in der neuen Sitzung läuft und
       das Fenster dort erscheint, springt der Zähler mit der nächsten Welle auf 1 von 1.
-- [ ] **Gerät startet während des Alarms:** Agent auf C beenden, Alarm P1 auslösen, nach ca. 10 s auf
-      C „HälpMi starten“ → C bekommt das Fenster mit der nächsten Welle, A zählt C mit.
-- [ ] Testmodus (Konfigurationsprogramm → „Testmodus“) einmal auslösen: Fenster grün mit „TEST“,
-      Ton unverändert, Toggle springt danach von selbst zurück.
+- [ ] **Gerät startet während des Alarms:** `HaelpMi.Agent.exe` auf C beenden, Alarm P1 auslösen,
+      nach ca. 10 s auf C `HaelpMi.Agent.exe` im Installationsordner starten → C bekommt das Fenster
+      mit der nächsten Welle, A zählt C mit.
 
 ## 3. Kein Empfänger (P3)
 
@@ -100,8 +104,9 @@ Rückmeldung je Punkt: ✅ geht / ❌ geht nicht + was passiert ist (Text der Me
       Hintergrunddienst konnte eine Meldung nicht zustellen (Code H-00). Bitte die IT informieren.“
       (folgt: #233)
       - [ ] Absender lautet „Arbeitsplatz-Dienst“, auf einem **frisch** installierten Gerät.
-      - [ ] Absender auf einem Gerät, das vorher mit 0.46.x eine Sprechblase von HälpMi gezeigt hat
-            (Punkt 6): Name notieren („Arbeitsplatz-Dienst“ oder „HaelpMi.Agent“).
+      - [ ] Nur falls vorhanden: Absender auf einem Gerät, auf dem früher schon eine Sprechblase von
+            HälpMi erschienen ist (z. B. „Autostart nicht eingerichtet“): Name notieren
+            („Arbeitsplatz-Dienst“ oder „HaelpMi.Agent“).
       - [ ] Welches Symbol zeigt Windows neben dem Absender? Screenshot.
 - [ ] P3 dreimal innerhalb von 30 s drücken → genau **eine** Benachrichtigung.
 - [ ] `audit.log` auf A: genau eine Welle je Druck, keine Wiederholung.
@@ -136,7 +141,10 @@ Rückmeldung je Punkt: ✅ geht / ❌ geht nicht + was passiert ist (Text der Me
 
 Vorbereitung: C auf den Ausgangszustand bringen (deinstallieren mit „Einstellungen entfernen“), dann
 den 0.46.x-Installer derselben Kundengruppe installieren, Profil P2 so ändern, dass C Empfänger ist,
-einen Alarm empfangen und schließen, und einmal die Sprechblase „HälpMi läuft bereits“ auslösen.
+einen Alarm empfangen und schließen.
+
+- [ ] Mischbetrieb vor dem Update: A (1.0.0) löst P2 bzw. P1 aus → C (0.46.x) empfängt, Quittung
+      und Schließen funktionieren. Umgekehrt, falls C Sender ist: C (0.46.x) → B (1.0.0).
 
 - [ ] User-Installer 1.0.0 auf C ausführen (Update). Keine Raum-Abfrage, keine Firewall-Abfrage.
 - [ ] Nach dem Update: genau ein `HaelpMi.Agent.exe`, Dateiversion 1.0.0 (Task-Manager → Details →
@@ -147,7 +155,7 @@ einen Alarm empfangen und schließen, und einmal die Sprechblase „HälpMi läu
       „Geräte / Lizenz“ einmal aus- und wieder einschalten (Hinweis aus den Versionshinweisen) →
       zählt danach normal gegen das Kontingent.
 - [ ] Mit zwei angemeldeten Windows-Benutzern auf C updaten: In der zweiten Sitzung läuft HälpMi
-      danach nicht (bekannte Einschränkung); „HälpMi starten“ dort behebt es.
+      danach nicht (bekannte Einschränkung); Ab- und wieder Anmelden in dieser Sitzung behebt es.
 - [ ] Admin-Gerät A ebenso von 0.46.x auf 1.0.0 aktualisieren (falls A noch auf 0.46.x steht):
       Dashboard öffnet, alle Gruppen und Profile vorhanden.
 
@@ -156,8 +164,8 @@ einen Alarm empfangen und schließen, und einmal die Sprechblase „HälpMi läu
 - [ ] `C:\ProgramData\HaelpMi\agent.log` und `config.log` vorhanden (Config einmal öffnen), Zeilen im
       JSON-Format mit Zeit, Stufe, Modul.
 - [ ] In den Logs stehen **keine** Alarmtexte (Profiltext eines ausgelösten Alarms suchen).
-- [ ] `C:\ProgramData\HaelpMi\betriebslog.json` mit `{"Stufe": "DEBUG"}` anlegen, Agent neu starten
-      → mehr Einträge (u. a. Zeitmessungen beim Alarmempfang); Datei wieder löschen, Agent neu
+- [ ] `C:\ProgramData\HaelpMi\betriebslog.json` mit `{"Stufe": "DEBUG"}` anlegen, HälpMi neu starten
+      → mehr Einträge (u. a. Zeitmessungen beim Alarmempfang); Datei wieder löschen, HälpMi neu
       starten → nur noch INFO und höher.
 - [ ] Optional, wenn ein Laufwerk `Z:` verbunden ist: Protokolle landen unter
       `Z:\HaelpMi-Logs\<Rechnername>\`. Für den Kundeneinsatz klären, ob das so gewünscht ist.
