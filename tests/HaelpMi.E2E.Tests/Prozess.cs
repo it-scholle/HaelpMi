@@ -79,23 +79,38 @@ internal static class Prozess
         return gefunden;
     }
 
+    /// <summary>
+    /// Kill wirkt asynchron: Ein Prozess mit offener Ein-/Ausgabe (z. B. Ton) kann noch Sekunden weiterleben und
+    /// hält so die Einzelinstanz-Sperre und die Ports. Ein direkt danach gestarteter Agent beendet sich dann
+    /// sofort wieder, deshalb erst zurückkehren, wenn der Prozess wirklich weg ist.
+    /// </summary>
     public static void Beenden(string prozessName)
     {
         foreach (var p in Process.GetProcessesByName(prozessName))
         {
-            try
+            using (p)
             {
-                p.Kill(entireProcessTree: true);
-                p.WaitForExit(5000);
-            }
-            catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception)
-            {
-                // Bereits beendet oder fremde Sitzung.
-            }
-            finally
-            {
-                p.Dispose();
+                bool beendet;
+                try
+                {
+                    p.Kill(entireProcessTree: true);
+                    beendet = p.WaitForExit(BeendenTimeout);
+                }
+                catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception)
+                {
+                    // Bereits beendet oder fremde Sitzung.
+                    continue;
+                }
+
+                if (!beendet)
+                {
+                    throw new InvalidOperationException(
+                        $"{prozessName} (PID {p.Id}) läuft {BeendenTimeout.TotalSeconds:0} s nach dem Beenden noch; " +
+                        "ein danach gestarteter Agent fände die Einzelinstanz-Sperre belegt und beendete sich sofort.");
+                }
             }
         }
     }
+
+    private static readonly TimeSpan BeendenTimeout = TimeSpan.FromSeconds(30);
 }
