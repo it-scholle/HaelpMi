@@ -145,6 +145,84 @@ public class NetworkingTests
         Assert.False(await faulted.WasDisplayedAsync());
     }
 
+    [Fact]
+    public async Task AlarmTcpListener_HandlerBlocksAfterDisplay_AcksImmediately_AndAcceptsNextConnection()
+    {
+        // Steht für eine Tonausgabe, die nach der Anzeige synchron hängt (WASAPI kurz nach dem Start).
+        using var tonHaengt = new ManualResetEventSlim(false);
+        var (listener, port, customerGroupId, receiverDeviceId) = StartListener(args =>
+        {
+            args.ReportDisplayed(true);
+            tonHaengt.Wait(TimeSpan.FromSeconds(20));
+        });
+        try
+        {
+            var dauer = System.Diagnostics.Stopwatch.StartNew();
+            var erste = await SendOneAsync(customerGroupId, receiverDeviceId, port);
+            var zweite = await SendOneAsync(customerGroupId, receiverDeviceId, port);
+            dauer.Stop();
+
+            Assert.Equal(1, erste.AckedCount);
+            Assert.Equal(1, zweite.AckedCount);
+            Assert.True(dauer.Elapsed < TimeSpan.FromSeconds(3), $"Zwei Quittungen brauchten {dauer.Elapsed.TotalSeconds:F1} s.");
+        }
+        finally
+        {
+            tonHaengt.Set();
+            await listener.DisposeAsync();
+        }
+    }
+
+    [Fact]
+    public async Task AlarmTcpListener_HandlerBlocksWithoutReport_StillAcceptsNextConnection()
+    {
+        // Ein hängender Melder darf weitere Verbindungen nicht im Backlog stauen.
+        using var ersterHaengt = new ManualResetEventSlim(false);
+        var aufrufe = 0;
+        var (listener, port, customerGroupId, receiverDeviceId) = StartListener(args =>
+        {
+            if (Interlocked.Increment(ref aufrufe) == 1)
+            {
+                ersterHaengt.Wait(TimeSpan.FromSeconds(20));
+                return;
+            }
+
+            args.ReportDisplayed(true);
+        });
+        try
+        {
+            var erste = SendOneAsync(customerGroupId, receiverDeviceId, port);
+            await WaitUntilAsync(() => Volatile.Read(ref aufrufe) >= 1, TimeSpan.FromSeconds(3));
+
+            var dauer = System.Diagnostics.Stopwatch.StartNew();
+            var zweite = await SendOneAsync(customerGroupId, receiverDeviceId, port);
+            dauer.Stop();
+
+            Assert.Equal(1, zweite.AckedCount);
+            Assert.True(dauer.Elapsed < TimeSpan.FromSeconds(2), $"Die zweite Quittung brauchte {dauer.Elapsed.TotalSeconds:F1} s.");
+            Assert.Equal(0, (await erste).AckedCount);
+        }
+        finally
+        {
+            ersterHaengt.Set();
+            await listener.DisposeAsync();
+        }
+    }
+
+    private static async Task WaitUntilAsync(Func<bool> condition, TimeSpan timeout)
+    {
+        var deadline = DateTime.UtcNow + timeout;
+        while (!condition())
+        {
+            if (DateTime.UtcNow > deadline)
+            {
+                throw new TimeoutException("Bedingung nicht rechtzeitig erfüllt.");
+            }
+
+            await Task.Delay(20);
+        }
+    }
+
     private static AlarmReceivedEventArgs NewArgs() => new()
     {
         Request = new AlarmRequestMessage(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), "PC", "User", "Raum", "1", false, "Text", 1, DateTimeOffset.UtcNow),
