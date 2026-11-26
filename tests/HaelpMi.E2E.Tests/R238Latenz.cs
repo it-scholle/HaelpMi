@@ -14,15 +14,14 @@ internal static class R238Latenz
     public const int ConfigVersion = 7100;
 
     /// <summary>
-    /// Höchstzeit des Agents vom Empfang bis „Popup sichtbar“ und bis „UI-Thread frei“ (Betriebs-Log, Uhr des Agents).
-    /// Gemessen 0,32 bis 0,78 s; vor dem Fix hing der UI-Thread bis etwa 24 s.
+    /// Höchstzeit vom ersten Empfang bis „Popup sichtbar“ und bis „UI-Thread frei“ (Betriebs-Log des Agents).
+    /// Messwerte und Begründung: docs/wissen/test-strategie.md, T26.
     /// </summary>
     public static readonly TimeSpan MaxProdukt = TimeSpan.FromSeconds(2);
 
     /// <summary>
-    /// Höchstzeit vom Eintrag „alarm received“ bis das Alarmfenster per UIA gelesen und bedient werden kann. Enthält den
-    /// ersten UIA-Aufbau im Agent (gemessen 2,8 bis 3,5 s in Teilläufen, 6,0 s in der vollen Suite bei 0,44 s
-    /// Produktzeit); vor dem Fix bis etwa 24 s.
+    /// Höchstzeit vom Eintrag „alarm received“ bis das Alarmfenster per UIA gelesen und bedient werden kann; enthält
+    /// den ersten Automation-Aufbau im Agent. Messwerte und Begründung: docs/wissen/test-strategie.md, T26.
     /// </summary>
     public static readonly TimeSpan MaxBisBedienbar = TimeSpan.FromSeconds(10);
 
@@ -104,11 +103,15 @@ internal static class R238Latenz
         return zeilen;
     }
 
-    /// <summary>Zeitmessungen des Agents zum ersten Alarm ab <paramref name="seit"/>; null, solange ein Wert fehlt.</summary>
-    /// <param name="zeilen">Zeilen aus <see cref="BetriebsLogZeilen"/>; eine Wiederholungswelle derselben Vorgangs-ID wird übergangen.</param>
+    /// <summary>
+    /// Zeit vom ersten „Alarm empfangen.“ ab <paramref name="seit"/> bis „Popup sichtbar“ bzw. „UI-Thread frei“ derselben
+    /// Vorgangs-ID, aus den Log-Zeitstempeln; null, solange ein Eintrag fehlt. Nicht die ms-Angabe der Meldung: Die zählt
+    /// ab der Welle, die das Fenster öffnet, und verdeckte eine ausgefallene erste Welle.
+    /// </summary>
     public static (TimeSpan Sichtbar, TimeSpan Frei)? ProduktZeiten(IEnumerable<string> zeilen, DateTimeOffset seit)
     {
         string? vorgang = null;
+        var empfangen = default(DateTimeOffset);
         TimeSpan? sichtbar = null;
         TimeSpan? frei = null;
         foreach (var zeile in zeilen)
@@ -121,10 +124,11 @@ internal static class R238Latenz
             if (vorgang is null && meldung == "Alarm empfangen.")
             {
                 vorgang = id;
+                empfangen = zeit;
             }
-            else if (vorgang is not null && id == vorgang && MsNachEmpfang.Match(meldung) is { Success: true } treffer)
+            else if (vorgang is not null && id == vorgang && MeldungNachEmpfang.Match(meldung) is { Success: true } treffer)
             {
-                var dauer = TimeSpan.FromMilliseconds(int.Parse(treffer.Groups[2].Value, CultureInfo.InvariantCulture));
+                var dauer = zeit - empfangen;
                 if (treffer.Groups[1].Value == "Popup sichtbar")
                 {
                     sichtbar ??= dauer;
@@ -139,7 +143,7 @@ internal static class R238Latenz
         return sichtbar is { } s && frei is { } f ? (s, f) : null;
     }
 
-    private static readonly Regex MsNachEmpfang = new(@"^(Popup sichtbar|UI-Thread frei), (\d+) ms nach dem Empfang\.$", RegexOptions.CultureInvariant);
+    private static readonly Regex MeldungNachEmpfang = new(@"^(Popup sichtbar|UI-Thread frei), \d+ ms nach dem Empfang\.$", RegexOptions.CultureInvariant);
 
     private static bool LeseEintrag(string zeile, out DateTimeOffset zeit, out string meldung, out string? vorgang)
     {
