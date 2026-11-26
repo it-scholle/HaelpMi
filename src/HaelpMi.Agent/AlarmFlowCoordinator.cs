@@ -1,4 +1,6 @@
+using System.Diagnostics;
 using HaelpMi.Core.Audio;
+using HaelpMi.Core.Diagnostics;
 using HaelpMi.Core.Interop;
 using HaelpMi.Core.Licensing;
 using HaelpMi.Core.Models;
@@ -24,6 +26,7 @@ namespace HaelpMi.Agent;
 /// </summary>
 public sealed class AlarmFlowCoordinator
 {
+    private const string LogModul = "Alarmempfang";
     private readonly Func<LiveIdentity> _identityProvider;
     private readonly Func<OwnSettings> _settingsProvider;
     private readonly Func<SharedConfig> _sharedConfigProvider;
@@ -125,6 +128,9 @@ public sealed class AlarmFlowCoordinator
         var settings = _settingsProvider();
         var soundOption = IncomingSoundCatalog.Resolve(settings.IncomingSoundId);
 
+        var vorgangsId = request.AlarmSessionId.ToString();
+        BetriebsLog.Debug(LogModul, $"Anzeige angefordert, {MsSeitEmpfang(args)} ms nach dem Empfang.", vorgangsId: vorgangsId);
+
         // Timeout statt unbegrenztem Invoke - direkt nach Logon ist der Dispatcher (siehe
         // AlarmDispatcherReadyTimeout) unter Umständen noch nicht am Pumpen, sonst würde dieser
         // Aufruf den Empfangsthread bis zum Ende von OnStartup blockieren und der Ack käme beim
@@ -163,11 +169,20 @@ public sealed class AlarmFlowCoordinator
                 request.AlarmSessionId,
                 request.SentAtUtc);
 
+            BetriebsLog.Debug(LogModul, $"UI-Thread übernimmt, {MsSeitEmpfang(args)} ms nach dem Empfang.", vorgangsId: vorgangsId);
+            popup.ContentRendered += (_, _) => BetriebsLog.Debug(LogModul, $"Popup sichtbar, {MsSeitEmpfang(args)} ms nach dem Empfang.", vorgangsId: vorgangsId);
             popup.OnMyWayRequested += (_, _) => _ = ReportOnMyWayAsync(request, args);
             popup.Closed += (_, _) => _receivedSessions.PopupClosed(request.AlarmSessionId, popup.IsCloseAllowed);
 
             _receivedSessions.PopupShown(request.AlarmSessionId, popup);
             popup.Show();
+            BetriebsLog.Debug(LogModul, $"Popup geöffnet (Show), {MsSeitEmpfang(args)} ms nach dem Empfang.", vorgangsId: vorgangsId);
+
+            // Erst bei leerer Warteschlange: Bleibt der UI-Thread nach dem Zeichnen beschäftigt, beantwortet
+            // er auch keine UI-Automation-Anfragen; der Abstand zu „Popup sichtbar“ zeigt das.
+            popup.Dispatcher.BeginInvoke(
+                System.Windows.Threading.DispatcherPriority.ApplicationIdle,
+                () => BetriebsLog.Debug(LogModul, $"UI-Thread frei, {MsSeitEmpfang(args)} ms nach dem Empfang.", vorgangsId: vorgangsId));
         }, AppConstants.AlarmDispatcherReadyTimeout);
 
         // Ohne Aktion hat der Dispatcher nicht rechtzeitig angefangen: kein Fenster in dieser Welle.
@@ -178,8 +193,27 @@ public sealed class AlarmFlowCoordinator
             return;
         }
 
-        _ = _audioPlayer.PlayOnAllActiveDevicesAsync(soundOption);
+        // Eigener Task: Der synchrone Anfang der Tonausgabe (Geräte aufzählen, WASAPI initialisieren)
+        // kann kurz nach dem Start sekundenlang dauern und darf weder Quittung noch Empfang aufhalten.
+        _ = Task.Run(() => PlaySoundAsync(soundOption, vorgangsId));
     }
+
+    private async Task PlaySoundAsync(IncomingSoundCatalog.Option soundOption, string vorgangsId)
+    {
+        var start = Stopwatch.GetTimestamp();
+        try
+        {
+            await _audioPlayer.PlayOnAllActiveDevicesAsync(soundOption);
+            BetriebsLog.Debug(LogModul, $"Ton beendet nach {Stopwatch.GetElapsedTime(start).TotalMilliseconds:F0} ms.", vorgangsId: vorgangsId);
+        }
+        catch (Exception ex)
+        {
+            BetriebsLog.Fehler(LogModul, "Ton für den empfangenen Alarm konnte nicht abgespielt werden.", ex, vorgangsId: vorgangsId);
+        }
+    }
+
+    private static string MsSeitEmpfang(AlarmReceivedEventArgs args) =>
+        Stopwatch.GetElapsedTime(args.ReceivedTimestamp).TotalMilliseconds.ToString("F0");
 
     /// <summary>Every aggregated status update from the sender (FR-51): keeps a still-open receiver popup's threshold gate current.</summary>
     private void HandleStatusRelay(AlarmStatusRelayMessage relay)

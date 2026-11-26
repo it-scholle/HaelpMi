@@ -71,6 +71,12 @@ Betriebs-Log (`src/HaelpMi.Core/Diagnostics/BetriebsLog.cs`):
   Aufräumen läuft im Hintergrund beim Start, beim Tageswechsel und bei einer neuen Teil-Datei, also nur, wenn
   der Prozess etwas schreibt.
 - Unbehandelte Ausnahmen stehen zusätzlich zu `crash.log` als FEHLER im Betriebs-Log.
+- Alarmempfang (Modul `Alarmempfang`, Vorgang = Alarm-Session-ID): WARNUNG, wenn eine Quittung nicht
+  zustellbar ist oder keine Anzeige-Rückmeldung rechtzeitig kommt; FEHLER, wenn Verarbeitung oder Ton
+  scheitern. Mit DEBUG die Laufzeiten ab dem Empfang: Anzeige angefordert, UI-Thread übernimmt, Popup
+  geöffnet, Popup sichtbar, Quittung geschrieben, Ton beendet.
+- Vordergrund (Modul `Vordergrund`): Dauer jedes erzwungenen In-den-Vordergrund-Holens, als WARNUNG ab 1 s
+  oder wenn das bisherige Vordergrundfenster nicht reagiert, sonst als DEBUG.
 
 Das Laufwerk `Z:` ist ein Zwischenschritt für die Alpha-Testphase (zentrale Ferndiagnose). Eine
 Aufbewahrungsfrist, Rotation und eine Hash-Kette für das Audit-Log gibt es im aktuellen Stand nicht
