@@ -21,7 +21,8 @@ _spec.loader.exec_module(auswerten)
 NS = "http://microsoft.com/schemas/VisualStudio/TeamTest/2010"
 
 
-def trx(ergebnisse: list[tuple[str, str, str]], lauf: str = "Completed", laufmeldung: str = "") -> str:
+def trx(ergebnisse: list[tuple[str, str, str]], lauf: str = "Completed", laufmeldung: str | list[str] = "") -> str:
+    meldungen = [laufmeldung] if isinstance(laufmeldung, str) and laufmeldung else list(laufmeldung or [])
     zeilen = []
     for name, ausgang, text in ergebnisse:
         fehler = f"<Output><ErrorInfo><Message>{text}</Message></ErrorInfo></Output>" if text else ""
@@ -30,8 +31,9 @@ def trx(ergebnisse: list[tuple[str, str, str]], lauf: str = "Completed", laufmel
         f'<?xml version="1.0" encoding="utf-8"?><TestRun xmlns="{NS}">'
         f"<Results>{''.join(zeilen)}</Results>"
         f'<ResultSummary outcome="{lauf}"><Counters total="{len(ergebnisse)}" />'
-        + (f'<RunInfos><RunInfo computerName="VM" outcome="Error" timestamp="2026-11-25T21:00:00">'
-           f"<Text>{laufmeldung}</Text></RunInfo></RunInfos>" if laufmeldung else "")
+        + ("<RunInfos>" + "".join(
+            f'<RunInfo computerName="VM" outcome="Error" timestamp="2026-11-25T21:00:00"><Text>{m}</Text></RunInfo>'
+            for m in meldungen) + "</RunInfos>" if meldungen else "")
         + "</ResultSummary></TestRun>"
     )
 
@@ -60,6 +62,10 @@ class Lauf:
 
     def aufraeumen(self) -> None:
         self._tmp.cleanup()
+
+
+def konsole(name: str) -> str:
+    return f"[xUnit.net 00:01:44.27]     {name} [FAIL]"
 
 
 GRUEN_A = trx([("GeraetATests.T1_Installation", "Passed", "")])
@@ -238,6 +244,51 @@ class NegativtestTests(unittest.TestCase):
         code, text = self.lauf.auswerten("a", "T22")
         self.assertEqual(code, 1, text)
         self.assertIn("Test host process crashed", text)
+
+    def test_konsolenzeile_zum_selben_test_zaehlt_nicht_doppelt(self) -> None:
+        # So schreibt vstest die trx echter Läufe (45733191892, 45733943179): Ergebnis plus Konsolenzeile als RunInfo.
+        self.lauf.geraet("a", "1", trx([("HaelpMi.E2E.Tests.GeraetATests.T22_Regression41_X", "Failed", "erwartet")],
+                                        lauf="Failed", laufmeldung=konsole("HaelpMi.E2E.Tests.GeraetATests.T22_Regression41_X")))
+        self.lauf.geraet("b", "0", GRUEN_B)
+        code, text = self.lauf.auswerten("a,b", "T22")
+        self.assertEqual(code, 0, text)
+        self.assertIn("erwartet fehlgeschlagen: 1, unerwartet: 0", text)
+
+    def test_konsolenzeile_ersetzt_keinen_absturz(self) -> None:
+        self.lauf.geraet("a", "1", trx([("GeraetATests.T22_X", "Failed", "erwartet")], lauf="Failed", laufmeldung=[
+            konsole("GeraetATests.T22_X"), "The active test run was aborted. Reason: Test host process crashed"]))
+        code, text = self.lauf.auswerten("a", "T22")
+        self.assertEqual(code, 1, text)
+        self.assertIn("Test host process crashed", text)
+
+    def test_konsolenzeile_ohne_trx_ergebnis_ist_fallback(self) -> None:
+        self.lauf.geraet("a", "1", trx([("GeraetATests.T1_Installation", "Passed", "")], lauf="Failed",
+                                        laufmeldung=konsole("GeraetATests.T22_X")))
+        code, text = self.lauf.auswerten("a", "T22")
+        self.assertEqual(code, 0, text)
+        self.assertIn("nur Konsolenzeile", text)
+        self.assertIn("erwartet fehlgeschlagen: 1, unerwartet: 0", text)
+
+    def test_konsolenzeile_ohne_trx_ergebnis_belegt_keine_variante(self) -> None:
+        self.lauf.geraet("a", "1", trx([], lauf="Failed", laufmeldung=konsole("GeraetATests.T10_X")))
+        code, text = self.lauf.auswerten("a", "T10W")
+        self.assertEqual(code, 1, text)
+
+    def test_konsolenzeile_fuer_unerwarteten_test_ist_rot(self) -> None:
+        self.lauf.geraet("a", "1", trx([("GeraetATests.T22_X", "Failed", "erwartet")], lauf="Failed", laufmeldung=[
+            konsole("GeraetATests.T22_X"), konsole("GeraetATests.T5_Alarm")]))
+        code, text = self.lauf.auswerten("a", "T22")
+        self.assertEqual(code, 1, text)
+        self.assertIn("T5_Alarm", text)
+
+    def test_konsolenzeile_widerspricht_trx_ist_rot(self) -> None:
+        self.lauf.geraet("a", "1", trx([
+            ("GeraetATests.T22_X", "Failed", "erwartet"),
+            ("GeraetATests.T5_Alarm", "Passed", ""),
+        ], lauf="Failed", laufmeldung=[konsole("GeraetATests.T22_X"), konsole("GeraetATests.T5_Alarm")]))
+        code, text = self.lauf.auswerten("a", "T22")
+        self.assertEqual(code, 1, text)
+        self.assertIn("laut Konsole [FAIL]", text)
 
     def test_exitcode_ohne_fehlschlag_ist_rot(self) -> None:
         self.lauf.geraet("a", "1", trx([("GeraetATests.T22_X", "Failed", "erwartet")], lauf="Failed"))

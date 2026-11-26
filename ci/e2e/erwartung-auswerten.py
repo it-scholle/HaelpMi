@@ -17,6 +17,8 @@ gescheitert") zählt nie als Nachweis, nur als erlaubter Begleiter eines eigentl
 desselben Kürzels. Zeilen aus uebersprungen.txt (Teilprüfungen für Features, die der Altstand noch nicht
 hat) stehen im Bericht und ändern das Urteil nicht. Unerwartet ist: ein Fehlschlag, der zu keinem Kürzel passt, jedes andere Ergebnis als Passed/Failed/NotExecuted, ein abgebrochener Testlauf, ein Gerät ohne
 Artefakt oder Exit-Code, ein Exit-Code ungleich 0 ohne fehlgeschlagenen Test. Sonst Exit 1.
+Die xunit-Konsolenzeile „[xUnit.net …] <Test> [FAIL]“, die vstest zusätzlich als RunInfo ablegt, zählt nur,
+wenn das Ergebnis dieses Tests in der trx fehlt; widerspricht sie der trx, ist das unerwartet.
 Exit 2 = Aufruf ungültig. Den Bericht (Markdown) schreibt das Skript auf stdout.
 """
 
@@ -34,6 +36,8 @@ KUERZEL = re.compile(r"T([1-9][0-9]{0,2})([A-Z]?)")
 TESTNAME = re.compile(r"(?:^|\.)T([0-9]{1,3})_[^.]*$")
 # Meldung aus Rendezvous.WaitForAsync, wenn die Gegenseite ihren Teil desselben Tests abgebrochen hat.
 FOLGEFEHLER = re.compile(r"Test t[0-9]+ ist auf der Gegenseite gescheitert")
+# RunInfo-Text, den vstest für jeden fehlgeschlagenen xunit-Test zusätzlich schreibt.
+XUNIT_FAIL = re.compile(r"\[xUnit\.net [0-9:.]+\]\s+(\S+) \[FAIL\]")
 
 
 @dataclass(frozen=True)
@@ -111,17 +115,12 @@ def trx_auswerten(datei: Path, geraet: str, a: Auswertung) -> int:
     lauf = zusammenfassung.get("outcome", "") if zusammenfassung is not None else ""
     if lauf not in ("Completed", "Failed"):
         a.unerwartet.append(f"{geraet}: Testlauf in {datei.name} endete mit „{lauf or 'unbekannt'}“")
-    # Testhost-Absturz oder xunit "Catastrophic failure" setzt in der trx nur outcome="Failed" und eine
-    # RunInfo mit Error; die danach geplanten Tests fehlen. Ohne diese Prüfung gälte der Lauf als bestanden.
-    for info in wurzel.iterfind("t:ResultSummary/t:RunInfos/t:RunInfo", NS):
-        if info.get("outcome") == "Error":
-            text = info.find("t:Text", NS)
-            a.unerwartet.append(f"{geraet}: Fehler im Testlauf – {kurz(text.text or '') if text is not None and text.text else '(keine Meldung)'}")
-
     fehlgeschlagen = 0
+    ausgaenge: dict[str, str] = {}
     for ergebnis in wurzel.iterfind("t:Results/t:UnitTestResult", NS):
         name = ergebnis.get("testName", "(ohne Namen)")
         ausgang = ergebnis.get("outcome", "")
+        ausgaenge[name] = ausgang
         if ausgang == "Passed":
             a.bestanden += 1
         elif ausgang == "NotExecuted":
@@ -129,19 +128,43 @@ def trx_auswerten(datei: Path, geraet: str, a: Auswertung) -> int:
         elif ausgang == "Failed":
             fehlgeschlagen += 1
             roh = meldung_roh(ergebnis)
-            zeile = f"{geraet}: `{name}` – {kurz(roh) if roh else '(keine Meldung)'}"
-            nummer = testnummer(name)
-            passende = [k.text for k in a.kuerzel if k.passt(nummer, roh)]
-            if passende and FOLGEFEHLER.search(roh):
-                a.folgefehler.append((passende, zeile))
-            elif passende:
-                a.getroffen.update(passende)
-                a.erwartet.append(f"{zeile} ({', '.join(passende)})")
-            else:
-                a.unerwartet.append(zeile + " (passt zu keinem Kürzel in ERWARTET_ROT)")
+            fehlschlag_einordnen(a, f"{geraet}: `{name}` – {kurz(roh) if roh else '(keine Meldung)'}", name, roh)
         else:
             a.unerwartet.append(f"{geraet}: `{name}` mit Ergebnis „{ausgang or 'unbekannt'}“")
+
+    # Testhost-Absturz oder xunit "Catastrophic failure" setzt in der trx nur outcome="Failed" und eine
+    # RunInfo mit Error; die danach geplanten Tests fehlen. Ohne diese Prüfung gälte der Lauf als bestanden.
+    for info in wurzel.iterfind("t:ResultSummary/t:RunInfos/t:RunInfo", NS):
+        if info.get("outcome") != "Error":
+            continue
+        text = info.find("t:Text", NS)
+        roh = text.text.strip() if text is not None and text.text else ""
+        konsole = XUNIT_FAIL.fullmatch(roh)
+        if konsole is None:
+            a.unerwartet.append(f"{geraet}: Fehler im Testlauf – {kurz(roh) if roh else '(keine Meldung)'}")
+            continue
+        # vstest legt für jeden fehlgeschlagenen Test zusätzlich dessen xunit-Konsolenzeile als RunInfo ab.
+        name = konsole.group(1)
+        if ausgaenge.get(name) == "Failed":
+            continue
+        if name in ausgaenge:
+            a.unerwartet.append(f"{geraet}: `{name}` laut Konsole [FAIL], in {datei.name} aber „{ausgaenge[name] or 'unbekannt'}“")
+            continue
+        # Fallback: Ergebnis fehlt in der trx. Ohne Meldung kann es keine Fehlerbild-Marke (T10W) belegen.
+        fehlgeschlagen += 1
+        fehlschlag_einordnen(a, f"{geraet}: `{name}` – nur Konsolenzeile [FAIL], kein Ergebnis in {datei.name}", name, "")
     return fehlgeschlagen
+
+
+def fehlschlag_einordnen(a: Auswertung, zeile: str, name: str, meldung: str) -> None:
+    passende = [k.text for k in a.kuerzel if k.passt(testnummer(name), meldung)]
+    if passende and FOLGEFEHLER.search(meldung):
+        a.folgefehler.append((passende, zeile))
+    elif passende:
+        a.getroffen.update(passende)
+        a.erwartet.append(f"{zeile} ({', '.join(passende)})")
+    else:
+        a.unerwartet.append(zeile + " (passt zu keinem Kürzel in ERWARTET_ROT)")
 
 
 def geraet_auswerten(verzeichnis: Path, geraet: str, a: Auswertung) -> None:
