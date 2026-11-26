@@ -174,6 +174,12 @@ public sealed class AlarmFlowCoordinator
             _receivedSessions.PopupShown(request.AlarmSessionId, popup);
             popup.Show();
             BetriebsLog.Debug(LogModul, $"Popup geöffnet (Show), {MsSeitEmpfang(args)} ms nach dem Empfang.", vorgangsId: vorgangsId);
+
+            // Erst bei leerer Warteschlange: Bleibt der UI-Thread nach dem Zeichnen beschäftigt, beantwortet
+            // er auch keine UI-Automation-Anfragen; der Abstand zu „Popup sichtbar“ zeigt das.
+            popup.Dispatcher.BeginInvoke(
+                System.Windows.Threading.DispatcherPriority.ApplicationIdle,
+                () => BetriebsLog.Debug(LogModul, $"UI-Thread frei, {MsSeitEmpfang(args)} ms nach dem Empfang.", vorgangsId: vorgangsId));
         }, AppConstants.AlarmDispatcherReadyTimeout);
 
         // Ohne Aktion hat der Dispatcher nicht rechtzeitig angefangen: kein Fenster in dieser Welle.

@@ -282,6 +282,27 @@ internal sealed class HaelpMiApp : IDisposable
         await SchliesseSenderBannerAsync();
     }
 
+    /// <summary>
+    /// Bricht den Alarm über „Abbrechen“ im Sender-Banner ab, falls er noch läuft. Ist die Schwelle erreicht,
+    /// sendet A nicht mehr und der Knopf ist deaktiviert; dann gibt es nichts abzubrechen.
+    /// </summary>
+    public static void BrecheAlarmAbFallsAktiv(AutomationElement banner)
+    {
+        try
+        {
+            var abbrechen = Element(banner, "CancelButton").AsButton();
+            if (abbrechen.IsEnabled)
+            {
+                abbrechen.Invoke();
+            }
+        }
+        // Das Banner kann sich gerade schließen oder der Alarm gerade enden; Aufräumen ist best effort.
+        catch (Exception ex) when (ex is COMException or InvalidOperationException or ElementNotEnabledException or ElementNotAvailableException)
+        {
+            Console.WriteLine($"Alarm abbrechen: {ex.GetType().Name}, wird übersprungen.");
+        }
+    }
+
     /// <summary>Schließt alle offenen Sender-Banner, z. B. aus einem vorherigen Test.</summary>
     public async Task SchliesseSenderBannerAsync()
     {
@@ -441,16 +462,30 @@ internal sealed class HaelpMiApp : IDisposable
     public Window WarteAuf(Func<Window?> suche, string beschreibung, TimeSpan timeout)
     {
         var frist = DateTime.UtcNow + timeout;
+        COMException? letzterUiaFehler = null;
+        var uiaFehler = 0;
         while (true)
         {
-            if (suche() is { } fenster)
+            // Läuft eine einzelne UIA-Abfrage ins Zeitlimit (z. B. während der Agent seine Automation zum ersten
+            // Mal aufbaut), zählt das als „noch nicht da“. Ein dauerhaft hängendes Fenster scheitert an der Frist.
+            try
             {
-                return fenster;
+                if (suche() is { } fenster)
+                {
+                    return fenster;
+                }
+            }
+            catch (COMException ex)
+            {
+                uiaFehler++;
+                letzterUiaFehler = ex;
+                Console.WriteLine($"{DateTimeOffset.Now:HH:mm:ss.fff} {beschreibung}: UIA-Abfrage gescheitert ({ex.Message}), neuer Versuch.");
             }
 
             if (DateTime.UtcNow > frist)
             {
-                throw new TimeoutException($"{beschreibung} ist nach {timeout} nicht erschienen.");
+                var uia = uiaFehler == 0 ? string.Empty : $" {uiaFehler} UIA-Abfrage(n) gescheitert, zuletzt: {letzterUiaFehler!.Message}";
+                throw new TimeoutException($"{beschreibung} ist nach {timeout} nicht erschienen.{uia}", letzterUiaFehler);
             }
 
             Thread.Sleep(300);

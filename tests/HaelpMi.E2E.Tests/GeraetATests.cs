@@ -123,13 +123,7 @@ public partial class GeraetATests
             catch
             {
                 // Sonst wiederholt A den Alarm bis in T6 hinein und B bekommt dort weiter dessen Fenster.
-                try
-                {
-                    Element(banner, "CancelButton").AsButton().Invoke();
-                }
-                catch (Exception ex) when (ex is System.Runtime.InteropServices.COMException or InvalidOperationException)
-                {
-                }
+                BrecheAlarmAbFallsAktiv(banner);
 
                 await app.SchliesseSenderBannerAsync();
                 throw;

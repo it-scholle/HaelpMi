@@ -36,13 +36,7 @@ public partial class GeraetATests
             }
             finally
             {
-                try
-                {
-                    Element(banner, "CancelButton").AsButton().Invoke();
-                }
-                catch (Exception ex) when (ex is System.Runtime.InteropServices.COMException or InvalidOperationException)
-                {
-                }
+                BrecheAlarmAbFallsAktiv(banner);
 
                 await app.SchliesseSenderBannerAsync();
             }
