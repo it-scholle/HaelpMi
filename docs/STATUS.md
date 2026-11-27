@@ -1,15 +1,33 @@
 # Status
 
-Stand: 2026-11-25
+Stand: 2026-11-27
 
 ## Aktueller Stand
 
-- `release-1.0-MVP` ist mit v0.47.11 abgeschlossen, ein Release gibt es daraus nicht. Entwicklung
-  läuft auf `develop` (GitHub-Default) mit PATCH-Version und Tag pro Merge. Ziel ist Milestone
-  `v1.0` (geplant 08.01.2027); vorher kommt der Hotfix v0.46.2-rc.1 (#210). Stabilisierungs-Branch
-  `release-X.Y` nach #194 und ADR 0010. Status „stable+buggy“: Alarmversand/-empfang, Selbsttest, Config-Sync, Discovery/Boot-Call und
-  Install-Creator/Installer funktionieren weitgehend, ohne Anspruch auf Produktionsreife.
-- `main` nimmt nur noch Releases auf und steht noch auf v0.16.5 (1.0 wurde bisher nicht nach
+- Release-Kandidat **0.48.0** (Owner-Entscheidung 32 in #204: zuerst 0.48.0, nach Handtest und
+  Freigabe des Repo-Owners Umstellung auf 1.0.0). `CHANGELOG.md` Abschnitt „[0.48.0] –
+  Release-Kandidat“, Versionshinweise `docs/release-notes/0.48.0.md`, Handtest
+  `docs/handbuch/handtest-0.48.0.md`, Version 0.48.0 in `Directory.Build.props`.
+- Nachweise (#204), alle auf `develop` v0.47.40 (`13acd97`):
+  - DoD 1 (#136 weg, je 100 Zyklen, zwei Runden): T10
+    [45908226232](https://github.com/it-scholle/HaelpMi/actions/runs/45908226232),
+    [45925667421](https://github.com/it-scholle/HaelpMi/actions/runs/45925667421); T18
+    [45915113014](https://github.com/it-scholle/HaelpMi/actions/runs/45915113014),
+    [45932485136](https://github.com/it-scholle/HaelpMi/actions/runs/45932485136); T19
+    [45920303984](https://github.com/it-scholle/HaelpMi/actions/runs/45920303984),
+    [45937587078](https://github.com/it-scholle/HaelpMi/actions/runs/45937587078).
+  - DoD 3 (volle E2E-Suite a,b,c zweimal grün):
+    [45893361138](https://github.com/it-scholle/HaelpMi/actions/runs/45893361138),
+    [45901072357](https://github.com/it-scholle/HaelpMi/actions/runs/45901072357).
+  - DoD 4: CI (Build, Unit-Tests, gitleaks) grün, zuletzt auf dem RC-Stand (develop v0.47.40 plus
+    Doku und Version 0.48.0): [45956263306](https://github.com/it-scholle/HaelpMi/actions/runs/45956263306).
+- Entwicklung läuft auf `develop` (GitHub-Default) mit PATCH-Version und Tag pro Merge, Stand
+  v0.48.0 (Release-Kandidat). Milestone `v1.0` (geplant 08.01.2027). Alarmweg einschließlich
+  Schließpfad (#136, #36), Empfangsbestätigung (#37, #182), Wiederholungstakt (#177), Erreichbarkeit
+  beim Start (#73), Firewall (#150, #222), Erstinstallation (#229), Lizenz- und Sperrhinweise (#133,
+  #179, #180, #181, #183), Betriebs-Log (#227, #214), „Kein Empfänger eingestellt!“ (#232) und
+  sofort bedienbares Alarmfenster (#238) sind auf `develop` gemergt.
+- `main` nimmt nur noch Releases auf und steht noch auf v0.16.5 (seither wurde kein Release nach
   `main` übernommen); `legacy/main-0.39.x` ist der alte,
   nicht mehr weiterentwickelte Stand (siehe `docs/entscheidungen/0001-neustart-auf-v0-16.md`).
 - Update-Pipeline (Update-Dienst, P2P-Verteilung) ist in dieser Linie inaktiv; Updates erfolgen
@@ -26,7 +44,20 @@ Stand: 2026-11-25
 - #73 (PR #220): Ursache des Original-Vorfalls (v0.34.1) nicht per Log belegt, Logs gibt es nicht
   mehr. Der Fix behebt die im Code belegten Wege (veraltete Adresse in der laufenden Session,
   Gossip überschreibt direkt gemeldete Adresse, Boot-Call vor Alarm-Port). Andere Ursachen aus dem
-  Ticket (Mutex, Abbruch von `StartBackgroundServices`) sind damit nicht ausgeschlossen.
+  Ticket (Mutex, Abbruch von `StartBackgroundServices`) sind damit nicht ausgeschlossen. In den
+  Versionshinweisen 0.48.0 als bekannte Einschränkung („Startprobleme sind nicht sichtbar“, #226).
+- #232 (PR #233): Absender „Arbeitsplatz-Dienst“ und neutrales Symbol der Windows-Benachrichtigung
+  „Wartung erforderlich“ (eigenes Hilfsprogramm `HaelpMi.Notify.exe`): Die Dateibeschreibung prüft
+  E2E (T1), die Anzeige von Absender und Symbol unter Windows ist nicht von Hand geprüft. Handtest
+  0.48.0 Abschnitt 3.
+- #224: Ursache vermutlich mit #238 beseitigt, nie reproduziert; `status:review`, Abschluss nach
+  weiteren grünen T20/T26-Läufen bzw. dem Handtest 0.48.0 Abschnitt 2 („Erster Alarm nach dem
+  Hochfahren“).
+- #244 (Barrierefreiheit): Alarmfenster erst 2,5–6 s nach dem Öffnen per UI-Automation
+  (Screenreader) erreichbar; Meldung „Kein Empfänger eingestellt!“ ohne Ansage. In den
+  Versionshinweisen 0.48.0 als bekannte Einschränkung geführt.
+- #180 (Owner-Entscheidung 22d): Altbestände mit `ForceEnabled` werden nicht migriert; Hinweis in
+  den Versionshinweisen 0.48.0 („Update von einer Vorversion“).
 
 ## Bekannte Abweichungen von `AGENTS.md` Teil A
 
@@ -34,8 +65,8 @@ Nicht als Ausnahme freigegeben, Umsetzung steht noch aus:
 
 - Audit-Log ohne Hash-Kette, Aufbewahrung und Schutz (`src/HaelpMi.Core/Storage/AuditLog.cs`).
 - Betriebs-Log (`BetriebsLog.cs`, #227) bisher nur mit Start, Ende, Startfehlern, unbehandelten
-  Ausnahmen sowie Alarmempfang und Vordergrund (#238); die übrigen Module schreiben noch nicht hinein
-  (nächstes Modul: #214).
+  Ausnahmen, Alarmempfang und Vordergrund (#238) sowie verworfenen Nachrichten fremder
+  Kundengruppen (#214); die übrigen Module schreiben noch nicht hinein.
 - Feste Werte im Code (z. B. Log-Laufwerk `Z:` in `SharedLogPaths.cs`, Ports in
   `AppConstants.cs`, dort bewusst fest).
 - Kein Linter/Formatierer konfiguriert.
@@ -60,9 +91,16 @@ Bei #151 aufgefallen, nicht Teil des Tickets, jeweils als eigenes Issue angelegt
 
 ## Nächste Schritte
 
-- Version 1.0 nach `main` übernehmen und taggen (Freigabe Repo-Owner offen).
-- Rulesets an das neue Modell anpassen (#160): „Block-all“ verlangt lineare Historie auf allen
-  Branches außer `develop`, das Ruleset für `develop` ebenfalls. Teil A und `release-X.Y` brauchen
-  aber Merge-Commits (`release-X.Y` bzw. `main` → `develop`, `release-X.Y` → `main`) und einen
-  Fast-Forward `develop` → `release-X.Y`, den ein GitHub-PR nicht kann. Vor dem ersten Release klären.
+- Handtest des Repo-Owners nach `docs/handbuch/handtest-0.48.0.md`.
+- Danach Release-PR `develop` → `main` (normaler Merge oder Fast-Forward, kein Squash) und Tag
+  `v0.48.0` durch den Repo-Owner; Kundeninstaller baut der Repo-Owner.
+- Nach Freigabe: Umstellung auf 1.0.0 (eigener kleiner PR: Version, CHANGELOG, Versionshinweise,
+  Datum), Tag `v1.0.0` durch den Repo-Owner. Wird der Handtest dabei umbenannt, bleibt die
+  Handbuch-`id` `handtest-0-48-0` als Weiterleitung bestehen.
+- Release-Weg klären: `AGENTS.md` Teil B (Ausnahme „Release-Stabilisierung“) sieht
+  `develop` → `release-X.Y` → `main` vor, #204 DoD 5 einen Release-PR `develop` → `main`; dazu
+  Konflikte mit drei älteren Lizenz-Commits auf `main` (README, THIRD-PARTY-NOTICES) und die
+  lineare Historie (Owner-Frage 21). Entscheidung des Repo-Owners vor dem Merge nach `main`.
+- Rulesets an das neue Modell anpassen (#160): Fast-Forward `develop` → `release-X.Y` kann ein
+  GitHub-PR nicht; vor dem ersten Release klären.
 - Tickets im Milestone `v1.0`, danach `Regelentwicklung`; zurückgestellte Themen in `release-2.0-…` bzw. `Backlog`.
