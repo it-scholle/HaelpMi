@@ -2,10 +2,10 @@
 
 Alle relevanten Änderungen, für Menschen lesbar. Versionen nach SemVer.
 Einträge vor v0.47.4 sind aus den Git-Tags dieser Versionslinie erzeugt (Titel des getaggten Commits);
-Details stehen in der Git-Historie. Ab 1.0.0 nennt jeder Abschnitt nur Änderungen, die Anwender und Administratoren betreffen. Der eingefrorene Stand `legacy/main-0.39.x` ist hier nicht aufgeführt.
+Details stehen in der Git-Historie. Ab 0.48.0 nennt jeder Abschnitt nur Änderungen, die Anwender und Administratoren betreffen. Der eingefrorene Stand `legacy/main-0.39.x` ist hier nicht aufgeführt.
 
-## [1.0.0] – unveröffentlicht
-Erste freigegebene Version. Aufgeführt ist, was sich gegenüber den Vorversionen 0.46.x für Anwender und Administratoren ändert. Änderungen an Entwicklungswerkzeugen, automatischen Tests und Arbeitsabläufen stehen nur in der Git-Historie.
+## [0.48.0] – Release-Kandidat
+Release-Kandidat für die erste freigegebene Version; wird nach Freigabe als 1.0.0 veröffentlicht. Aufgeführt ist, was sich gegenüber den Vorversionen 0.46.x für Anwender und Administratoren ändert. Änderungen an Entwicklungswerkzeugen, automatischen Tests und Arbeitsabläufen stehen nur in der Git-Historie.
 ### Neu
 - Betriebsprotokoll zur Fehlersuche: `agent.log` (Hintergrundprogramm) und `config.log` (Einstellungen und Dashboard) unter `%ProgramData%\HaelpMi`, ohne Alarmtexte oder andere Inhalte. Eine Datei pro Tag, ältere werden komprimiert und nach 90 Tagen gelöscht, höchstens 200 MB je Programm. Ein ausführlicheres Protokoll lässt sich ohne Update über `betriebslog.json` einschalten (#227)
 - Empfängt ein Gerät Nachrichten einer anderen HälpMi-Installation im selben Netz (z. B. ein mit falschem Installer eingerichtetes Gerät), steht das als Warnung im Betriebsprotokoll, höchstens einmal pro Stunde je Art und fremder Installation. Die Nachrichten werden wie bisher ignoriert (#214)

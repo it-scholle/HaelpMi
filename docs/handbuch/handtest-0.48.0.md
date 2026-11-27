@@ -1,20 +1,21 @@
 ---
-id: handtest-1-0
-titel: Handtest Release-Kandidat 1.0
+id: handtest-0-48-0
+titel: Handtest Release-Kandidat 0.48.0
 kapitel: Entwicklung
 reihenfolge: 21
 zielgruppe: entwickler
-ab_version: 1.0.0
+ab_version: 0.48.0
 schlagworte: [test, release, manuell, handtest]
 siehe_auch: [entwickler-alpha-testplan, entwickler-bauen-und-installieren]
 ---
 
-# Handtest Release-Kandidat 1.0
+# Handtest Release-Kandidat 0.48.0
 
-Abnahme-Checkliste vor der Freigabe von 1.0.0. Sie ersetzt den Alpha-Testplan nicht, sondern zieht
-aus ihm heraus, was für 1.0 zählt, und ergänzt die Neuerungen seit 0.46.x. Was die E2E-Suite schon
-prüft, steht hier nur, wenn es auf echten Geräten anders aussehen kann (Ton, Vordergrund,
-Windows-Benachrichtigungen, Firewall-Abfragen, Update-Weg).
+Abnahme-Checkliste für den Release-Kandidaten 0.48.0, der nach Freigabe als 1.0.0 veröffentlicht
+wird. Sie ersetzt den Alpha-Testplan nicht, sondern zieht aus ihm heraus, was für 1.0 zählt, und
+ergänzt die Neuerungen seit 0.46.x. Was die E2E-Suite schon prüft, steht hier nur, wenn es auf
+echten Geräten anders aussehen kann (Ton, Vordergrund, Windows-Benachrichtigungen,
+Firewall-Abfragen, Update-Weg).
 
 Rückmeldung je Punkt: ✅ geht / ❌ geht nicht + was passiert ist (Text der Meldung, Screenshot,
 `agent.log` und `audit.log` des betroffenen Geräts). Bei Abstürzen zusätzlich
@@ -148,22 +149,22 @@ den 0.46.x-Installer derselben Kundengruppe installieren, Profil P2 so ändern, 
 einen Alarm empfangen und schließen. Auf A ein Profil „P4“ anlegen: Sender C, Empfänger B,
 Schwelle 1.
 
-- [ ] Mischbetrieb vor dem Update: A (1.0.0) löst P2 aus → C (0.46.x) zeigt das Alarmfenster,
+- [ ] Mischbetrieb vor dem Update: A (0.48.0) löst P2 aus → C (0.46.x) zeigt das Alarmfenster,
       „Bin unterwegs“ auf C → A zeigt „Empfangen: 1 von 1“ und C unter „Auf dem Weg“, Schließen
-      auf C klappt. Rückrichtung: P4 auf C auslösen → B (1.0.0) zeigt das Alarmfenster, C zählt B
+      auf C klappt. Rückrichtung: P4 auf C auslösen → B (0.48.0) zeigt das Alarmfenster, C zählt B
       als empfangen, Schließen auf B klappt.
 
-- [ ] User-Installer 1.0.0 auf C ausführen (Update). Keine Raum-Abfrage, keine Firewall-Abfrage.
-- [ ] Nach dem Update: genau ein `HaelpMi.Agent.exe`, Dateiversion 1.0.0 (Task-Manager → Details →
+- [ ] User-Installer 0.48.0 auf C ausführen (Update). Keine Raum-Abfrage, keine Firewall-Abfrage.
+- [ ] Nach dem Update: genau ein `HaelpMi.Agent.exe`, Dateiversion 0.48.0 (Task-Manager → Details →
       Eigenschaften).
-- [ ] Raum, Raumnummer, Profile und Lizenz unverändert; C taucht im Dashboard mit Version 1.0.0 auf.
+- [ ] Raum, Raumnummer, Profile und Lizenz unverändert; C taucht im Dashboard mit Version 0.48.0 auf.
 - [ ] Alarm P1 von A → C empfängt, Schließen nach Schwelle klappt.
 - [ ] Gerät, das unter 0.46.x deaktiviert und wieder aktiviert wurde: nach dem Update im Reiter
       „Geräte / Lizenz“ einmal aus- und wieder einschalten (Hinweis aus den Versionshinweisen) →
       zählt danach normal gegen das Kontingent.
 - [ ] Mit zwei angemeldeten Windows-Benutzern auf C updaten: In der zweiten Sitzung läuft HälpMi
       danach nicht (bekannte Einschränkung); Ab- und wieder Anmelden in dieser Sitzung behebt es.
-- [ ] Admin-Gerät A ebenso von 0.46.x auf 1.0.0 aktualisieren (falls A noch auf 0.46.x steht):
+- [ ] Admin-Gerät A ebenso von 0.46.x auf 0.48.0 aktualisieren (falls A noch auf 0.46.x steht):
       Dashboard öffnet, alle Gruppen und Profile vorhanden.
 
 ## 7. Betriebs-Log

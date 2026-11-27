@@ -1,23 +1,31 @@
 # Status
 
-Stand: 2026-11-26
+Stand: 2026-11-27
 
 ## Aktueller Stand
 
-- Release-Kandidat 1.0 in Vorbereitung (#204, DoD 5; #241): `CHANGELOG.md` Abschnitt
-  „[1.0.0] – unveröffentlicht“, Versionshinweise `docs/release-notes/1.0.0.md`, Handtest
-  `docs/handbuch/handtest-1.0.md`. Versionsvorschlag 1.0.0; `Directory.Build.props` steht noch auf
-  0.47.x und wird erst im Release-PR gesetzt. Inhaltlich vollständig: #233 (v0.47.38, #232,
-  „Kein Empfänger eingestellt!“ mit Hilfsprogramm `HaelpMi.Notify`) und #239 (v0.47.39, #238,
-  Alarmfenster sofort bedienbar, Quittung unabhängig von der Tonausgabe) sind gemergt. Vor dem RC
-  fehlen noch zwei grüne volle E2E-Läufe auf dem RC-Stand (DoD 3); bisher eine volle Suite grün auf
-  dem #239-Branch (Lauf 45865691457).
+- Release-Kandidat **0.48.0** (Owner-Entscheidung 32 in #204: zuerst 0.48.0, nach Handtest und
+  Freigabe des Repo-Owners Umstellung auf 1.0.0). `CHANGELOG.md` Abschnitt „[0.48.0] –
+  Release-Kandidat“, Versionshinweise `docs/release-notes/0.48.0.md`, Handtest
+  `docs/handbuch/handtest-0.48.0.md`, Version 0.48.0 in `Directory.Build.props`.
+- Nachweise (#204), alle auf `develop` v0.47.40 (`13acd97`):
+  - DoD 1 (#136 weg, je 100 Zyklen, zwei Runden): T10
+    [45908226232](https://github.com/it-scholle/HaelpMi/actions/runs/45908226232),
+    [45925667421](https://github.com/it-scholle/HaelpMi/actions/runs/45925667421); T18
+    [45915113014](https://github.com/it-scholle/HaelpMi/actions/runs/45915113014),
+    [45932485136](https://github.com/it-scholle/HaelpMi/actions/runs/45932485136); T19
+    [45920303984](https://github.com/it-scholle/HaelpMi/actions/runs/45920303984),
+    [45937587078](https://github.com/it-scholle/HaelpMi/actions/runs/45937587078).
+  - DoD 3 (volle E2E-Suite a,b,c zweimal grün):
+    [45893361138](https://github.com/it-scholle/HaelpMi/actions/runs/45893361138),
+    [45901072357](https://github.com/it-scholle/HaelpMi/actions/runs/45901072357).
+  - DoD 4: CI (Build, Unit-Tests, gitleaks) grün.
 - Entwicklung läuft auf `develop` (GitHub-Default) mit PATCH-Version und Tag pro Merge, Stand
-  v0.47.39. Milestone `v1.0` (geplant 08.01.2027). Alarmweg einschließlich Schließpfad (#136, #36),
-  Empfangsbestätigung (#37, #182), Wiederholungstakt (#177), Erreichbarkeit beim Start (#73),
-  Firewall (#150, #222), Erstinstallation (#229), Lizenz- und Sperrhinweise (#133, #179, #180,
-  #181, #183), Betriebs-Log (#227, #214), „Kein Empfänger eingestellt!“ (#232) und sofort
-  bedienbares Alarmfenster (#238) sind auf `develop` gemergt.
+  v0.48.0 (Release-Kandidat). Milestone `v1.0` (geplant 08.01.2027). Alarmweg einschließlich
+  Schließpfad (#136, #36), Empfangsbestätigung (#37, #182), Wiederholungstakt (#177), Erreichbarkeit
+  beim Start (#73), Firewall (#150, #222), Erstinstallation (#229), Lizenz- und Sperrhinweise (#133,
+  #179, #180, #181, #183), Betriebs-Log (#227, #214), „Kein Empfänger eingestellt!“ (#232) und
+  sofort bedienbares Alarmfenster (#238) sind auf `develop` gemergt.
 - `main` nimmt nur noch Releases auf und steht noch auf v0.16.5 (1.0 wurde bisher nicht nach
   `main` übernommen); `legacy/main-0.39.x` ist der alte,
   nicht mehr weiterentwickelte Stand (siehe `docs/entscheidungen/0001-neustart-auf-v0-16.md`).
@@ -36,19 +44,19 @@ Stand: 2026-11-26
   mehr. Der Fix behebt die im Code belegten Wege (veraltete Adresse in der laufenden Session,
   Gossip überschreibt direkt gemeldete Adresse, Boot-Call vor Alarm-Port). Andere Ursachen aus dem
   Ticket (Mutex, Abbruch von `StartBackgroundServices`) sind damit nicht ausgeschlossen. In den
-  Versionshinweisen 1.0.0 als bekannte Einschränkung („Startprobleme sind nicht sichtbar“, #226).
+  Versionshinweisen 0.48.0 als bekannte Einschränkung („Startprobleme sind nicht sichtbar“, #226).
 - #232 (PR #233): Absender „Arbeitsplatz-Dienst“ und neutrales Symbol der Windows-Benachrichtigung
   „Wartung erforderlich“ (eigenes Hilfsprogramm `HaelpMi.Notify.exe`): Die Dateibeschreibung prüft
   E2E (T1), die Anzeige von Absender und Symbol unter Windows ist nicht von Hand geprüft. Handtest
-  1.0 Abschnitt 3.
+  0.48.0 Abschnitt 3.
 - #224: Ursache vermutlich mit #238 beseitigt, nie reproduziert; `status:review`, Abschluss nach
-  weiteren grünen T20/T26-Läufen bzw. dem Handtest 1.0 Abschnitt 2 („Erster Alarm nach dem
+  weiteren grünen T20/T26-Läufen bzw. dem Handtest 0.48.0 Abschnitt 2 („Erster Alarm nach dem
   Hochfahren“).
 - #244 (Barrierefreiheit): Alarmfenster erst 2,5–6 s nach dem Öffnen per UI-Automation
   (Screenreader) erreichbar; Meldung „Kein Empfänger eingestellt!“ ohne Ansage. In den
-  Versionshinweisen 1.0.0 als bekannte Einschränkung geführt.
+  Versionshinweisen 0.48.0 als bekannte Einschränkung geführt.
 - #180 (Owner-Entscheidung 22d): Altbestände mit `ForceEnabled` werden nicht migriert; Hinweis in
-  den Versionshinweisen 1.0.0 („Update von einer Vorversion“).
+  den Versionshinweisen 0.48.0 („Update von einer Vorversion“).
 
 ## Bekannte Abweichungen von `AGENTS.md` Teil A
 
@@ -82,12 +90,11 @@ Bei #151 aufgefallen, nicht Teil des Tickets, jeweils als eigenes Issue angelegt
 
 ## Nächste Schritte
 
-- Volle E2E-Suite `a,b,c` auf dem RC-Stand (`develop` ab v0.47.39) zweimal grün (DoD 3), CI grün.
-- Release-PR: Version 1.0.0 in `Directory.Build.props`, Datum in CHANGELOG und Versionshinweisen,
-  `dependency-check`. Vorher klären, ob der Weg über `release-1.0` (`AGENTS.md` Teil B, Ausnahme
-  „Release-Stabilisierung“) oder direkt `develop` → `main` (#204, DoD 5) gilt.
-- Handtest des Repo-Owners nach `docs/handbuch/handtest-1.0.md`, danach Merge nach `main`, Tag
-  `v1.0.0` und Kundeninstaller durch den Repo-Owner.
+- Handtest des Repo-Owners nach `docs/handbuch/handtest-0.48.0.md`.
+- Danach Release-PR `develop` → `main` (normaler Merge oder Fast-Forward, kein Squash) und Tag
+  `v0.48.0` durch den Repo-Owner; Kundeninstaller baut der Repo-Owner.
+- Nach Freigabe: Umstellung auf 1.0.0 (eigener kleiner PR: Version, CHANGELOG, Versionshinweise,
+  Datum), Tag `v1.0.0` durch den Repo-Owner.
 - Rulesets an das neue Modell anpassen (#160): Fast-Forward `develop` → `release-X.Y` kann ein
   GitHub-PR nicht; vor dem ersten Release klären.
 - Tickets im Milestone `v1.0`, danach `Regelentwicklung`; zurückgestellte Themen in `release-2.0-…` bzw. `Backlog`.
