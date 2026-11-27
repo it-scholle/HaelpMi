@@ -19,14 +19,15 @@ Stand: 2026-11-27
   - DoD 3 (volle E2E-Suite a,b,c zweimal grün):
     [45893361138](https://github.com/it-scholle/HaelpMi/actions/runs/45893361138),
     [45901072357](https://github.com/it-scholle/HaelpMi/actions/runs/45901072357).
-  - DoD 4: CI (Build, Unit-Tests, gitleaks) grün.
+  - DoD 4: CI (Build, Unit-Tests, gitleaks) grün, zuletzt auf dem RC-Stand (develop v0.47.40 plus
+    Doku und Version 0.48.0): [45956263306](https://github.com/it-scholle/HaelpMi/actions/runs/45956263306).
 - Entwicklung läuft auf `develop` (GitHub-Default) mit PATCH-Version und Tag pro Merge, Stand
   v0.48.0 (Release-Kandidat). Milestone `v1.0` (geplant 08.01.2027). Alarmweg einschließlich
   Schließpfad (#136, #36), Empfangsbestätigung (#37, #182), Wiederholungstakt (#177), Erreichbarkeit
   beim Start (#73), Firewall (#150, #222), Erstinstallation (#229), Lizenz- und Sperrhinweise (#133,
   #179, #180, #181, #183), Betriebs-Log (#227, #214), „Kein Empfänger eingestellt!“ (#232) und
   sofort bedienbares Alarmfenster (#238) sind auf `develop` gemergt.
-- `main` nimmt nur noch Releases auf und steht noch auf v0.16.5 (1.0 wurde bisher nicht nach
+- `main` nimmt nur noch Releases auf und steht noch auf v0.16.5 (seither wurde kein Release nach
   `main` übernommen); `legacy/main-0.39.x` ist der alte,
   nicht mehr weiterentwickelte Stand (siehe `docs/entscheidungen/0001-neustart-auf-v0-16.md`).
 - Update-Pipeline (Update-Dienst, P2P-Verteilung) ist in dieser Linie inaktiv; Updates erfolgen
@@ -94,7 +95,12 @@ Bei #151 aufgefallen, nicht Teil des Tickets, jeweils als eigenes Issue angelegt
 - Danach Release-PR `develop` → `main` (normaler Merge oder Fast-Forward, kein Squash) und Tag
   `v0.48.0` durch den Repo-Owner; Kundeninstaller baut der Repo-Owner.
 - Nach Freigabe: Umstellung auf 1.0.0 (eigener kleiner PR: Version, CHANGELOG, Versionshinweise,
-  Datum), Tag `v1.0.0` durch den Repo-Owner.
+  Datum), Tag `v1.0.0` durch den Repo-Owner. Wird der Handtest dabei umbenannt, bleibt die
+  Handbuch-`id` `handtest-0-48-0` als Weiterleitung bestehen.
+- Release-Weg klären: `AGENTS.md` Teil B (Ausnahme „Release-Stabilisierung“) sieht
+  `develop` → `release-X.Y` → `main` vor, #204 DoD 5 einen Release-PR `develop` → `main`; dazu
+  Konflikte mit drei älteren Lizenz-Commits auf `main` (README, THIRD-PARTY-NOTICES) und die
+  lineare Historie (Owner-Frage 21). Entscheidung des Repo-Owners vor dem Merge nach `main`.
 - Rulesets an das neue Modell anpassen (#160): Fast-Forward `develop` → `release-X.Y` kann ein
   GitHub-PR nicht; vor dem ersten Release klären.
 - Tickets im Milestone `v1.0`, danach `Regelentwicklung`; zurückgestellte Themen in `release-2.0-…` bzw. `Backlog`.
